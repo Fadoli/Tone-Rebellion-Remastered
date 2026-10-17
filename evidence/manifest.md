@@ -51,8 +51,6 @@
 ## Profil d’analyse
 
 - Fournisseur : Ghidra 12.1.4
-- Digest du profil Ghidra : `3c06738e45e144d5f073edbd3244c6bff46222f389525fe659bc92dca2ccdece`
-- Digest du profil workflow `binary_overview` : `f6e648d2d6b6da88dcf26ba1d744e1e5b2f45f623f8c5408d6783dd66ec3f8ca`
 - Aucun fichier `Float.pdb` disponible pour cette analyse, selon la précision de l’utilisateur. Toute référence PE au nom du PDB est un chemin/nom déclaré dans les métadonnées, pas la preuve de disponibilité du fichier.
 - Progression finale : 2 410 procédures inventoriées ; 1 493 internes et 14 runtime décompilées ; 780 thunks et 123 externes exclus avec motif ; 0 fonction interne en attente ou en échec de décompilation dans cette passe.
 - Les Evidence IDs individuels sont référencés par adresse dans `index.jsonl`; les pages pseudocode sont `functions/0001_entry_runtime.md` à `functions/0023_batch_0019.md`.
