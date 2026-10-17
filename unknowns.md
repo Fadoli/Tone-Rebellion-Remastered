@@ -37,6 +37,7 @@
 - `FUN_0041bdae` reçoit le callback de fenêtre via le stub `0x4020d6`; son pseudocode explicite seulement certains messages Windows. Les autres sont délégués à `DefWindowProcA` dans le pseudocode disponible.
 - La file d’événements interne est limitée à huit enregistrements observés. Ses conventions sont lisibles pour certains messages Win32, mais les destinataires finaux des actions passent souvent par dispatch virtuel/indirect.
 - `FUN_00466ce2` et d’autres helpers de boucle parcourent de grands états indexés et appellent des pointeurs de fonctions. Les identités métier des objets parcourus restent inconnues.
+- Le port de `FUN_00464b9e` couvre les choix de marqueurs et d’IDs 6–9, mais ne consomme pas les tirages RNG de la boucle initiale des IDs `0x17`–`0x19`; une comparaison exacte de séquence aléatoire complète nécessite d’abord de résoudre `DAT_006136b0` et les écritures/états de ces enregistrements. `FUN_004528ca` écrit plusieurs champs supplémentaires et appelle des helpers dont les effets restent à relier au modèle d’entités du remake. La distribution ultérieure des valeurs/liens de classe 0 dans `FUN_004637fc` est également non portée. Détail : [world_start_distribution.md](world_start_distribution.md).
 - `FUN_0042cc24` combine des appels de surface indirects et GDI `BitBlt`; l’identité exacte des interfaces de présentation n’est pas établie par les noms reconstruits seuls.
 - Le chemin audio demeure à suivre au-delà des références `sound.txt` et `DXSOUND`.
 - La liste priorisée des prochaines analyses figure dans `behavior_map.md`.

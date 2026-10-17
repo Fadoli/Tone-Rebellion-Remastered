@@ -41,6 +41,13 @@
 | `analyze_function` | `ev_5937c55f338b7b8770bc542cfe382c4755b4fb232b3d306e6a536037c7fbd98c` | `FUN_00474b90` | Mise à jour 32 bits de la graine et retour des bits 16–30 (`state * 0x343fd + 0x269ec3`). |
 | `read_bytes` | `ev_4791eda48b1dd3df52587e7ec577452e548d62501c2802c49c34a2cbeebf2c38` | `0x494798` | Les quatre octets `00 00 00 47` représentent le flottant IEEE-754 `32768.0f`, utilisé par `FUN_00467260`. |
 | `analyze_function` | `ev_af395cb5dc0ed1efd405d0c4880d5843648c434a49f9d811e53dccc4b1268377` | `FUN_00464b9e` | Attribution additionnelle de lieux via parcours de tables et choix conditionnels/aléatoires. |
+| `analyze_function` | `ev_038b2943f7d5a4740ab39be3abfaf601533a2b50ae7c2135f46dd1eea6cbeaf5` | `FUN_00464b9e`, assemblage | Confirme les limites du parcours, le choix des marqueurs et les paramètres passés aux helpers. |
+| `analyze_function` | `ev_9c1455ba552ca8516634a6b8919d421f5f1ab12d0184e0cbf893965eef0b22ba` | `FUN_004535e4` | Choix des IDs 6–9 selon les tables shape/realm et les items déjà présents dans l'île. |
+| `analyze_function` | `ev_ebe214a1825dc422a3162a86d7bbb782029538e17a763d5d78e571c6fee5822d` | `FUN_00452859` | Validation, mutation via `FUN_004528ca` puis effets secondaires d'objet. |
+| `analyze_function` | `ev_7a10ac57d0a8f9d1c6d94bfdba0ff8f19388f4df1e6f899c1c0e677dc4e4a147` | `FUN_00452656` | Admissibilité d'un item selon le paramètre et la classe/limite du record. |
+| `analyze_function` | `ev_48b4bcba9562b96d86e08e3898333b2848f2054141dcd10e2ad9becb516044e3` | `FUN_004528ca` | Champs d'enregistrement écrits et drapeaux initialisés à la création. |
+| `read_bytes` | `ev_614008e78140c166d35cb4e7093dbfb71b9bca6ea7b05059d629a6c9d6a74f51` | `0x4a28c8` | 16 entrées `int16` de la première table de realm, indexée par shape ID. |
+| `read_bytes` | `ev_75517bd4bd63d8f7b901ff08a88d5103b4ac6340e48e2a9556989d5651f72040` | `0x4a28e8` | 16 entrées `int16` de la seconde table de realm, indexée par shape ID. |
 | `analyze_function` | `ev_a3a1136454b116409a3a18908d27e23488bf809cdcb8d28b4d4d0805f05688e3` | `FUN_0041c46f` | Références Ghidra relient les chaînes `effects.txt`, `fltinf.txt`, `bldinf.txt` aux appels respectifs vers `FUN_004153b8`, `FUN_00454d1f` et `FUN_00455833` ; call-sites `0x41c669`, `0x41c6aa`, `0x41c6b9`. |
 | `read_bytes` | `ev_d64c24d6ebe5f8bcb691202a6d7fad642a6264e07b2bc78e83ce1c39bc21ec8f` | `0x49de40` | Lecture de 16 octets ; `END\0` observé à l’adresse référencée par le parseur de textes. |
 | `read_bytes` | `ev_7dfb26f9c9ef233774c5281b8d6c98964c45d378c4dabe0e36f189713717924f` | `0x49be80` | Lecture de 0x140 octets ; a permis de confirmer le tag `TYPE`, `CAST` et les valeurs de `REALM`. |

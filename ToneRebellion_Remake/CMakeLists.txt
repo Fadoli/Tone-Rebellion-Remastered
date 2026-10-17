@@ -16,6 +16,7 @@ add_library(tone_core STATIC
     src/core/window_catalog.c
     src/core/world_map.c
     src/core/game_start.c
+    src/core/game_session.c
     src/core/tone_rng.c
 )
 target_include_directories(tone_core PUBLIC src/core src/data)
@@ -97,6 +98,18 @@ if(BUILD_TESTING)
     target_compile_features(test_tone_rng PRIVATE c_std_11)
     enable_test_assertions(test_tone_rng)
     add_test(NAME tone_rng_unit COMMAND test_tone_rng)
+
+    add_executable(test_game_start_tones tests/test_game_start_tones.c)
+    target_link_libraries(test_game_start_tones PRIVATE tone_core)
+    target_compile_features(test_game_start_tones PRIVATE c_std_11)
+    enable_test_assertions(test_game_start_tones)
+    add_test(NAME game_start_tones_unit COMMAND test_game_start_tones)
+
+    add_executable(test_game_session tests/test_game_session.c)
+    target_link_libraries(test_game_session PRIVATE tone_core)
+    target_compile_features(test_game_session PRIVATE c_std_11)
+    enable_test_assertions(test_game_session)
+    add_test(NAME game_session_unit COMMAND test_game_session)
 
     add_executable(test_island_corpus tests/test_island_corpus.c)
     target_link_libraries(test_island_corpus PRIVATE tone_core)
