@@ -4,11 +4,11 @@ Porter uniquement les comportements établis par le binaire et les données loca
 
 ## À faire
 
-- [ ] Tracer le clic sur `IWMove`/`IWHallMove` : gestionnaire, gardes, coûts et événement de validation.
+- [ ] Relier le clic type 34 sur `IWMove`/`IWHallMove` à l'état UI qui produit `0x4c`; établir gardes, coût et validation avant de porter l'ordre.
 - [ ] Identifier le callback et la garde de classe des ordres directs avant d'exposer les commandes soldat/mage.
 - [ ] Finir les panneaux d'unités/bâtiments : mapper les champs de `CHARGE` et tracer chaque action avant d'ajouter des boutons. Le roster actuel ne couvre que les quatre ouvriers initiaux.
-- [ ] Relier la sélection initiale au Hall, mapper le badge charge/état et identifier les consommateurs de l'état `PANIC`.
-- [ ] Tracer l'initialisation/écriture de `DAT_006191f8` et la formule de `% WORKSTR` avant d'afficher surplus, population et ouvriers.
+- [ ] Établir l'état initial et les consommateurs visuels de `TOGREALM`; relier la sélection initiale au Hall, mapper le badge charge/état et identifier les consommateurs de `PANIC`.
+- [ ] Tracer l'initialisation/écriture de `DAT_006191f8` et la formule de `% WORKSTR` avant d'afficher surplus et ouvriers.
 - [ ] Relier les événements d'acquisition aux compteurs d'inventaire et au masque de glyphes; compléter le retour à la ligne et la bannière Diplomatie.
 - [ ] Remplacer le placement immédiat par la construction différée source : coûts, sélection d'unité, ordre, trajet et achèvement.
 - [ ] Reconstituer le cycle des tâches, collecte, livraison, stocks et état idle des ouvriers.
