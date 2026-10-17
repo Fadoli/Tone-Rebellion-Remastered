@@ -303,7 +303,10 @@ static void draw_bitmap_text_at(DWORD *pixels, int surface_width, int surface_he
             uint32_t col;
             for (row = 0; row < g_bitmap_font.height; ++row) {
                 for (col = 0; col < glyph_width; ++col) {
-                    if (glyph_pixels[(size_t)row * glyph_width + col] != 0xffu) {
+                    /* BGOUTFNT masks distinguish ink (1), background (0),
+                       and transparent padding (0xff). Treating zero as ink
+                       filled each glyph's entire bounding box. */
+                    if (glyph_pixels[(size_t)row * glyph_width + col] == 1u) {
                         int px = x + (int)col;
                         int py = y + (int)row;
                         if (px >= 0 && px < surface_width && py >= 0 && py < surface_height) {
