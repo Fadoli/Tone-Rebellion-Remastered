@@ -11,6 +11,7 @@
 #include "shp_image.h"
 #include "window_catalog.h"
 #include "world_map.h"
+#include "tone_rng.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -1192,8 +1193,7 @@ static int create_help_sheet(SpriteSheet *sheet, char *error, size_t error_capac
    from QueryPerformanceCounter before entering the message loop. */
 static unsigned game_random(void)
 {
-    g_random_state = g_random_state * 0x343fdu + 0x269ec3u;
-    return (g_random_state >> 16) & 0x7fffu;
+    return tone_rng_next15(&g_random_state);
 }
 
 static int logical_viewport(int client_width, int client_height, RECT *viewport)
