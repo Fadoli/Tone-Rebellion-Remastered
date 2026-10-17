@@ -6,6 +6,7 @@
 #include "font_image.h"
 #include "island_data.h"
 #include "island_haze.h"
+#include "island_render_rules.h"
 #include "shp_image.h"
 #include "world_map.h"
 
@@ -62,6 +63,7 @@ static SpriteSheet g_difficulty_art;
 static SpriteSheet g_map_background;
 static SpriteSheet g_small_islands;
 static SpriteSheet g_island_surface_art;
+static SpriteSheet g_tone_field_art;
 static SpriteSheet g_pad_art;
 static SpriteSheet g_bridge_trigger_art;
 static SpriteSheet g_island_feature_art;
@@ -303,6 +305,7 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     };
     CobArchive archive = {0};
     SpriteSheet candidate = {0};
+    SpriteSheet tone_candidate = {0};
     SpriteSheet pad_candidate = {0};
     SpriteSheet bridge_candidate = {0};
     SpriteSheet feature_candidate = {0};
@@ -335,6 +338,8 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     if (!load_palette(&archive, palette_name, palette, palette_rgb6,
                       error, error_capacity) ||
         !load_sprite_sheet(&archive, shape_name, palette, &candidate, error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\tone.shp", palette, &tone_candidate,
+                           error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\pad.shp", palette, &pad_candidate,
                            error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\br-trg01.shp", palette, &bridge_candidate,
@@ -346,6 +351,11 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     if (pad_candidate.frame_count != 27) {
         (void)snprintf(error, error_capacity,
                        "data\\pad.shp does not contain the 27 frames used by the pad renderer");
+        goto done;
+    }
+    if (tone_candidate.frame_count != 40) {
+        (void)snprintf(error, error_capacity,
+                       "data\\tone.shp does not contain the 40 POOL frames from bldinf.txt");
         goto done;
     }
     if (bridge_candidate.frame_count != 23) {
@@ -388,12 +398,15 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     }
 
     free_sprite_sheet(&g_island_surface_art);
+    free_sprite_sheet(&g_tone_field_art);
     free_sprite_sheet(&g_pad_art);
     free_sprite_sheet(&g_bridge_trigger_art);
     free_sprite_sheet(&g_island_feature_art);
     free(g_island_height_data);
     g_island_surface_art = candidate;
     memset(&candidate, 0, sizeof(candidate));
+    g_tone_field_art = tone_candidate;
+    memset(&tone_candidate, 0, sizeof(tone_candidate));
     g_pad_art = pad_candidate;
     memset(&pad_candidate, 0, sizeof(pad_candidate));
     g_bridge_trigger_art = bridge_candidate;
@@ -413,6 +426,7 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     success = 1;
 done:
     free_sprite_sheet(&candidate);
+    free_sprite_sheet(&tone_candidate);
     free_sprite_sheet(&pad_candidate);
     free_sprite_sheet(&bridge_candidate);
     free_sprite_sheet(&feature_candidate);
@@ -1418,12 +1432,11 @@ static COLORREF island_location_color(const char *type)
     return RGB(104, 174, 255);
 }
 
-/* FUN_00461b3b stores the size in renderer_subtype for class-0 locations.
-   blddraw's FUN_0040ab42 selects one nine-frame group from PAD.SHP. */
+/* Only explicit size tags use PAD.SHP. Class/subtype alone is insufficient:
+   Tone pools and Leviathan shields share class-0/subtype-0 in the source. */
 static int island_pad_group(const IslandLocation *location)
 {
-    if (location->renderer_class != 0 || location->renderer_subtype > 2) return -1;
-    return (int)location->renderer_subtype;
+    return island_pad_size_group(location->kind);
 }
 
 /* FUN_0040b345 draws feature layers at fixed world coordinates from the
@@ -1554,6 +1567,15 @@ static void render_island_view(HDC dc)
         if (location->renderer_class == 2 &&
             g_bridge_trigger_art.frame_count == 23) {
             draw_sprite(dc, &g_bridge_trigger_art, 0, x, y);
+            continue;
+        }
+        /* Island TXT `tone` rows denote unoccupied Tone pools. shapes.txt maps
+           POOL to tone.shp; bldinf.txt gives the 2..40 ping-pong animation. */
+        if (location->kind == ISLAND_LOCATION_TONE &&
+            g_tone_field_art.frame_count == 40) {
+            uint32_t frame = island_tone_pool_frame(g_menu.animation_ticks,
+                                                    location->x);
+            draw_sprite(dc, &g_tone_field_art, frame, x, y);
             continue;
         }
         if (pad_group >= 0 && g_pad_art.frame_count == 27) {
@@ -2260,6 +2282,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_map_background);
     free_sprite_sheet(&g_small_islands);
     free_sprite_sheet(&g_island_surface_art);
+    free_sprite_sheet(&g_tone_field_art);
     free_sprite_sheet(&g_pad_art);
     free_sprite_sheet(&g_island_feature_art);
     free_sprite_sheet(&g_island_names_art);

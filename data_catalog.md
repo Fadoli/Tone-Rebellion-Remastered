@@ -1,6 +1,6 @@
 # Catalogue statique des fichiers et formats
 
-Cette page décrit les formats visibles dans Ghidra et les compare aux données disponibles dans `C:\git\ToneRebellion_Raw\original_content`. Les archives d’origine, `C:\Program Files\Tone\TONE00.COB` et `TONE01.COB`, sont à côté du binaire. Tous leurs 483 membres correspondent par nom, taille et SHA-256 aux fichiers du corpus local (voir [cob_archives.md](cob_archives.md) et [archive_index.jsonl](archive_index.jsonl)). Cette comparaison valide les octets des membres, mais pas à elle seule leur interprétation sémantique.
+Cette page décrit les formats visibles dans Ghidra et les compare aux données disponibles dans `C:\git\ToneRebellion_Raw\original_content`. Les archives d’origine, `C:\Program Files\Tone\TONE00.COB` et `TONE01.COB`, sont à côté du binaire. Leurs 483 membres sont indexés par nom, taille et chemin du corpus local (voir [cob_archives.md](cob_archives.md) et [archive_index.jsonl](archive_index.jsonl)). L’index facilite l’accès aux octets, mais ne garantit pas à lui seul leur interprétation sémantique.
 
 ## Lecteur commun de lignes
 

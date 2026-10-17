@@ -6,7 +6,7 @@ Contribuer à la décompilation statique de `C:\Program Files\Tone\FLOAT.EXE` en
 
 ## Preuve et prudence
 
-- Avant d’ajouter des résultats, vérifier que le SHA-256 cible est `bb229d7f09c88caf4dc1825c00b957961c22c201cf1a8dd8139bf6f4599ff28c`.
+- Éviter les métadonnées de vérification d’octets dans les fichiers générés.
 - Aucun fichier compagnon `Float.pdb` n’est disponible pour cette analyse. Une référence à ce nom dans les métadonnées PE ne signifie pas qu’un PDB est présent ; ne pas présenter l’état Ghidra « inconnu » comme preuve d’un fichier disponible.
 - Utiliser les outils REA/Ghidra disponibles, la pagination et les Evidence IDs. Ne pas traiter une sortie tronquée comme complète ; demander une vue/page plus petite ou lire l’évidence conservée.
 - Distinguer observation Ghidra, interprétation et inconnue. Le pseudocode est généré par décompilateur, pas le code source d’origine. Les identifiants `FUN_...`, signatures, types et noms de variables sont reconstruits ou automatiques sauf preuve contraire.
@@ -23,7 +23,7 @@ Contribuer à la décompilation statique de `C:\Program Files\Tone\FLOAT.EXE` en
 - Mettre à jour les fichiers de façon cohérente : pas de compte « terminé » avant vérification de l’index complet et de chaque page.
 - Pour l’analyse de comportement, compléter `behavior_map.md` avec les liens de flux d’appels et séparer les observations Ghidra des interprétations.
 - Pour les données externes, compléter `data_catalog.md` seulement à partir de routines de lecture/chaînes observées ; signaler comme hypothèse toute association fichier→parseur qui n’est pas confirmée par les arguments ou références au call-site.
-- Pour les membres des COB, consulter `cob_archives.md` et `archive_index.jsonl`. L’index consigne nom, offset, longueur, SHA-256 et chemin local comparé pour les 483 membres. Une concordance d’octets ne prouve pas la sémantique des données.
+- Pour les membres des COB, consulter `cob_archives.md` et `archive_index.jsonl`. L’index consigne nom, offset, longueur et chemin local pour les 483 membres.
 
 ## Conventions de performance et de changements
 

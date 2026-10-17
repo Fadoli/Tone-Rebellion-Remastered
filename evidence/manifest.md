@@ -2,7 +2,7 @@
 
 | Opération | Evidence ID | Résumé | Couverture / remarque |
 |---|---|---|---|
-| `binary_overview` | `ev_78e02fea36715ea8de479afd53ecbe956f7050cb8cea229addc1a460097c39f3` | 2 410 procédures, 2 209 chaînes, image base `0x400000`, 7 segments | Observation Ghidra 12.1.4 via workflow REA ; SHA-256 conforme. |
+| `binary_overview` | `ev_78e02fea36715ea8de479afd53ecbe956f7050cb8cea229addc1a460097c39f3` | 2 410 procédures, 2 209 chaînes, image base `0x400000`, 7 segments | Observation Ghidra 12.1.4 via workflow REA. |
 | `list_procedures` | `ev_c01b8c54dcc2f60207f2b1d086a7768d14adb866a6a07f142f3c1ef365c344ac` | 2 410 procédures | Evidence complète récupérée du registre REA ; index initialisé depuis cette réponse. |
 | `analyze_function` | `ev_4ea4348ef088ca577694ef3daa25d523ab017af07ee682c3223e064798ca5191` | `entry`, `0x478460` | Pseudocode, appels et références associés. |
 | `analyze_function` | `ev_4447fdd9631929efaeb1d177248260afbbd55aec3775ce0996e1f9b427cb4e7f` | `FUN_0041d8e1` | Pseudocode, appels et chaînes associés. |
@@ -44,8 +44,8 @@
 
 ## Sources locales de données du jeu
 
-- Les archives `TONE00.COB` et `TONE01.COB` sont à côté de `FLOAT.EXE`; empreintes, structure statique et correspondance avec les fichiers extraits : [cob_archives.md](../cob_archives.md).
-- Les 483 membres ont chacun un enregistrement avec offset et empreintes dans `../archive_index.jsonl`.
+- Les archives `TONE00.COB` et `TONE01.COB` sont à côté de `FLOAT.EXE`; structure statique et inventaire : [cob_archives.md](../cob_archives.md).
+- Les 483 membres ont chacun un enregistrement avec offset, longueur et chemin local dans `../archive_index.jsonl`.
 - Le clone local `C:\git\ToneRebellion_Raw\original_content` est la copie de travail des contenus extraits. Éviter GitHub, conformément à la demande de l’utilisateur.
 
 ## Profil d’analyse

@@ -1,17 +1,17 @@
 # Archives de données COB
 
-## Sources locales et intégrité
+## Sources locales
 
 Les archives se trouvent à côté de la cible, sous `C:\Program Files\Tone\` :
 
-| Fichier | Taille | SHA-256 | Membres |
-|---|---:|---|---:|
-| `TONE00.COB` | 156 212 octets | `362257b33c4d6b6e3c95208f6e45a1734aeadc2d21898a7f1055476c521bae5b` | 21 |
-| `TONE01.COB` | 26 927 860 octets | `ba15e43c3d5b9156594a6fab166c76749c5953dfecc39ffaa568271f7100a64f` | 462 |
+| Fichier | Taille | Membres |
+|---|---:|---:|
+| `TONE00.COB` | 156 212 octets | 21 |
+| `TONE01.COB` | 26 927 860 octets | 462 |
 
-`C:\Program Files\Tone\COB.CFG` contient les deux noms `tone00.cob` et `tone01.cob`, chacun sur sa ligne. Les membres extraits sont présents dans `C:\git\ToneRebellion_Raw\original_content`. Une comparaison locale de chaque membre a vérifié le nom, la longueur et le SHA-256 : 21/21 pour `TONE00.COB`, 462/462 pour `TONE01.COB`, soit 483 correspondances et aucun écart. Le détail reproductible est consigné ligne par ligne dans [archive_index.jsonl](archive_index.jsonl).
+`C:\Program Files\Tone\COB.CFG` contient les deux noms `tone00.cob` et `tone01.cob`, chacun sur sa ligne. Les membres extraits sont présents dans `C:\git\ToneRebellion_Raw\original_content`. L’index local recense les 483 entrées par nom, taille, offset et chemin de contenu extrait.
 
-Les fichiers originaux ont été lus pour calculer leurs empreintes et analyser leurs tables ; ils n’ont pas été modifiés ni exécutés. Le corpus local fourni est la source de travail. Conformément à la demande, ne pas utiliser GitHub ni télécharger à nouveau les fichiers.
+Les fichiers originaux ont été lus pour analyser leurs tables ; ils n’ont pas été modifiés ni exécutés. Le corpus local fourni est la source de travail. Conformément à la demande, ne pas utiliser GitHub ni télécharger à nouveau les fichiers.
 
 ## Structure observée sur disque
 
@@ -24,7 +24,7 @@ L’inspection statique des octets des deux archives montre la disposition suiva
 
 La fin des deux tables et le début de la zone de données sont à l’offset `0x472` dans `TONE00.COB` et `0x6178` dans `TONE01.COB`. Les offsets observés sont croissants, dans les limites des fichiers, et la dernière entrée de chaque archive s’achève à sa fin. Les premiers membres sont `bldinf.txt` et `data\\acast.shp`; les derniers sont `windows.txt` et `data\\worldpos.txt`, respectivement.
 
-Cette description provient de la lecture des octets et de la concordance de tous les contenus extraits. Le pseudocode Ghidra confirme indépendamment les champs de table utilisés par le chargeur.
+Cette description provient de la lecture des octets et de l’examen des contenus extraits. Le pseudocode Ghidra confirme indépendamment les champs de table utilisés par le chargeur.
 
 ## Code de chargement observé dans Ghidra
 
@@ -36,6 +36,6 @@ Cette description provient de la lecture des octets et de la concordance de tous
 
 ## Inventaire et prochaines analyses
 
-`archive_index.jsonl` contient une entrée par membre : archive et empreinte de l’archive, index, nom, offset, longueur, empreinte du contenu, chemin extrait local, empreinte extraite et résultat de comparaison. Les fichiers du corpus peuvent donc servir directement à lire les formats texte et inspecter les assets, tout en gardant la provenance vers les octets archivés.
+`archive_index.jsonl` contient une entrée par membre : archive, index, nom, offset, longueur et chemin extrait local. Les fichiers du corpus peuvent donc servir directement à lire les formats texte et inspecter les assets, tout en gardant la provenance des membres archivés.
 
 La correspondance du conteneur avec le corpus extrait ne donne pas automatiquement la grammaire des formats. Rattacher chaque fichier à son chargeur/parseur à l’aide des appels et références Ghidra. `shapeinf.txt`, par exemple, est présent localement et expose les directives `shape`, `frame` et `offset`, mais le call-site qui le consomme reste à identifier. Les associations et interprétations documentées figurent dans [data_catalog.md](data_catalog.md).

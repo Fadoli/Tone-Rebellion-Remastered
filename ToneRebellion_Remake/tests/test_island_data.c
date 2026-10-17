@@ -48,6 +48,7 @@ static void test_tone_location_with_zero_special_value(void)
                             error, sizeof(error)));
     assert(data.location_count == 5);
     assert(data.locations[0].kind == ISLAND_LOCATION_TONE);
+    assert(data.locations[0].kind != ISLAND_LOCATION_PAD_SMALL);
     assert(data.locations[0].special_value == 0);
     assert(data.locations[0].renderer_class == 0);
     assert(data.locations[0].renderer_subtype == 0);

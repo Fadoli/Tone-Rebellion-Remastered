@@ -9,6 +9,7 @@ add_library(tone_core STATIC
     src/data/shp_image.c
     src/core/island_haze.c
     src/core/island_data.c
+    src/core/island_render_rules.c
     src/core/world_map.c
 )
 target_include_directories(tone_core PUBLIC src/core src/data)
@@ -33,6 +34,16 @@ if(BUILD_TESTING)
     target_link_libraries(test_island_data PRIVATE tone_core)
     target_compile_features(test_island_data PRIVATE c_std_11)
     add_test(NAME island_data_unit COMMAND test_island_data)
+
+    add_executable(test_shp_image tests/test_shp_image.c)
+    target_link_libraries(test_shp_image PRIVATE tone_core)
+    target_compile_features(test_shp_image PRIVATE c_std_11)
+    add_test(NAME shp_image_unit COMMAND test_shp_image)
+
+    add_executable(test_island_render_rules tests/test_island_render_rules.c)
+    target_link_libraries(test_island_render_rules PRIVATE tone_core)
+    target_compile_features(test_island_render_rules PRIVATE c_std_11)
+    add_test(NAME island_render_rules_unit COMMAND test_island_render_rules)
 
     add_executable(test_island_corpus tests/test_island_corpus.c)
     target_link_libraries(test_island_corpus PRIVATE tone_core)

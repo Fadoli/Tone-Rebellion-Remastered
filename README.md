@@ -3,7 +3,7 @@
 ## Cible et identité
 
 - Fichier : `C:\Program Files\Tone\FLOAT.EXE`
-- SHA-256 attendu et observé : `bb229d7f09c88caf4dc1825c00b957961c22c201cf1a8dd8139bf6f4599ff28c`
+- Binaire : exécutable Windows PE x86 32 bits, version installée 1.16F.
 - Format / architecture : PE Windows, x86 32 bits
 - Fournisseur actif : Ghidra 12.1.4 via REA (`rea-agents` 6.5.0)
 - Ghidra : `C:\ghidra_12.1.4_PUBLIC`
@@ -13,15 +13,15 @@
 
 ## Corpus de données local
 
-- Archives du jeu, à côté du binaire : `C:\Program Files\Tone\TONE00.COB` (156 212 octets, SHA-256 `362257b33c4d6b6e3c95208f6e45a1734aeadc2d21898a7f1055476c521bae5b`) et `C:\Program Files\Tone\TONE01.COB` (26 927 860 octets, SHA-256 `ba15e43c3d5b9156594a6fab166c76749c5953dfecc39ffaa568271f7100a64f`).
+- Archives du jeu, à côté du binaire : `C:\Program Files\Tone\TONE00.COB` (156 212 octets) et `C:\Program Files\Tone\TONE01.COB` (26 927 860 octets).
 - `C:\Program Files\Tone\COB.CFG` référence `tone00.cob` et `tone01.cob`.
-- Les fichiers extraits sont disponibles dans `C:\git\ToneRebellion_Raw\original_content`. Les 483 membres des archives correspondent tous par nom, taille et SHA-256 aux fichiers du corpus local.
+- Les fichiers extraits sont disponibles dans `C:\git\ToneRebellion_Raw\original_content`. Les 483 entrées des archives sont indexées par nom, taille et chemin vers le membre correspondant du corpus local.
 - Voir [cob_archives.md](cob_archives.md) pour le format observé et les éléments Ghidra, et [archive_index.jsonl](archive_index.jsonl) pour le détail des membres.
 - Pour la suite, utiliser ces chemins locaux. L’utilisateur a demandé d’éviter GitHub ; ne pas chercher ni télécharger le corpus sur GitHub.
 
 ## Méthode
 
-L’analyse reste statique. On conserve l’identité SHA-256, le fournisseur, la version, le profil d’analyse et les Evidence IDs REA. L’inventaire complet des procédures distingue fonctions internes, thunks, fonctions externes et code de démarrage/runtime lorsque l’évidence le permet. Chaque fonction interne avec un corps analysable est décompilée par lots. Pour chaque procédure, l’index consigne l’adresse, le nom actuel, la classification, l’état, les appels directs, les chaînes référencées, une référence Evidence et les limites.
+L’analyse reste statique. On conserve le fournisseur, la version, le profil d’analyse et les Evidence IDs REA. L’inventaire complet des procédures distingue fonctions internes, thunks, fonctions externes et code de démarrage/runtime lorsque l’évidence le permet. Chaque fonction interne avec un corps analysable est décompilée par lots. Pour chaque procédure, l’index consigne l’adresse, le nom actuel, la classification, l’état, les appels directs, les chaînes référencées, une référence Evidence et les limites.
 
 Les faits observés par Ghidra sont séparés des interprétations. Une absence de chaîne ou de symbole dans les inventaires Ghidra ne prouve pas son absence des octets du fichier. Les références d’évidence doivent permettre de retrouver les détails sans recopier de réponses tronquées.
 

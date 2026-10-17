@@ -30,6 +30,45 @@ static int is_shp_member(const char *name)
            (extension[3] == 'p' || extension[3] == 'P');
 }
 
+static int read_shape_manifest(const char *content_dir,
+                               char names[][64], size_t capacity,
+                               size_t *name_count)
+{
+    char path[1024];
+    char line[256];
+    FILE *file;
+    int path_length;
+
+    path_length = snprintf(path, sizeof(path), "%s\\shapes.txt", content_dir);
+    if (path_length < 0 || (size_t)path_length >= sizeof(path)) return 0;
+    file = fopen(path, "rb");
+    if (file == NULL) return 0;
+    *name_count = 0;
+    while (fgets(line, sizeof(line), file) != NULL) {
+        char member_name[64];
+        size_t length;
+        if (sscanf(line, "%63s", member_name) != 1 || !is_shp_member(member_name)) continue;
+        length = strlen(member_name);
+        if (length >= sizeof(names[0]) || *name_count == capacity) {
+            fclose(file);
+            return 0;
+        }
+        memcpy(names[*name_count], member_name, length + 1);
+        ++*name_count;
+    }
+    fclose(file);
+    return *name_count != 0;
+}
+
+static int manifest_contains(char names[][64], size_t name_count, const char *name)
+{
+    size_t i;
+    for (i = 0; i < name_count; ++i) {
+        if (strcmp(names[i], name) == 0) return 1;
+    }
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     CobArchive archive = {0};
@@ -39,10 +78,18 @@ int main(int argc, char **argv)
     unsigned int records_found = 0;
     unsigned int shapes_found = 0;
     unsigned int frames_decoded = 0;
+    char shape_names[512][64];
+    size_t shape_name_count = 0;
 
-    if (argc != 2) {
-        (void)fprintf(stderr, "usage: test_island_cob <TONE01.COB>\n");
+    if (argc != 3) {
+        (void)fprintf(stderr, "usage: test_island_cob <TONE01.COB> <original_content_dir>\n");
         return 2;
+    }
+    if (!read_shape_manifest(argv[2], shape_names,
+                             sizeof(shape_names) / sizeof(shape_names[0]),
+                             &shape_name_count)) {
+        (void)fprintf(stderr, "could not read SHP manifest from original content\n");
+        return 1;
     }
     if (!cob_archive_open(argv[1], &archive, error, sizeof(error))) {
         (void)fprintf(stderr, "could not open COB: %s\n", error);
@@ -52,7 +99,8 @@ int main(int argc, char **argv)
     for (i = 0; i < archive.member_count; ++i) {
         const CobMember *member = cob_archive_member_at(&archive, i);
         unsigned char *bytes;
-        if (is_shp_member(member->name)) {
+        if (is_shp_member(member->name) &&
+            manifest_contains(shape_names, shape_name_count, member->name)) {
             ShpFile shp;
             uint32_t frame_index;
             bytes = (unsigned char *)malloc(member->length == 0 ? 1U : member->length);
@@ -63,6 +111,14 @@ int main(int argc, char **argv)
                                error, sizeof(error))) {
                 (void)fprintf(stderr, "%s: %s\n", member->name,
                               bytes == NULL ? "out of memory" : error);
+                free(bytes);
+                cob_archive_close(&archive);
+                return 1;
+            }
+            if (strcmp(member->name, "data\\tone.shp") == 0 &&
+                shp.frame_count != 40) {
+                (void)fprintf(stderr, "data\\tone.shp: expected 40 POOL frames, found %u\n",
+                              (unsigned)shp.frame_count);
                 free(bytes);
                 cob_archive_close(&archive);
                 return 1;
@@ -85,8 +141,9 @@ int main(int argc, char **argv)
         }
     }
 
-    if (shapes_found == 0 || cob_archive_find(&archive, "data\\br-trg01.shp") == NULL) {
-        (void)fprintf(stderr, "expected SHP members including data\\br-trg01.shp\n");
+    if (shapes_found == 0 || cob_archive_find(&archive, "data\\br-trg01.shp") == NULL ||
+        !manifest_contains(shape_names, shape_name_count, "data\\br-trg01.shp")) {
+        (void)fprintf(stderr, "expected manifested SHP members including data\\br-trg01.shp\n");
         cob_archive_close(&archive);
         return 1;
     }
