@@ -76,9 +76,16 @@ int game_music_enter_realm(GameMusicState *state, uint8_t realm_id,
     } else if (realm_id < 4) {
         (void)snprintf(out_tune_id, out_capacity, "act%u",
                        (unsigned int)realm_id + 1U);
-    } else if (!choose_random_realm_tune(state, player_tribe, random_state,
-                                         out_tune_id, out_capacity)) {
-        return 0;
+    } else {
+        /* FUN_00470fe7 first consumes one LCG value and only invokes
+           FUN_0046ff6f when bit 0 is set. Either way, the realm's pending
+           transition flag is consumed below. */
+        if (random_state == NULL) return 0;
+        if ((tone_rng_next15(random_state) & 1U) != 0 &&
+            !choose_random_realm_tune(state, player_tribe, random_state,
+                                      out_tune_id, out_capacity)) {
+            return 0;
+        }
     }
 
     state->pending_realms = (uint16_t)(state->pending_realms & ~realm_bit);

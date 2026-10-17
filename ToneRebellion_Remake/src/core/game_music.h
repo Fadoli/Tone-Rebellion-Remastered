@@ -16,8 +16,9 @@ typedef struct GameMusicState {
 /* FUN_004702d9 marks all 15 realm IDs for a first-entry music transition. */
 void game_music_state_init(GameMusicState *state);
 
-/* Select the original tune on the first entry into a realm. Returns 1 and
-   writes a sound.txt tune ID when a transition is pending, otherwise 0. */
+/* Consume the original first-entry transition flag. Returns 1 when a realm
+   was pending; an ordinary realm can leave out_tune_id empty when the source
+   LCG gate elects not to change tracks. */
 int game_music_enter_realm(GameMusicState *state, uint8_t realm_id,
                            uint8_t player_tribe, ToneRng *random_state,
                            char *out_tune_id, size_t out_capacity);

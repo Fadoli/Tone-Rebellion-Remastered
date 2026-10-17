@@ -456,6 +456,71 @@ int game_session_bridge_is_active(const GameSession *session,
     return (session->active_bridge_mask & (UINT32_C(1) << bridge_index)) != 0;
 }
 
+static int find_bridge_marker_index(const GameRuntimeIsland *island,
+                                    uint8_t neighbor_island)
+{
+    unsigned int location_index;
+    if (island == NULL) return -1;
+    for (location_index = 0; location_index < island->location_count;
+         ++location_index) {
+        const GameRuntimeLocation *location = &island->locations[location_index];
+        if (location->renderer_class == 2 &&
+            location->bridge_neighbor_island == (int32_t)neighbor_island) {
+            return (int)location_index;
+        }
+    }
+    return -1;
+}
+
+int game_session_world_bridge_is_renderable(const GameSession *session,
+                                            uint8_t bridge_index,
+                                            uint8_t bridge_count,
+                                            uint8_t island_a,
+                                            uint8_t island_b)
+{
+    const GameRuntimeLocation *marker_a;
+    const GameRuntimeLocation *marker_b;
+    if (!game_session_bridge_is_active(session, bridge_index, bridge_count) ||
+        island_a >= session->island_count || island_b >= session->island_count ||
+        island_a == island_b) {
+        return 0;
+    }
+    {
+        int index_a = find_bridge_marker_index(&session->islands[island_a], island_b);
+        int index_b = find_bridge_marker_index(&session->islands[island_b], island_a);
+        if (index_a < 0 || index_b < 0) return 0;
+        marker_a = &session->islands[island_a].locations[index_a];
+        marker_b = &session->islands[island_b].locations[index_b];
+    }
+    return
+           marker_a->bridge_constructed && marker_b->bridge_constructed;
+}
+
+int game_session_mark_bridge_constructed(GameSession *session,
+                                         uint8_t bridge_index,
+                                         uint8_t bridge_count,
+                                         uint8_t island_a,
+                                         uint8_t island_b)
+{
+    GameRuntimeLocation *marker_a;
+    GameRuntimeLocation *marker_b;
+    if (session == NULL || bridge_count > WORLD_MAP_MAX_BRIDGES ||
+        bridge_index >= bridge_count || island_a >= session->island_count ||
+        island_b >= session->island_count || island_a == island_b) {
+        return 0;
+    }
+    {
+        int index_a = find_bridge_marker_index(&session->islands[island_a], island_b);
+        int index_b = find_bridge_marker_index(&session->islands[island_b], island_a);
+        if (index_a < 0 || index_b < 0) return 0;
+        marker_a = &session->islands[island_a].locations[index_a];
+        marker_b = &session->islands[island_b].locations[index_b];
+    }
+    marker_a->bridge_constructed = 1;
+    marker_b->bridge_constructed = 1;
+    return game_session_set_bridge_active(session, bridge_index, bridge_count, 1);
+}
+
 int game_session_set_bridge_active(GameSession *session,
                                    uint8_t bridge_index,
                                    uint8_t bridge_count,
@@ -621,7 +686,7 @@ int game_session_order_floater_move_from_click(GameSession *session,
     return game_session_order_floater_move(session, floater_index,
                                            (uint16_t)packed_x * 10U,
                                            (uint16_t)packed_y * 10U,
-                                           floater->movement_speed, 0);
+                                           floater->movement_speed, 10);
 }
 
 void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
@@ -640,6 +705,10 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
         if (!floater->has_move_order) continue;
         dx = (int32_t)floater->destination_x - floater->x;
         dy = (int32_t)floater->destination_y - floater->y;
+        /* FUN_00423068 updates facing from the destination independently of
+           whether the movement state is already inside its stopping radius. */
+        if (dx < 0) floater->facing_left = 1;
+        else if (dx > 0) floater->facing_left = 0;
         distance = dx < 0 ? -dx : dx;
         if ((dy < 0 ? -dy : dy) > distance) distance = dy < 0 ? -dy : dy;
         if (distance <= floater->stop_radius) {

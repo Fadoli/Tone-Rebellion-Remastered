@@ -40,6 +40,9 @@ typedef struct GameRuntimeLocation {
     double barg_progress;
     uint8_t renderer_class;
     uint8_t tribe_visibility_mask;
+    /* FUN_004669bd sets bit 0 at runtime record +0x1c on both paired
+       class-2 bridge objects once the bridge link is established. */
+    uint8_t bridge_constructed;
 } GameRuntimeLocation;
 
 typedef struct GameRuntimeIsland {
@@ -59,6 +62,7 @@ typedef struct GameFloaterStart {
     uint16_t movement_speed;
     uint16_t stop_radius;
     uint8_t has_move_order;
+    uint8_t facing_left;
 } GameFloaterStart;
 
 typedef struct GameSession {
@@ -113,6 +117,20 @@ int game_session_world_map_frame_offset(const GameSession *session,
 int game_session_bridge_is_active(const GameSession *session,
                                   uint8_t bridge_index,
                                   uint8_t bridge_count);
+/* A WORLDPOS possibility is drawable only when its runtime flag is active and
+   both endpoint islands contain the reciprocal class-2 bridge markers paired
+   by FUN_00461859. */
+int game_session_world_bridge_is_renderable(const GameSession *session,
+                                            uint8_t bridge_index,
+                                            uint8_t bridge_count,
+                                            uint8_t island_a,
+                                            uint8_t island_b);
+/* Models the paired-object state change observed in FUN_004669bd. */
+int game_session_mark_bridge_constructed(GameSession *session,
+                                         uint8_t bridge_index,
+                                         uint8_t bridge_count,
+                                         uint8_t island_a,
+                                         uint8_t island_b);
 int game_session_set_bridge_active(GameSession *session,
                                    uint8_t bridge_index,
                                    uint8_t bridge_count,

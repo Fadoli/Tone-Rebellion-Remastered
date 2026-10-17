@@ -117,6 +117,9 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
                 assert(game_session_world_map_frame_offset(
                            &session, (uint8_t)island,
                            (uint8_t)(1U << config.selected_tribe), 0) == 15);
+                assert(game_session_world_map_frame_offset(
+                           &session, (uint8_t)island,
+                           (uint8_t)(1U << config.selected_tribe), 1) == 15);
             }
         }
         assert(found_unassigned);
@@ -148,6 +151,39 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
     assert(session.islands[4].locations[12].bridge_neighbor_island == -1);
     assert(session.islands[4].locations[13].record_value_10 == 7);
     assert(session.islands[4].locations[13].owner_id == -1);
+    {
+        GameRuntimeLocation *bridge_a = &session.islands[0].locations[12];
+        GameRuntimeLocation *bridge_b = &session.islands[1].locations[12];
+        assert(!game_session_world_bridge_is_renderable(
+            &session, 0, world.bridge_count, 0, 1));
+        assert(game_session_set_bridge_active(&session, 0, world.bridge_count, 1));
+        /* A map-edge flag and paired possible bridge sites are not enough:
+           the binary also marks both endpoint objects when the bridge exists. */
+        assert(!game_session_world_bridge_is_renderable(
+            &session, 0, world.bridge_count, 0, 1));
+        assert(game_session_mark_bridge_constructed(
+            &session, 0, world.bridge_count, 0, 1));
+        assert(game_session_world_bridge_is_renderable(
+            &session, 0, world.bridge_count, 0, 1));
+        assert(session.islands[0].locations[12].bridge_constructed);
+        assert(session.islands[1].locations[12].bridge_constructed);
+        assert(game_session_set_bridge_active(&session, 0, world.bridge_count, 0));
+        assert(!game_session_world_bridge_is_renderable(
+            &session, 0, world.bridge_count, 0, 1));
+        assert(game_session_set_bridge_active(&session, 0, world.bridge_count, 1));
+        bridge_b->bridge_neighbor_island = -1;
+        assert(!game_session_world_bridge_is_renderable(
+            &session, 0, world.bridge_count, 0, 1));
+        bridge_b->bridge_neighbor_island = 0;
+        bridge_a->renderer_class = 0;
+        assert(!game_session_world_bridge_is_renderable(
+            &session, 0, world.bridge_count, 0, 1));
+        bridge_a->renderer_class = 2;
+        assert(!game_session_world_bridge_is_renderable(
+            &session, 0, world.bridge_count, 1, 1));
+        assert(!game_session_world_bridge_is_renderable(
+            &session, world.bridge_count, world.bridge_count, 0, 1));
+    }
     assert(session.class0_assignments == 9);
     {
         unsigned int island_index;
@@ -427,12 +463,23 @@ static void test_floater_move_state_advances_only_the_ordered_unit(void)
     assert(floater->has_move_order);
     game_session_tick_floater_moves(&session, 1);
     assert(floater->x == 103 && floater->y == 97);
+    assert(!floater->facing_left);
     assert(idle_floater->x == idle_x && !idle_floater->has_move_order);
 
-    assert(game_session_order_floater_move(&session, 0, 104, 96, 3, 1));
+    assert(game_session_order_floater_move(&session, 0, 100, 96, 3, 10));
     game_session_tick_floater_moves(&session, 2);
     assert(floater->x == 103 && floater->y == 97);
     assert(!floater->has_move_order); /* destination is within the stop radius */
+    assert(floater->facing_left); /* facing follows target even when stationary */
+
+    assert(game_session_order_floater_move(&session, 0, 100, 97, 3, 0));
+    game_session_tick_floater_moves(&session, 3);
+    assert(floater->facing_left);
+    game_session_tick_floater_moves(&session, 4);
+    game_session_tick_floater_moves(&session, 5);
+    game_session_tick_floater_moves(&session, 6);
+    game_session_tick_floater_moves(&session, 7);
+    assert(floater->x == 100 && floater->y == 97);
 
     assert(!game_session_order_floater_move(&session, 0, 2560, 100, 1, 0));
     assert(!game_session_order_floater_move(&session, 0, 120, 80, 0, 0));
@@ -455,9 +502,16 @@ static void test_floater_move_from_click_uses_source_grid_and_worker_speed(void)
     assert(floater->destination_x == 100);
     assert(floater->destination_y == 120);
     assert(floater->movement_speed == 3);
+    assert(floater->stop_radius == 10);
     assert(floater->has_move_order);
     game_session_tick_floater_moves(&session, 1);
     assert(floater->x == 100 && floater->y == 103);
+
+    /* FUN_0041e569 ends a free-move state within its default 10 px radius. */
+    assert(game_session_order_floater_move(&session, 0, 105, 103, 3, 10));
+    game_session_tick_floater_moves(&session, 2);
+    assert(floater->x == 100 && floater->y == 103);
+    assert(!floater->has_move_order);
 
     /* The source packs cell coordinates into bytes before expanding them. */
     assert(game_session_order_floater_move_from_click(&session, 0, 2559, 320));

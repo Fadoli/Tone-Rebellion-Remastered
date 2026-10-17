@@ -24,15 +24,13 @@ int main(void)
     assert(strcmp(tune, "levi") == 0);
 
     assert(game_music_enter_realm(&state, 4, 2, &rng, tune, sizeof(tune)));
-    assert(tune[0] != '\0');
-    assert(strncmp(tune, "tribe", 5) == 0 ||
-           strncmp(tune, "act", 3) == 0 ||
-           strcmp(tune, "ambi1") == 0 || strcmp(tune, "ambi2") == 0);
-    assert(state.last_random_track >= 0 && state.last_random_track < 9);
+    assert(strcmp(tune, "ambi2") == 0); /* gate 41 is odd; next draw selects 8 */
+    assert(state.last_random_track == 8);
     previous_random_track = state.last_random_track;
     assert(game_music_enter_realm(&state, 5, 2, &rng, tune, sizeof(tune)));
-    assert(state.last_random_track >= 0 && state.last_random_track < 9);
-    assert(state.last_random_track != previous_random_track);
+    assert(tune[0] == '\0'); /* gate 6334 is even: consume flag, keep current tune */
+    assert(state.last_random_track == previous_random_track);
+    assert(!game_music_enter_realm(&state, 5, 2, &rng, tune, sizeof(tune)));
     assert(!game_music_enter_realm(&state, 15, 2, &rng, tune, sizeof(tune)));
     assert(!game_music_enter_realm(&state, 1, 4, &rng, tune, sizeof(tune)));
 
