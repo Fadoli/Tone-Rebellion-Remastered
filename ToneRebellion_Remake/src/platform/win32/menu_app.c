@@ -7,8 +7,8 @@
 #include "island_data.h"
 #include "island_haze.h"
 #include "island_render_rules.h"
-#include "pad_catalog.h"
 #include "shp_image.h"
+#include "window_catalog.h"
 #include "world_map.h"
 
 #include <math.h>
@@ -83,7 +83,7 @@ static char g_newgame_text[8][256];
 static char g_tribe_text[4][2][1024];
 static char g_island_names[ISLAND_NAME_COUNT][32];
 static IslandData g_island_surface_data;
-static PadCatalog g_pad_catalog;
+static WindowCatalog g_window_catalog;
 static uint16_t g_island_draw_order[ISLAND_DATA_MAX_LOCATIONS];
 static IslandHaze g_island_haze;
 static unsigned char *g_island_height_data;
@@ -92,9 +92,6 @@ static int g_island_surface_id = -1;
 static int g_island_scroll_x;
 static int g_hovered_location = -1;
 static int g_selected_location = -1;
-static int g_build_menu_open;
-static size_t g_build_menu_page;
-static int g_selected_build_item = -1;
 static int g_resume_available;
 static unsigned char g_load_slot_valid[8];
 static int g_hovered_help = -1;
@@ -105,49 +102,13 @@ static int g_mouse_x;
 static int g_mouse_y;
 
 static const int g_difficulty_count = 5;
-static const PadTribe g_menu_pad_tribes[4] = {
-    PAD_TRIBE_PROTECTOR, PAD_TRIBE_SEEKER,
-    PAD_TRIBE_MYSTIC, PAD_TRIBE_LIFEGIVER
-};
-
-static PadTribe selected_pad_tribe(void)
-{
-    if (g_menu.selected_tribe < 0 || g_menu.selected_tribe >= 4) return PAD_TRIBE_NONE;
-    return g_menu_pad_tribes[g_menu.selected_tribe];
-}
-
-static size_t build_menu_page_count(void)
-{
-    size_t count = pad_catalog_tribe_item_count(&g_pad_catalog, selected_pad_tribe());
-    return (count + 3u) / 4u;
-}
-
-static const PadCatalogItem *build_menu_item_at(unsigned column)
-{
-    size_t ordinal = g_build_menu_page * 4u + column;
-    return pad_catalog_tribe_item_at(&g_pad_catalog, selected_pad_tribe(), ordinal);
-}
-
-static void set_build_menu_page(int direction)
-{
-    size_t page_count = build_menu_page_count();
-    if (page_count == 0) {
-        g_build_menu_page = 0;
-        return;
-    }
-    if (direction > 0) g_build_menu_page = (g_build_menu_page + 1u) % page_count;
-    else g_build_menu_page = (g_build_menu_page + page_count - 1u) % page_count;
-}
-
 static void update_window_title(HWND window)
 {
     const char *title = "Tone Rebellion - Title";
     if (g_menu.screen == SCREEN_NEW_GAME) title = "Tone Rebellion - New Game";
     else if (g_menu.screen == SCREEN_WORLD_MAP) title = "Tone Rebellion - World Map (Esc: setup, Left/Right: size)";
-    else if (g_menu.screen == SCREEN_ISLAND && g_build_menu_open)
-        title = "Tone Rebellion - Construction (B: close, Left/Right: page)";
     else if (g_menu.screen == SCREEN_ISLAND)
-        title = "Tone Rebellion - Island (B: build, arrows: scroll, Esc: map)";
+        title = "Tone Rebellion - Island (arrows: scroll, Esc: map)";
     else if (g_menu.screen == SCREEN_LOAD_GAME) title = "Tone Rebellion - Load Game (Esc: back)";
     SetWindowTextA(window, title);
 }
@@ -481,20 +442,12 @@ static int update_hover_help(int x, int y)
 {
     int help = -1;
     if (g_menu.screen == SCREEN_MAIN_MENU) {
-        if (y >= 337 && y <= 399 && x >= 99 && x <= 240) help = HELP_MAIN_NEWGAME;
-        else if (g_resume_available && y >= 269 && y <= 332 && x >= 262 && x <= 377)
+        const WindowTemplate *control = window_catalog_hit_test(&g_window_catalog, 0, x, y);
+        if (control != NULL && strcmp(control->name, "NEWGAME") == 0) help = HELP_MAIN_NEWGAME;
+        else if (control != NULL && strcmp(control->name, "RESUME") == 0 && g_resume_available)
             help = HELP_MAIN_RESUME;
-        else if (y >= 337 && y <= 399 && x >= 402 && x <= 540) help = HELP_MAIN_LOAD;
-        else if (y >= 407 && y <= 469 && x >= 255 && x <= 375) help = HELP_MAIN_EXIT;
-    } else if (g_menu.screen == SCREEN_NEW_GAME) {
-        if (y >= 423 && y <= 465 && x >= 7 && x <= 75) help = HELP_NEW_EXIT;
-        else if (y >= 423 && y <= 464 && x >= 76 && x <= 142) help = HELP_NEW_WORLD;
-        else if (y >= 443 && y <= 476 && x >= 143 && x <= 195) help = HELP_NEW_TRIBE0;
-        else if (y >= 445 && y <= 474 && x >= 196 && x <= 250) help = HELP_NEW_TRIBE1;
-        else if (y >= 441 && y <= 474 && x >= 391 && x <= 443) help = HELP_NEW_TRIBE2;
-        else if (y >= 440 && y <= 476 && x >= 444 && x <= 494) help = HELP_NEW_TRIBE3;
-        else if (y >= 420 && y <= 464 && x >= 495 && x <= 562) help = HELP_NEW_DIFFICULTY;
-        else if (y >= 419 && y <= 464 && x >= 564 && x <= 633) help = HELP_NEW_BEGIN;
+        else if (control != NULL && strcmp(control->name, "LOADGAME") == 0) help = HELP_MAIN_LOAD;
+        else if (control != NULL && strcmp(control->name, "EXITAPP") == 0) help = HELP_MAIN_EXIT;
     }
     if (help == g_hovered_help) return 0;
     g_hovered_help = help;
@@ -516,6 +469,7 @@ static int tribe_icon_at(int x, int y)
 static int newgame_text_index_at(int x, int y)
 {
     int tribe = tribe_icon_at(x, y);
+    const WindowTemplate *control;
     if (tribe >= 0) return tribe;
     {
         int dx = x - 320;
@@ -524,14 +478,16 @@ static int newgame_text_index_at(int x, int y)
         if (distance_squared < 100) return 4;
         if (distance_squared < 200) return 5;
     }
-    if (y >= 423 && y <= 465 && x >= 7 && x <= 75) return 6;
-    if (y >= 423 && y <= 464 && x >= 76 && x <= 142) return 5;
-    if (y >= 443 && y <= 476 && x >= 143 && x <= 195) return 0;
-    if (y >= 445 && y <= 474 && x >= 196 && x <= 250) return 1;
-    if (y >= 441 && y <= 474 && x >= 391 && x <= 443) return 2;
-    if (y >= 440 && y <= 476 && x >= 444 && x <= 494) return 3;
-    if (y >= 420 && y <= 464 && x >= 495 && x <= 562) return 4;
-    if (y >= 419 && y <= 464 && x >= 564 && x <= 633) return 7;
+    control = window_catalog_hit_test(&g_window_catalog, 1, x, y);
+    if (control == NULL) return -1;
+    if (strcmp(control->message_destination, "WINMGR") == 0 &&
+        control->send_message[0] == 1 && control->send_message[1] == 0) return 6;
+    if (strcmp(control->message_destination, "MASTER") != 0) return -1;
+    if (control->send_message[0] == 52) return 7;
+    if (control->send_message[0] == 53) return 5;
+    if (control->send_message[0] == 55) return 4;
+    if (control->send_message[0] >= 60 && control->send_message[0] <= 63)
+        return control->send_message[0] - 60;
     return -1;
 }
 
@@ -869,32 +825,6 @@ static int load_island_names(char *error, size_t error_capacity)
         goto done;
     }
     success = 1;
-done:
-    free(bytes);
-    cob_archive_close(&archive);
-    return success;
-}
-
-static int load_pad_catalog(char *error, size_t error_capacity)
-{
-    CobArchive archive = {0};
-    const CobMember *member;
-    unsigned char *bytes = NULL;
-    int success = 0;
-
-    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE00.COB", &archive,
-                          error, error_capacity)) return 0;
-    member = cob_archive_find(&archive, "pad.txt");
-    if (member == NULL) {
-        (void)snprintf(error, error_capacity, "pad.txt was not found in TONE00.COB");
-        goto done;
-    }
-    bytes = (unsigned char *)malloc(member->length == 0 ? 1 : member->length);
-    if (bytes == NULL || !cob_archive_read_member(&archive, member, bytes,
-                                                   member->length, error,
-                                                   error_capacity)) goto done;
-    success = pad_catalog_load(bytes, member->length, &g_pad_catalog,
-                               error, error_capacity);
 done:
     free(bytes);
     cob_archive_close(&archive);
@@ -1257,16 +1187,60 @@ static int logical_viewport(int client_width, int client_height, RECT *viewport)
     return viewport->right > viewport->left && viewport->bottom > viewport->top;
 }
 
+static int template_is_in_state(const WindowTemplate *window, int state)
+{
+    size_t i;
+    for (i = 0; i < window->state_count; ++i) {
+        if (window->states[i] == state) return 1;
+    }
+    return 0;
+}
+
+static int template_help_index(const WindowTemplate *window)
+{
+    if (strcmp(window->name, "RESUME") == 0) return HELP_MAIN_RESUME;
+    if (strcmp(window->name, "NEWGAME") == 0) return HELP_MAIN_NEWGAME;
+    if (strcmp(window->name, "LOADGAME") == 0) return HELP_MAIN_LOAD;
+    if (strcmp(window->name, "EXITAPP") == 0) return HELP_MAIN_EXIT;
+    return -1;
+}
+
+static int template_caption_index(const WindowTemplate *window)
+{
+    if (strcmp(window->message_destination, "WINMGR") == 0 &&
+        window->send_message[0] == 1 && window->send_message[1] == 0) return 6;
+    if (strcmp(window->message_destination, "MASTER") != 0) return -1;
+    if (window->send_message[0] == 52) return 7;
+    if (window->send_message[0] == 53) return 5;
+    if (window->send_message[0] == 55) return 4;
+    if (window->send_message[0] >= 60 && window->send_message[0] <= 63)
+        return window->send_message[0] - 60;
+    return -1;
+}
+
+static void draw_configured_buttons(HDC dc, int state, const char *shape_id,
+                                    SpriteSheet *sheet)
+{
+    size_t i;
+    for (i = 0; i < g_window_catalog.count; ++i) {
+        const WindowTemplate *window = &g_window_catalog.windows[i];
+        int frame;
+        if (!template_is_in_state(window, state) ||
+            strcmp(window->shape_id, shape_id) != 0 || window->shape_frame < 0) continue;
+        frame = window->shape_frame;
+        if (state == 0) {
+            if (template_help_index(window) == g_hovered_help) ++frame;
+        } else if (state == 1) {
+            if (template_caption_index(window) == g_hovered_newgame_text) ++frame;
+        }
+        draw_sprite(dc, sheet, (uint32_t)frame, window->pane.left, window->pane.top);
+    }
+}
+
 static void render_main_menu(HDC dc)
 {
     fill_rect(dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
-    draw_sprite(dc, &g_title_art, 0, 0, 0);
-    draw_sprite(dc, &g_title_art,
-                2u + (g_resume_available && g_hovered_help == HELP_MAIN_RESUME ? 1u : 0u),
-                262, 269);
-    draw_sprite(dc, &g_title_art, 4u + (g_hovered_help == HELP_MAIN_NEWGAME ? 1u : 0u), 99, 337);
-    draw_sprite(dc, &g_title_art, 6u + (g_hovered_help == HELP_MAIN_LOAD ? 1u : 0u), 402, 337);
-    draw_sprite(dc, &g_title_art, 8u + (g_hovered_help == HELP_MAIN_EXIT ? 1u : 0u), 255, 407);
+    draw_configured_buttons(dc, 0, "TITSCRN", &g_title_art);
     draw_hover_help(dc);
 }
 
@@ -1315,15 +1289,7 @@ static void render_new_game(HDC dc)
             }
         }
     }
-    draw_sprite(dc, &g_new_buttons, 0, 0, 0);
-    draw_sprite(dc, &g_new_buttons, 1u + (g_hovered_help == HELP_NEW_EXIT ? 1u : 0u), 7, 423);
-    draw_sprite(dc, &g_new_buttons, 3u + (g_hovered_help == HELP_NEW_WORLD ? 1u : 0u), 76, 423);
-    draw_sprite(dc, &g_new_buttons, 5u + (g_hovered_help == HELP_NEW_TRIBE0 ? 1u : 0u), 143, 443);
-    draw_sprite(dc, &g_new_buttons, 7u + (g_hovered_help == HELP_NEW_TRIBE1 ? 1u : 0u), 196, 445);
-    draw_sprite(dc, &g_new_buttons, 9u + (g_hovered_help == HELP_NEW_TRIBE2 ? 1u : 0u), 391, 441);
-    draw_sprite(dc, &g_new_buttons, 11u + (g_hovered_help == HELP_NEW_TRIBE3 ? 1u : 0u), 444, 440);
-    draw_sprite(dc, &g_new_buttons, 13u + (g_hovered_help == HELP_NEW_DIFFICULTY ? 1u : 0u), 495, 420);
-    draw_sprite(dc, &g_new_buttons, 15u + (g_hovered_help == HELP_NEW_BEGIN ? 1u : 0u), 564, 419);
+    draw_configured_buttons(dc, 1, "NEWBUTT", &g_new_buttons);
     draw_sprite(dc, &g_realm_art, (uint32_t)g_menu.selected_tribe, 60, 40);
     draw_sprite(dc, &g_realm_art,
                 (uint32_t)((g_menu.selected_tribe + 1) % 4), 140, 40);
@@ -1658,7 +1624,7 @@ static void render_island_view(HDC dc)
             }
         }
     }
-    if (!g_build_menu_open && focus != NULL) {
+    if (focus != NULL) {
         int x = (int)focus->x - g_island_scroll_x;
         int y = image_top + (int)focus->y;
         HPEN pen = CreatePen(PS_SOLID, 1, RGB(255, 255, 255));
@@ -1680,47 +1646,7 @@ static void render_island_view(HDC dc)
     (void)snprintf(text, sizeof(text), "VIEW X=%04d / 1920     ARROWS: SCROLL     ESC: WORLD MAP",
                    g_island_scroll_x);
     draw_bitmap_label(dc, text, 12, 43, RGB(143, 181, 217));
-    if (g_build_menu_open) {
-        size_t page_count = build_menu_page_count();
-        unsigned column;
-        fill_rect(dc, 0, status_top, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(7, 12, 25));
-        draw_bitmap_label(dc, "BUILD CATALOG  B: CLOSE  LEFT/RIGHT: PAGE",
-                          10, status_top + 4, RGB(160, 196, 224));
-        (void)snprintf(text, sizeof(text), "PAGE %u/%u  TRIBE %d",
-                       (unsigned)(g_build_menu_page + 1u),
-                       (unsigned)(page_count == 0 ? 1 : page_count),
-                       g_menu.selected_tribe + 1);
-        draw_bitmap_label(dc, text, 488, status_top + 4, RGB(160, 196, 224));
-        for (column = 0; column < 4; ++column) {
-            const PadCatalogItem *item = build_menu_item_at(column);
-            int left = (int)column * 160;
-            int selected = item != NULL && item->item_id == g_selected_build_item;
-            if (item == NULL) continue;
-            if (selected) fill_rect(dc, left + 3, status_top + 20,
-                                    left + 157, status_top + 59, RGB(42, 54, 80));
-            (void)snprintf(text, sizeof(text), "%u #%u %s",
-                           column + 1u, item->item_id, item->shape_id);
-            draw_bitmap_label(dc, text, left + 7, status_top + 22,
-                              selected ? RGB(255, 231, 144) : RGB(232, 234, 240));
-            (void)snprintf(text, sizeof(text), "S%d T%d U%d H%d",
-                           item->size, item->building_tone_cost,
-                           item->maintenance_tone_cost, item->hit_points);
-            draw_bitmap_label(dc, text, left + 7, status_top + 42,
-                              RGB(169, 191, 217));
-        }
-        if (g_selected_build_item >= 0) {
-            const PadCatalogItem *selected = pad_catalog_find(
-                &g_pad_catalog, (uint16_t)g_selected_build_item);
-            if (selected != NULL) {
-                (void)snprintf(text, sizeof(text), "SELECTED #%u %s - PLACEMENT NOT YET IMPLEMENTED",
-                               selected->item_id, selected->shape_id);
-                draw_bitmap_label(dc, text, 10, status_top + 63, RGB(244, 216, 131));
-            }
-        } else {
-            draw_bitmap_label(dc, "CLICK AN ITEM OR PRESS 1-4 TO SELECT",
-                              10, status_top + 63, RGB(143, 181, 217));
-        }
-    } else if (focus != NULL) {
+    if (focus != NULL) {
         (void)snprintf(text, sizeof(text), "LOCATION %02u  %s  X=%u Y=%u",
                        (unsigned)focus->id, focus->type,
                        (unsigned)focus->x, (unsigned)focus->y);
@@ -1901,9 +1827,29 @@ static void paint_window(HWND window)
     EndPaint(window, &paint);
 }
 
+static void dispatch_newgame_master_message(int message)
+{
+    if (message == 52) {
+        g_menu.setup_accepted = 1;
+        g_menu.selected_map_island = -1;
+        g_hovered_island = -1;
+        g_menu.screen = SCREEN_WORLD_MAP;
+    } else if (message == 53) {
+        g_menu.world_index = (g_menu.world_index + 1) % g_menu.world_map.world_count;
+        g_menu.setup_accepted = 0;
+    } else if (message == 55) {
+        g_menu.difficulty = (g_menu.difficulty + 1) % g_difficulty_count;
+        g_menu.setup_accepted = 0;
+    } else if (message >= 60 && message <= 63) {
+        g_menu.selected_tribe = message - 60;
+        g_menu.setup_accepted = 0;
+    }
+}
+
 static void handle_click(HWND window, int x, int y)
 {
     int clicked_tribe = g_menu.screen == SCREEN_NEW_GAME ? tribe_icon_at(x, y) : -1;
+    const WindowTemplate *control = NULL;
     g_mouse_inside = 1;
     g_mouse_x = x;
     g_mouse_y = y;
@@ -1914,54 +1860,45 @@ static void handle_click(HWND window, int x, int y)
                         SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
     }
     if (g_menu.screen == SCREEN_MAIN_MENU) {
-        if (y >= 337 && y <= 399 && x >= 99 && x <= 240) {
-            g_menu.screen = SCREEN_NEW_GAME;
-            g_menu.setup_accepted = 0;
-        } else if (g_resume_available && y >= 269 && y <= 332 && x >= 262 && x <= 377) {
+        control = window_catalog_hit_test(&g_window_catalog, 0, x, y);
+        if (control != NULL && strcmp(control->message_destination, "WINMGR") == 0) {
+            if (control->send_message[0] == 5) {
+                g_menu.screen = SCREEN_NEW_GAME;
+                g_menu.setup_accepted = 0;
+            } else if (control->send_message[0] == 1 &&
+                       control->send_message[1] == 4) {
+                g_menu.screen = SCREEN_LOAD_GAME;
+            } else if (control->send_message[0] == 2) {
+                PostMessageA(window, WM_CLOSE, 0, 0);
+            }
+        } else if (control != NULL && strcmp(control->name, "RESUME") == 0 &&
+                   g_resume_available) {
             MessageBoxA(window, "La reprise d'une sauvegarde n'est pas encore prise en charge.",
                         "Tone Rebellion remake", MB_OK | MB_ICONINFORMATION);
-        } else if (y >= 337 && y <= 399 && x >= 402 && x <= 540) {
-            g_menu.screen = SCREEN_LOAD_GAME;
-        } else if (y >= 407 && y <= 469 && x >= 255 && x <= 375) {
-            PostMessageA(window, WM_CLOSE, 0, 0);
         }
-    } else if (g_menu.screen == SCREEN_NEW_GAME && y >= 423 && y <= 465 && x >= 7 && x <= 75) {
-        g_menu.screen = SCREEN_MAIN_MENU;
-        g_menu.setup_accepted = 0;
     } else if (g_menu.screen == SCREEN_NEW_GAME && clicked_tribe >= 0) {
+        /* NewGameWin's custom mouse handler resolves the animated tribe glyphs. */
         g_menu.selected_tribe = clicked_tribe;
         g_menu.setup_accepted = 0;
     } else if (g_menu.screen == SCREEN_NEW_GAME &&
                (x - 320) * (x - 320) + (y - 240) * (y - 240) < 100) {
+        /* The NewGameWin handler assigns this inner hit region to difficulty. */
         g_menu.difficulty = (g_menu.difficulty + 1) % g_difficulty_count;
         g_menu.setup_accepted = 0;
     } else if (g_menu.screen == SCREEN_NEW_GAME &&
                (x - 320) * (x - 320) + (y - 240) * (y - 240) < 200) {
+        /* The surrounding NewGameWin hit region changes world size. */
         g_menu.world_index = (g_menu.world_index + 1) % g_menu.world_map.world_count;
         g_menu.setup_accepted = 0;
-    } else if (g_menu.screen == SCREEN_NEW_GAME && y >= 423 && y <= 464 && x >= 76 && x <= 142) {
-        g_menu.world_index = (g_menu.world_index + 1) % g_menu.world_map.world_count;
-        g_menu.setup_accepted = 0;
-    } else if (g_menu.screen == SCREEN_NEW_GAME && y >= 443 && y <= 476 && x >= 143 && x <= 195) {
-        g_menu.selected_tribe = 0;
-        g_menu.setup_accepted = 0;
-    } else if (g_menu.screen == SCREEN_NEW_GAME && y >= 443 && y <= 476 && x >= 196 && x <= 250) {
-        g_menu.selected_tribe = 1;
-        g_menu.setup_accepted = 0;
-    } else if (g_menu.screen == SCREEN_NEW_GAME && y >= 441 && y <= 474 && x >= 391 && x <= 443) {
-        g_menu.selected_tribe = 2;
-        g_menu.setup_accepted = 0;
-    } else if (g_menu.screen == SCREEN_NEW_GAME && y >= 440 && y <= 476 && x >= 444 && x <= 494) {
-        g_menu.selected_tribe = 3;
-        g_menu.setup_accepted = 0;
-    } else if (g_menu.screen == SCREEN_NEW_GAME && y >= 420 && y <= 464 && x >= 495 && x <= 562) {
-        g_menu.difficulty = (g_menu.difficulty + 1) % g_difficulty_count;
-        g_menu.setup_accepted = 0;
-    } else if (g_menu.screen == SCREEN_NEW_GAME && y >= 419 && y <= 464 && x >= 564 && x <= 633) {
-        g_menu.setup_accepted = 1;
-        g_menu.selected_map_island = -1;
-        g_hovered_island = -1;
-        g_menu.screen = SCREEN_WORLD_MAP;
+    } else if (g_menu.screen == SCREEN_NEW_GAME) {
+        control = window_catalog_hit_test(&g_window_catalog, 1, x, y);
+        if (control != NULL && strcmp(control->message_destination, "WINMGR") == 0 &&
+            control->send_message[0] == 1 && control->send_message[1] == 0) {
+            g_menu.screen = SCREEN_MAIN_MENU;
+            g_menu.setup_accepted = 0;
+        } else if (control != NULL && strcmp(control->message_destination, "MASTER") == 0) {
+            dispatch_newgame_master_message(control->send_message[0]);
+        }
     } else if (g_menu.screen == SCREEN_WORLD_MAP) {
         int clicked_island = world_island_at(x, y);
         if (clicked_island >= 0) {
@@ -1972,16 +1909,8 @@ static void handle_click(HWND window, int x, int y)
             }
         }
     } else if (g_menu.screen == SCREEN_ISLAND) {
-        if (g_build_menu_open && y >= 420) {
-            unsigned column = (unsigned)x / 160u;
-            const PadCatalogItem *item = build_menu_item_at(column);
-            if (item != NULL) {
-                g_selected_build_item = item->item_id;
-            }
-        } else {
-            int clicked_location = island_location_at(x, y);
-            if (clicked_location >= 0) g_selected_location = clicked_location;
-        }
+        int clicked_location = island_location_at(x, y);
+        if (clicked_location >= 0) g_selected_location = clicked_location;
     } else if (g_menu.screen == SCREEN_LOAD_GAME) {
         /* FUN_00458162 maps the two columns and four rows to slots 00..07.
            An empty slot closes the load/save screen; a valid slot is kept
@@ -2115,12 +2044,8 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 g_menu.screen = SCREEN_MAIN_MENU;
                 InvalidateRect(window, NULL, FALSE);
             } else if (g_menu.screen == SCREEN_ISLAND) {
-                if (g_build_menu_open) {
-                    g_build_menu_open = 0;
-                } else {
-                    g_menu.screen = SCREEN_WORLD_MAP;
-                    g_hovered_location = -1;
-                }
+                g_menu.screen = SCREEN_WORLD_MAP;
+                g_hovered_location = -1;
                 InvalidateRect(window, NULL, FALSE);
             } else if (g_menu.screen == SCREEN_WORLD_MAP) {
                 g_hovered_island = -1;
@@ -2168,21 +2093,6 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             g_menu.selected_map_island = -1;
             g_hovered_island = -1;
             InvalidateRect(window, NULL, FALSE);
-        } else if (g_menu.screen == SCREEN_ISLAND && g_build_menu_open &&
-                   (wparam == VK_LEFT || wparam == VK_RIGHT)) {
-            set_build_menu_page(wparam == VK_RIGHT ? 1 : -1);
-            InvalidateRect(window, NULL, FALSE);
-        } else if (g_menu.screen == SCREEN_ISLAND && g_build_menu_open &&
-                   wparam >= '1' && wparam <= '4') {
-            const PadCatalogItem *item = build_menu_item_at((unsigned)(wparam - '1'));
-            if (item != NULL) {
-                g_selected_build_item = item->item_id;
-                InvalidateRect(window, NULL, FALSE);
-            }
-        } else if (g_menu.screen == SCREEN_ISLAND && wparam == 'B') {
-            g_build_menu_open = !g_build_menu_open;
-            g_build_menu_page = 0;
-            InvalidateRect(window, NULL, FALSE);
         } else if (g_menu.screen == SCREEN_ISLAND &&
                    (wparam == VK_LEFT || wparam == VK_RIGHT)) {
             g_island_scroll_x += wparam == VK_RIGHT ? 160 : -160;
@@ -2198,12 +2108,10 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             g_menu.setup_accepted = 0;
             InvalidateRect(window, NULL, FALSE);
         } else if (g_menu.screen == SCREEN_NEW_GAME && wparam == 'D') {
-            g_menu.difficulty = (g_menu.difficulty + 1) % g_difficulty_count;
-            g_menu.setup_accepted = 0;
+            dispatch_newgame_master_message(55);
             InvalidateRect(window, NULL, FALSE);
         } else if (g_menu.screen == SCREEN_NEW_GAME && wparam >= '1' && wparam <= '4') {
-            g_menu.selected_tribe = (int)(wparam - '1');
-            g_menu.setup_accepted = 0;
+            dispatch_newgame_master_message(60 + (int)(wparam - '1'));
             InvalidateRect(window, NULL, FALSE);
         }
         if (g_mouse_inside && (update_hover_help(g_mouse_x, g_mouse_y) |
@@ -2249,6 +2157,32 @@ static int load_world_map(char *error, size_t error_capacity)
               world_map_load_data(data, member->length, &g_menu.world_map,
                                   error, error_capacity);
     free(data);
+    cob_archive_close(&archive);
+    return success;
+}
+
+static int load_window_catalog(char *error, size_t error_capacity)
+{
+    CobArchive archive = {0};
+    const CobMember *member;
+    unsigned char *bytes = NULL;
+    int success = 0;
+
+    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE00.COB", &archive,
+                          error, error_capacity)) return 0;
+    member = cob_archive_find(&archive, "windows.txt");
+    if (member == NULL) {
+        (void)snprintf(error, error_capacity, "windows.txt was not found in TONE00.COB");
+        goto done;
+    }
+    bytes = (unsigned char *)malloc(member->length == 0 ? 1 : member->length);
+    if (bytes == NULL || !cob_archive_read_member(&archive, member, bytes,
+                                                   member->length, error,
+                                                   error_capacity)) goto done;
+    success = window_catalog_load(bytes, member->length, &g_window_catalog,
+                                  error, error_capacity);
+done:
+    free(bytes);
     cob_archive_close(&archive);
     return success;
 }
@@ -2353,7 +2287,8 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     (void)previous_instance;
     (void)command_line;
 
-    if (!load_world_map(error, sizeof(error)) || !load_pad_catalog(error, sizeof(error)) ||
+    if (!load_world_map(error, sizeof(error)) ||
+        !load_window_catalog(error, sizeof(error)) ||
         !load_menu_art(error, sizeof(error)) ||
         !load_menu_help(error, sizeof(error)) ||
         !create_help_sheet(&g_menu_help, error, sizeof(error)) ||

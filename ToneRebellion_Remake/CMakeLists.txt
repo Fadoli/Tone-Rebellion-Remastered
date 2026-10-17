@@ -10,7 +10,9 @@ add_library(tone_core STATIC
     src/core/island_haze.c
     src/core/island_data.c
     src/core/island_render_rules.c
+    src/core/iw_construct.c
     src/core/pad_catalog.c
+    src/core/window_catalog.c
     src/core/world_map.c
 )
 target_include_directories(tone_core PUBLIC src/core src/data)
@@ -31,33 +33,59 @@ target_link_libraries(remake_inspect_cob PRIVATE tone_core)
 target_compile_features(remake_inspect_cob PRIVATE c_std_11)
 
 if(BUILD_TESTING)
+    function(enable_test_assertions target)
+        if(MSVC)
+            target_compile_options(${target} PRIVATE /UNDEBUG)
+        else()
+            target_compile_options(${target} PRIVATE -UNDEBUG)
+        endif()
+    endfunction()
+
     add_executable(test_island_data tests/test_island_data.c)
     target_link_libraries(test_island_data PRIVATE tone_core)
     target_compile_features(test_island_data PRIVATE c_std_11)
+    enable_test_assertions(test_island_data)
     add_test(NAME island_data_unit COMMAND test_island_data)
 
     add_executable(test_shp_image tests/test_shp_image.c)
     target_link_libraries(test_shp_image PRIVATE tone_core)
     target_compile_features(test_shp_image PRIVATE c_std_11)
+    enable_test_assertions(test_shp_image)
     add_test(NAME shp_image_unit COMMAND test_shp_image)
 
     add_executable(test_island_render_rules tests/test_island_render_rules.c)
     target_link_libraries(test_island_render_rules PRIVATE tone_core)
     target_compile_features(test_island_render_rules PRIVATE c_std_11)
+    enable_test_assertions(test_island_render_rules)
     add_test(NAME island_render_rules_unit COMMAND test_island_render_rules)
 
     add_executable(test_pad_catalog tests/test_pad_catalog.c)
     target_link_libraries(test_pad_catalog PRIVATE tone_core)
     target_compile_features(test_pad_catalog PRIVATE c_std_11)
+    enable_test_assertions(test_pad_catalog)
     add_test(NAME pad_catalog_unit COMMAND test_pad_catalog)
+
+    add_executable(test_window_catalog tests/test_window_catalog.c)
+    target_link_libraries(test_window_catalog PRIVATE tone_core)
+    target_compile_features(test_window_catalog PRIVATE c_std_11)
+    enable_test_assertions(test_window_catalog)
+    add_test(NAME window_catalog_unit COMMAND test_window_catalog)
+
+    add_executable(test_iw_construct tests/test_iw_construct.c)
+    target_link_libraries(test_iw_construct PRIVATE tone_core)
+    target_compile_features(test_iw_construct PRIVATE c_std_11)
+    enable_test_assertions(test_iw_construct)
+    add_test(NAME iw_construct_unit COMMAND test_iw_construct)
 
     add_executable(test_island_corpus tests/test_island_corpus.c)
     target_link_libraries(test_island_corpus PRIVATE tone_core)
     target_compile_features(test_island_corpus PRIVATE c_std_11)
+    enable_test_assertions(test_island_corpus)
 
     add_executable(test_island_cob tests/test_island_cob.c)
     target_link_libraries(test_island_cob PRIVATE tone_core)
     target_compile_features(test_island_cob PRIVATE c_std_11)
+    enable_test_assertions(test_island_cob)
 endif()
 
 if(WIN32)

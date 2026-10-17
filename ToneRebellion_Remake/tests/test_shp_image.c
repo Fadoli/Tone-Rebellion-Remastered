@@ -5,8 +5,9 @@
 #include <stdio.h>
 #include <string.h>
 
-enum { TEST_FRAME_DATA_OFFSET = 24, TEST_EMPTY_FRAME_OFFSET = 51,
-       TEST_FILE_LENGTH = 75 };
+/* Three frame records occupy bytes 8..31, so frame payload starts at 32. */
+enum { TEST_FRAME_DATA_OFFSET = 32, TEST_EMPTY_FRAME_OFFSET = 59,
+       TEST_FILE_LENGTH = 83 };
 
 static void write_u32(uint8_t *destination, uint32_t value)
 {
