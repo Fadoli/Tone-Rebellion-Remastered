@@ -13,6 +13,11 @@ Contribuer à la décompilation statique de `C:\Program Files\Tone\FLOAT.EXE` en
 - Une chaîne est une chaîne définie par Ghidra ; une absence de résultat n’établit pas l’absence d’octets correspondants.
 - Ne pas exécuter le programme ni invoquer de débogueur, d’instrumentation ou d’observation runtime. L’objectif est uniquement statique.
 
+## Analyse REA et documentation
+
+- Pour toute nouvelle analyse REA, déléguer la lecture ciblée des preuves à un sous-agent `gpt-6-luna`, effort `medium`. Lui demander un résultat bref avec Evidence IDs, faits directs et inconnues; garder la coordination et les échanges au minimum. Ne pas déléguer les modifications du remake sans besoin explicite.
+- Garder la documentation concise : ne répéter ni pseudocode ni faits déjà consignés. Ajouter les observations, Evidence IDs, interprétations et limites nécessaires à la décision; mettre le détail de fonction dans `functions/` et résumer les ports dans le guide et le TODO.
+
 ## Inventaire et décompilation
 
 - Conserver une entrée `index.jsonl` par procédure, avec adresse, nom actuel, classification (`internal`, `thunk`, `external`, `runtime` ou `unknown`), état, appels directs, chaînes référencées, Evidence ID(s), limites et motif si non décompilée.
