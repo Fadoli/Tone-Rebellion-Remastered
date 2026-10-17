@@ -470,6 +470,20 @@ int game_session_set_bridge_active(GameSession *session,
     return 1;
 }
 
+int game_session_apply_world_bridge_message(GameSession *session,
+                                            uint8_t bridge_count,
+                                            uint32_t parameter_flags)
+{
+    uint32_t mask;
+    if (session == NULL || bridge_count > WORLD_MAP_MAX_BRIDGES) return 0;
+    if (bridge_count == 0) mask = 0;
+    else if (bridge_count == WORLD_MAP_MAX_BRIDGES) mask = UINT32_MAX;
+    else mask = (UINT32_C(1) << bridge_count) - UINT32_C(1);
+    session->active_bridge_mask = (parameter_flags & UINT32_C(0x100)) == 0
+        ? mask : 0;
+    return 1;
+}
+
 void game_session_tick_item_animations(GameSession *session,
                                        const struct BuildingRenderCatalog *catalog)
 {

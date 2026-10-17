@@ -135,6 +135,11 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
                                            world.bridge_count, 1));
     assert(!game_session_bridge_is_active(NULL, 0, world.bridge_count));
     assert(!game_session_bridge_is_active(&session, 0, WORLD_MAP_MAX_BRIDGES + 1));
+    assert(game_session_apply_world_bridge_message(&session, world.bridge_count, 0));
+    assert(game_session_bridge_is_active(&session, 0, world.bridge_count));
+    assert(game_session_apply_world_bridge_message(&session, world.bridge_count, 0x100));
+    assert(!game_session_bridge_is_active(&session, 0, world.bridge_count));
+    assert(!game_session_apply_world_bridge_message(NULL, world.bridge_count, 0));
     assert(session.islands[0].locations[12].record_value_10 == 2);
     assert(session.islands[1].locations[12].record_value_10 == 2);
     assert(session.islands[0].locations[12].bridge_neighbor_island == 1);

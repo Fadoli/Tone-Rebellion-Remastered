@@ -117,6 +117,11 @@ int game_session_set_bridge_active(GameSession *session,
                                    uint8_t bridge_index,
                                    uint8_t bridge_count,
                                    int active);
+/* Models FUN_004702d9's WORLDWIN message 0x4f: all counted bridge flags are
+   enabled when parameter bit 0x100 is clear and disabled when it is set. */
+int game_session_apply_world_bridge_message(GameSession *session,
+                                            uint8_t bridge_count,
+                                            uint32_t parameter_flags);
 
 /* Advance the per-location animation fields updated by FUN_00450a71. */
 void game_session_tick_item_animations(GameSession *session,
