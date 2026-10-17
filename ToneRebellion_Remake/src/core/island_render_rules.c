@@ -10,16 +10,53 @@ int island_pad_size_group(IslandLocationKind kind)
     }
 }
 
-uint32_t island_tone_pool_frame(uint32_t animation_ticks, uint16_t world_x)
+uint16_t island_tone_pool_next_counter(int32_t runtime_item_id,
+                                       uint16_t chug_progress)
 {
-    enum { FIRST_FRAME = 1, LAST_FRAME = 39, TICKS_PER_FRAME = 3 };
-    const uint32_t span = LAST_FRAME - FIRST_FRAME;
-    const uint32_t cycle = span * 2;
-    uint32_t phase = animation_ticks / TICKS_PER_FRAME + world_x % 23u;
-    uint32_t offset = phase % cycle;
+    if (runtime_item_id == ISLAND_TONE_POOL_ITEM_DEFAULT) {
+        /* FUN_00450a71's ID 0 sequence: 0..89, then restart at 0. */
+        if (chug_progress < 0x5aU) {
+            ++chug_progress;
+            if (chug_progress > 0x59U) chug_progress = 0;
+        } else {
+            --chug_progress;
+            if (chug_progress < 0x5aU) chug_progress = 0;
+        }
+    } else if (runtime_item_id == ISLAND_TONE_POOL_ITEM_ALTERNATE) {
+        /* ID 5 has a long first run, then loops over counters 102..125. */
+        ++chug_progress;
+        if (chug_progress > 0x7dU) chug_progress = 0x66U;
+    }
+    return chug_progress;
+}
 
-    if (offset > span) offset = cycle - offset;
-    return FIRST_FRAME + offset;
+uint32_t island_tone_pool_frame(int32_t runtime_item_id,
+                                uint32_t chug_progress)
+{
+    enum { SOURCE_FIRST_FRAME = 2, SOURCE_LAST_FRAME = 40,
+           TICKS_PER_FRAME = 3 };
+    if (runtime_item_id != ISLAND_TONE_POOL_ITEM_DEFAULT &&
+        runtime_item_id != ISLAND_TONE_POOL_ITEM_ALTERNATE) return 0;
+    /* FUN_0040bf98 applies FUN_0040ab05 over the inclusive source range,
+       then SHP drawing uses zero-based frame indices. */
+    {
+        const uint32_t span = SOURCE_LAST_FRAME - SOURCE_FIRST_FRAME;
+        const uint32_t cycle = span * 2;
+        uint32_t phase = chug_progress / TICKS_PER_FRAME;
+        uint32_t offset = phase % cycle;
+
+        if (offset > span) offset = cycle - offset;
+        return SOURCE_FIRST_FRAME + offset - 1;
+    }
+}
+
+int island_tone_pool_should_draw(int is_tone_location,
+                                 int32_t runtime_item_id,
+                                 int covered_by_leviathan_building)
+{
+    int uses_pool_shape = runtime_item_id == ISLAND_TONE_POOL_ITEM_DEFAULT ||
+                          runtime_item_id == ISLAND_TONE_POOL_ITEM_ALTERNATE;
+    return is_tone_location && uses_pool_shape && !covered_by_leviathan_building;
 }
 
 uint32_t island_pad_frame(uint32_t animation_ticks, uint16_t world_x,
@@ -34,7 +71,7 @@ uint32_t island_pad_frame(uint32_t animation_ticks, uint16_t world_x,
     return (uint32_t)pad_group * FRAMES_PER_GROUP + phase % FRAMES_PER_GROUP;
 }
 
-int island_site_should_draw_pad(int pad_group, int has_drawable_runtime_item)
+int island_site_should_draw_pad(int pad_group, int site_occupied_by_item)
 {
-    return pad_group >= 0 && !has_drawable_runtime_item;
+    return pad_group >= 0 && !site_occupied_by_item;
 }

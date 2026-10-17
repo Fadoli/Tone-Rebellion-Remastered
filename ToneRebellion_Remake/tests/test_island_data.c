@@ -34,20 +34,22 @@ static void test_original_type_tags(void)
 static void test_tone_location_with_zero_special_value(void)
 {
     static const unsigned char fixture[] =
-        "NUM_LOCATIONS 6\r\n"
+        "NUM_LOCATIONS 8\r\n"
         "; original ISLAND00.TXT has tone records with special_value 0\r\n"
         "0 278 229 tone 0\r\n"
         "1 209 154 smpad 0\r\n"
         "2 912 160 bridge 4\r\n"
         "3 100 100 pad 0\r\n"
         "4 200 100 feattrig 0\r\n"
-        "5 250 100 tone 1\r\n";
+        "5 250 100 tone 1\r\n"
+        "6 300 100 mdpad 0\r\n"
+        "7 350 100 lgpad 0\r\n";
     IslandData data;
     char error[128];
 
     assert(island_data_load(fixture, sizeof(fixture) - 1, &data,
                             error, sizeof(error)));
-    assert(data.location_count == 6);
+    assert(data.location_count == 8);
     assert(data.locations[0].kind == ISLAND_LOCATION_TONE);
     assert(data.locations[0].kind != ISLAND_LOCATION_PAD_SMALL);
     assert(data.locations[0].special_value == 0);
@@ -65,6 +67,9 @@ static void test_tone_location_with_zero_special_value(void)
     assert(data.locations[5].special_value == 1);
     assert(data.locations[5].renderer_class == 1);
     assert(data.locations[5].renderer_variant == 0);
+    assert(data.locations[1].renderer_subtype == 0);
+    assert(data.locations[6].renderer_subtype == 1);
+    assert(data.locations[7].renderer_subtype == 2);
 }
 
 static void test_unknown_type_is_preserved(void)

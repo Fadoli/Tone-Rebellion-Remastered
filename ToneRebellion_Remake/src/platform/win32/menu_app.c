@@ -1648,14 +1648,15 @@ static int draw_runtime_item(HDC dc, const GameRuntimeLocation *runtime_location
        The source divides the object's +0x3a progress by CHUG speed. The menu
        timer is only a provisional source for that per-object counter. */
     if (item->base.present) {
-        frame = building_render_base_frame(item);
+        frame = building_render_base_frame_for_state(item, runtime_location->base_progress,
+                                                     runtime_location->source_flags);
         if (frame < sheet->frame_count) {
             draw_sprite(dc, sheet, frame, x, y);
             drew = 1;
         }
     }
     if (item->chug.present) {
-        frame = building_render_chug_frame(item, g_menu.animation_ticks);
+        frame = building_render_chug_frame(item, runtime_location->chug_progress);
         if (frame < sheet->frame_count) {
             draw_sprite(dc, sheet, frame, x, y);
             drew = 1;
@@ -1664,7 +1665,51 @@ static int draw_runtime_item(HDC dc, const GameRuntimeLocation *runtime_location
         }
     }
     if (item->glyph.present) {
-        frame = building_render_glyph_frame(item, g_menu.animation_ticks);
+        frame = building_render_glyph_frame(item, runtime_location->glyph_progress);
+        if (frame < sheet->frame_count) {
+            draw_sprite(dc, sheet, frame, x, y);
+            drew = 1;
+        }
+    }
+    /* FUN_0040bf98's remaining item layers are data-driven too. INCI uses
+       +0x3e; CONS uses +0x40 and flag 0x004; PROD uses +0x42 and flag 0x002.
+       The animated PROD frame stays at the item anchor; only its separate
+       threshold effect uses the descriptor offset. OCCU is gated by flag 8.
+       Initial counters remain zero until their game events are ported. */
+    if (item->inci.present) {
+        frame = building_render_inci_frame(item, runtime_location->inci_progress);
+        if (frame < sheet->frame_count) {
+            draw_sprite(dc, sheet, frame, x, y);
+            drew = 1;
+        }
+    }
+    if (item->cons.present) {
+        frame = building_render_cons_frame(item, runtime_location->construction_progress,
+                                           runtime_location->source_flags);
+        if (frame < sheet->frame_count) {
+            draw_sprite(dc, sheet, frame, x, y);
+            drew = 1;
+        }
+    }
+    if (item->prod.present) {
+        BuildingRenderPoint prod_position =
+            building_render_prod_frame_position(x, y);
+        frame = building_render_prod_frame(item, runtime_location->production_progress,
+                                           runtime_location->source_flags);
+        if (frame < sheet->frame_count) {
+            draw_sprite(dc, sheet, frame, prod_position.x, prod_position.y);
+            drew = 1;
+        }
+    }
+    if (item->occu.present && (runtime_location->source_flags & 8U) != 0) {
+        frame = (uint32_t)item->occu.first_frame - 1U;
+        if (frame < sheet->frame_count) {
+            draw_sprite(dc, sheet, frame, x, y);
+            drew = 1;
+        }
+    }
+    if (item->barg.present) {
+        frame = building_render_barg_frame(item, runtime_location->barg_progress);
         if (frame < sheet->frame_count) {
             draw_sprite(dc, sheet, frame, x, y);
             drew = 1;
@@ -1829,24 +1874,35 @@ static void render_island_view(HDC dc)
             int drew_location = 0;
         /* Island TXT `tone` rows denote unoccupied Tone pools. shapes.txt maps
            POOL to tone.shp; bldinf.txt gives the 2..40 ping-pong animation. */
-        if (location->kind == ISLAND_LOCATION_TONE &&
+        {
+        int32_t runtime_item_id = runtime_location != NULL
+            ? runtime_location->record_value_10 : 0;
+        int covered_by_leviathan_building = runtime_item_id > 0 &&
+            runtime_item_id < g_pad_catalog.item_count &&
+            g_pad_catalog.items[runtime_item_id].tribe == PAD_TRIBE_LEVIATHAN;
+        if (island_tone_pool_should_draw(location->kind == ISLAND_LOCATION_TONE,
+                                         runtime_item_id,
+                                         covered_by_leviathan_building) &&
             g_tone_field_art.frame_count == 40) {
-            uint32_t frame = island_tone_pool_frame(g_menu.animation_ticks,
-                                                    location->x);
+            uint32_t frame = island_tone_pool_frame(runtime_item_id,
+                runtime_location != NULL ? runtime_location->chug_progress : 0U);
             draw_sprite(dc, &g_tone_field_art, frame, x, y);
             drew_location = 1;
+        }
         }
         /* FUN_0040bf98 draws an installed runtime item at this record. Such an
            item occupies the construction site, so its sprite replaces PAD.SHP.
            Keep the animated ring only when no drawable item occupies the site. */
         {
+            int occupied = runtime_location != NULL && runtime_location->record_value_10 > 0;
             int has_runtime_item = draw_runtime_item(dc, runtime_location, x, y);
-            if (has_runtime_item) drew_location = 1;
-            else if (island_site_should_draw_pad(pad_group, has_runtime_item) &&
+            if (has_runtime_item || occupied) drew_location = 1;
+            else if (island_site_should_draw_pad(pad_group, occupied) &&
                      g_pad_art.frame_count == 27) {
                 uint32_t frame = island_pad_frame(g_menu.animation_ticks,
                                                   location->x,
-                                                  (unsigned)pad_group, 0);
+                                                  (unsigned)pad_group,
+                                                  location->renderer_subtype);
                 draw_sprite(dc, &g_pad_art, frame, x, y);
                 drew_location = 1;
             }
@@ -2221,6 +2277,10 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         if (wparam == 1 && (g_menu.screen == SCREEN_NEW_GAME ||
                             g_menu.screen == SCREEN_ISLAND)) {
             ++g_menu.animation_ticks;
+            if (g_menu.screen == SCREEN_ISLAND && g_game_session_valid) {
+                game_session_tick_item_animations(&g_game_session,
+                                                  &g_building_render_catalog);
+            }
             InvalidateRect(window, NULL, FALSE);
         }
         return 0;

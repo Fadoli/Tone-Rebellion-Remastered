@@ -5,18 +5,30 @@
 
 #include "island_data.h"
 
-/* `POOL` in bldinf.txt animates SHP frames 2..40 at three ticks per frame,
-   ping-ponging. The text format numbers frames from 1; SHP indexes from 0. */
-uint32_t island_tone_pool_frame(uint32_t animation_ticks, uint16_t world_x);
+enum {
+    ISLAND_TONE_POOL_ITEM_DEFAULT = 0,
+    ISLAND_TONE_POOL_ITEM_ALTERNATE = 5
+};
+
+/* FUN_00450a71 gives POOL runtime IDs 0 and 5 distinct counter sequences.
+   FUN_0040bf98 maps the selected counter through POOL CHUG 2..40, speed 3,
+   ping-pong (FUN_0040ab05); the returned frame is zero-based for tone.shp. */
+uint16_t island_tone_pool_next_counter(int32_t runtime_item_id,
+                                       uint16_t chug_progress);
+uint32_t island_tone_pool_frame(int32_t runtime_item_id,
+                                uint32_t chug_progress);
+int island_tone_pool_should_draw(int is_tone_location,
+                                 int32_t runtime_item_id,
+                                 int covered_by_leviathan_building);
 
 /* Only explicit size tags select the three groups in PAD.SHP. */
 int island_pad_size_group(IslandLocationKind kind);
 
 /* PADS uses CHUG 1..9 from bldinf.txt and FUN_0040ab42 adds world_x % 23
-   after dividing the source tick counter by (segment speed + object[+0x0c]).
-   The island prototype supplies zero for that unresolved object modifier. */
+   after dividing source ticks by (segment speed + object[+0x0c]). FUN_00461b3b
+   stores the pad-size subtype at +0x0c: small=0, medium=1, large=2. */
 uint32_t island_pad_frame(uint32_t animation_ticks, uint16_t world_x,
                           unsigned pad_group, unsigned speed_adjustment);
-int island_site_should_draw_pad(int pad_group, int has_drawable_runtime_item);
+int island_site_should_draw_pad(int pad_group, int site_occupied_by_item);
 
 #endif

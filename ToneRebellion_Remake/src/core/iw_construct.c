@@ -2,6 +2,45 @@
 
 #include <string.h>
 
+int iw_construct_build_list(const PadCatalog *catalog, uint8_t player_slot,
+                            int32_t player_size_limit, uint8_t rule_set,
+                            uint16_t owned_island_count,
+                            int32_t *out_ids, size_t out_capacity,
+                            size_t *out_count)
+{
+    static const uint8_t candidates[IW_CONSTRUCT_BUILD_CANDIDATE_COUNT] = {
+        40, 37, 39, 38, 44, 45, 46, 47
+    };
+    static const uint8_t island_thresholds[3][4] = {
+        {1, 2, 20, 3},
+        {1, 2, 8, 3},
+        {1, 2, 8, 3}
+    };
+    int32_t result[IW_CONSTRUCT_BUILD_CANDIDATE_COUNT];
+    size_t result_count = 0;
+    size_t i;
+
+    if (out_count != NULL) *out_count = 0;
+    if (catalog == NULL || catalog->item_count < 101 || player_slot >= 4 ||
+        rule_set >= 3 || out_ids == NULL || out_capacity < IW_CONSTRUCT_BUILD_CANDIDATE_COUNT ||
+        out_count == NULL) return 0;
+
+    for (i = 0; i < IW_CONSTRUCT_BUILD_CANDIDATE_COUNT; ++i) {
+        uint16_t base_id = candidates[i];
+        uint16_t resolved_id = (uint16_t)(base_id + (uint16_t)player_slot * 16U);
+        const PadCatalogItem *item = &catalog->items[resolved_id];
+
+        if (item->size > player_size_limit || item->building_tone_cost == -1) continue;
+        if (base_id >= 44 &&
+            owned_island_count < island_thresholds[rule_set][base_id - 44]) continue;
+        result[result_count++] = base_id;
+    }
+
+    memcpy(out_ids, result, result_count * sizeof(result[0]));
+    *out_count = result_count;
+    return 1;
+}
+
 static void clear_transition(IwConstructTransition *transition)
 {
     if (transition != NULL) memset(transition, 0, sizeof(*transition));

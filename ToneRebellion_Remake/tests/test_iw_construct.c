@@ -71,10 +71,57 @@ static void test_cycle_button_threshold(void)
     assert(!state.cycle_button_visible);
 }
 
+static void test_source_build_list_order_and_unlock_rules(void)
+{
+    static const int32_t initial_expected[] = {40, 37, 39, 38, 44};
+    static const int32_t medium_expected[] = {40, 37, 39, 38, 44, 45};
+    PadCatalog catalog;
+    int32_t items[IW_CONSTRUCT_BUILD_CANDIDATE_COUNT];
+    size_t item_count;
+    unsigned int i;
+
+    memset(&catalog, 0, sizeof(catalog));
+    catalog.item_count = 101;
+    for (i = 0; i < catalog.item_count; ++i) {
+        catalog.items[i].item_id = (uint16_t)i;
+        catalog.items[i].size = 0;
+        catalog.items[i].building_tone_cost = 1;
+    }
+    assert(iw_construct_build_list(&catalog, 0, 0, 0, 1,
+                                   items, IW_CONSTRUCT_BUILD_CANDIDATE_COUNT,
+                                   &item_count));
+    assert(item_count == sizeof(initial_expected) / sizeof(initial_expected[0]));
+    assert(memcmp(items, initial_expected, sizeof(initial_expected)) == 0);
+
+    assert(iw_construct_build_list(&catalog, 0, 0, 1, 2,
+                                   items, IW_CONSTRUCT_BUILD_CANDIDATE_COUNT,
+                                   &item_count));
+    assert(item_count == sizeof(medium_expected) / sizeof(medium_expected[0]));
+    assert(memcmp(items, medium_expected, sizeof(medium_expected)) == 0);
+
+    /* Tribe-specific records are resolved by player slot, while window
+       messages still carry the unshifted IDs from the original candidate table. */
+    catalog.items[40 + 2 * 16].size = 1;
+    catalog.items[45 + 2 * 16].building_tone_cost = -1;
+    assert(iw_construct_build_list(&catalog, 2, 0, 2, 8,
+                                   items, IW_CONSTRUCT_BUILD_CANDIDATE_COUNT,
+                                   &item_count));
+    assert(item_count == 6);
+    assert(items[0] == 37 && items[1] == 39 && items[2] == 38 &&
+           items[3] == 44 && items[4] == 46 && items[5] == 47);
+
+    item_count = 99;
+    assert(!iw_construct_build_list(&catalog, 4, 0, 0, 1,
+                                    items, IW_CONSTRUCT_BUILD_CANDIDATE_COUNT,
+                                    &item_count));
+    assert(item_count == 0);
+}
+
 int main(void)
 {
     test_hover_click_and_pages();
     test_bounds_and_info_messages();
     test_cycle_button_threshold();
+    test_source_build_list_order_and_unlock_rules();
     return 0;
 }

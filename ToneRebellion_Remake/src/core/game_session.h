@@ -9,6 +9,8 @@
 
 enum { GAME_SESSION_MAX_FLOATERS = GAME_START_PLAYER_COUNT * GAME_START_FLOATERS_PER_PLAYER };
 
+struct BuildingRenderCatalog;
+
 typedef struct GameSessionConfig {
     uint8_t world_index;
     uint8_t difficulty;
@@ -25,6 +27,16 @@ typedef struct GameRuntimeLocation {
     int32_t owner_id;
     int32_t record_value_24;
     int32_t bridge_neighbor_island;
+    uint32_t source_flags;
+    uint16_t base_progress;
+    uint16_t chug_progress;
+    uint16_t glyph_progress;
+    uint16_t inci_progress;
+    uint16_t construction_progress;
+    uint16_t production_progress;
+    uint16_t animation_rate;
+    double barg_progress;
+    uint8_t renderer_class;
 } GameRuntimeLocation;
 
 typedef struct GameRuntimeIsland {
@@ -69,5 +81,9 @@ int game_session_initialize(const WorldDefinition *world,
                             const GameSessionConfig *config,
                             GameSession *out,
                             char *error, size_t error_capacity);
+
+/* Advance the per-location animation fields updated by FUN_00450a71. */
+void game_session_tick_item_animations(GameSession *session,
+                                       const struct BuildingRenderCatalog *catalog);
 
 #endif

@@ -9,12 +9,26 @@
 
 enum {
     IW_CONSTRUCT_ITEMS_PER_PAGE = 4,
+    IW_CONSTRUCT_BUILD_CANDIDATE_COUNT = 8,
     IW_CONSTRUCT_MSG_SELECT_HOVER = 0x3c,
     IW_CONSTRUCT_MSG_SELECT_BUILD = 0x34,
     IW_CONSTRUCT_MSG_CLEAR_BUILD = 0x33,
     IW_CONSTRUCT_MSG_BUILD_CYCLE = 0x45,
     IW_CONSTRUCT_INFO_MSG_ITEM = 0x9a4
 };
+
+/* Rebuilds FUN_0045f121's ordered available-item list from the active
+   player's +0x0c size limit, the three observed global rule sets, and the
+   local pad.txt metadata loaded by FUN_0046303b. `player_slot` selects the
+   matching 16-item tribe block through FUN_004641de. Owned-island count and
+   rule_set are explicit because the remake has not yet ported their live
+   world/player-state producers. `out_ids` contains the original base item
+   IDs used by the window messages. */
+int iw_construct_build_list(const PadCatalog *catalog, uint8_t player_slot,
+                            int32_t player_size_limit, uint8_t rule_set,
+                            uint16_t owned_island_count,
+                            int32_t *out_ids, size_t out_capacity,
+                            size_t *out_count);
 
 typedef struct IwConstructMessage {
     uint16_t code;
