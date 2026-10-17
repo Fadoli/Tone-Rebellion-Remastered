@@ -71,6 +71,69 @@ static int parse_nonnegative(const char *text, long minimum, long maximum, long 
     return 1;
 }
 
+IslandLocationKind island_location_kind(const char *type)
+{
+    if (type == NULL) return ISLAND_LOCATION_UNKNOWN;
+    if (strcmp(type, "tone") == 0) return ISLAND_LOCATION_TONE;
+    if (strcmp(type, "pad") == 0) return ISLAND_LOCATION_PAD;
+    if (strcmp(type, "smpad") == 0) return ISLAND_LOCATION_PAD_SMALL;
+    if (strcmp(type, "mdpad") == 0) return ISLAND_LOCATION_PAD_MEDIUM;
+    if (strcmp(type, "lgpad") == 0) return ISLAND_LOCATION_PAD_LARGE;
+    if (strcmp(type, "special") == 0) return ISLAND_LOCATION_SPECIAL;
+    if (strcmp(type, "bridge") == 0) return ISLAND_LOCATION_BRIDGE;
+    if (strcmp(type, "levhub") == 0) return ISLAND_LOCATION_LEVEL_HUB;
+    if (strcmp(type, "levshld") == 0) return ISLAND_LOCATION_LEVEL_SHIELD;
+    if (strcmp(type, "feature") == 0) return ISLAND_LOCATION_FEATURE;
+    if (strcmp(type, "feattrig") == 0) return ISLAND_LOCATION_FEATURE_TRIGGER;
+    return ISLAND_LOCATION_UNKNOWN;
+}
+
+static void set_renderer_fields(IslandLocation *location)
+{
+    location->renderer_class = 0;
+    location->renderer_subtype = 0;
+    location->renderer_variant = 0;
+    switch (location->kind) {
+    case ISLAND_LOCATION_PAD_SMALL:
+    case ISLAND_LOCATION_TONE:
+        location->renderer_variant = (uint16_t)(location->special_value == 1);
+        break;
+    case ISLAND_LOCATION_PAD:
+        location->renderer_class = 1;
+        break;
+    case ISLAND_LOCATION_PAD_MEDIUM:
+        location->renderer_subtype = 1;
+        location->renderer_variant = (uint16_t)(location->special_value == 1);
+        break;
+    case ISLAND_LOCATION_PAD_LARGE:
+        location->renderer_subtype = 2;
+        location->renderer_variant = (uint16_t)(location->special_value == 1);
+        break;
+    case ISLAND_LOCATION_SPECIAL:
+        location->renderer_class = 3;
+        break;
+    case ISLAND_LOCATION_BRIDGE:
+        location->renderer_class = 2;
+        break;
+    case ISLAND_LOCATION_LEVEL_HUB:
+        location->renderer_class = 3;
+        location->renderer_variant = 0x16;
+        break;
+    case ISLAND_LOCATION_FEATURE:
+        location->renderer_class = 3;
+        location->renderer_variant = 4;
+        break;
+    case ISLAND_LOCATION_FEATURE_TRIGGER:
+        location->renderer_class = 3;
+        location->renderer_variant = 3;
+        break;
+    case ISLAND_LOCATION_LEVEL_SHIELD:
+    case ISLAND_LOCATION_UNKNOWN:
+    default:
+        break;
+    }
+}
+
 int island_data_load(const unsigned char *bytes, size_t length, IslandData *out,
                      char *error, size_t error_capacity)
 {
@@ -112,6 +175,7 @@ int island_data_load(const unsigned char *bytes, size_t length, IslandData *out,
         char extra;
         int fields;
         IslandLocation *location;
+        IslandLocationKind kind;
 
         if (parsed.location_count >= expected_count) {
             set_error(error, error_capacity, "more rows than NUM_LOCATIONS declares", line_number);
@@ -124,11 +188,18 @@ int island_data_load(const unsigned char *bytes, size_t length, IslandData *out,
             set_error(error, error_capacity, "invalid location row", line_number);
             return 0;
         }
+        kind = island_location_kind(type);
+        if (kind == ISLAND_LOCATION_UNKNOWN) {
+            set_error(error, error_capacity, "unknown location type", line_number);
+            return 0;
+        }
         location = &parsed.locations[parsed.location_count];
         location->id = (uint16_t)id;
         location->x = (uint16_t)x;
         location->y = (uint16_t)y;
         location->special_value = (int32_t)special_value;
+        location->kind = kind;
+        set_renderer_fields(location);
         memcpy(location->type, type, strlen(type) + 1);
         ++parsed.location_count;
     }

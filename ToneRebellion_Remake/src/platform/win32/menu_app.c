@@ -5,6 +5,7 @@
 #include "cob_archive.h"
 #include "font_image.h"
 #include "island_data.h"
+#include "island_haze.h"
 #include "shp_image.h"
 #include "world_map.h"
 
@@ -61,7 +62,8 @@ static SpriteSheet g_difficulty_art;
 static SpriteSheet g_map_background;
 static SpriteSheet g_small_islands;
 static SpriteSheet g_island_surface_art;
-static SpriteSheet g_solid_pad_art;
+static SpriteSheet g_pad_art;
+static SpriteSheet g_island_feature_art;
 static SpriteSheet g_island_names_art;
 static SpriteSheet g_load_save_art;
 static SpriteSheet g_newgame_captions;
@@ -77,6 +79,8 @@ static char g_newgame_text[8][256];
 static char g_tribe_text[4][2][1024];
 static char g_island_names[ISLAND_NAME_COUNT][32];
 static IslandData g_island_surface_data;
+static uint16_t g_island_draw_order[ISLAND_DATA_MAX_LOCATIONS];
+static IslandHaze g_island_haze;
 static unsigned char *g_island_height_data;
 static size_t g_island_height_length;
 static int g_island_surface_id = -1;
@@ -105,7 +109,8 @@ static void update_window_title(HWND window)
 }
 
 static int load_palette(CobArchive *archive, const char *member_name,
-                        COLORREF palette[256], char *error, size_t error_capacity)
+                        COLORREF palette[256], uint8_t palette_rgb6[768],
+                        char *error, size_t error_capacity)
 {
     const CobMember *member = cob_archive_find(archive, member_name);
     unsigned char bytes[768];
@@ -125,6 +130,7 @@ static int load_palette(CobArchive *archive, const char *member_name,
         unsigned b = bytes[i * 3 + 2] > 63 ? 255u : (unsigned)bytes[i * 3 + 2] * 255u / 63u;
         palette[i] = RGB(r, g, b);
     }
+    if (palette_rgb6 != NULL) memcpy(palette_rgb6, bytes, sizeof(bytes));
     return 1;
 }
 
@@ -231,6 +237,23 @@ static void free_sprite_sheet(SpriteSheet *sheet)
     memset(sheet, 0, sizeof(*sheet));
 }
 
+/* FUN_00432940 is the original location comparator: ascending Y coordinate. */
+static void build_island_draw_order(void)
+{
+    uint16_t i;
+    for (i = 0; i < g_island_surface_data.location_count; ++i) {
+        uint16_t index = i;
+        uint16_t j = i;
+        while (j > 0 &&
+               g_island_surface_data.locations[g_island_draw_order[j - 1]].y >
+                   g_island_surface_data.locations[index].y) {
+            g_island_draw_order[j] = g_island_draw_order[j - 1];
+            --j;
+        }
+        g_island_draw_order[j] = index;
+    }
+}
+
 static void draw_sprite(HDC target, const SpriteSheet *sheet, uint32_t frame_index,
                         int x, int y)
 {
@@ -274,11 +297,17 @@ static void draw_sprite_region(HDC target, const SpriteSheet *sheet, uint32_t fr
 
 static int load_island_surface(int island_id, char *error, size_t error_capacity)
 {
+    static const uint8_t feature_frame_counts[ISLAND_NAME_COUNT] = {
+        5, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 1
+    };
     CobArchive archive = {0};
     SpriteSheet candidate = {0};
     SpriteSheet pad_candidate = {0};
+    SpriteSheet feature_candidate = {0};
     COLORREF palette[256];
+    uint8_t palette_rgb6[ISLAND_HAZE_PALETTE_BYTES];
     IslandData parsed;
+    IslandHaze haze_candidate;
     unsigned char *height_data = NULL;
     unsigned char *text_data = NULL;
     const CobMember *height_member;
@@ -287,6 +316,7 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     char palette_name[48];
     char height_name[48];
     char text_name[48];
+    char feature_name[48];
     const char *archive_path = "C:\\Program Files\\Tone\\TONE01.COB";
     int success = 0;
 
@@ -298,16 +328,25 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     (void)snprintf(palette_name, sizeof(palette_name), "data\\island%02d.pal", island_id);
     (void)snprintf(height_name, sizeof(height_name), "data\\island%02d.hzt", island_id);
     (void)snprintf(text_name, sizeof(text_name), "data\\island%02d.txt", island_id);
+    (void)snprintf(feature_name, sizeof(feature_name), "data\\i%02d-feat.shp", island_id);
     if (!cob_archive_open(archive_path, &archive, error, error_capacity)) return 0;
-    if (!load_palette(&archive, palette_name, palette, error, error_capacity) ||
+    if (!load_palette(&archive, palette_name, palette, palette_rgb6,
+                      error, error_capacity) ||
         !load_sprite_sheet(&archive, shape_name, palette, &candidate, error, error_capacity) ||
-        !load_sprite_sheet(&archive, "data\\solidpad.shp", palette, &pad_candidate,
+        !load_sprite_sheet(&archive, "data\\pad.shp", palette, &pad_candidate,
+                           error, error_capacity) ||
+        !load_sprite_sheet(&archive, feature_name, palette, &feature_candidate,
                            error, error_capacity)) {
         goto done;
     }
     if (pad_candidate.frame_count != 3) {
         (void)snprintf(error, error_capacity,
-                       "data\\solidpad.shp does not contain the three observed pad sizes");
+                       "data\\pad.shp does not contain the three nine-frame size groups");
+        goto done;
+    }
+    if (pad_candidate.frame_count != 27) {
+        (void)snprintf(error, error_capacity,
+                       "data\\pad.shp does not contain the 27 frames used by the pad renderer");
         goto done;
     }
     if (candidate.frame_count != 1 || candidate.frames[0].width != 2560 ||
@@ -316,13 +355,18 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
                        "%s does not contain the expected 2560x320 island panorama", shape_name);
         goto done;
     }
+    if (feature_candidate.frame_count != feature_frame_counts[island_id]) {
+        (void)snprintf(error, error_capacity,
+                       "%s has an unexpected island feature frame count", feature_name);
+        goto done;
+    }
     height_member = cob_archive_find(&archive, height_name);
     text_member = cob_archive_find(&archive, text_name);
     if (height_member == NULL || text_member == NULL) {
         (void)snprintf(error, error_capacity, "island height or location member is missing");
         goto done;
     }
-    if (height_member->length != 0x0e00) {
+    if (height_member->length != ISLAND_HAZE_FILE_BYTES) {
         (void)snprintf(error, error_capacity, "%s has an unexpected HZT length", height_name);
         goto done;
     }
@@ -333,21 +377,28 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
                                 error, error_capacity) ||
         !cob_archive_read_member(&archive, text_member, text_data, text_member->length,
                                 error, error_capacity) ||
+        !island_haze_load(height_data, height_member->length, palette_rgb6,
+                          &haze_candidate, error, error_capacity) ||
         !island_data_load(text_data, text_member->length, &parsed, error, error_capacity)) {
         goto done;
     }
 
     free_sprite_sheet(&g_island_surface_art);
-    free_sprite_sheet(&g_solid_pad_art);
+    free_sprite_sheet(&g_pad_art);
+    free_sprite_sheet(&g_island_feature_art);
     free(g_island_height_data);
     g_island_surface_art = candidate;
     memset(&candidate, 0, sizeof(candidate));
-    g_solid_pad_art = pad_candidate;
+    g_pad_art = pad_candidate;
     memset(&pad_candidate, 0, sizeof(pad_candidate));
+    g_island_feature_art = feature_candidate;
+    memset(&feature_candidate, 0, sizeof(feature_candidate));
     g_island_height_data = height_data;
     g_island_height_length = height_member->length;
     height_data = NULL;
     g_island_surface_data = parsed;
+    build_island_draw_order();
+    g_island_haze = haze_candidate;
     g_island_surface_id = island_id;
     g_island_scroll_x = 0;
     g_selected_location = -1;
@@ -356,6 +407,7 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
 done:
     free_sprite_sheet(&candidate);
     free_sprite_sheet(&pad_candidate);
+    free_sprite_sheet(&feature_candidate);
     free(height_data);
     free(text_data);
     cob_archive_close(&archive);
@@ -1364,10 +1416,91 @@ static COLORREF island_location_color(const char *type)
    Other location tags remain inspection markers until their state is known. */
 static int island_pad_frame(const char *type)
 {
-    if (strcmp(type, "smpad") == 0) return 0;
-    if (strcmp(type, "mdpad") == 0) return 1;
-    if (strcmp(type, "lgpad") == 0) return 2;
-    return -1;
+    switch (island_location_kind(type)) {
+    case ISLAND_LOCATION_PAD_SMALL: return 0;
+    case ISLAND_LOCATION_PAD_MEDIUM: return 9;
+    case ISLAND_LOCATION_PAD_LARGE: return 18;
+    default: return -1;
+    }
+}
+
+/* FUN_0040b345 draws feature layers at fixed world coordinates from the
+   island-window origin. The object contributes its special-value bits. This
+   renders only the static branch (object flag bit 0 clear); triggered and
+   altitude-hazed variants depend on live game state. */
+static void draw_island_feature(HDC dc, int island_id, const IslandLocation *site,
+                                int world_origin_x, int world_origin_y)
+{
+    const int bit0 = (site->special_value & 1) != 0;
+    const int bit1 = (site->special_value & 2) != 0;
+    const SpriteSheet *art = &g_island_feature_art;
+
+#define FEATURE_FRAME(frame, dx, dy) \
+    do { if ((uint32_t)(frame) < art->frame_count) \
+        draw_sprite(dc, art, (uint32_t)(frame), world_origin_x + (dx), \
+                    world_origin_y + (dy)); } while (0)
+
+    switch (island_id) {
+    case 0:
+        FEATURE_FRAME(bit0 ? 2 : 0, 0x6b3, 100);
+        FEATURE_FRAME(bit1 ? 3 : 1, 0x6b3, 100);
+        break;
+    case 1:
+        if (bit0) FEATURE_FRAME(0, 0x11a, 0xe9);
+        if (bit1) FEATURE_FRAME(1, 0x169, 0xf6);
+        break;
+    case 2:
+        if (bit0) FEATURE_FRAME(0, 0x4c, 0);
+        if (bit1) FEATURE_FRAME(1, 0x144, 0);
+        break;
+    case 3:
+        if (bit0 || bit1) FEATURE_FRAME(0, 0x8f, 99);
+        break;
+    case 4:
+        if (bit0) FEATURE_FRAME(0, 0x529, 0x8c);
+        if (bit1) FEATURE_FRAME(1, 0x5c2, 0x90);
+        break;
+    case 5:
+        if (bit0) FEATURE_FRAME(0, 0x2d4, 0xd5);
+        if (bit1) FEATURE_FRAME(1, 0x33e, 0xd5);
+        break;
+    case 6:
+        if (bit0) FEATURE_FRAME(0, 0x40, 0x6c);
+        if (bit1) FEATURE_FRAME(1, 0xa0, 0x69);
+        break;
+    case 7:
+        if (bit0) FEATURE_FRAME(0, 0x8f, 0xa2);
+        if (bit1) FEATURE_FRAME(1, 0xf5, 0xa5);
+        break;
+    case 8:
+        if (bit0) FEATURE_FRAME(0, 0x4a1, 0x43);
+        if (bit1) FEATURE_FRAME(1, 0x51a, 0x9e);
+        break;
+    case 9:
+        if (bit0) FEATURE_FRAME(0, 0x42a, 0x74);
+        if (bit1) FEATURE_FRAME(1, 0x4d6, 0x7f);
+        break;
+    case 10:
+        if (bit0) FEATURE_FRAME(0, 0x421, 0x87);
+        if (bit1) FEATURE_FRAME(1, 0x43b, 0x18);
+        break;
+    case 11:
+        FEATURE_FRAME(0, 0x57b, 0xf0);
+        if (bit0) FEATURE_FRAME(1, 0x57b, 0xf0);
+        if (bit1) FEATURE_FRAME(2, 0x57b, 0xf0);
+        break;
+    case 12:
+        if (bit0) FEATURE_FRAME(0, 0x4e7, 0xa0);
+        if (bit1) FEATURE_FRAME(1, 0x4e7, 0xa0);
+        break;
+    case 13:
+        if (bit0 || bit1) FEATURE_FRAME(0, 0x463, 0x82);
+        break;
+    case 14:
+    default:
+        break;
+    }
+#undef FEATURE_FRAME
 }
 
 static void render_island_view(HDC dc)
@@ -1383,7 +1516,8 @@ static void render_island_view(HDC dc)
     fill_rect(dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
     fill_rect(dc, 0, 0, LOGICAL_WIDTH, image_top, RGB(6, 10, 23));
     fill_rect(dc, 0, status_top, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(6, 10, 23));
-    if (g_island_height_data == NULL || g_island_height_length != 0x0e00) return;
+    if (g_island_height_data == NULL ||
+        g_island_height_length != ISLAND_HAZE_FILE_BYTES) return;
     draw_sprite_region(dc, &g_island_surface_art, 0, g_island_scroll_x, 0,
                        LOGICAL_WIDTH, 320, 0, image_top);
 
@@ -1391,16 +1525,23 @@ static void render_island_view(HDC dc)
         focus = &g_island_surface_data.locations[focus_index];
     }
     for (i = 0; i < g_island_surface_data.location_count; ++i) {
-        const IslandLocation *location = &g_island_surface_data.locations[i];
+        const IslandLocation *location =
+            &g_island_surface_data.locations[g_island_draw_order[i]];
         int x = (int)location->x - g_island_scroll_x;
         int y = image_top + (int)location->y;
         int pad_frame = island_pad_frame(location->type);
         COLORREF color = island_location_color(location->type);
         int dx;
         int dy;
+        if (location->renderer_class == 3 &&
+            (location->renderer_variant == 4 || location->renderer_variant == 0x16)) {
+            draw_island_feature(dc, g_island_surface_id, location,
+                                -g_island_scroll_x, image_top);
+            continue;
+        }
         if (x < -4 || x >= LOGICAL_WIDTH + 4) continue;
-        if (pad_frame >= 0 && g_solid_pad_art.frame_count == 3) {
-            draw_sprite(dc, &g_solid_pad_art, (uint32_t)pad_frame, x, y);
+        if (pad_frame >= 0 && g_pad_art.frame_count == 27) {
+            draw_sprite(dc, &g_pad_art, (uint32_t)pad_frame, x, y);
             continue;
         }
         for (dy = -2; dy <= 2; ++dy) {
@@ -1945,8 +2086,10 @@ static int load_menu_art(char *error, size_t error_capacity)
     const char *path = "C:\\Program Files\\Tone\\TONE01.COB";
     int success = 0;
     if (!cob_archive_open(path, &archive, error, error_capacity)) return 0;
-    if (!load_palette(&archive, "data\\titscrn.pal", title_palette, error, error_capacity) ||
-        !load_palette(&archive, "data\\newgame.pal", newgame_palette, error, error_capacity) ||
+    if (!load_palette(&archive, "data\\titscrn.pal", title_palette, NULL,
+                      error, error_capacity) ||
+        !load_palette(&archive, "data\\newgame.pal", newgame_palette, NULL,
+                      error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\titscrn.shp", title_palette,
                            &g_title_art, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\loadsav0.shp", title_palette,
@@ -1963,7 +2106,8 @@ static int load_menu_art(char *error, size_t error_capacity)
                            &g_big_floaters, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\levidif.shp", newgame_palette,
                            &g_difficulty_art, error, error_capacity) ||
-        !load_palette(&archive, "data\\mainmap.pal", mainmap_palette, error, error_capacity) ||
+        !load_palette(&archive, "data\\mainmap.pal", mainmap_palette, NULL,
+                      error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\mapback.shp", mainmap_palette,
                            &g_map_background, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\smisle.shp", mainmap_palette,
@@ -2096,7 +2240,8 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_map_background);
     free_sprite_sheet(&g_small_islands);
     free_sprite_sheet(&g_island_surface_art);
-    free_sprite_sheet(&g_solid_pad_art);
+    free_sprite_sheet(&g_pad_art);
+    free_sprite_sheet(&g_island_feature_art);
     free_sprite_sheet(&g_island_names_art);
     free_sprite_sheet(&g_load_save_art);
     free_sprite_sheet(&g_menu_help);

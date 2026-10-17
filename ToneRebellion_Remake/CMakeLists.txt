@@ -5,6 +5,7 @@ add_library(tone_core STATIC
     src/data/cob_archive.c
     src/data/font_image.c
     src/data/shp_image.c
+    src/core/island_haze.c
     src/core/island_data.c
     src/core/world_map.c
 )
