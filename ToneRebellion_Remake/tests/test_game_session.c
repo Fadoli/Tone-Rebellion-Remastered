@@ -504,7 +504,7 @@ static void test_building_placement_matches_source_runtime_initialization(void)
     assert(runtime->record_value_10 == 0 && runtime->owner_id == -1);
 }
 
-static void test_floater_move_state_advances_only_the_ordered_unit(void)
+static void test_floater_move_state_advances_only_simulation_assigned_destinations(void)
 {
     GameSession session;
     GameFloaterStart *floater;
@@ -517,26 +517,38 @@ static void test_floater_move_state_advances_only_the_ordered_unit(void)
     floater->island_index = 0;
     floater->x = 100;
     floater->y = 100;
+    /* The original simulation assigns movement targets through its unit/task
+       state machine. This fixture exercises only the movement kernel; it does
+       not model a player-issued order. */
+    floater->destination_x = 120;
+    floater->destination_y = 80;
+    floater->movement_speed = 3;
+    floater->has_move_order = 1;
     idle_floater = &session.floaters[1];
     idle_floater->island_index = 1;
     idle_floater->x = 200;
     idle_floater->y = 200;
     idle_x = idle_floater->x;
 
-    assert(game_session_order_floater_move(&session, 0, 120, 80, 3, 0));
-    assert(floater->has_move_order);
     game_session_tick_floater_moves(&session, 1);
     assert(floater->x == 103 && floater->y == 97);
     assert(!floater->facing_left);
     assert(idle_floater->x == idle_x && !idle_floater->has_move_order);
 
-    assert(game_session_order_floater_move(&session, 0, 100, 96, 3, 10));
+    floater->destination_x = 100;
+    floater->destination_y = 96;
+    floater->movement_speed = 3;
+    floater->stop_radius = 10;
+    floater->has_move_order = 1;
     game_session_tick_floater_moves(&session, 2);
     assert(floater->x == 103 && floater->y == 97);
     assert(!floater->has_move_order); /* destination is within the stop radius */
     assert(floater->facing_left); /* facing follows target even when stationary */
 
-    assert(game_session_order_floater_move(&session, 0, 100, 97, 3, 0));
+    floater->destination_x = 100;
+    floater->destination_y = 97;
+    floater->stop_radius = 0;
+    floater->has_move_order = 1;
     game_session_tick_floater_moves(&session, 3);
     assert(floater->facing_left);
     game_session_tick_floater_moves(&session, 4);
@@ -545,9 +557,6 @@ static void test_floater_move_state_advances_only_the_ordered_unit(void)
     game_session_tick_floater_moves(&session, 7);
     assert(floater->x == 100 && floater->y == 97);
 
-    assert(!game_session_order_floater_move(&session, 0, 2560, 100, 1, 0));
-    assert(!game_session_order_floater_move(&session, 0, 120, 80, 0, 0));
-    assert(!game_session_order_floater_move(&session, 2, 120, 80, 1, 0));
 }
 
 static void test_floater_selection_uses_original_hit_radius_and_island(void)
@@ -595,7 +604,7 @@ int main(void)
     test_active_cons_and_prod_counters_finish_at_source_limits();
     test_initialization_is_transactional_on_bad_world();
     test_building_placement_matches_source_runtime_initialization();
-    test_floater_move_state_advances_only_the_ordered_unit();
+    test_floater_move_state_advances_only_simulation_assigned_destinations();
     test_floater_selection_uses_original_hit_radius_and_island();
     test_location_panel_level_uses_original_low_nibble_plus_one();
     (void)puts("game session unit tests passed");

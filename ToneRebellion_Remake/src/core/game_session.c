@@ -673,30 +673,6 @@ void game_session_tick_item_animations(GameSession *session,
     }
 }
 
-int game_session_order_floater_move(GameSession *session,
-                                    uint16_t floater_index,
-                                    uint16_t destination_x,
-                                    uint16_t destination_y,
-                                    uint16_t effective_speed,
-                                    uint16_t stop_radius)
-{
-    GameFloaterStart *floater;
-
-    if (session == NULL || floater_index >= session->floater_count ||
-        destination_x >= 2560U || destination_y > 320U || effective_speed == 0) {
-        return 0;
-    }
-
-    floater = &session->floaters[floater_index];
-    floater->destination_x = destination_x;
-    floater->destination_y = destination_y;
-    floater->movement_speed = effective_speed;
-    floater->stop_radius = stop_radius;
-    floater->has_move_order =
-        floater->x != destination_x || floater->y != destination_y;
-    return 1;
-}
-
 void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
 {
     unsigned int i;

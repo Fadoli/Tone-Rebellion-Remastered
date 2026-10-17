@@ -183,15 +183,8 @@ int game_session_apply_world_bridge_message(GameSession *session,
 /* Advance the per-location animation fields updated by FUN_00450a71. */
 void game_session_tick_item_animations(GameSession *session,
                                        const struct BuildingRenderCatalog *catalog);
-/* Queue a local move target for one floater; speed and stop radius are explicit
-   because the original derives them from its state/stat tables. */
-int game_session_order_floater_move(GameSession *session,
-                                    uint16_t floater_index,
-                                    uint16_t destination_x,
-                                    uint16_t destination_y,
-                                    uint16_t effective_speed,
-                                    uint16_t stop_radius);
-/* Advance queued floater destinations using the FUN_00422d27 step kernel. */
+/* Advance destinations assigned by the simulation using the FUN_00422d27
+   step kernel. Player input must not call this as a worker-order command. */
 void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick);
 /* Hit test the visible island's active floaters in session order. The original
    FUN_00435581 uses Chebyshev distance < 0x14 (20) for floater selection. */

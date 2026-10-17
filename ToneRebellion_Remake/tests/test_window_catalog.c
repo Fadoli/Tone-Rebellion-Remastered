@@ -99,6 +99,20 @@ static void verify_hover_frame_selection(void)
     assert(window_catalog_hover_frame(0, 3, -1) == 0);
     assert(window_catalog_hover_frame(8, 3, 3) == 9);
     assert(window_catalog_hover_frame(8, 3, 2) == 8);
+    {
+        WindowTemplate control;
+        memset(&control, 0, sizeof(control));
+        control.shape_frame = 1;
+        control.mouse_focus = 1;
+        control.has_hilite_frame = 1;
+        control.hilite_frame = 4;
+        assert(window_catalog_control_frame(&control, 0) == 1);
+        assert(window_catalog_control_frame(&control, 1) == 4);
+        control.has_hilite_frame = 0;
+        assert(window_catalog_control_frame(&control, 1) == 2);
+        control.shape_frame = -1;
+        assert(window_catalog_control_frame(&control, 1) == -1);
+    }
 }
 
 static void verify_original_manifest(const char *path)
@@ -139,7 +153,34 @@ static void verify_original_manifest(const char *path)
     window = window_catalog_find(&catalog, "BC_TrnStkC", 3);
     assert(window != NULL && window->has_pane_extras);
     assert(window->pane_extras[0] == -4 && window->pane_extras[1] == 0);
-    puts("parsed original windows.txt: 100 descriptors; NewGameWin, WorldWindow and construction window templates found");
+    window = window_catalog_find(&catalog, "BC_HallStkB", 3);
+    assert(window != NULL && window->type_id == 35 && window->state_count == 1 &&
+           window->states[0] == 3);
+    assert(strcmp(window->shape_id, "THBUTT") == 0 && window->shape_frame == 1);
+    assert(window->pane.left == 191 && window->pane.top == 384 &&
+           window->pane.right == 223 && window->pane.bottom == 416);
+    assert(window->nstates == 3 && window->has_hilite_frame &&
+           window->hilite_frame == 4);
+    window = window_catalog_find(&catalog, "BC_HallStkC", 3);
+    assert(window != NULL && window->pane.top == 412 && window->pane.bottom == 444);
+    window = window_catalog_find(&catalog, "BC_HallStkM", 3);
+    assert(window != NULL && window->pane.top == 440 && window->pane.bottom == 471);
+    {
+        static const char *const permanent_buttons[] = {
+            "GOTOMAP", "PANIC", "TOGREALM", "TASKLIST"
+        };
+        static const int32_t button_x[] = {20, 120, 20, 120};
+        static const int32_t button_y[] = {340, 340, 440, 440};
+        size_t button;
+        for (button = 0; button < sizeof(permanent_buttons) / sizeof(permanent_buttons[0]);
+             ++button) {
+            window = window_catalog_find(&catalog, permanent_buttons[button], 3);
+            assert(window != NULL && window->mouse_focus == 1);
+            assert(window_catalog_hit_test(&catalog, 3, button_x[button],
+                                           button_y[button]) == window);
+        }
+    }
+    puts("parsed original windows.txt: 100 descriptors; menu, world, construction and Hall reserve controls found");
 }
 
 int main(int argc, char **argv)

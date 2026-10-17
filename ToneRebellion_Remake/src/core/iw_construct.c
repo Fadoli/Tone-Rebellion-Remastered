@@ -2,6 +2,23 @@
 
 #include <string.h>
 
+static int pane_contains(const WindowPane *pane, int32_t x, int32_t y)
+{
+    return pane != NULL && x >= pane->left && x <= pane->right &&
+           y >= pane->top && y <= pane->bottom;
+}
+
+IwConstructClickTarget iw_construct_click_target(int is_open,
+                                                 const WindowPane *grid_pane,
+                                                 const WindowPane *cycle_pane,
+                                                 int32_t x, int32_t y)
+{
+    if (!is_open) return IW_CONSTRUCT_CLICK_ISLAND;
+    if (pane_contains(cycle_pane, x, y)) return IW_CONSTRUCT_CLICK_CYCLE;
+    if (pane_contains(grid_pane, x, y)) return IW_CONSTRUCT_CLICK_GRID;
+    return IW_CONSTRUCT_CLICK_ISLAND;
+}
+
 int iw_construct_site_size(const IslandLocation *site, uint8_t *out_site_size)
 {
     if (out_site_size != NULL) *out_site_size = 0;

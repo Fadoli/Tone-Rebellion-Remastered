@@ -42,6 +42,21 @@ static unsigned int starting_hall_frame_count(const char *name)
 
 static int ascii_case_equal(const char *left, const char *right);
 
+static int island_template_variant(const char *name)
+{
+    unsigned int variant;
+    if (!ascii_case_equal(name, "data\\isletmp0.shp") &&
+        !ascii_case_equal(name, "data\\isletmp1.shp") &&
+        !ascii_case_equal(name, "data\\isletmp2.shp") &&
+        !ascii_case_equal(name, "data\\isletmp3.shp")) return -1;
+    for (variant = 0; variant < 4; ++variant) {
+        char expected[32];
+        (void)snprintf(expected, sizeof(expected), "data\\isletmp%u.shp", variant);
+        if (ascii_case_equal(name, expected)) return (int)variant;
+    }
+    return -1;
+}
+
 static int initial_worker_shape_kind(const char *name)
 {
     static const char *const body_names[4] = {
@@ -119,6 +134,7 @@ int main(int argc, char **argv)
     unsigned int halls_found = 0;
     unsigned int floater_body_sheets_found = 0;
     unsigned int floater_leg_sheets_found = 0;
+    unsigned int island_template_sheets_found = 0;
     char shape_names[512][64];
     size_t shape_name_count = 0;
 
@@ -141,7 +157,8 @@ int main(int argc, char **argv)
         const CobMember *member = cob_archive_member_at(&archive, i);
         unsigned char *bytes;
         if (is_shp_member(member->name) &&
-            manifest_contains(shape_names, shape_name_count, member->name)) {
+            (manifest_contains(shape_names, shape_name_count, member->name) ||
+             island_template_variant(member->name) >= 0)) {
             ShpFile shp;
             uint32_t frame_index;
             bytes = (unsigned char *)malloc(member->length == 0 ? 1U : member->length);
@@ -163,6 +180,30 @@ int main(int argc, char **argv)
                 free(bytes);
                 cob_archive_close(&archive);
                 return 1;
+            }
+            if (island_template_variant(member->name) >= 0) {
+                ShpFrame frame;
+                if (shp.frame_count != 1 ||
+                    !shp_decode_frame(&shp, 0, &frame, error, sizeof(error))) {
+                    (void)fprintf(stderr,
+                                  "%s: expected one decodable tribe-specific template frame: %s\n",
+                                  member->name, error);
+                    free(bytes);
+                    cob_archive_close(&archive);
+                    return 1;
+                }
+                if (frame.width != 640 || frame.height != 160) {
+                    (void)fprintf(stderr,
+                                  "%s: expected 640x160 frame, found %ux%u\n",
+                                  member->name, (unsigned)frame.width,
+                                  (unsigned)frame.height);
+                    shp_frame_free(&frame);
+                    free(bytes);
+                    cob_archive_close(&archive);
+                    return 1;
+                }
+                shp_frame_free(&frame);
+                ++island_template_sheets_found;
             }
             {
                 unsigned int required_hall_frames = starting_hall_frame_count(member->name);
@@ -219,12 +260,12 @@ int main(int argc, char **argv)
         }
     }
 
-    if (shapes_found == 0 || halls_found != 4 ||
+    if (shapes_found == 0 || halls_found != 4 || island_template_sheets_found != 4 ||
         floater_body_sheets_found != 4 || floater_leg_sheets_found != 4 ||
         cob_archive_find(&archive, "data\\br-trg01.shp") == NULL ||
         !manifest_contains(shape_names, shape_name_count, "data\\br-trg01.shp")) {
         (void)fprintf(stderr,
-                      "expected four starting hall sheets, four worker bodies, four worker leg sheets, and manifested data\\br-trg01.shp\n");
+                      "expected four starting hall sheets, four tribe templates, four worker bodies, four worker leg sheets, and manifested data\\br-trg01.shp\n");
         cob_archive_close(&archive);
         return 1;
     }

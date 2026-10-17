@@ -74,4 +74,9 @@ int32_t window_catalog_hover_frame(int32_t base_frame,
                                    int32_t control_index,
                                    int32_t hovered_control_index);
 
+/* Use the descriptor's explicit HILITEFRAME when present; windows.txt controls
+   without one use the adjacent frame convention used by the title menus. */
+int32_t window_catalog_control_frame(const WindowTemplate *control,
+                                     int hovered);
+
 #endif

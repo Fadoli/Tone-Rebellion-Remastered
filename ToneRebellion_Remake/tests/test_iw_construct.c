@@ -3,6 +3,25 @@
 #include <assert.h>
 #include <string.h>
 
+static void test_click_routing_dismisses_grid_outside_pane(void)
+{
+    const WindowPane grid = {192, 368, 447, 471};
+    const WindowPane cycle = {282, 368, 358, 391};
+
+    assert(iw_construct_click_target(0, &grid, &cycle, 220, 400) ==
+           IW_CONSTRUCT_CLICK_ISLAND);
+    assert(iw_construct_click_target(1, &grid, &cycle, 220, 400) ==
+           IW_CONSTRUCT_CLICK_GRID);
+    assert(iw_construct_click_target(1, &grid, &cycle, 320, 380) ==
+           IW_CONSTRUCT_CLICK_CYCLE);
+    /* Hall stock controls start at x=191; x=191 remains outside the grid
+       even though most of each stock control is covered by its pane. */
+    assert(iw_construct_click_target(1, &grid, &cycle, 191, 400) ==
+           IW_CONSTRUCT_CLICK_ISLAND);
+    assert(iw_construct_click_target(1, &grid, &cycle, 448, 400) ==
+           IW_CONSTRUCT_CLICK_ISLAND);
+}
+
 static void test_hover_click_and_pages(void)
 {
     const WindowPane pane = {192, 368, 447, 471};
@@ -166,6 +185,7 @@ static void test_build_list_uses_selected_site_size(void)
 
 int main(void)
 {
+    test_click_routing_dismisses_grid_outside_pane();
     test_hover_click_and_pages();
     test_bounds_and_info_messages();
     test_cycle_button_threshold();

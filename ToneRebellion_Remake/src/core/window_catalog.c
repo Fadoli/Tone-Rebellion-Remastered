@@ -336,3 +336,13 @@ int32_t window_catalog_hover_frame(int32_t base_frame,
         return base_frame + 1;
     return base_frame;
 }
+
+int32_t window_catalog_control_frame(const WindowTemplate *control,
+                                     int hovered)
+{
+    if (control == NULL) return -1;
+    if (!hovered || control->mouse_focus == 0 || control->shape_frame < 0)
+        return control->shape_frame;
+    if (control->has_hilite_frame) return control->hilite_frame;
+    return control->shape_frame + 1;
+}

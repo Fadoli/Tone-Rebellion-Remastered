@@ -18,6 +18,19 @@ enum {
     IW_CONSTRUCT_INFO_MSG_ITEM = 0x9a4
 };
 
+typedef enum IwConstructClickTarget {
+    IW_CONSTRUCT_CLICK_ISLAND = 0,
+    IW_CONSTRUCT_CLICK_GRID = 1,
+    IW_CONSTRUCT_CLICK_CYCLE = 2
+} IwConstructClickTarget;
+
+/* Window-template hit routing: controls only own clicks inside their panes.
+   Outside clicks return to the island view so another location can be chosen. */
+IwConstructClickTarget iw_construct_click_target(int is_open,
+                                                 const WindowPane *grid_pane,
+                                                 const WindowPane *cycle_pane,
+                                                 int32_t x, int32_t y);
+
 /* Extract the size subtype stored at +0x0c for a constructible island site.
    FUN_00461b3b maps pad/smpad/mdpad/lgpad to subtypes 0/0/1/2. */
 int iw_construct_site_size(const IslandLocation *site, uint8_t *out_site_size);

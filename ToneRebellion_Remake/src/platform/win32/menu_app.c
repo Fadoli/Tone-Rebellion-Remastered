@@ -72,12 +72,16 @@ static SpriteSheet g_map_background;
 static SpriteSheet g_small_islands;
 static SpriteSheet g_island_surface_art;
 static SpriteSheet g_island_template_art;
+static SpriteSheet g_island_lilmap_art;
+static SpriteSheet g_island_main_buttons;
+static SpriteSheet g_island_realm_art;
 static SpriteSheet g_tone_field_art;
 static SpriteSheet g_pad_art;
 static SpriteSheet g_bridge_trigger_art;
 static SpriteSheet g_temp_hole_art;
 static SpriteSheet g_build_cycle_art;
 static SpriteSheet g_bildtone_art;
+static SpriteSheet g_hall_stock_art;
 static SpriteSheet g_building_art[PAD_CATALOG_MAX_ITEMS];
 static SpriteSheet g_initial_floater_bodies[4];
 static SpriteSheet g_initial_floater_legs[4];
@@ -121,6 +125,8 @@ static size_t g_island_height_length;
 static int g_island_surface_id = -1;
 static int g_island_scroll_x;
 static int g_hovered_location = -1;
+static int g_hovered_hall_stock = -1;
+static int g_hovered_island_button = -1;
 static int g_selected_location = -1;
 static int g_selected_floater = -1;
 static IwConstructState g_iw_construct;
@@ -630,12 +636,16 @@ static int load_island_surface(int island_id, int map_island_index,
     CobArchive archive = {0};
     SpriteSheet candidate = {0};
     SpriteSheet template_candidate = {0};
+    SpriteSheet lilmap_candidate = {0};
+    SpriteSheet main_buttons_candidate = {0};
+    SpriteSheet realm_candidate = {0};
     SpriteSheet tone_candidate = {0};
     SpriteSheet pad_candidate = {0};
     SpriteSheet bridge_candidate = {0};
     SpriteSheet temp_hole_candidate = {0};
     SpriteSheet build_cycle_candidate = {0};
     SpriteSheet bildtone_candidate = {0};
+    SpriteSheet hall_stock_candidate = {0};
     SpriteSheet building_candidates[PAD_CATALOG_MAX_ITEMS] = {{0}};
     SpriteSheet floater_body_candidates[4] = {{0}};
     SpriteSheet floater_leg_candidates[4] = {{0}};
@@ -652,6 +662,7 @@ static int load_island_surface(int island_id, int map_island_index,
     const CobMember *text_member;
     char shape_name[48];
     char palette_name[48];
+    char template_shape_name[32];
     char height_name[48];
     char text_name[48];
     char feature_name[48];
@@ -663,6 +674,7 @@ static int load_island_surface(int island_id, int map_island_index,
     };
     unsigned int hall_index;
     unsigned int item_id;
+    int selected_player;
     const GameRuntimeIsland *runtime_island = NULL;
     const char *archive_path = "C:\\Program Files\\Tone\\TONE01.COB";
     int success = 0;
@@ -675,8 +687,16 @@ static int load_island_surface(int island_id, int map_island_index,
         map_island_index >= 0 && map_island_index < g_game_session.island_count) {
         runtime_island = &g_game_session.islands[map_island_index];
     }
+    selected_player = g_game_session_valid
+        ? (int)g_game_session.config.selected_tribe : g_menu.selected_tribe;
+    if (selected_player < 0 || selected_player >= GAME_START_PLAYER_COUNT) {
+        (void)snprintf(error, error_capacity, "selected tribe is out of range");
+        return 0;
+    }
     (void)snprintf(shape_name, sizeof(shape_name), "data\\island%02d.shp", island_id);
     (void)snprintf(palette_name, sizeof(palette_name), "data\\island%02d.pal", island_id);
+    (void)snprintf(template_shape_name, sizeof(template_shape_name),
+                   "data\\isletmp%d.shp", selected_player);
     (void)snprintf(height_name, sizeof(height_name), "data\\island%02d.hzt", island_id);
     (void)snprintf(text_name, sizeof(text_name), "data\\island%02d.txt", island_id);
     (void)snprintf(feature_name, sizeof(feature_name), "data\\i%02d-feat.shp", island_id);
@@ -684,8 +704,14 @@ static int load_island_surface(int island_id, int map_island_index,
     if (!load_palette(&archive, palette_name, palette, palette_rgb6,
                       error, error_capacity) ||
         !load_sprite_sheet(&archive, shape_name, palette, &candidate, error, error_capacity) ||
-        !load_sprite_sheet(&archive, "data\\isletmp0.shp", palette,
+        !load_sprite_sheet(&archive, template_shape_name, palette,
                            &template_candidate, error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\lilmap.shp", palette,
+                           &lilmap_candidate, error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\mainbut0.shp", palette,
+                           &main_buttons_candidate, error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\isrealm.shp", palette,
+                           &realm_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\tone.shp", palette, &tone_candidate,
                            error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\pad.shp", palette, &pad_candidate,
@@ -697,6 +723,8 @@ static int load_island_surface(int island_id, int map_island_index,
         !load_sprite_sheet(&archive, "data\\scarrow0.shp", palette, &build_cycle_candidate,
                            error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\bildtone.shp", palette, &bildtone_candidate,
+                           error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\thbutt.shp", palette, &hall_stock_candidate,
                            error, error_capacity) ||
         !load_sprite_sheet(&archive, feature_name, palette, &feature_candidate,
                            error, error_capacity)) {
@@ -808,6 +836,13 @@ static int load_island_surface(int island_id, int map_island_index,
                        "data\\isletmp0.shp does not match the 640x160 ISLETEMP pane");
         goto done;
     }
+    if (lilmap_candidate.frame_count != 16 ||
+        lilmap_candidate.frames[0].width != 256 ||
+        lilmap_candidate.frames[0].height != 32) {
+        (void)snprintf(error, error_capacity,
+                       "data\\lilmap.shp does not match the 16 256x32 island-map frames");
+        goto done;
+    }
     if (pad_candidate.frame_count != 27) {
         (void)snprintf(error, error_capacity,
                        "data\\pad.shp does not contain the 27 frames used by the pad renderer");
@@ -823,9 +858,11 @@ static int load_island_surface(int island_id, int map_island_index,
                        "data\\br-trg01.shp does not contain its 23 declared animation frames");
         goto done;
     }
-    if (temp_hole_candidate.frame_count < 3 || build_cycle_candidate.frame_count < 1) {
+    if (temp_hole_candidate.frame_count < 3 || build_cycle_candidate.frame_count < 1 ||
+        hall_stock_candidate.frame_count < 5 || main_buttons_candidate.frame_count < 8 ||
+        realm_candidate.frame_count < 1) {
         (void)snprintf(error, error_capacity,
-                       "construction window templates lack their windows.txt frames");
+                       "island controls lack the frames declared in windows.txt or shapes.txt");
         goto done;
     }
     if (candidate.frame_count != 1 || candidate.frames[0].width != 2560 ||
@@ -864,12 +901,16 @@ static int load_island_surface(int island_id, int map_island_index,
 
     free_sprite_sheet(&g_island_surface_art);
     free_sprite_sheet(&g_island_template_art);
+    free_sprite_sheet(&g_island_lilmap_art);
+    free_sprite_sheet(&g_island_main_buttons);
+    free_sprite_sheet(&g_island_realm_art);
     free_sprite_sheet(&g_tone_field_art);
     free_sprite_sheet(&g_pad_art);
     free_sprite_sheet(&g_bridge_trigger_art);
     free_sprite_sheet(&g_temp_hole_art);
     free_sprite_sheet(&g_build_cycle_art);
     free_sprite_sheet(&g_bildtone_art);
+    free_sprite_sheet(&g_hall_stock_art);
     for (hall_index = 0; hall_index < 4; ++hall_index) {
         free_sprite_sheet(&g_initial_floater_bodies[hall_index]);
         g_initial_floater_bodies[hall_index] = floater_body_candidates[hall_index];
@@ -901,6 +942,12 @@ static int load_island_surface(int island_id, int map_island_index,
     memset(&candidate, 0, sizeof(candidate));
     g_island_template_art = template_candidate;
     memset(&template_candidate, 0, sizeof(template_candidate));
+    g_island_lilmap_art = lilmap_candidate;
+    memset(&lilmap_candidate, 0, sizeof(lilmap_candidate));
+    g_island_main_buttons = main_buttons_candidate;
+    memset(&main_buttons_candidate, 0, sizeof(main_buttons_candidate));
+    g_island_realm_art = realm_candidate;
+    memset(&realm_candidate, 0, sizeof(realm_candidate));
     g_tone_field_art = tone_candidate;
     memset(&tone_candidate, 0, sizeof(tone_candidate));
     g_pad_art = pad_candidate;
@@ -913,6 +960,8 @@ static int load_island_surface(int island_id, int map_island_index,
     memset(&build_cycle_candidate, 0, sizeof(build_cycle_candidate));
     g_bildtone_art = bildtone_candidate;
     memset(&bildtone_candidate, 0, sizeof(bildtone_candidate));
+    g_hall_stock_art = hall_stock_candidate;
+    memset(&hall_stock_candidate, 0, sizeof(hall_stock_candidate));
     g_island_feature_art = feature_candidate;
     memset(&feature_candidate, 0, sizeof(feature_candidate));
     g_island_height_data = height_data;
@@ -932,12 +981,16 @@ static int load_island_surface(int island_id, int map_island_index,
 done:
     free_sprite_sheet(&candidate);
     free_sprite_sheet(&template_candidate);
+    free_sprite_sheet(&lilmap_candidate);
+    free_sprite_sheet(&main_buttons_candidate);
+    free_sprite_sheet(&realm_candidate);
     free_sprite_sheet(&tone_candidate);
     free_sprite_sheet(&pad_candidate);
     free_sprite_sheet(&bridge_candidate);
     free_sprite_sheet(&temp_hole_candidate);
     free_sprite_sheet(&build_cycle_candidate);
     free_sprite_sheet(&bildtone_candidate);
+    free_sprite_sheet(&hall_stock_candidate);
     for (item_id = 0; item_id < PAD_CATALOG_MAX_ITEMS; ++item_id) {
         free_sprite_sheet(&building_candidates[item_id]);
     }
@@ -1815,11 +1868,11 @@ static void draw_configured_buttons(HDC dc, int state, const char *shape_id,
             strcmp(window->shape_id, shape_id) != 0 || window->shape_frame < 0) continue;
         frame = window->shape_frame;
         if (state == 0) {
-            frame = window_catalog_hover_frame(
-                frame, template_help_index(window), g_hovered_help);
+            frame = window_catalog_control_frame(
+                window, template_help_index(window) == g_hovered_help);
         } else if (state == 1) {
-            frame = window_catalog_hover_frame(
-                frame, template_caption_index(window), g_hovered_newgame_text);
+            frame = window_catalog_control_frame(
+                window, template_caption_index(window) == g_hovered_newgame_text);
         }
         draw_sprite(dc, sheet, (uint32_t)frame, window->pane.left, window->pane.top);
     }
@@ -2144,6 +2197,66 @@ static int update_island_location_hover(int x, int y)
     int location = g_menu.screen == SCREEN_ISLAND ? island_location_at(x, y) : -1;
     if (location == g_hovered_location) return 0;
     g_hovered_location = location;
+    return 1;
+}
+
+static int selected_hall_player(void)
+{
+    unsigned int player;
+    const GameRuntimeIsland *island;
+    const GameRuntimeLocation *hall;
+    if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
+        g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
+        g_menu.selected_map_island < 0 ||
+        g_menu.selected_map_island >= g_game_session.island_count ||
+        g_selected_location < 0) return -1;
+    player = g_menu.selected_tribe;
+    if (g_game_session.economy[player].hall_island_index !=
+            (uint8_t)g_menu.selected_map_island ||
+        g_game_session.economy[player].hall_location_index !=
+            (uint16_t)g_selected_location) return -1;
+    island = &g_game_session.islands[g_menu.selected_map_island];
+    if (g_selected_location >= island->location_count) return -1;
+    hall = &island->locations[g_selected_location];
+    if (hall->owner_id != (int32_t)player ||
+        hall->record_value_10 != (int32_t)(0x2aU + player * 16U)) return -1;
+    return (int)player;
+}
+
+static int hall_stock_control_at(int x, int y)
+{
+    const WindowTemplate *control = window_catalog_hit_test(&g_window_catalog, 3, x, y);
+    if (control == NULL) return -1;
+    if (strcmp(control->name, "BC_HallStkB") == 0) return GAME_RESOURCE_BUILD_TONE;
+    if (strcmp(control->name, "BC_HallStkC") == 0) return GAME_RESOURCE_CRYSTAL_TONE;
+    if (strcmp(control->name, "BC_HallStkM") == 0) return GAME_RESOURCE_MAGIC_TONE;
+    return -1;
+}
+
+static int update_hall_stock_hover(int x, int y)
+{
+    int hovered = selected_hall_player() >= 0 ? hall_stock_control_at(x, y) : -1;
+    if (hovered == g_hovered_hall_stock) return 0;
+    g_hovered_hall_stock = hovered;
+    return 1;
+}
+
+static int island_button_index(const char *name)
+{
+    if (strcmp(name, "GOTOMAP") == 0) return 0;
+    if (strcmp(name, "PANIC") == 0) return 1;
+    if (strcmp(name, "TOGREALM") == 0) return 2;
+    if (strcmp(name, "TASKLIST") == 0) return 3;
+    return -1;
+}
+
+static int update_island_button_hover(int x, int y)
+{
+    const WindowTemplate *control = window_catalog_hit_test(
+        &g_window_catalog, 3, x, y);
+    int hovered = control != NULL ? island_button_index(control->name) : -1;
+    if (hovered == g_hovered_island_button) return 0;
+    g_hovered_island_button = hovered;
     return 1;
 }
 
@@ -2586,8 +2699,8 @@ static void render_island_view(HDC dc)
     const IslandLocation *focus = NULL;
     const GameFloaterStart *selected_floater = NULL;
     int focus_index = g_hovered_location >= 0 ? g_hovered_location : g_selected_location;
+    int hall_player = selected_hall_player();
     int saved_dc;
-    char text[160];
     uint16_t i;
     const GameRuntimeIsland *runtime_island = NULL;
 
@@ -2762,34 +2875,76 @@ static void render_island_view(HDC dc)
        ISLETMP pane in windows.txt. It uses the active island palette. */
     draw_sprite(dc, &g_island_template_art, 0, 0, status_top);
 
-    if (g_island_surface_id >= 0 && g_island_surface_id < ISLAND_NAME_COUNT) {
-        (void)snprintf(text, sizeof(text), "%s   ISLAND %02d",
-                       g_island_names[g_island_surface_id], g_island_surface_id);
-    } else {
-        (void)snprintf(text, sizeof(text), "ISLAND %02d", g_island_surface_id);
-    }
-    draw_bitmap_label(dc, text, 12, status_top + 8, RGB(230, 238, 255));
-    (void)snprintf(text, sizeof(text), "VIEW X=%04d / 1920     ARROWS: SCROLL     ESC: WORLD MAP",
-                   g_island_scroll_x);
-    draw_bitmap_label(dc, text, 12, status_top + 27, RGB(143, 181, 217));
-    if (focus != NULL) {
-        (void)snprintf(text, sizeof(text), "LOCATION %02u  %s  X=%u Y=%u",
-                       (unsigned)focus->id, focus->type,
-                       (unsigned)focus->x, (unsigned)focus->y);
-        draw_bitmap_label(dc, text, 12, status_top + 140, RGB(244, 216, 131));
-        if (runtime_island != NULL && focus_index < runtime_island->location_count) {
-            const GameRuntimeLocation *state = &runtime_island->locations[focus_index];
-            (void)snprintf(text, sizeof(text),
-                           "RUNTIME ITEM=%ld OWNER=%ld AUX=%ld BRIDGE-TO=%ld",
-                           (long)state->record_value_10, (long)state->owner_id,
-                           (long)state->record_value_24,
-                           (long)state->bridge_neighbor_island);
-            draw_bitmap_label(dc, text, 12, status_top + 150, RGB(169, 208, 232));
-        } else {
-            draw_bitmap_label(dc, "NO GAME SESSION FOR THIS ISLAND",
-                              12, status_top + 150, RGB(111, 135, 166));
+    /* windows.txt declares the always-present island controls separately from
+       ISLETEMP. FUN_0042fa0f shows GOTOMAP/PANIC/TOGREALM/TASKLIST at entry to
+       island state; mainbut0.shp supplies their normal and adjacent hover
+       frames, while ISREALM is the companion left-panel artwork. */
+    {
+        const WindowTemplate *realm_panel = window_catalog_find(
+            &g_window_catalog, "IWRealm", 3);
+        static const char *const button_names[] = {
+            "GOTOMAP", "PANIC", "TOGREALM", "TASKLIST"
+        };
+        size_t button_index;
+        if (realm_panel != NULL && g_island_realm_art.frame_count != 0) {
+            draw_sprite(dc, &g_island_realm_art,
+                        (uint32_t)realm_panel->shape_frame,
+                        realm_panel->pane.left, realm_panel->pane.top);
+        }
+        for (button_index = 0;
+             button_index < sizeof(button_names) / sizeof(button_names[0]);
+             ++button_index) {
+            const WindowTemplate *button = window_catalog_find(
+                &g_window_catalog, button_names[button_index], 3);
+            int frame;
+            if (button == NULL || button->shape_frame < 0) continue;
+            frame = window_catalog_control_frame(
+                button, (int)button_index == g_hovered_island_button);
+            if (frame >= 0 && (uint32_t)frame < g_island_main_buttons.frame_count) {
+                draw_sprite(dc, &g_island_main_buttons, (uint32_t)frame,
+                            button->pane.left, button->pane.top);
+            }
         }
     }
+
+    /* windows.txt places IWLilMap at (192,328)-(447,359), and shapes.txt
+       binds it to the 16-frame LILMAP sheet. The SHP frame is indexed by the
+       selected island's existing surface id (the local 15-island corpus uses
+       the corresponding first 15 frames). */
+    if (g_island_surface_id >= 0 && g_island_surface_id < 16) {
+        const WindowTemplate *mini_map = window_catalog_find(
+            &g_window_catalog, "IWLilMap", 16);
+        if (mini_map != NULL) {
+            draw_sprite(dc, &g_island_lilmap_art,
+                        (uint32_t)g_island_surface_id,
+                        mini_map->pane.left, mini_map->pane.top);
+        }
+    }
+
+    /* BC_HallStkB/C/M are the original Hall reserve controls. Their state
+       selects THBUTT frames 1..3; windows.txt assigns hover frame 4. */
+    if (hall_player >= 0 && g_hall_stock_art.frame_count >= 5) {
+        static const char *const stock_control_names[GAME_RESOURCE_TYPE_COUNT] = {
+            "BC_HallStkB", "BC_HallStkC", "BC_HallStkM"
+        };
+        unsigned int resource;
+        for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
+            const WindowTemplate *button = window_catalog_find(
+                &g_window_catalog, stock_control_names[resource], 3);
+            uint32_t frame;
+            if (button == NULL) continue;
+            frame = (uint32_t)button->shape_frame +
+                g_game_session.economy[hall_player].stock_mode[resource];
+            if ((int)resource == g_hovered_hall_stock && button->has_hilite_frame) {
+                frame = (uint32_t)button->hilite_frame;
+            }
+            if (frame < g_hall_stock_art.frame_count) {
+                draw_sprite(dc, &g_hall_stock_art, frame,
+                            button->pane.left, button->pane.top);
+            }
+        }
+    }
+
     draw_iw_construct(dc);
     if (selected_floater != NULL && selected_floater->type_index < 4) {
         const WindowTemplate *info = window_catalog_find(
@@ -3148,48 +3303,89 @@ static void handle_click(HWND window, int x, int y)
             }
         }
     } else if (g_menu.screen == SCREEN_ISLAND) {
+        const WindowTemplate *construct = window_catalog_find(
+            &g_window_catalog, "IWConstruct", 3);
         const WindowTemplate *cycle = window_catalog_find(&g_window_catalog,
                                                            "BuildCycle", 3);
-        if (g_iw_construct_open && cycle != NULL &&
-            x >= cycle->pane.left && x <= cycle->pane.right &&
-            y >= cycle->pane.top && y <= cycle->pane.bottom) {
+        IwConstructClickTarget click_target = iw_construct_click_target(
+            g_iw_construct_open,
+            construct != NULL ? &construct->pane : NULL,
+            cycle != NULL && g_iw_construct.cycle_button_visible
+                ? &cycle->pane : NULL,
+            x, y);
+        if (click_target == IW_CONSTRUCT_CLICK_CYCLE) {
             IwConstructTransition transition;
             iw_construct_build_cycle(&g_iw_construct, g_iw_construct_item_count,
                                      &transition);
             (void)apply_iw_construct_messages(&transition);
             (void)update_iw_construct_hover(x, y);
-        } else if (g_iw_construct_open) {
+        } else if (click_target == IW_CONSTRUCT_CLICK_GRID) {
             (void)update_iw_construct_hover(x, y);
             if (select_iw_construct_item()) {
                 InvalidateRect(window, NULL, FALSE);
             }
         } else {
-            int clicked_floater = g_game_session_valid
-                ? game_session_floater_at(&g_game_session,
-                    (uint8_t)g_menu.selected_map_island,
-                    (uint16_t)(x + g_island_scroll_x), (uint16_t)y)
-                : -1;
-            if (clicked_floater >= 0) {
-                g_selected_floater = clicked_floater;
-                g_selected_location = -1;
-                g_hovered_location = -1;
-                InvalidateRect(window, NULL, FALSE);
+            /* IWConstruct overlaps the Hall's stock buttons in ISLETMP. Keep
+               clicks modal only inside its panes; an outside click dismisses
+               it and continues through the normal island/Hall hit routing.
+               Without this, clicking the Hall location is swallowed and the
+               Hall panel can never become selected after opening the grid. */
+            if (g_iw_construct_open) {
+                g_iw_construct_open = 0;
+                g_iw_construct.hovered_column = -1;
+                (void)iw_construct_info_handle_message(
+                    &g_iw_construct_info, 1, 0);
+            }
+            const WindowTemplate *island_control = window_catalog_hit_test(
+                &g_window_catalog, 3, x, y);
+            int button_index = island_control != NULL
+                ? island_button_index(island_control->name) : -1;
+            int hall_player = selected_hall_player();
+            int stock_control = hall_player >= 0 ? hall_stock_control_at(x, y) : -1;
+            if (button_index >= 0) {
+                /* GOTOMAP is the only permanent-button action currently
+                   ported from the original dispatch. The other names remain
+                   consumed here until their state transitions are mapped. */
+                if (island_control->send_message[0] == 2000) {
+                    g_menu.screen = SCREEN_WORLD_MAP;
+                    g_selected_floater = -1;
+                    g_selected_location = -1;
+                    g_hovered_location = -1;
+                    g_hovered_island_button = -1;
+                    update_window_title(window);
+                }
+            } else if (stock_control >= 0) {
+                (void)game_session_cycle_resource_stock_mode(
+                    &g_game_session, (uint8_t)hall_player,
+                    (GameResourceType)stock_control);
             } else {
-                int clicked_location = island_location_at(x, y);
-                g_selected_floater = -1;
-                if (clicked_location >= 0) {
-                    if (g_pending_build_item_id >= 0) {
-                        if (place_pending_building(window, clicked_location)) {
-                            g_selected_location = clicked_location;
-                        }
-                    } else {
-                        g_selected_location = clicked_location;
-                        (void)open_iw_construct(clicked_location);
-                    }
+                int clicked_floater = g_game_session_valid
+                    ? game_session_floater_at(&g_game_session,
+                        (uint8_t)g_menu.selected_map_island,
+                        (uint16_t)(x + g_island_scroll_x), (uint16_t)y)
+                    : -1;
+                if (clicked_floater >= 0) {
+                    g_selected_floater = clicked_floater;
+                    g_selected_location = -1;
+                    g_hovered_location = -1;
                     InvalidateRect(window, NULL, FALSE);
                 } else {
-                    g_selected_location = -1;
-                    InvalidateRect(window, NULL, FALSE);
+                    int clicked_location = island_location_at(x, y);
+                    g_selected_floater = -1;
+                    if (clicked_location >= 0) {
+                        if (g_pending_build_item_id >= 0) {
+                            if (place_pending_building(window, clicked_location)) {
+                                g_selected_location = clicked_location;
+                            }
+                        } else {
+                            g_selected_location = clicked_location;
+                            (void)open_iw_construct(clicked_location);
+                        }
+                        InvalidateRect(window, NULL, FALSE);
+                    } else {
+                        g_selected_location = -1;
+                        InvalidateRect(window, NULL, FALSE);
+                    }
                 }
             }
         }
@@ -3212,6 +3408,8 @@ static void handle_click(HWND window, int x, int y)
     }
     (void)update_hover_help(x, y);
     (void)update_newgame_text(x, y);
+    (void)update_hall_stock_hover(x, y);
+    (void)update_island_button_hover(x, y);
     update_window_title(window);
     InvalidateRect(window, NULL, FALSE);
 }
@@ -3265,14 +3463,18 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         if (x < viewport.left || x >= viewport.right || y < viewport.top || y >= viewport.bottom) {
             int construct_hover_changed = update_iw_construct_hover(-1, -1);
             if (g_mouse_inside || g_hovered_help != -1 || g_hovered_newgame_text != -1 ||
-                g_hovered_island != -1 || g_hovered_location != -1) {
+                g_hovered_island != -1 || g_hovered_location != -1 ||
+                g_hovered_hall_stock != -1 || g_hovered_island_button != -1) {
                 g_mouse_inside = 0;
                 if (g_hovered_help != -1 || g_hovered_newgame_text != -1 ||
-                    g_hovered_island != -1 || g_hovered_location != -1) {
+                    g_hovered_island != -1 || g_hovered_location != -1 ||
+                    g_hovered_hall_stock != -1 || g_hovered_island_button != -1) {
                     g_hovered_help = -1;
                     g_hovered_newgame_text = -1;
                     g_hovered_island = -1;
                     g_hovered_location = -1;
+                    g_hovered_hall_stock = -1;
+                    g_hovered_island_button = -1;
                     InvalidateRect(window, NULL, FALSE);
                 }
             }
@@ -3291,6 +3493,8 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             update_newgame_text(g_mouse_x, g_mouse_y) |
             update_world_map_hover(g_mouse_x, g_mouse_y) |
             update_island_location_hover(g_mouse_x, g_mouse_y) |
+            update_hall_stock_hover(g_mouse_x, g_mouse_y) |
+                update_island_button_hover(g_mouse_x, g_mouse_y) |
             update_iw_construct_hover(g_mouse_x, g_mouse_y)) {
             InvalidateRect(window, NULL, FALSE);
         }
@@ -3300,11 +3504,14 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         g_mouse_inside = 0;
         (void)update_iw_construct_hover(-1, -1);
         if (g_hovered_help != -1 || g_hovered_newgame_text != -1 ||
-            g_hovered_island != -1 || g_hovered_location != -1) {
+            g_hovered_island != -1 || g_hovered_location != -1 ||
+            g_hovered_hall_stock != -1 || g_hovered_island_button != -1) {
             g_hovered_help = -1;
             g_hovered_newgame_text = -1;
             g_hovered_island = -1;
             g_hovered_location = -1;
+            g_hovered_hall_stock = -1;
+            g_hovered_island_button = -1;
             InvalidateRect(window, NULL, FALSE);
         }
         return 0;
@@ -3845,12 +4052,16 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_small_islands);
     free_sprite_sheet(&g_island_surface_art);
     free_sprite_sheet(&g_island_template_art);
+    free_sprite_sheet(&g_island_lilmap_art);
+    free_sprite_sheet(&g_island_main_buttons);
+    free_sprite_sheet(&g_island_realm_art);
     free_sprite_sheet(&g_tone_field_art);
     free_sprite_sheet(&g_pad_art);
     free_sprite_sheet(&g_bridge_trigger_art);
     free_sprite_sheet(&g_temp_hole_art);
     free_sprite_sheet(&g_build_cycle_art);
     free_sprite_sheet(&g_bildtone_art);
+    free_sprite_sheet(&g_hall_stock_art);
     {
         unsigned int hall_index;
         unsigned int item_index;
