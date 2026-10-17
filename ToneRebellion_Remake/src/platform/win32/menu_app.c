@@ -61,6 +61,7 @@ static SpriteSheet g_difficulty_art;
 static SpriteSheet g_map_background;
 static SpriteSheet g_small_islands;
 static SpriteSheet g_island_surface_art;
+static SpriteSheet g_solid_pad_art;
 static SpriteSheet g_island_names_art;
 static SpriteSheet g_load_save_art;
 static SpriteSheet g_newgame_captions;
@@ -275,6 +276,7 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
 {
     CobArchive archive = {0};
     SpriteSheet candidate = {0};
+    SpriteSheet pad_candidate = {0};
     COLORREF palette[256];
     IslandData parsed;
     unsigned char *height_data = NULL;
@@ -298,7 +300,14 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     (void)snprintf(text_name, sizeof(text_name), "data\\island%02d.txt", island_id);
     if (!cob_archive_open(archive_path, &archive, error, error_capacity)) return 0;
     if (!load_palette(&archive, palette_name, palette, error, error_capacity) ||
-        !load_sprite_sheet(&archive, shape_name, palette, &candidate, error, error_capacity)) {
+        !load_sprite_sheet(&archive, shape_name, palette, &candidate, error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\solidpad.shp", palette, &pad_candidate,
+                           error, error_capacity)) {
+        goto done;
+    }
+    if (pad_candidate.frame_count != 3) {
+        (void)snprintf(error, error_capacity,
+                       "data\\solidpad.shp does not contain the three observed pad sizes");
         goto done;
     }
     if (candidate.frame_count != 1 || candidate.frames[0].width != 2560 ||
@@ -329,9 +338,12 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     }
 
     free_sprite_sheet(&g_island_surface_art);
+    free_sprite_sheet(&g_solid_pad_art);
     free(g_island_height_data);
     g_island_surface_art = candidate;
     memset(&candidate, 0, sizeof(candidate));
+    g_solid_pad_art = pad_candidate;
+    memset(&pad_candidate, 0, sizeof(pad_candidate));
     g_island_height_data = height_data;
     g_island_height_length = height_member->length;
     height_data = NULL;
@@ -343,6 +355,7 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     success = 1;
 done:
     free_sprite_sheet(&candidate);
+    free_sprite_sheet(&pad_candidate);
     free(height_data);
     free(text_data);
     cob_archive_close(&archive);
@@ -1345,6 +1358,18 @@ static COLORREF island_location_color(const char *type)
     return RGB(104, 174, 255);
 }
 
+/* FUN_00461b3b maps smpad/mdpad/lgpad to size values 0/1/2. The matching
+   solidpad.shp frames are an asset-based placement inference; the exact
+   original call that associates pad records with these frames remains open.
+   Other location tags remain inspection markers until their state is known. */
+static int island_pad_frame(const char *type)
+{
+    if (strcmp(type, "smpad") == 0) return 0;
+    if (strcmp(type, "mdpad") == 0) return 1;
+    if (strcmp(type, "lgpad") == 0) return 2;
+    return -1;
+}
+
 static void render_island_view(HDC dc)
 {
     const int image_top = 80;
@@ -1369,10 +1394,15 @@ static void render_island_view(HDC dc)
         const IslandLocation *location = &g_island_surface_data.locations[i];
         int x = (int)location->x - g_island_scroll_x;
         int y = image_top + (int)location->y;
+        int pad_frame = island_pad_frame(location->type);
         COLORREF color = island_location_color(location->type);
         int dx;
         int dy;
         if (x < -4 || x >= LOGICAL_WIDTH + 4) continue;
+        if (pad_frame >= 0 && g_solid_pad_art.frame_count == 3) {
+            draw_sprite(dc, &g_solid_pad_art, (uint32_t)pad_frame, x, y);
+            continue;
+        }
         for (dy = -2; dy <= 2; ++dy) {
             for (dx = -2; dx <= 2; ++dx) {
                 if (dx * dx + dy * dy <= 5) (void)SetPixelV(dc, x + dx, y + dy, color);
@@ -2066,6 +2096,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_map_background);
     free_sprite_sheet(&g_small_islands);
     free_sprite_sheet(&g_island_surface_art);
+    free_sprite_sheet(&g_solid_pad_art);
     free_sprite_sheet(&g_island_names_art);
     free_sprite_sheet(&g_load_save_art);
     free_sprite_sheet(&g_menu_help);
