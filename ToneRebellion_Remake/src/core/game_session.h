@@ -16,12 +16,15 @@ typedef struct GameSessionConfig {
     uint32_t mode;
     uint32_t alternate_island;
     uint8_t home_island_index;
+    uint8_t randomize_class0_assignment;
     uint32_t random_seed;
 } GameSessionConfig;
 
 typedef struct GameRuntimeLocation {
-    int32_t item_id;
+    int32_t record_value_10;
     int32_t owner_id;
+    int32_t record_value_24;
+    int32_t bridge_neighbor_island;
 } GameRuntimeLocation;
 
 typedef struct GameRuntimeIsland {
@@ -43,6 +46,7 @@ typedef struct GameSession {
     GameStartToneDistribution tone_placements;
     GameFloaterStart floaters[GAME_SESSION_MAX_FLOATERS];
     uint8_t floater_count;
+    uint16_t class0_assignments;
     GameRuntimeIsland islands[WORLD_MAP_MAX_ISLANDS];
 } GameSession;
 
@@ -50,8 +54,10 @@ typedef struct GameSession {
  * Builds the initial, mutable gameplay state from a selected WORLDPOS world
  * and its ISLANDnn.TXT records (ordered by world-island index). The port
  * models FUN_004500c4 field resets, FUN_0046466f start descriptors and initial
- * pads/floaters, then applies FUN_00464b9e marker item placements. All inputs
- * remain unchanged and `out` changes only after the full setup succeeds.
+ * pads/floaters, applies FUN_00464b9e marker item placements, sets class-2
+ * record state and reproduces the two class-0 assignment loops in
+ * FUN_004637fc. All inputs remain unchanged and `out` changes only after the
+ * full setup succeeds.
  *
  * `home_island_index` represents the unresolved runtime value compared with
  * DAT_006136b0 - 1. RNG draws before/inside the unported 0x17..0x19 loop are

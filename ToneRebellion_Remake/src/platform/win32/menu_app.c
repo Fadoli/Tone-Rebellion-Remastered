@@ -8,6 +8,7 @@
 #include "island_haze.h"
 #include "island_render_rules.h"
 #include "curved_text_layout.h"
+#include "game_session.h"
 #include "shp_image.h"
 #include "window_catalog.h"
 #include "world_map.h"
@@ -70,6 +71,9 @@ static SpriteSheet g_island_template_art;
 static SpriteSheet g_tone_field_art;
 static SpriteSheet g_pad_art;
 static SpriteSheet g_bridge_trigger_art;
+static SpriteSheet g_initial_halls[4];
+static SpriteSheet g_initial_floater_bodies[4];
+static SpriteSheet g_initial_floater_legs[4];
 static SpriteSheet g_island_feature_art;
 static SpriteSheet g_island_names_art;
 static SpriteSheet g_load_save_art;
@@ -86,6 +90,9 @@ static char g_newgame_text[8][256];
 static char g_tribe_text[4][2][1024];
 static char g_island_names[ISLAND_NAME_COUNT][32];
 static IslandData g_island_surface_data;
+static GameSession g_game_session;
+static int g_game_session_valid;
+static int g_game_session_world_index = -1;
 static WindowCatalog g_window_catalog;
 static uint16_t g_island_draw_order[ISLAND_DATA_MAX_LOCATIONS];
 static IslandHaze g_island_haze;
@@ -103,6 +110,26 @@ static int g_hovered_island = -1;
 static int g_mouse_inside;
 static int g_mouse_x;
 static int g_mouse_y;
+
+static void update_window_title(HWND window);
+static int load_game_session_for_selected_world(char *error, size_t error_capacity);
+
+static int begin_new_game(HWND window)
+{
+    char error[256];
+    if (!load_game_session_for_selected_world(error, sizeof(error))) {
+        MessageBoxA(window, error, "Tone Rebellion remake - game setup error",
+                    MB_OK | MB_ICONERROR);
+        return 0;
+    }
+    g_menu.setup_accepted = 1;
+    g_menu.selected_map_island = -1;
+    g_hovered_island = -1;
+    g_menu.screen = SCREEN_WORLD_MAP;
+    update_window_title(window);
+    InvalidateRect(window, NULL, FALSE);
+    return 1;
+}
 
 static const int g_difficulty_count = 5;
 static void update_window_title(HWND window)
@@ -314,6 +341,9 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     SpriteSheet tone_candidate = {0};
     SpriteSheet pad_candidate = {0};
     SpriteSheet bridge_candidate = {0};
+    SpriteSheet hall_candidates[4] = {{0}};
+    SpriteSheet floater_body_candidates[4] = {{0}};
+    SpriteSheet floater_leg_candidates[4] = {{0}};
     SpriteSheet feature_candidate = {0};
     COLORREF palette[256];
     uint8_t palette_rgb6[ISLAND_HAZE_PALETTE_BYTES];
@@ -328,6 +358,18 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     char height_name[48];
     char text_name[48];
     char feature_name[48];
+    static const char *const hall_names[4] = {
+        "data\\p-hall.shp", "data\\s-hall.shp",
+        "data\\m-hall.shp", "data\\l-hall.shp"
+    };
+    static const uint32_t hall_frame_counts[4] = {3, 3, 4, 4};
+    static const char *const floater_body_names[4] = {
+        "data\\pbod.shp", "data\\sbod.shp", "data\\mbod.shp", "data\\lbod.shp"
+    };
+    static const char *const floater_leg_names[4] = {
+        "data\\plegs.shp", "data\\slegs.shp", "data\\mlegs.shp", "data\\llegs.shp"
+    };
+    unsigned int hall_index;
     const char *archive_path = "C:\\Program Files\\Tone\\TONE01.COB";
     int success = 0;
 
@@ -355,6 +397,35 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
         !load_sprite_sheet(&archive, feature_name, palette, &feature_candidate,
                            error, error_capacity)) {
         goto done;
+    }
+    for (hall_index = 0; hall_index < 4; ++hall_index) {
+        if (!load_sprite_sheet(&archive, hall_names[hall_index], palette,
+                              &hall_candidates[hall_index], error, error_capacity)) {
+            goto done;
+        }
+        if (hall_candidates[hall_index].frame_count < hall_frame_counts[hall_index]) {
+            (void)snprintf(error, error_capacity,
+                           "%s does not contain the BASE frames used by its starting hall",
+                           hall_names[hall_index]);
+            goto done;
+        }
+    }
+    /* FUN_0042704b (fltdraw.cpp) draws tribe-specific body and legs sheets.
+       shapeinf.txt specifies base-worker body frame 0 and hover frames 0..15. */
+    for (hall_index = 0; hall_index < 4; ++hall_index) {
+        if (!load_sprite_sheet(&archive, floater_body_names[hall_index], palette,
+                               &floater_body_candidates[hall_index], error, error_capacity) ||
+            !load_sprite_sheet(&archive, floater_leg_names[hall_index], palette,
+                               &floater_leg_candidates[hall_index], error, error_capacity)) {
+            goto done;
+        }
+        if (floater_body_candidates[hall_index].frame_count == 0 ||
+            floater_leg_candidates[hall_index].frame_count < 16) {
+            (void)snprintf(error, error_capacity,
+                           "%s or %s lacks the base-worker or hover frames in shapeinf.txt",
+                           floater_body_names[hall_index], floater_leg_names[hall_index]);
+            goto done;
+        }
     }
     if (template_candidate.frame_count != 1 ||
         template_candidate.frames[0].width != LOGICAL_WIDTH ||
@@ -417,6 +488,19 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     free_sprite_sheet(&g_tone_field_art);
     free_sprite_sheet(&g_pad_art);
     free_sprite_sheet(&g_bridge_trigger_art);
+    for (hall_index = 0; hall_index < 4; ++hall_index) {
+        free_sprite_sheet(&g_initial_halls[hall_index]);
+        g_initial_halls[hall_index] = hall_candidates[hall_index];
+        memset(&hall_candidates[hall_index], 0, sizeof(hall_candidates[hall_index]));
+        free_sprite_sheet(&g_initial_floater_bodies[hall_index]);
+        g_initial_floater_bodies[hall_index] = floater_body_candidates[hall_index];
+        memset(&floater_body_candidates[hall_index], 0,
+               sizeof(floater_body_candidates[hall_index]));
+        free_sprite_sheet(&g_initial_floater_legs[hall_index]);
+        g_initial_floater_legs[hall_index] = floater_leg_candidates[hall_index];
+        memset(&floater_leg_candidates[hall_index], 0,
+               sizeof(floater_leg_candidates[hall_index]));
+    }
     free_sprite_sheet(&g_island_feature_art);
     free(g_island_height_data);
     g_island_surface_art = candidate;
@@ -448,6 +532,11 @@ done:
     free_sprite_sheet(&tone_candidate);
     free_sprite_sheet(&pad_candidate);
     free_sprite_sheet(&bridge_candidate);
+    for (hall_index = 0; hall_index < 4; ++hall_index) {
+        free_sprite_sheet(&hall_candidates[hall_index]);
+        free_sprite_sheet(&floater_body_candidates[hall_index]);
+        free_sprite_sheet(&floater_leg_candidates[hall_index]);
+    }
     free_sprite_sheet(&feature_candidate);
     free(height_data);
     free(text_data);
@@ -1444,6 +1533,13 @@ static int open_island_view(HWND window, int map_island_index)
     if (g_menu.world_index < 0 || g_menu.world_index >= g_menu.world_map.world_count) return 0;
     world = &g_menu.world_map.worlds[g_menu.world_index];
     if (map_island_index < 0 || map_island_index >= world->island_count) return 0;
+    if (!g_game_session_valid || g_game_session_world_index != g_menu.world_index) {
+        if (!load_game_session_for_selected_world(error, sizeof(error))) {
+            MessageBoxA(window, error, "Tone Rebellion remake - game setup error",
+                        MB_OK | MB_ICONERROR);
+            return 0;
+        }
+    }
     island_id = world->islands[map_island_index].shape_id;
     if (!load_island_surface(island_id, error, sizeof(error))) {
         MessageBoxA(window, error, "Tone Rebellion remake - island data error",
@@ -1498,6 +1594,27 @@ static COLORREF island_location_color(const char *type)
 static int island_pad_group(const IslandLocation *location)
 {
     return island_pad_size_group(location->kind);
+}
+
+static int initial_hall_index(int32_t item_id)
+{
+    switch (item_id) {
+    case 42: return 0; /* pad.txt item 42: p-hall */
+    case 58: return 1; /* item 42 + 16 * player 1: s-hall */
+    case 74: return 2; /* item 42 + 16 * player 2: m-hall */
+    case 90: return 3; /* item 42 + 16 * player 3: l-hall */
+    default: return -1;
+    }
+}
+
+static uint32_t initial_hall_frame(int hall_index, unsigned int animation_ticks,
+                                   uint16_t world_x)
+{
+    static const uint8_t last_base_frame[4] = {3, 3, 4, 4};
+    const unsigned int frame_count = (unsigned int)last_base_frame[hall_index];
+    /* bldinf BASE uses inclusive 1-based frame bounds. FUN_0040aaeb applies
+       ordinary inclusive modulo when the segment has no ping-pong flag. */
+    return (uint32_t)((animation_ticks / 50U + world_x % 23U) % frame_count);
 }
 
 /* FUN_0040b345 draws feature layers at fixed world coordinates from the
@@ -1588,6 +1705,12 @@ static void render_island_view(HDC dc)
     int saved_dc;
     char text[160];
     uint16_t i;
+    const GameRuntimeIsland *runtime_island = NULL;
+
+    if (g_game_session_valid && g_menu.selected_map_island >= 0 &&
+        g_menu.selected_map_island < g_game_session.island_count) {
+        runtime_island = &g_game_session.islands[g_menu.selected_map_island];
+    }
 
     fill_rect(dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
     if (g_island_height_data == NULL ||
@@ -1606,11 +1729,15 @@ static void render_island_view(HDC dc)
     saved_dc = SaveDC(dc);
     (void)IntersectClipRect(dc, 0, 0, LOGICAL_WIDTH, status_top);
     for (i = 0; i < g_island_surface_data.location_count; ++i) {
-        const IslandLocation *location =
-            &g_island_surface_data.locations[g_island_draw_order[i]];
+        uint16_t location_index = g_island_draw_order[i];
+        const IslandLocation *location = &g_island_surface_data.locations[location_index];
+        const GameRuntimeLocation *runtime_location =
+            runtime_island != NULL && location_index < runtime_island->location_count
+                ? &runtime_island->locations[location_index] : NULL;
         int x = (int)location->x - g_island_scroll_x;
         int y = image_top + (int)location->y;
         int pad_group = island_pad_group(location);
+        int runtime_class = location->renderer_class;
         COLORREF color = island_location_color(location->type);
         int dx;
         int dy;
@@ -1619,6 +1746,25 @@ static void render_island_view(HDC dc)
             draw_island_feature(dc, g_island_surface_id, location,
                                 -g_island_scroll_x, image_top);
             continue;
+        }
+        /* FUN_00461859 demotes unmatched class-2 records to class 0 at game
+           startup. Draw the bridge trigger only for records still paired to a
+           world-map neighbor; preserve the source class in the parsed data. */
+        if (runtime_location != NULL && location->renderer_class == 2 &&
+            runtime_location->bridge_neighbor_island < 0) {
+            runtime_class = 0;
+        }
+        if (runtime_location != NULL) {
+            int hall_index = initial_hall_index(runtime_location->record_value_10);
+            if (hall_index >= 0) {
+                if (x >= -4 && x < LOGICAL_WIDTH + 4) {
+                    uint32_t frame = initial_hall_frame(hall_index,
+                                                        g_menu.animation_ticks,
+                                                        location->x);
+                    draw_sprite(dc, &g_initial_halls[hall_index], frame, x, y);
+                }
+                continue;
+            }
         }
         /* The pad catalog's PIT_Object (item 1) and PIT_FeatureTrigger
            (item 3) entries have no shape asset. These item IDs are distinct
@@ -1631,7 +1777,7 @@ static void render_island_view(HDC dc)
         /* The original class-2 bridge site is distinct from class-0 pads.
            bldinf.txt defines BR-TRG01's static BASE as frame 1; the COB's
            corresponding SHP stores that frame at index 0. */
-        if (location->renderer_class == 2 &&
+        if (runtime_class == 2 &&
             g_bridge_trigger_art.frame_count == 23) {
             draw_sprite(dc, &g_bridge_trigger_art, 0, x, y);
             continue;
@@ -1656,6 +1802,29 @@ static void render_island_view(HDC dc)
             for (dx = -2; dx <= 2; ++dx) {
                 if (dx * dx + dy * dy <= 5) (void)SetPixelV(dc, x + dx, y + dy, color);
             }
+        }
+    }
+    /* FUN_0046466f creates four idle type-0 floaters for each player at the
+       selected hall marker. FUN_0042704b draws their tribe-specific legs and
+       body separately; shapeinf.txt defines body frame 0 and hover frames 0..15. */
+    if (runtime_island != NULL && g_game_session_valid) {
+        unsigned floater_index;
+        for (floater_index = 0; floater_index < g_game_session.floater_count;
+             ++floater_index) {
+            const GameFloaterStart *floater = &g_game_session.floaters[floater_index];
+            int floater_x;
+            int floater_y;
+            uint32_t leg_frame;
+            if (floater->island_index != g_menu.selected_map_island ||
+                floater->type_index >= 4) continue;
+            floater_x = (int)floater->x - g_island_scroll_x;
+            if (floater_x < -64 || floater_x >= LOGICAL_WIDTH + 64) continue;
+            floater_y = image_top + (int)floater->y;
+            leg_frame = g_menu.animation_ticks % 16u;
+            draw_sprite(dc, &g_initial_floater_legs[floater->type_index], leg_frame,
+                        floater_x, floater_y);
+            draw_sprite(dc, &g_initial_floater_bodies[floater->type_index], 0,
+                        floater_x, floater_y);
         }
     }
     if (focus != NULL) {
@@ -1690,12 +1859,26 @@ static void render_island_view(HDC dc)
                        (unsigned)focus->id, focus->type,
                        (unsigned)focus->x, (unsigned)focus->y);
         draw_bitmap_label(dc, text, 12, status_top + 140, RGB(244, 216, 131));
+        if (runtime_island != NULL && focus_index < runtime_island->location_count) {
+            const GameRuntimeLocation *state = &runtime_island->locations[focus_index];
+            (void)snprintf(text, sizeof(text),
+                           "RUNTIME ITEM=%ld OWNER=%ld AUX=%ld BRIDGE-TO=%ld",
+                           (long)state->record_value_10, (long)state->owner_id,
+                           (long)state->record_value_24,
+                           (long)state->bridge_neighbor_island);
+            draw_bitmap_label(dc, text, 12, status_top + 150, RGB(169, 208, 232));
+        } else {
+            draw_bitmap_label(dc, "NO GAME SESSION FOR THIS ISLAND",
+                              12, status_top + 150, RGB(111, 135, 166));
+        }
     } else {
         draw_bitmap_label(dc, "CLICK A MARKER TO INSPECT THIS LOCATION",
                           12, status_top + 140, RGB(143, 181, 217));
+        draw_bitmap_label(dc, runtime_island != NULL
+                                  ? "INITIAL GAME STATE IS ACTIVE"
+                                  : "NO GAME SESSION FOR THIS ISLAND",
+                          12, status_top + 150, RGB(111, 135, 166));
     }
-    draw_bitmap_label(dc, "SITE MARKERS USE THE SHIPPED ISLANDnn.TXT COORDINATES",
-                      12, status_top + 150, RGB(111, 135, 166));
 }
 
 /* The x87 helpers called by FUN_00471536 continue past Ghidra's short
@@ -1866,13 +2049,10 @@ static void paint_window(HWND window)
     EndPaint(window, &paint);
 }
 
-static void dispatch_newgame_master_message(int message)
+static void dispatch_newgame_master_message(HWND window, int message)
 {
     if (message == 52) {
-        g_menu.setup_accepted = 1;
-        g_menu.selected_map_island = -1;
-        g_hovered_island = -1;
-        g_menu.screen = SCREEN_WORLD_MAP;
+        (void)begin_new_game(window);
     } else if (message == 53) {
         g_menu.world_index = (g_menu.world_index + 1) % g_menu.world_map.world_count;
         g_menu.setup_accepted = 0;
@@ -1936,7 +2116,7 @@ static void handle_click(HWND window, int x, int y)
             g_menu.screen = SCREEN_MAIN_MENU;
             g_menu.setup_accepted = 0;
         } else if (control != NULL && strcmp(control->message_destination, "MASTER") == 0) {
-            dispatch_newgame_master_message(control->send_message[0]);
+            dispatch_newgame_master_message(window, control->send_message[0]);
         }
     } else if (g_menu.screen == SCREEN_WORLD_MAP) {
         int clicked_island = world_island_at(x, y);
@@ -2102,10 +2282,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             if (g_menu.screen == SCREEN_MAIN_MENU) {
                 g_menu.screen = SCREEN_NEW_GAME;
             } else if (g_menu.screen == SCREEN_NEW_GAME) {
-                g_menu.setup_accepted = 1;
-                g_menu.selected_map_island = -1;
-                g_hovered_island = -1;
-                g_menu.screen = SCREEN_WORLD_MAP;
+                (void)begin_new_game(window);
             } else if (g_menu.screen == SCREEN_LOAD_GAME) {
                 g_menu.screen = SCREEN_MAIN_MENU;
             } else if (g_menu.screen == SCREEN_WORLD_MAP) {
@@ -2147,10 +2324,10 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             g_menu.setup_accepted = 0;
             InvalidateRect(window, NULL, FALSE);
         } else if (g_menu.screen == SCREEN_NEW_GAME && wparam == 'D') {
-            dispatch_newgame_master_message(55);
+            dispatch_newgame_master_message(window, 55);
             InvalidateRect(window, NULL, FALSE);
         } else if (g_menu.screen == SCREEN_NEW_GAME && wparam >= '1' && wparam <= '4') {
-            dispatch_newgame_master_message(60 + (int)(wparam - '1'));
+            dispatch_newgame_master_message(window, 60 + (int)(wparam - '1'));
             InvalidateRect(window, NULL, FALSE);
         }
         if (g_mouse_inside && (update_hover_help(g_mouse_x, g_mouse_y) |
@@ -2198,6 +2375,83 @@ static int load_world_map(char *error, size_t error_capacity)
     free(data);
     cob_archive_close(&archive);
     return success;
+}
+
+static int load_game_session_for_selected_world(char *error, size_t error_capacity)
+{
+    CobArchive archive = {0};
+    const WorldDefinition *world;
+    IslandData island_records[WORLD_MAP_MAX_ISLANDS];
+    GameSessionConfig config;
+    GameSession session;
+    unsigned int island_index;
+
+    if (g_menu.world_index < 0 || g_menu.world_index >= g_menu.world_map.world_count) {
+        (void)snprintf(error, error_capacity, "selected world is out of range");
+        return 0;
+    }
+    world = &g_menu.world_map.worlds[g_menu.world_index];
+    memset(island_records, 0, sizeof(island_records));
+    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE01.COB", &archive,
+                          error, error_capacity)) return 0;
+
+    for (island_index = 0; island_index < world->island_count; ++island_index) {
+        char member_name[48];
+        const CobMember *member;
+        unsigned char *bytes;
+        int shape_id = world->islands[island_index].shape_id;
+        int parsed;
+
+        if (shape_id < 0 || shape_id >= ISLAND_NAME_COUNT) {
+            (void)snprintf(error, error_capacity,
+                           "world island %u has unsupported shape ID %d",
+                           island_index, shape_id);
+            cob_archive_close(&archive);
+            return 0;
+        }
+        (void)snprintf(member_name, sizeof(member_name), "data\\island%02d.txt", shape_id);
+        member = cob_archive_find(&archive, member_name);
+        if (member == NULL) {
+            (void)snprintf(error, error_capacity, "%s was not found in TONE01.COB",
+                           member_name);
+            cob_archive_close(&archive);
+            return 0;
+        }
+        bytes = (unsigned char *)malloc(member->length == 0 ? 1 : member->length);
+        if (bytes == NULL) {
+            (void)snprintf(error, error_capacity, "could not allocate %s buffer", member_name);
+            cob_archive_close(&archive);
+            return 0;
+        }
+        parsed = cob_archive_read_member(&archive, member, bytes, member->length,
+                                         error, error_capacity) &&
+                 island_data_load(bytes, member->length, &island_records[island_index],
+                                  error, error_capacity);
+        free(bytes);
+        if (!parsed) {
+            cob_archive_close(&archive);
+            return 0;
+        }
+    }
+    cob_archive_close(&archive);
+
+    memset(&config, 0, sizeof(config));
+    config.world_index = (uint8_t)g_menu.world_index;
+    config.difficulty = (uint8_t)g_menu.difficulty;
+    config.selected_tribe = (uint8_t)g_menu.selected_tribe;
+    /* DAT_006136b0's runtime initializer remains unresolved in the source
+       analysis. Keep the core's documented explicit default until that is
+       resolved; do not infer it from the selected tribe. */
+    config.home_island_index = 0;
+    config.randomize_class0_assignment = 0;
+    config.random_seed = g_random_state;
+    if (!game_session_initialize(world, island_records, &config, &session,
+                                 error, error_capacity)) return 0;
+
+    g_game_session = session;
+    g_game_session_world_index = g_menu.world_index;
+    g_game_session_valid = 1;
+    return 1;
 }
 
 static int load_window_catalog(char *error, size_t error_capacity)
@@ -2394,6 +2648,14 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_island_template_art);
     free_sprite_sheet(&g_tone_field_art);
     free_sprite_sheet(&g_pad_art);
+    {
+        unsigned int hall_index;
+        for (hall_index = 0; hall_index < 4; ++hall_index) {
+            free_sprite_sheet(&g_initial_halls[hall_index]);
+            free_sprite_sheet(&g_initial_floater_bodies[hall_index]);
+            free_sprite_sheet(&g_initial_floater_legs[hall_index]);
+        }
+    }
     free_sprite_sheet(&g_island_feature_art);
     free_sprite_sheet(&g_island_names_art);
     free_sprite_sheet(&g_load_save_art);

@@ -2,6 +2,7 @@
 #include "island_data.h"
 #include "shp_image.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,6 +29,33 @@ static int is_shp_member(const char *name)
            (extension[1] == 's' || extension[1] == 'S') &&
            (extension[2] == 'h' || extension[2] == 'H') &&
            (extension[3] == 'p' || extension[3] == 'P');
+}
+
+static unsigned int starting_hall_frame_count(const char *name)
+{
+    if (strcmp(name, "data\\p-hall.shp") == 0 ||
+        strcmp(name, "data\\s-hall.shp") == 0) return 3;
+    if (strcmp(name, "data\\m-hall.shp") == 0 ||
+        strcmp(name, "data\\l-hall.shp") == 0) return 4;
+    return 0;
+}
+
+static int ascii_case_equal(const char *left, const char *right);
+
+static int initial_worker_shape_kind(const char *name)
+{
+    static const char *const body_names[4] = {
+        "data\\pbod.shp", "data\\sbod.shp", "data\\mbod.shp", "data\\lbod.shp"
+    };
+    static const char *const leg_names[4] = {
+        "data\\plegs.shp", "data\\slegs.shp", "data\\mlegs.shp", "data\\llegs.shp"
+    };
+    unsigned int i;
+    for (i = 0; i < 4; ++i) {
+        if (ascii_case_equal(name, body_names[i])) return 1;
+        if (ascii_case_equal(name, leg_names[i])) return 2;
+    }
+    return 0;
 }
 
 static int read_shape_manifest(const char *content_dir,
@@ -60,11 +88,21 @@ static int read_shape_manifest(const char *content_dir,
     return *name_count != 0;
 }
 
+static int ascii_case_equal(const char *left, const char *right)
+{
+    while (*left != '\0' && *right != '\0') {
+        if (tolower((unsigned char)*left) != tolower((unsigned char)*right)) return 0;
+        ++left;
+        ++right;
+    }
+    return *left == *right;
+}
+
 static int manifest_contains(char names[][64], size_t name_count, const char *name)
 {
     size_t i;
     for (i = 0; i < name_count; ++i) {
-        if (strcmp(names[i], name) == 0) return 1;
+        if (ascii_case_equal(names[i], name)) return 1;
     }
     return 0;
 }
@@ -78,6 +116,9 @@ int main(int argc, char **argv)
     unsigned int records_found = 0;
     unsigned int shapes_found = 0;
     unsigned int frames_decoded = 0;
+    unsigned int halls_found = 0;
+    unsigned int floater_body_sheets_found = 0;
+    unsigned int floater_leg_sheets_found = 0;
     char shape_names[512][64];
     size_t shape_name_count = 0;
 
@@ -123,6 +164,43 @@ int main(int argc, char **argv)
                 cob_archive_close(&archive);
                 return 1;
             }
+            {
+                unsigned int required_hall_frames = starting_hall_frame_count(member->name);
+                if (required_hall_frames != 0) {
+                    if (shp.frame_count < required_hall_frames) {
+                    (void)fprintf(stderr,
+                                      "%s: expected at least %u BASE frames, found %u\n",
+                                      member->name, required_hall_frames,
+                                      (unsigned)shp.frame_count);
+                        free(bytes);
+                        cob_archive_close(&archive);
+                        return 1;
+                    }
+                    ++halls_found;
+                }
+            }
+            {
+                int worker_shape_kind = initial_worker_shape_kind(member->name);
+                if (worker_shape_kind == 1) {
+                    if (shp.frame_count < 1) {
+                        (void)fprintf(stderr, "%s: missing base-worker body frame 0\n",
+                                      member->name);
+                        free(bytes);
+                        cob_archive_close(&archive);
+                        return 1;
+                    }
+                    ++floater_body_sheets_found;
+                } else if (worker_shape_kind == 2) {
+                    if (shp.frame_count < 16) {
+                        (void)fprintf(stderr, "%s: missing hover frames 0..15\n",
+                                      member->name);
+                        free(bytes);
+                        cob_archive_close(&archive);
+                        return 1;
+                    }
+                    ++floater_leg_sheets_found;
+                }
+            }
             for (frame_index = 0; frame_index < shp.frame_count; ++frame_index) {
                 ShpFrame frame;
                 if (!shp_decode_frame(&shp, frame_index, &frame,
@@ -141,9 +219,12 @@ int main(int argc, char **argv)
         }
     }
 
-    if (shapes_found == 0 || cob_archive_find(&archive, "data\\br-trg01.shp") == NULL ||
+    if (shapes_found == 0 || halls_found != 4 ||
+        floater_body_sheets_found != 4 || floater_leg_sheets_found != 4 ||
+        cob_archive_find(&archive, "data\\br-trg01.shp") == NULL ||
         !manifest_contains(shape_names, shape_name_count, "data\\br-trg01.shp")) {
-        (void)fprintf(stderr, "expected manifested SHP members including data\\br-trg01.shp\n");
+        (void)fprintf(stderr,
+                      "expected four starting hall sheets, four worker bodies, four worker leg sheets, and manifested data\\br-trg01.shp\n");
         cob_archive_close(&archive);
         return 1;
     }
