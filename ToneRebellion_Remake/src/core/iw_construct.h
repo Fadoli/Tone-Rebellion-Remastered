@@ -2,6 +2,7 @@
 #define TONE_REBELLION_IW_CONSTRUCT_H
 
 #include "pad_catalog.h"
+#include "island_data.h"
 #include "window_catalog.h"
 
 #include <stddef.h>
@@ -17,18 +18,31 @@ enum {
     IW_CONSTRUCT_INFO_MSG_ITEM = 0x9a4
 };
 
-/* Rebuilds FUN_0045f121's ordered available-item list from the active
-   player's +0x0c size limit, the three observed global rule sets, and the
+/* Extract the size subtype stored at +0x0c for a constructible island site.
+   FUN_00461b3b maps pad/smpad/mdpad/lgpad to subtypes 0/0/1/2. */
+int iw_construct_site_size(const IslandLocation *site, uint8_t *out_site_size);
+
+/* Rebuilds FUN_0045f121's ordered available-item list from the selected
+   construction site's +0x0c size, the three observed global rule sets, and the
    local pad.txt metadata loaded by FUN_0046303b. `player_slot` selects the
    matching 16-item tribe block through FUN_004641de. Owned-island count and
    rule_set are explicit because the remake has not yet ported their live
    world/player-state producers. `out_ids` contains the original base item
    IDs used by the window messages. */
 int iw_construct_build_list(const PadCatalog *catalog, uint8_t player_slot,
-                            int32_t player_size_limit, uint8_t rule_set,
+                            int32_t site_size, uint8_t rule_set,
                             uint16_t owned_island_count,
                             int32_t *out_ids, size_t out_capacity,
                             size_t *out_count);
+
+/* Site-aware entry point for island selection; rejects non-pad location types. */
+int iw_construct_build_list_for_site(const PadCatalog *catalog,
+                                     uint8_t player_slot,
+                                     const IslandLocation *site,
+                                     uint8_t rule_set,
+                                     uint16_t owned_island_count,
+                                     int32_t *out_ids, size_t out_capacity,
+                                     size_t *out_count);
 
 typedef struct IwConstructMessage {
     uint16_t code;

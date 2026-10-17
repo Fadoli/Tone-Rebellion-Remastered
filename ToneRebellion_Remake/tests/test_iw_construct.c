@@ -117,11 +117,59 @@ static void test_source_build_list_order_and_unlock_rules(void)
     assert(item_count == 0);
 }
 
+static void test_build_list_uses_selected_site_size(void)
+{
+    static const int32_t small_expected[] = {37, 39, 38, 44};
+    PadCatalog catalog;
+    IslandLocation site;
+    int32_t items[IW_CONSTRUCT_BUILD_CANDIDATE_COUNT];
+    size_t item_count;
+    uint8_t site_size;
+    unsigned int i;
+
+    memset(&catalog, 0, sizeof(catalog));
+    catalog.item_count = 101;
+    for (i = 0; i < catalog.item_count; ++i) {
+        catalog.items[i].item_id = (uint16_t)i;
+        catalog.items[i].size = 0;
+        catalog.items[i].building_tone_cost = 1;
+    }
+    catalog.items[40].size = 1;
+    memset(&site, 0, sizeof(site));
+    site.kind = ISLAND_LOCATION_PAD;
+    assert(iw_construct_site_size(&site, &site_size) && site_size == 0);
+    site.kind = ISLAND_LOCATION_PAD_SMALL;
+    site.renderer_subtype = 0;
+    assert(iw_construct_site_size(&site, &site_size) && site_size == 0);
+    assert(iw_construct_build_list_for_site(&catalog, 0, &site, 0, 1,
+                                            items, IW_CONSTRUCT_BUILD_CANDIDATE_COUNT,
+                                            &item_count));
+    assert(item_count == sizeof(small_expected) / sizeof(small_expected[0]));
+    assert(memcmp(items, small_expected, sizeof(small_expected)) == 0);
+
+    site.kind = ISLAND_LOCATION_PAD_LARGE;
+    site.renderer_subtype = 2;
+    assert(iw_construct_site_size(&site, &site_size) && site_size == 2);
+    site.kind = ISLAND_LOCATION_PAD_MEDIUM;
+    site.renderer_subtype = 1;
+    assert(iw_construct_site_size(&site, &site_size) && site_size == 1);
+    site.renderer_subtype = 3;
+    assert(!iw_construct_site_size(&site, &site_size) && site_size == 0);
+    site.kind = ISLAND_LOCATION_TONE;
+    site.renderer_subtype = 0;
+    item_count = 99;
+    assert(!iw_construct_build_list_for_site(&catalog, 0, &site, 0, 1,
+                                             items, IW_CONSTRUCT_BUILD_CANDIDATE_COUNT,
+                                             &item_count));
+    assert(item_count == 0);
+}
+
 int main(void)
 {
     test_hover_click_and_pages();
     test_bounds_and_info_messages();
     test_cycle_button_threshold();
     test_source_build_list_order_and_unlock_rules();
+    test_build_list_uses_selected_site_size();
     return 0;
 }

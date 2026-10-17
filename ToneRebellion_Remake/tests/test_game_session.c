@@ -208,6 +208,10 @@ static void test_tone_pool_uses_two_source_counter_sequences(void)
     game_session_tick_item_animations(&session, &catalog);
     assert(idle_pool->chug_progress == 0); /* class-1 ID 0 wraps at tick 90 */
     assert(alternate_pool->chug_progress == 90);
+    assert(island_tone_pool_frame(idle_pool->record_value_10,
+                                  idle_pool->chug_progress) == 1);
+    assert(island_tone_pool_frame(alternate_pool->record_value_10,
+                                  alternate_pool->chug_progress) == 31);
 
     for (tick = 90; tick < 126; ++tick) game_session_tick_item_animations(&session, &catalog);
     assert(alternate_pool->chug_progress == 102); /* ID 5 jumps from 126 back to 102 */

@@ -11,6 +11,7 @@ int main(void)
     assert(island_pad_size_group(ISLAND_LOCATION_TONE) == -1);
     assert(island_pad_size_group(ISLAND_LOCATION_LEVEL_SHIELD) == -1);
     assert(island_pad_size_group(ISLAND_LOCATION_PAD) == -1);
+    assert(ISLAND_TONE_POOL_BASE_FRAME == 0); /* bldinf BASE 1 1 -> SHP index 0 */
     assert(island_tone_pool_frame(ISLAND_TONE_POOL_ITEM_DEFAULT, 0) == 1);
     assert(island_tone_pool_frame(ISLAND_TONE_POOL_ITEM_DEFAULT, 3) == 2);
     assert(island_tone_pool_frame(ISLAND_TONE_POOL_ITEM_DEFAULT, 114) == 39);

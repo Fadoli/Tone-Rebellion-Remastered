@@ -7,12 +7,15 @@
 
 enum {
     ISLAND_TONE_POOL_ITEM_DEFAULT = 0,
-    ISLAND_TONE_POOL_ITEM_ALTERNATE = 5
+    ISLAND_TONE_POOL_ITEM_ALTERNATE = 5,
+    /* bldinf.txt's BASE 1 1 is one-based; decoded SHP frames are zero-based. */
+    ISLAND_TONE_POOL_BASE_FRAME = 0
 };
 
-/* FUN_00450a71 gives POOL runtime IDs 0 and 5 distinct counter sequences.
+/* FUN_0040bf98 composites POOL's BASE 1 1 before its animated CHUG layer.
+   FUN_00450a71 gives POOL runtime IDs 0 and 5 distinct counter sequences.
    FUN_0040bf98 maps the selected counter through POOL CHUG 2..40, speed 3,
-   ping-pong (FUN_0040ab05); the returned frame is zero-based for tone.shp. */
+   ping-pong (FUN_0040ab05); this returns that overlay frame zero-based. */
 uint16_t island_tone_pool_next_counter(int32_t runtime_item_id,
                                        uint16_t chug_progress);
 uint32_t island_tone_pool_frame(int32_t runtime_item_id,

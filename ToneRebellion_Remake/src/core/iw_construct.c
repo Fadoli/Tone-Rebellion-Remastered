@@ -2,8 +2,25 @@
 
 #include <string.h>
 
+int iw_construct_site_size(const IslandLocation *site, uint8_t *out_site_size)
+{
+    if (out_site_size != NULL) *out_site_size = 0;
+    if (site == NULL || out_site_size == NULL) return 0;
+    switch (site->kind) {
+    case ISLAND_LOCATION_PAD:
+    case ISLAND_LOCATION_PAD_SMALL:
+    case ISLAND_LOCATION_PAD_MEDIUM:
+    case ISLAND_LOCATION_PAD_LARGE:
+        if (site->renderer_subtype > 2) return 0;
+        *out_site_size = site->renderer_subtype;
+        return 1;
+    default:
+        return 0;
+    }
+}
+
 int iw_construct_build_list(const PadCatalog *catalog, uint8_t player_slot,
-                            int32_t player_size_limit, uint8_t rule_set,
+                            int32_t site_size, uint8_t rule_set,
                             uint16_t owned_island_count,
                             int32_t *out_ids, size_t out_capacity,
                             size_t *out_count)
@@ -30,7 +47,7 @@ int iw_construct_build_list(const PadCatalog *catalog, uint8_t player_slot,
         uint16_t resolved_id = (uint16_t)(base_id + (uint16_t)player_slot * 16U);
         const PadCatalogItem *item = &catalog->items[resolved_id];
 
-        if (item->size > player_size_limit || item->building_tone_cost == -1) continue;
+        if (item->size > site_size || item->building_tone_cost == -1) continue;
         if (base_id >= 44 &&
             owned_island_count < island_thresholds[rule_set][base_id - 44]) continue;
         result[result_count++] = base_id;
@@ -39,6 +56,24 @@ int iw_construct_build_list(const PadCatalog *catalog, uint8_t player_slot,
     memcpy(out_ids, result, result_count * sizeof(result[0]));
     *out_count = result_count;
     return 1;
+}
+
+int iw_construct_build_list_for_site(const PadCatalog *catalog,
+                                     uint8_t player_slot,
+                                     const IslandLocation *site,
+                                     uint8_t rule_set,
+                                     uint16_t owned_island_count,
+                                     int32_t *out_ids, size_t out_capacity,
+                                     size_t *out_count)
+{
+    uint8_t site_size;
+    if (!iw_construct_site_size(site, &site_size)) {
+        if (out_count != NULL) *out_count = 0;
+        return 0;
+    }
+    return iw_construct_build_list(catalog, player_slot, site_size, rule_set,
+                                   owned_island_count, out_ids, out_capacity,
+                                   out_count);
 }
 
 static void clear_transition(IwConstructTransition *transition)

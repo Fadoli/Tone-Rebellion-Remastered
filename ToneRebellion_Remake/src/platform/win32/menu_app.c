@@ -10,6 +10,7 @@
 #include "island_render_rules.h"
 #include "curved_text_layout.h"
 #include "game_session.h"
+#include "iw_construct.h"
 #include "shp_image.h"
 #include "window_catalog.h"
 #include "world_map.h"
@@ -72,6 +73,8 @@ static SpriteSheet g_island_template_art;
 static SpriteSheet g_tone_field_art;
 static SpriteSheet g_pad_art;
 static SpriteSheet g_bridge_trigger_art;
+static SpriteSheet g_temp_hole_art;
+static SpriteSheet g_build_cycle_art;
 static SpriteSheet g_building_art[PAD_CATALOG_MAX_ITEMS];
 static SpriteSheet g_initial_floater_bodies[4];
 static SpriteSheet g_initial_floater_legs[4];
@@ -105,6 +108,11 @@ static int g_island_surface_id = -1;
 static int g_island_scroll_x;
 static int g_hovered_location = -1;
 static int g_selected_location = -1;
+static IwConstructState g_iw_construct;
+static IwConstructInfoState g_iw_construct_info;
+static int32_t g_iw_construct_items[IW_CONSTRUCT_BUILD_CANDIDATE_COUNT];
+static size_t g_iw_construct_item_count;
+static int g_iw_construct_open;
 static int g_resume_available;
 static unsigned char g_load_slot_valid[8];
 static int g_hovered_help = -1;
@@ -345,6 +353,8 @@ static int load_island_surface(int island_id, int map_island_index,
     SpriteSheet tone_candidate = {0};
     SpriteSheet pad_candidate = {0};
     SpriteSheet bridge_candidate = {0};
+    SpriteSheet temp_hole_candidate = {0};
+    SpriteSheet build_cycle_candidate = {0};
     SpriteSheet building_candidates[PAD_CATALOG_MAX_ITEMS] = {{0}};
     SpriteSheet floater_body_candidates[4] = {{0}};
     SpriteSheet floater_leg_candidates[4] = {{0}};
@@ -399,6 +409,10 @@ static int load_island_surface(int island_id, int map_island_index,
                            error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\br-trg01.shp", palette, &bridge_candidate,
                            error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\temphol0.shp", palette, &temp_hole_candidate,
+                           error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\scarrow0.shp", palette, &build_cycle_candidate,
+                           error, error_capacity) ||
         !load_sprite_sheet(&archive, feature_name, palette, &feature_candidate,
                            error, error_capacity)) {
         goto done;
@@ -435,6 +449,45 @@ static int load_island_surface(int island_id, int map_island_index,
                 /* Some data entries are logical items without a drawable SHP. */
                 free_sprite_sheet(&building_candidates[item_id]);
                 continue;
+            }
+        }
+    }
+    /* IWConstruct's ordered candidates come from FUN_0045f121. Preload their
+       selected player's actual item sheets so the grid can show source art. */
+    if (g_game_session_valid) {
+        static const uint8_t construction_candidates[IW_CONSTRUCT_BUILD_CANDIDATE_COUNT] = {
+            40, 37, 39, 38, 44, 45, 46, 47
+        };
+        unsigned int candidate_index;
+        for (candidate_index = 0;
+             candidate_index < IW_CONSTRUCT_BUILD_CANDIDATE_COUNT; ++candidate_index) {
+            const BuildingRenderItem *definition;
+            char item_shape[BUILDING_RENDER_SHAPE_CAPACITY];
+            char item_member[48];
+            char item_error[128];
+            item_id = construction_candidates[candidate_index] +
+                      (unsigned int)g_game_session.config.selected_tribe * 16U;
+            if (item_id >= PAD_CATALOG_MAX_ITEMS ||
+                item_id >= g_pad_catalog.item_count ||
+                building_candidates[item_id].frames != NULL) continue;
+            definition = building_render_find(&g_building_render_catalog,
+                                               (uint16_t)item_id);
+            if (definition == NULL || definition->shape_id[0] == '\0' ||
+                strcmp(definition->shape_id, "noshape") == 0) continue;
+            (void)snprintf(item_shape, sizeof(item_shape), "%s", definition->shape_id);
+            {
+                char *character;
+                for (character = item_shape; *character != '\0'; ++character) {
+                    if (*character >= 'A' && *character <= 'Z') {
+                        *character = (char)(*character - 'A' + 'a');
+                    }
+                }
+            }
+            (void)snprintf(item_member, sizeof(item_member), "data\\%s.shp", item_shape);
+            if (!load_sprite_sheet(&archive, item_member, palette,
+                                   &building_candidates[item_id], item_error,
+                                   sizeof(item_error))) {
+                free_sprite_sheet(&building_candidates[item_id]);
             }
         }
     }
@@ -477,6 +530,11 @@ static int load_island_surface(int island_id, int map_island_index,
                        "data\\br-trg01.shp does not contain its 23 declared animation frames");
         goto done;
     }
+    if (temp_hole_candidate.frame_count < 3 || build_cycle_candidate.frame_count < 1) {
+        (void)snprintf(error, error_capacity,
+                       "construction window templates lack their windows.txt frames");
+        goto done;
+    }
     if (candidate.frame_count != 1 || candidate.frames[0].width != 2560 ||
         candidate.frames[0].height != 320) {
         (void)snprintf(error, error_capacity,
@@ -516,6 +574,8 @@ static int load_island_surface(int island_id, int map_island_index,
     free_sprite_sheet(&g_tone_field_art);
     free_sprite_sheet(&g_pad_art);
     free_sprite_sheet(&g_bridge_trigger_art);
+    free_sprite_sheet(&g_temp_hole_art);
+    free_sprite_sheet(&g_build_cycle_art);
     for (hall_index = 0; hall_index < 4; ++hall_index) {
         free_sprite_sheet(&g_initial_floater_bodies[hall_index]);
         g_initial_floater_bodies[hall_index] = floater_body_candidates[hall_index];
@@ -543,6 +603,10 @@ static int load_island_surface(int island_id, int map_island_index,
     memset(&pad_candidate, 0, sizeof(pad_candidate));
     g_bridge_trigger_art = bridge_candidate;
     memset(&bridge_candidate, 0, sizeof(bridge_candidate));
+    g_temp_hole_art = temp_hole_candidate;
+    memset(&temp_hole_candidate, 0, sizeof(temp_hole_candidate));
+    g_build_cycle_art = build_cycle_candidate;
+    memset(&build_cycle_candidate, 0, sizeof(build_cycle_candidate));
     g_island_feature_art = feature_candidate;
     memset(&feature_candidate, 0, sizeof(feature_candidate));
     g_island_height_data = height_data;
@@ -555,6 +619,9 @@ static int load_island_surface(int island_id, int map_island_index,
     g_island_scroll_x = 0;
     g_selected_location = -1;
     g_hovered_location = -1;
+    g_iw_construct_open = 0;
+    g_iw_construct_item_count = 0;
+    iw_construct_info_init(&g_iw_construct_info);
     success = 1;
 done:
     free_sprite_sheet(&candidate);
@@ -562,6 +629,8 @@ done:
     free_sprite_sheet(&tone_candidate);
     free_sprite_sheet(&pad_candidate);
     free_sprite_sheet(&bridge_candidate);
+    free_sprite_sheet(&temp_hole_candidate);
+    free_sprite_sheet(&build_cycle_candidate);
     for (item_id = 0; item_id < PAD_CATALOG_MAX_ITEMS; ++item_id) {
         free_sprite_sheet(&building_candidates[item_id]);
     }
@@ -1608,6 +1677,140 @@ static int update_island_location_hover(int x, int y)
     return 1;
 }
 
+static int open_iw_construct(int location_index)
+{
+    const IslandLocation *site;
+    const GameRuntimeIsland *runtime_island;
+    char error[96];
+
+    if (!g_game_session_valid || g_menu.selected_map_island < 0 ||
+        g_menu.selected_map_island >= g_game_session.island_count ||
+        location_index < 0 || location_index >= g_island_surface_data.location_count) {
+        return 0;
+    }
+    site = &g_island_surface_data.locations[location_index];
+    runtime_island = &g_game_session.islands[g_menu.selected_map_island];
+    if (location_index >= runtime_island->location_count ||
+        runtime_island->locations[location_index].renderer_class != 0 ||
+        runtime_island->locations[location_index].record_value_10 != 0 ||
+        runtime_island->locations[location_index].owner_id != -1) return 0;
+
+    /* Initial new-game state gives each player one home island. The rule-set
+       selector is still unresolved; at owned-island count 1 the only gated
+       row that can pass is candidate 44, whose threshold is 1 in all tables. */
+    if (!iw_construct_build_list_for_site(
+            &g_pad_catalog, g_game_session.config.selected_tribe, site, 0, 1,
+            g_iw_construct_items,
+            sizeof(g_iw_construct_items) / sizeof(g_iw_construct_items[0]),
+            &g_iw_construct_item_count) || g_iw_construct_item_count == 0) return 0;
+
+    iw_construct_init(&g_iw_construct, g_iw_construct_item_count);
+    iw_construct_info_init(&g_iw_construct_info);
+    g_iw_construct_open = 1;
+    return 1;
+}
+
+static int apply_iw_construct_messages(const IwConstructTransition *transition)
+{
+    unsigned int i;
+    int old_item = g_iw_construct_info.item_id;
+    if (transition == NULL) return 0;
+    for (i = 0; i < transition->message_count; ++i) {
+        if (transition->messages[i].code == IW_CONSTRUCT_MSG_SELECT_HOVER) {
+            (void)iw_construct_info_handle_message(
+                &g_iw_construct_info, IW_CONSTRUCT_INFO_MSG_ITEM,
+                transition->messages[i].value);
+        }
+    }
+    return transition->changed || old_item != g_iw_construct_info.item_id;
+}
+
+static int update_iw_construct_hover(int x, int y)
+{
+    const WindowTemplate *window;
+    IwConstructTransition transition;
+
+    if (!g_iw_construct_open) return 0;
+    window = window_catalog_find(&g_window_catalog, "IWConstruct", 3);
+    if (window == NULL) return 0;
+    iw_construct_mouse_move(&g_iw_construct, &window->pane, x, y,
+                            g_iw_construct_items, g_iw_construct_item_count,
+                            &transition);
+    return apply_iw_construct_messages(&transition);
+}
+
+static void draw_iw_construct(HDC dc)
+{
+    const WindowTemplate *window;
+    const WindowTemplate *info_window;
+    const WindowTemplate *cycle_window;
+    const PadCatalogItem *info_item;
+    unsigned int column;
+
+    if (!g_iw_construct_open) return;
+    window = window_catalog_find(&g_window_catalog, "IWConstruct", 3);
+    info_window = window_catalog_find(&g_window_catalog, "IWConstructInfo", 3);
+    cycle_window = window_catalog_find(&g_window_catalog, "BuildCycle", 3);
+    if (window == NULL || info_window == NULL) return;
+
+    /* The pane extents, backdrop frames, and optional cycle button come from
+       windows.txt; the original draw loop lays out four columns per page. */
+    draw_sprite(dc, &g_temp_hole_art, (uint32_t)window->shape_frame,
+                window->pane.left, window->pane.top);
+    for (column = 0; column < IW_CONSTRUCT_ITEMS_PER_PAGE; ++column) {
+        size_t item_index = (size_t)g_iw_construct.page *
+                            IW_CONSTRUCT_ITEMS_PER_PAGE + column;
+        int column_width = (window->pane.right - window->pane.left) /
+                           IW_CONSTRUCT_ITEMS_PER_PAGE;
+        int center_x = window->pane.left + column_width * (int)column +
+                       column_width / 2;
+        if (item_index >= g_iw_construct_item_count) break;
+        {
+            uint16_t item_id = (uint16_t)(g_iw_construct_items[item_index] +
+                (int32_t)g_game_session.config.selected_tribe * 16);
+            if (item_id < PAD_CATALOG_MAX_ITEMS &&
+                g_building_art[item_id].frame_count != 0) {
+                draw_sprite(dc, &g_building_art[item_id], 0,
+                            center_x - 18, window->pane.bottom - 36);
+            }
+        }
+        if ((int)column == g_iw_construct.hovered_column) {
+            RECT highlight = {
+                window->pane.left + column_width * (int)column,
+                window->pane.top + 0x1a,
+                window->pane.left + column_width * ((int)column + 1),
+                window->pane.bottom - 10
+            };
+            HBRUSH brush = CreateSolidBrush(RGB(119, 199, 234));
+            FrameRect(dc, &highlight, brush);
+            DeleteObject(brush);
+        }
+    }
+    if (g_iw_construct.cycle_button_visible && cycle_window != NULL) {
+        draw_sprite(dc, &g_build_cycle_art, (uint32_t)cycle_window->shape_frame,
+                    cycle_window->pane.left, cycle_window->pane.top);
+    }
+
+    draw_sprite(dc, &g_temp_hole_art, (uint32_t)info_window->shape_frame,
+                info_window->pane.left, info_window->pane.top);
+    info_item = g_iw_construct_info.item_id < 0 ? NULL : pad_catalog_find(
+        &g_pad_catalog, (uint16_t)(g_iw_construct_info.item_id +
+        (int32_t)g_game_session.config.selected_tribe * 16));
+    if (info_item != NULL) {
+        uint16_t item_id = (uint16_t)(info_item->item_id +
+            (uint16_t)g_game_session.config.selected_tribe * 16U);
+        if (item_id < PAD_CATALOG_MAX_ITEMS &&
+            g_building_art[item_id].frame_count != 0) {
+            draw_sprite(dc, &g_building_art[item_id], 0,
+                        info_window->pane.right - 64, info_window->pane.top + 0x55);
+        }
+        draw_bitmap_label(dc, info_item->shape_id,
+                          info_window->pane.left + 0x25,
+                          info_window->pane.top + 0x58,
+                          RGB(232, 236, 244));
+    }
+}
+
 static COLORREF island_location_color(const char *type)
 {
     if (strcmp(type, "tone") == 0) return RGB(255, 202, 68);
@@ -1886,6 +2089,9 @@ static void render_island_view(HDC dc)
             g_tone_field_art.frame_count == 40) {
             uint32_t frame = island_tone_pool_frame(runtime_item_id,
                 runtime_location != NULL ? runtime_location->chug_progress : 0U);
+            /* FUN_0040bf98 draws POOL's BASE segment, then composites CHUG on
+               top. bldinf.txt stores BASE 1 1, hence frame zero in decoded SHP. */
+            draw_sprite(dc, &g_tone_field_art, ISLAND_TONE_POOL_BASE_FRAME, x, y);
             draw_sprite(dc, &g_tone_field_art, frame, x, y);
             drew_location = 1;
         }
@@ -1990,6 +2196,7 @@ static void render_island_view(HDC dc)
                                   : "NO GAME SESSION FOR THIS ISLAND",
                           12, status_top + 150, RGB(111, 135, 166));
     }
+    draw_iw_construct(dc);
 }
 
 /* The x87 helpers called by FUN_00471536 continue past Ghidra's short
@@ -2239,8 +2446,27 @@ static void handle_click(HWND window, int x, int y)
             }
         }
     } else if (g_menu.screen == SCREEN_ISLAND) {
-        int clicked_location = island_location_at(x, y);
-        if (clicked_location >= 0) g_selected_location = clicked_location;
+        const WindowTemplate *cycle = window_catalog_find(&g_window_catalog,
+                                                           "BuildCycle", 3);
+        if (g_iw_construct_open && cycle != NULL &&
+            x >= cycle->pane.left && x <= cycle->pane.right &&
+            y >= cycle->pane.top && y <= cycle->pane.bottom) {
+            IwConstructTransition transition;
+            iw_construct_build_cycle(&g_iw_construct, g_iw_construct_item_count,
+                                     &transition);
+            (void)apply_iw_construct_messages(&transition);
+            (void)update_iw_construct_hover(x, y);
+        } else if (g_iw_construct_open) {
+            /* Source selection dispatches a gameplay build event (0x34). The
+               remake has not ported that event producer/placement yet. */
+            (void)update_iw_construct_hover(x, y);
+        } else {
+            int clicked_location = island_location_at(x, y);
+            if (clicked_location >= 0) {
+                g_selected_location = clicked_location;
+                (void)open_iw_construct(clicked_location);
+            }
+        }
     } else if (g_menu.screen == SCREEN_LOAD_GAME) {
         /* FUN_00458162 maps the two columns and four rows to slots 00..07.
            An empty slot closes the load/save screen; a valid slot is kept
@@ -2299,6 +2525,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         x = GET_X_LPARAM(lparam);
         y = GET_Y_LPARAM(lparam);
         if (x < viewport.left || x >= viewport.right || y < viewport.top || y >= viewport.bottom) {
+            int construct_hover_changed = update_iw_construct_hover(-1, -1);
             if (g_mouse_inside || g_hovered_help != -1 || g_hovered_newgame_text != -1 ||
                 g_hovered_island != -1 || g_hovered_location != -1) {
                 g_mouse_inside = 0;
@@ -2311,6 +2538,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                     InvalidateRect(window, NULL, FALSE);
                 }
             }
+            if (construct_hover_changed) InvalidateRect(window, NULL, FALSE);
             return 0;
         }
         g_mouse_x = (x - viewport.left) * LOGICAL_WIDTH / (viewport.right - viewport.left);
@@ -2324,13 +2552,15 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         if (update_hover_help(g_mouse_x, g_mouse_y) |
             update_newgame_text(g_mouse_x, g_mouse_y) |
             update_world_map_hover(g_mouse_x, g_mouse_y) |
-            update_island_location_hover(g_mouse_x, g_mouse_y)) {
+            update_island_location_hover(g_mouse_x, g_mouse_y) |
+            update_iw_construct_hover(g_mouse_x, g_mouse_y)) {
             InvalidateRect(window, NULL, FALSE);
         }
         return 0;
     }
     case WM_MOUSELEAVE:
         g_mouse_inside = 0;
+        (void)update_iw_construct_hover(-1, -1);
         if (g_hovered_help != -1 || g_hovered_newgame_text != -1 ||
             g_hovered_island != -1 || g_hovered_location != -1) {
             g_hovered_help = -1;
@@ -2807,6 +3037,9 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_island_template_art);
     free_sprite_sheet(&g_tone_field_art);
     free_sprite_sheet(&g_pad_art);
+    free_sprite_sheet(&g_bridge_trigger_art);
+    free_sprite_sheet(&g_temp_hole_art);
+    free_sprite_sheet(&g_build_cycle_art);
     {
         unsigned int hall_index;
         unsigned int item_index;
