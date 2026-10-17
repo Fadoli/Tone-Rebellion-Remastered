@@ -11,8 +11,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <mmsystem.h>
+
 enum { LOGICAL_WIDTH = 640, LOGICAL_HEIGHT = 480 };
-enum { SCREEN_MAIN_MENU, SCREEN_NEW_GAME, SCREEN_WORLD_MAP };
+enum { SCREEN_MAIN_MENU, SCREEN_NEW_GAME, SCREEN_WORLD_MAP, SCREEN_LOAD_GAME };
 
 typedef struct SpriteFrame {
     HBITMAP bitmap;
@@ -47,7 +49,12 @@ static SpriteSheet g_big_floaters;
 static SpriteSheet g_difficulty_art;
 static SpriteSheet g_map_background;
 static SpriteSheet g_small_islands;
+static SpriteSheet g_load_save_art;
 static COLORREF g_newgame_palette[256];
+static COLORREF g_map_palette[256];
+static uint32_t g_random_state;
+static unsigned char *g_button_sound;
+static HFONT g_menu_font;
 
 static const int g_difficulty_count = 5;
 
@@ -56,6 +63,7 @@ static void update_window_title(HWND window)
     const char *title = "Tone Rebellion - Title";
     if (g_menu.screen == SCREEN_NEW_GAME) title = "Tone Rebellion - New Game";
     else if (g_menu.screen == SCREEN_WORLD_MAP) title = "Tone Rebellion - World Map (Esc: setup, Left/Right: size)";
+    else if (g_menu.screen == SCREEN_LOAD_GAME) title = "Tone Rebellion - Load Game (Esc: back)";
     SetWindowTextA(window, title);
 }
 
@@ -198,6 +206,30 @@ static void fill_rect(HDC dc, int left, int top, int right, int bottom, COLORREF
     DeleteObject(brush);
 }
 
+static void draw_menu_label(HDC dc, const wchar_t *text, int left, int top,
+                            int right, int bottom)
+{
+    RECT rect = {left, top, right, bottom};
+    HGDIOBJ previous_font = NULL;
+    COLORREF previous_color;
+    int previous_background;
+    if (g_menu_font != NULL) previous_font = SelectObject(dc, g_menu_font);
+    previous_color = SetTextColor(dc, RGB(238, 221, 166));
+    previous_background = SetBkMode(dc, TRANSPARENT);
+    DrawTextW(dc, text, -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    SetBkMode(dc, previous_background);
+    SetTextColor(dc, previous_color);
+    if (previous_font != NULL) SelectObject(dc, previous_font);
+}
+
+/* FUN_00474b90 is the game's 15-bit MSVC-style LCG. The original seeds it
+   from QueryPerformanceCounter before entering the message loop. */
+static unsigned game_random(void)
+{
+    g_random_state = g_random_state * 0x343fdu + 0x269ec3u;
+    return (g_random_state >> 16) & 0x7fffu;
+}
+
 static int logical_viewport(int client_width, int client_height, RECT *viewport)
 {
     if (client_width <= 0 || client_height <= 0 || viewport == NULL) return 0;
@@ -251,19 +283,21 @@ static void render_new_game(HDC dc)
                 FillRect(dc, &dot, brush);
                 DeleteObject(brush);
             }
-            /* The original adds randomized palette specks on every ring up
-               through the selected world size. Keep their density stable so
-               the selector has a visible, non-flickering effect. */
+            /* The original emits ten randomized pixels for each quadrant,
+               using FUN_00474b90's LCG. Its palette byte is 0xb6..0xc6. */
             if (ring <= g_menu.world_index) {
                 int speck;
                 for (speck = 0; speck < 10; ++speck) {
                     int side;
                     for (side = 0; side < 4; ++side) {
-                        unsigned seed = (unsigned)(angle_step * 73 + speck * 29 + ring * 101 + side * 17);
-                        int sx = xs[side] + (int)(seed % 10u);
-                        int sy = ys[side] + (int)((seed / 7u) % 8u);
-                        COLORREF star = g_newgame_palette[(unsigned)(angle_step + speck + ring) % 7u];
-                        SetPixelV(dc, sx, sy, star);
+                        int sx;
+                        int sy;
+                        unsigned color = game_random() % 17u + 0xb6u;
+                        unsigned y_jitter = game_random() % 6u;
+                        unsigned x_jitter = game_random() % 7u;
+                        sx = (side == 0 || side == 3 ? 325 + dx : 325 - dx) - (int)x_jitter;
+                        sy = (side < 2 ? 244 + dy : 244 - dy) - (int)y_jitter;
+                        SetPixelV(dc, sx, sy, g_newgame_palette[color]);
                     }
                 }
             }
@@ -278,15 +312,32 @@ static void render_new_game(HDC dc)
     draw_sprite(dc, &g_new_buttons, 11, 444, 440);
     draw_sprite(dc, &g_new_buttons, 13, 495, 420);
     draw_sprite(dc, &g_new_buttons, 15, 564, 419);
+    /* FUN_0044ec5d registers these named text controls for the button panes. */
+    draw_menu_label(dc, L"Quitter", 7, 405, 75, 423);
+    draw_menu_label(dc, L"Monde", 76, 405, 142, 423);
+    draw_menu_label(dc, L"Tarks", 143, 425, 195, 443);
+    draw_menu_label(dc, L"Zygons", 196, 425, 250, 443);
+    draw_menu_label(dc, L"Céphéens", 391, 422, 443, 440);
+    draw_menu_label(dc, L"Dyla", 444, 421, 494, 439);
+    draw_menu_label(dc, L"Difficulté", 495, 402, 562, 420);
+    draw_menu_label(dc, L"Jouer", 564, 401, 633, 419);
     draw_sprite(dc, &g_realm_art, (uint32_t)g_menu.selected_tribe, 60, 40);
     draw_sprite(dc, &g_realm_art,
                 (uint32_t)((g_menu.selected_tribe + 1) % 4), 140, 40);
     draw_sprite(dc, &g_difficulty_art, (uint32_t)g_menu.difficulty, 320, 240);
-    draw_sprite(dc, &g_big_floaters,
-                (uint32_t)(g_menu.selected_tribe * 17 + (g_menu.animation_ticks / 2u) % 17u),
-                530, 38 + (int)(sin((double)(g_menu.animation_ticks / 2u % 24u) *
-                                    0.261799388) * 5.0) -
-                     (g_menu.selected_tribe == 3 ? 5 : 0));
+    {
+        uint32_t tribe_frame = (uint32_t)(g_menu.selected_tribe * 17);
+        uint32_t animation_frame = tribe_frame + ((g_menu.animation_ticks / 2u) % 16u) + 1u;
+        unsigned game_tick = g_menu.animation_ticks / 2u;
+        int floater_y = 38 + (int)(sin((double)(game_tick % 24u) *
+                                       0.261799388) * 5.0) -
+                        (g_menu.selected_tribe == 3 ? 5 : 0);
+        /* FUN_0044ec5d draws the tribe's base frame and a cycling overlay
+           frame at the same point; drawing only the overlay loses half of
+           the original floater artwork. */
+        draw_sprite(dc, &g_big_floaters, tribe_frame, 530, floater_y);
+        draw_sprite(dc, &g_big_floaters, animation_frame, 530, floater_y);
+    }
     for (tribe = 0; tribe < 4; ++tribe) {
         draw_sprite(dc, &g_glyphs,
                     (uint32_t)(tribe * 20 + (g_menu.animation_ticks / 3u) % 20u),
@@ -308,6 +359,69 @@ static void render_world_map(HDC dc)
     draw_sprite(dc, &g_map_background, 0, 0, 0);
     if (g_menu.world_index < 0 || g_menu.world_index >= g_menu.world_map.world_count) return;
     world = &g_menu.world_map.worlds[g_menu.world_index];
+    /* WorldWindow display type 1 (FUN_00471b74) renders explicit bridge pairs
+       as animated palette-color pixels. Draw these before the islands so the
+       island sprites cover the bridge endpoints. */
+    {
+        BYTE bridge_colors[8];
+        int ramp;
+        for (ramp = 0; ramp < 8; ++ramp) {
+            int red = (5 + ramp * 7) * 255 / 63;
+            int green = (5 + ramp * 2) * 255 / 63;
+            int blue = (45 + ramp * 2) * 255 / 63;
+            int best_index = 0;
+            unsigned best_distance = 0xffffffffu;
+            int palette_index;
+            for (palette_index = 0; palette_index < 255; ++palette_index) {
+                int dr = red - (int)GetRValue(g_map_palette[palette_index]);
+                int dg = green - (int)GetGValue(g_map_palette[palette_index]);
+                int db = blue - (int)GetBValue(g_map_palette[palette_index]);
+                unsigned distance = (unsigned)(dr * dr + dg * dg + db * db);
+                if (distance < best_distance) {
+                    best_distance = distance;
+                    best_index = palette_index;
+                }
+            }
+            bridge_colors[ramp] = (BYTE)best_index;
+        }
+        for (size_t bridge_index = 0; bridge_index < world->bridge_count; ++bridge_index) {
+            const WorldBridge *bridge = &world->bridges[bridge_index];
+            const WorldIsland *a = &world->islands[bridge->island_a];
+            const WorldIsland *b = &world->islands[bridge->island_b];
+            float angle_a = (float)a->angle_degrees * 0.017453277f;
+            float angle_b = (float)b->angle_degrees * 0.017453277f;
+            int ax = 320 + (int)(cos((double)angle_a) * a->range * scale_x + 0.5f);
+            int ay = 240 - (int)(sin((double)angle_a) * a->range * scale_y +
+                                  a->z * scale_y + 0.5f);
+            int bx = 320 + (int)(cos((double)angle_b) * b->range * scale_x + 0.5f);
+            int by = 240 - (int)(sin((double)angle_b) * b->range * scale_y +
+                                  b->z * scale_y + 0.5f);
+            int dx = bx - ax;
+            int dy = by - ay;
+            int length = (int)sqrt((double)dx * dx + (double)dy * dy);
+            int step;
+            if (ax < 0 || ax >= LOGICAL_WIDTH || bx < 0 || bx >= LOGICAL_WIDTH ||
+                ay < 0 || ay >= LOGICAL_HEIGHT || by < 0 || by >= LOGICAL_HEIGHT ||
+                length <= 0) {
+                continue;
+            }
+            for (step = 0; step < length; ++step) {
+                int center_x = ax + dx * step / length;
+                int center_y = ay + dy * step / length;
+                int width = step * 20 / length;
+                unsigned color = bridge_colors[game_random() % 8u];
+                int spark;
+                for (spark = 0; spark < 10; ++spark) {
+                    unsigned rx = game_random();
+                    int x_jitter = (width + 1) / 2 - (int)(rx % (unsigned)(width + 1));
+                    int y_jitter = (width + 1) / 2 -
+                        (int)(((rx >> 8) % (unsigned)(width + 1)));
+                    SetPixelV(dc, center_x + x_jitter, center_y + y_jitter,
+                              g_map_palette[color]);
+                }
+            }
+        }
+    }
     for (island_index = 0; island_index < world->island_count; ++island_index) {
         const WorldIsland *island = &world->islands[island_index];
         float angle = (float)island->angle_degrees * 0.017453277f;
@@ -326,6 +440,14 @@ static void render_world_map(HDC dc)
         draw_sprite(dc, &g_small_islands, frame, x, y);
     }
 }
+
+static void render_load_game(HDC dc)
+{
+    fill_rect(dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
+    /* windows.txt state 4 layers LOADSAVE frame 0 and frame 1 full-screen. */
+    draw_sprite(dc, &g_load_save_art, 0, 0, 0);
+    draw_sprite(dc, &g_load_save_art, 1, 0, 0);
+}
 static void paint_window(HWND window)
 {
     PAINTSTRUCT paint;
@@ -338,16 +460,42 @@ static void paint_window(HWND window)
         RECT viewport;
         HDC back = CreateCompatibleDC(screen);
         HBITMAP bitmap = CreateCompatibleBitmap(screen, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-        HGDIOBJ old_bitmap = SelectObject(back, bitmap);
+        HGDIOBJ old_bitmap;
+        if (back == NULL || bitmap == NULL) {
+            if (bitmap != NULL) DeleteObject(bitmap);
+            if (back != NULL) DeleteDC(back);
+            EndPaint(window, &paint);
+            return;
+        }
+        old_bitmap = SelectObject(back, bitmap);
         if (g_menu.screen == SCREEN_MAIN_MENU) {
             render_main_menu(back);
         } else if (g_menu.screen == SCREEN_NEW_GAME) {
             render_new_game(back);
-        } else {
+        } else if (g_menu.screen == SCREEN_WORLD_MAP) {
             render_world_map(back);
+        } else {
+            render_load_game(back);
         }
-        FillRect(screen, &client, (HBRUSH)GetStockObject(BLACK_BRUSH));
         if (logical_viewport(width, height, &viewport)) {
+            /* Clearing the whole client before each StretchBlt exposed a black
+               frame on every animated paint. Only clear the letterbox bars. */
+            if (viewport.top > 0) {
+                RECT bar = {client.left, client.top, client.right, viewport.top};
+                FillRect(screen, &bar, (HBRUSH)GetStockObject(BLACK_BRUSH));
+            }
+            if (viewport.bottom < height) {
+                RECT bar = {client.left, viewport.bottom, client.right, client.bottom};
+                FillRect(screen, &bar, (HBRUSH)GetStockObject(BLACK_BRUSH));
+            }
+            if (viewport.left > 0) {
+                RECT bar = {client.left, viewport.top, viewport.left, viewport.bottom};
+                FillRect(screen, &bar, (HBRUSH)GetStockObject(BLACK_BRUSH));
+            }
+            if (viewport.right < width) {
+                RECT bar = {viewport.right, viewport.top, client.right, viewport.bottom};
+                FillRect(screen, &bar, (HBRUSH)GetStockObject(BLACK_BRUSH));
+            }
             SetStretchBltMode(screen, HALFTONE);
             StretchBlt(screen, viewport.left, viewport.top,
                        viewport.right - viewport.left, viewport.bottom - viewport.top,
@@ -362,35 +510,41 @@ static void paint_window(HWND window)
 
 static void handle_click(HWND window, int x, int y)
 {
+    if (g_button_sound != NULL) {
+        (void)PlaySoundA((LPCSTR)g_button_sound, NULL,
+                        SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
+    }
     if (g_menu.screen == SCREEN_MAIN_MENU) {
         if (y >= 337 && y <= 399 && x >= 99 && x <= 240) {
             g_menu.screen = SCREEN_NEW_GAME;
             g_menu.setup_accepted = 0;
+        } else if (y >= 337 && y <= 399 && x >= 402 && x <= 540) {
+            g_menu.screen = SCREEN_LOAD_GAME;
         } else if (y >= 407 && y <= 469 && x >= 255 && x <= 375) {
             PostMessageA(window, WM_CLOSE, 0, 0);
         }
-    } else if (y >= 423 && y <= 465 && x >= 7 && x <= 75) {
+    } else if (g_menu.screen == SCREEN_NEW_GAME && y >= 423 && y <= 465 && x >= 7 && x <= 75) {
         g_menu.screen = SCREEN_MAIN_MENU;
         g_menu.setup_accepted = 0;
-    } else if (y >= 423 && y <= 464 && x >= 76 && x <= 142) {
+    } else if (g_menu.screen == SCREEN_NEW_GAME && y >= 423 && y <= 464 && x >= 76 && x <= 142) {
         g_menu.world_index = (g_menu.world_index + 1) % g_menu.world_map.world_count;
         g_menu.setup_accepted = 0;
-    } else if (y >= 443 && y <= 476 && x >= 143 && x <= 195) {
+    } else if (g_menu.screen == SCREEN_NEW_GAME && y >= 443 && y <= 476 && x >= 143 && x <= 195) {
         g_menu.selected_tribe = 0;
         g_menu.setup_accepted = 0;
-    } else if (y >= 443 && y <= 476 && x >= 196 && x <= 250) {
+    } else if (g_menu.screen == SCREEN_NEW_GAME && y >= 443 && y <= 476 && x >= 196 && x <= 250) {
         g_menu.selected_tribe = 1;
         g_menu.setup_accepted = 0;
-    } else if (y >= 441 && y <= 474 && x >= 391 && x <= 443) {
+    } else if (g_menu.screen == SCREEN_NEW_GAME && y >= 441 && y <= 474 && x >= 391 && x <= 443) {
         g_menu.selected_tribe = 2;
         g_menu.setup_accepted = 0;
-    } else if (y >= 440 && y <= 476 && x >= 444 && x <= 494) {
+    } else if (g_menu.screen == SCREEN_NEW_GAME && y >= 440 && y <= 476 && x >= 444 && x <= 494) {
         g_menu.selected_tribe = 3;
         g_menu.setup_accepted = 0;
-    } else if (y >= 420 && y <= 464 && x >= 495 && x <= 562) {
+    } else if (g_menu.screen == SCREEN_NEW_GAME && y >= 420 && y <= 464 && x >= 495 && x <= 562) {
         g_menu.difficulty = (g_menu.difficulty + 1) % g_difficulty_count;
         g_menu.setup_accepted = 0;
-    } else if (y >= 419 && y <= 464 && x >= 564 && x <= 633) {
+    } else if (g_menu.screen == SCREEN_NEW_GAME && y >= 419 && y <= 464 && x >= 564 && x <= 633) {
         g_menu.setup_accepted = 1;
         g_menu.screen = SCREEN_WORLD_MAP;
     }
@@ -437,7 +591,10 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
     }
     case WM_KEYDOWN:
         if (wparam == VK_ESCAPE) {
-            if (g_menu.screen == SCREEN_WORLD_MAP) {
+            if (g_menu.screen == SCREEN_LOAD_GAME) {
+                g_menu.screen = SCREEN_MAIN_MENU;
+                InvalidateRect(window, NULL, FALSE);
+            } else if (g_menu.screen == SCREEN_WORLD_MAP) {
                 g_menu.screen = SCREEN_NEW_GAME;
                 g_menu.setup_accepted = 0;
                 InvalidateRect(window, NULL, FALSE);
@@ -454,12 +611,17 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             } else if (g_menu.screen == SCREEN_NEW_GAME) {
                 g_menu.setup_accepted = 1;
                 g_menu.screen = SCREEN_WORLD_MAP;
+            } else if (g_menu.screen == SCREEN_LOAD_GAME) {
+                g_menu.screen = SCREEN_MAIN_MENU;
             } else {
                 g_menu.screen = SCREEN_NEW_GAME;
             }
             InvalidateRect(window, NULL, FALSE);
         } else if (g_menu.screen == SCREEN_MAIN_MENU && wparam == 'N') {
             g_menu.screen = SCREEN_NEW_GAME;
+            InvalidateRect(window, NULL, FALSE);
+        } else if (g_menu.screen == SCREEN_MAIN_MENU && wparam == 'L') {
+            g_menu.screen = SCREEN_LOAD_GAME;
             InvalidateRect(window, NULL, FALSE);
         } else if (g_menu.screen == SCREEN_WORLD_MAP &&
                    (wparam == VK_LEFT || wparam == VK_RIGHT)) {
@@ -537,6 +699,8 @@ static int load_menu_art(char *error, size_t error_capacity)
         !load_palette(&archive, "data\\newgame.pal", newgame_palette, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\titscrn.shp", title_palette,
                            &g_title_art, error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\loadsav0.shp", title_palette,
+                           &g_load_save_art, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\newback.shp", newgame_palette,
                            &g_new_background, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\ngmeintr.shp", newgame_palette,
@@ -556,7 +720,20 @@ static int load_menu_art(char *error, size_t error_capacity)
                            &g_small_islands, error, error_capacity)) {
         goto done;
     }
+    {
+        const CobMember *button = cob_archive_find(&archive, "data\\button.wav");
+        if (button != NULL && button->length >= 44) {
+            g_button_sound = (unsigned char *)malloc(button->length);
+            if (g_button_sound == NULL ||
+                !cob_archive_read_member(&archive, button, g_button_sound,
+                                         button->length, error, error_capacity)) {
+                free(g_button_sound);
+                g_button_sound = NULL;
+            }
+        }
+    }
     memcpy(g_newgame_palette, newgame_palette, sizeof(g_newgame_palette));
+    memcpy(g_map_palette, mainmap_palette, sizeof(g_map_palette));
     success = 1;
 done:
     cob_archive_close(&archive);
@@ -570,6 +747,7 @@ done:
         free_sprite_sheet(&g_difficulty_art);
         free_sprite_sheet(&g_map_background);
         free_sprite_sheet(&g_small_islands);
+        free_sprite_sheet(&g_load_save_art);
     }
     return success;
 }
@@ -591,6 +769,14 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     g_menu.world_index = 0;
     g_menu.difficulty = 0;
     g_menu.selected_tribe = 0;
+    g_menu_font = CreateFontW(-10, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+                              DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                              ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Arial");
+    {
+        LARGE_INTEGER seed;
+        QueryPerformanceCounter(&seed);
+        g_random_state = (uint32_t)seed.LowPart;
+    }
 
     memset(&window_class, 0, sizeof(window_class));
     window_class.lpfnWndProc = menu_window_proc;
@@ -629,5 +815,9 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_difficulty_art);
     free_sprite_sheet(&g_map_background);
     free_sprite_sheet(&g_small_islands);
+    free_sprite_sheet(&g_load_save_art);
+    (void)PlaySoundA(NULL, NULL, 0);
+    if (g_menu_font != NULL) DeleteObject(g_menu_font);
+    free(g_button_sound);
     return (int)message.wParam;
 }

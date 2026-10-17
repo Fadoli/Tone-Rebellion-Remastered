@@ -25,7 +25,7 @@ target_compile_features(remake_inspect_cob PRIVATE c_std_11)
 
 if(WIN32)
     add_executable(remake_menu WIN32 src/platform/win32/menu_app.c)
-    target_link_libraries(remake_menu PRIVATE tone_core user32 gdi32 msimg32)
+    target_link_libraries(remake_menu PRIVATE tone_core user32 gdi32 msimg32 winmm)
     target_compile_features(remake_menu PRIVATE c_std_11)
     if(NOT MSVC)
         target_link_libraries(remake_menu PRIVATE m)
