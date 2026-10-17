@@ -1,8 +1,13 @@
-# Initial floater movement: REA evidence and port
+# Floater movement primitives: REA evidence and port
 
-This note records the binary observations behind the remake's first user-issued
-floater movement order. Ghidra pseudocode is a decompiler reconstruction, not
-recovered source; field names and inferred types remain provisional.
+This note records observed selection/input/movement procedures and separates them
+from behavior still needing class/state checks. Ghidra pseudocode is a decompiler
+reconstruction, not recovered source; field names and inferred types remain
+provisional. The user has clarified that workers cannot receive direct orders:
+selecting them only shows stats, while soldiers and mages are orderable. The
+remake source and current executable do not expose player-facing worker orders.
+Worker selection remains informational, and soldiers/mages should only become
+orderable after their original class/state gates are verified.
 
 ## Input and destination path
 
@@ -28,25 +33,24 @@ recovered source; field names and inferred types remain provisional.
 
 The local original `floater.txt` defines the final field as speed. Each tribe's
 `*work` row has speed 3. This agrees with the runtime access at `+0x0c` in
-`FUN_00422d27` through `FUN_00464242`; it is the source for the initial worker
-speed used by the remake.
+`FUN_00422d27` through `FUN_00464242`; this is only the worker movement
+parameter, not evidence that the player can issue worker move orders.
 
 ## Current port and limits
 
-`game_session_order_floater_move_from_click` mirrors the packed 10-pixel
-coordinates, uses the source-derived speed of initial workers, and applies the
-10-pixel default stopping radius observed in `FUN_0041e569`. In the
-remake, left-click selects a floater and right-button-down on empty island
-terrain sets its destination. The island timer advances the same coordinate
-step kernel and the renderer uses the updated position.
+The former `game_session_order_floater_move_from_click` player-facing helper
+and worker cargo/order model have been removed. The generic movement kernel
+remains as a simulation primitive; do not connect it to player input until the
+original recipient and class/state gates are traced. Autonomous worker
+navigation and soldier/mage orders remain TODOs, not implemented behavior.
 
 The REA pseudocode does not yet establish obstacle/terrain collision, full
-unit-state transitions, or the complete recipient behavior for message `0x4c`.
-The remake therefore currently permits direct movement across the island view
-and does not claim collision or movement-state parity. Initial workers are
-covered; other unit classes need their live unit-class records and action paths.
+unit-state transitions, or the complete recipient behavior and class/state gate
+for message `0x4c`. Trace those before implementing player controls. Also trace
+the original worker task loop: construction clicks should create orders that
+workers execute autonomously, and taskless workers navigate peacefully.
 
-The remake now also records left/right facing from the destination direction and
+The current remake also records left/right facing from the destination direction and
 uses horizontally mirrored body and leg sheets while facing left. This follows
 the flag producer in `FUN_00423068` and the renderer in `FUN_0042704b`; flipped
 32-bit DIB sheets are cached when the island's art is loaded. This only ports

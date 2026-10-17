@@ -313,6 +313,8 @@ int game_session_initialize(const WorldDefinition *world,
             state->owner_id = -1;
             state->record_value_24 = 0;
             state->bridge_neighbor_island = bridge_neighbors[island_index][location_index];
+            state->x = location->x;
+            state->y = location->y;
             state->renderer_class = location->renderer_class;
         }
     }
@@ -348,6 +350,12 @@ int game_session_initialize(const WorldDefinition *world,
         runtime->locations[location_index].record_value_10 =
             (int32_t)start->initial_pad_item_id + (int32_t)island_index * 16;
         runtime->locations[location_index].owner_id = (int32_t)island_index;
+        next.economy[island_index].hall_island_index = start->island_index;
+        next.economy[island_index].hall_location_index = (uint16_t)location_index;
+        next.economy[island_index].hall_x = runtime_layouts[start->island_index]
+            .locations[location_index].x;
+        next.economy[island_index].hall_y = runtime_layouts[start->island_index]
+            .locations[location_index].y;
         for (unit = 0; unit < start->floater_count; ++unit) {
             GameFloaterStart *floater;
             if (floater_cursor >= GAME_SESSION_MAX_FLOATERS) {
@@ -357,6 +365,7 @@ int game_session_initialize(const WorldDefinition *world,
             floater = &next.floaters[floater_cursor++];
             floater->island_index = start->island_index;
             floater->type_index = start->floater_type_index;
+            floater->owner_slot = (uint8_t)island_index;
             floater->x = start->marker_x;
             floater->y = start->marker_y;
             floater->destination_x = start->marker_x;
@@ -549,6 +558,18 @@ int game_session_apply_world_bridge_message(GameSession *session,
     return 1;
 }
 
+static int producer_resource_code(const GameRuntimeLocation *state)
+{
+    int32_t base_item_id;
+    if (state == NULL || state->renderer_class != 0 || state->owner_id < 0 ||
+        state->owner_id >= GAME_START_PLAYER_COUNT) return 0;
+    base_item_id = state->record_value_10 - state->owner_id * 16;
+    if (base_item_id == 0x25) return 1; /* P-BLDTON -> Build Tone */
+    if (base_item_id == 0x27) return 2; /* P-CRYTON -> Crystal Tone */
+    if (base_item_id == 0x26) return 3; /* P-MAGTON -> Magic Tone */
+    return 0;
+}
+
 void game_session_tick_item_animations(GameSession *session,
                                        const struct BuildingRenderCatalog *catalog)
 {
@@ -625,6 +646,10 @@ void game_session_tick_item_animations(GameSession *session,
                 ++state->production_progress;
                 if (limit <= state->production_progress) {
                     state->source_flags &= ~0x002U;
+                    /* FUN_00450a71 maps completed producer cycles into the
+                       pending output code held in runtime +0x24. */
+                    if (state->record_value_24 == 0)
+                        state->record_value_24 = producer_resource_code(state);
                 }
             }
 
@@ -666,29 +691,6 @@ int game_session_order_floater_move(GameSession *session,
     return 1;
 }
 
-int game_session_order_floater_move_from_click(GameSession *session,
-                                               uint16_t floater_index,
-                                               uint16_t world_x,
-                                               uint16_t world_y)
-{
-    const GameFloaterStart *floater;
-    uint8_t packed_x;
-    uint8_t packed_y;
-
-    if (session == NULL || floater_index >= session->floater_count) return 0;
-    floater = &session->floaters[floater_index];
-    if (floater->movement_speed == 0 || world_x >= 2560U || world_y > 320U) return 0;
-
-    /* FUN_0041e3eb packs rounded 10-pixel map cells into high/low bytes;
-       FUN_0041e427 expands those bytes back to coordinates for the mover. */
-    packed_x = (uint8_t)((world_x + 5U) / 10U);
-    packed_y = (uint8_t)((world_y + 5U) / 10U);
-    return game_session_order_floater_move(session, floater_index,
-                                           (uint16_t)packed_x * 10U,
-                                           (uint16_t)packed_y * 10U,
-                                           floater->movement_speed, 10);
-}
-
 void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
 {
     unsigned int i;
@@ -702,7 +704,9 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
         int32_t dy;
         int32_t distance;
 
-        if (!floater->has_move_order) continue;
+        if (!floater->has_move_order) {
+            continue;
+        }
         dx = (int32_t)floater->destination_x - floater->x;
         dy = (int32_t)floater->destination_y - floater->y;
         /* FUN_00423068 updates facing from the destination independently of
@@ -730,6 +734,7 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
             (dy < 0 ? -dy : dy) <= floater->stop_radius) {
             floater->has_move_order = 0;
         }
+
     }
 }
 
@@ -754,6 +759,59 @@ int game_session_floater_at(const GameSession *session,
         if ((dx > dy ? dx : dy) < 20) return (int)i;
     }
     return -1;
+}
+
+static GameRuntimeLocation *player_hall(GameSession *session, uint8_t player_slot)
+{
+    const GamePlayerEconomy *economy;
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT) return NULL;
+    economy = &session->economy[player_slot];
+    if (economy->hall_island_index >= session->island_count ||
+        economy->hall_location_index >=
+            session->islands[economy->hall_island_index].location_count) return NULL;
+    return &session->islands[economy->hall_island_index]
+        .locations[economy->hall_location_index];
+}
+
+int game_session_credit_resource(GameSession *session, uint8_t player_slot,
+                                 GameResourceType type, uint32_t amount)
+{
+    GameRuntimeLocation *hall = player_hall(session, player_slot);
+    uint16_t *stock;
+    if (hall == NULL || (int)type < GAME_RESOURCE_BUILD_TONE ||
+        (int)type >= GAME_RESOURCE_TYPE_COUNT) return 0;
+    stock = &hall->resource_stock[type];
+    if (amount > UINT16_MAX - *stock) return 0;
+    *stock = (uint16_t)(*stock + amount);
+    return 1;
+}
+
+int game_session_debit_resource(GameSession *session, uint8_t player_slot,
+                                 GameResourceType type, uint32_t amount)
+{
+    GameRuntimeLocation *hall = player_hall(session, player_slot);
+    uint16_t *stock;
+    if (hall == NULL || (int)type < GAME_RESOURCE_BUILD_TONE ||
+        (int)type >= GAME_RESOURCE_TYPE_COUNT) return 0;
+    stock = &hall->resource_stock[type];
+    if (amount > *stock) return 0;
+    *stock = (uint16_t)(*stock - amount);
+    return 1;
+}
+
+int game_session_cycle_resource_stock_mode(GameSession *session,
+                                           uint8_t player_slot,
+                                           GameResourceType type)
+{
+    uint8_t *mode;
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        (int)type < GAME_RESOURCE_BUILD_TONE || (int)type >= GAME_RESOURCE_TYPE_COUNT) {
+        return -1;
+    }
+    mode = &session->economy[player_slot].stock_mode[type];
+    if (*mode > 2) *mode = 0;
+    else *mode = (uint8_t)((*mode + 1U) % 3U);
+    return (int)*mode;
 }
 
 int game_session_place_building(GameSession *session,

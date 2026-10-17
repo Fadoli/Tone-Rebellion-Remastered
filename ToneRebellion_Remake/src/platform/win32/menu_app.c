@@ -2085,28 +2085,6 @@ static int update_island_location_hover(int x, int y)
     return 1;
 }
 
-static int order_selected_floater_move(int x, int y)
-{
-    uint32_t world_x;
-    if (g_menu.screen != SCREEN_ISLAND || !g_game_session_valid ||
-        g_selected_floater < 0 || g_iw_construct_open ||
-        g_pending_build_item_id >= 0 || y < 0 || y >= 320) {
-        return 0;
-    }
-    world_x = (uint32_t)x + (uint32_t)g_island_scroll_x;
-    if (world_x >= 2560U ||
-        island_location_at(x, y) >= 0 ||
-        game_session_floater_at(&g_game_session,
-            (uint8_t)g_menu.selected_map_island, (uint16_t)world_x, (uint16_t)y) >= 0) {
-        return 0;
-    }
-    /* FUN_00435826 turns an empty-ground order into packed 10-pixel map
-       coordinates via FUN_0041e3eb; the session helper mirrors that encoding. */
-    return game_session_order_floater_move_from_click(
-        &g_game_session, (uint16_t)g_selected_floater,
-        (uint16_t)world_x, (uint16_t)y);
-}
-
 static int open_iw_construct(int location_index)
 {
     const IslandLocation *site;
@@ -2749,31 +2727,54 @@ static void render_island_view(HDC dc)
             draw_bitmap_label(dc, "NO GAME SESSION FOR THIS ISLAND",
                               12, status_top + 150, RGB(111, 135, 166));
         }
-    } else {
-        if (selected_floater != NULL) {
-            (void)snprintf(text, sizeof(text), "FLOATER %02d  PLAYER %u  X=%u Y=%u",
-                           g_selected_floater, (unsigned)selected_floater->type_index,
-                           (unsigned)selected_floater->x,
-                           (unsigned)selected_floater->y);
-            draw_bitmap_label(dc, text, 12, status_top + 140, RGB(244, 216, 131));
-            if (selected_floater->has_move_order) {
-                (void)snprintf(text, sizeof(text), "MOVING TO X=%u Y=%u  -  RIGHT-CLICK TO REDIRECT",
-                               (unsigned)selected_floater->destination_x,
-                               (unsigned)selected_floater->destination_y);
-            } else {
-                (void)snprintf(text, sizeof(text), "IDLE  -  RIGHT-CLICK EMPTY GROUND TO MOVE");
-            }
-            draw_bitmap_label(dc, text, 12, status_top + 150, RGB(169, 208, 232));
-        } else {
-            draw_bitmap_label(dc, "CLICK A MARKER OR FLOATER TO SELECT",
-                              12, status_top + 140, RGB(143, 181, 217));
-            draw_bitmap_label(dc, runtime_island != NULL
-                                      ? "INITIAL GAME STATE IS ACTIVE"
-                                      : "NO GAME SESSION FOR THIS ISLAND",
-                              12, status_top + 150, RGB(111, 135, 166));
-        }
     }
     draw_iw_construct(dc);
+    if (selected_floater != NULL && selected_floater->type_index < 4) {
+        const WindowTemplate *info = window_catalog_find(
+            &g_window_catalog, "IWLocInfo", 3);
+        if (info != NULL && g_temp_hole_art.frame_count > 1) {
+            RECT pane = {info->pane.left, info->pane.top,
+                         info->pane.right + 1, info->pane.bottom + 1};
+            int saved_info_dc = SaveDC(dc);
+            (void)IntersectClipRect(dc, pane.left, pane.top,
+                                    pane.right, pane.bottom);
+            draw_sprite(dc, &g_temp_hole_art, 1,
+                        info->pane.left, info->pane.top);
+
+            /* FUN_0044338b (Iwloc.cpp) draws the selected object's details in
+               IWLocInfo. Initial workers are class 0, level 0, and have the
+               four tribe-specific *work rows: 3 hit points and 0 strength.
+               FUN_00466fe4 initializes current hits to FUN_00420f28's max. */
+            draw_bitmap_label(dc, "WORKER",
+                              info->pane.left + 5, info->pane.top + 3,
+                              RGB(230, 238, 255));
+            draw_bitmap_label(dc, "HITS 3/3",
+                              info->pane.left + 5, info->pane.top + 23,
+                              RGB(230, 238, 255));
+            draw_bitmap_label(dc, "STRENGTH 0",
+                              info->pane.left + 5, info->pane.top + 33,
+                              RGB(230, 238, 255));
+
+            /* FUN_0044338b places the selected unit sprite to the right of
+               the text. The island renderer's original base-worker sheets
+               supply the same body and animated legs used in the world view. */
+            {
+                uint32_t leg_frame = g_menu.animation_ticks % 16u;
+                int sprite_x = info->pane.right - 50;
+                int sprite_y = info->pane.top +
+                    (info->pane.bottom - info->pane.top) / 2;
+                const SpriteSheet *body_art = selected_floater->facing_left
+                    ? &g_initial_floater_bodies_flipped[selected_floater->type_index]
+                    : &g_initial_floater_bodies[selected_floater->type_index];
+                const SpriteSheet *leg_art = selected_floater->facing_left
+                    ? &g_initial_floater_legs_flipped[selected_floater->type_index]
+                    : &g_initial_floater_legs[selected_floater->type_index];
+                draw_sprite(dc, leg_art, leg_frame, sprite_x, sprite_y);
+                draw_sprite(dc, body_art, 0, sprite_x, sprite_y);
+            }
+            if (saved_info_dc != 0) RestoreDC(dc, saved_info_dc);
+        }
+    }
 }
 
 /* The x87 helpers called by FUN_00471536 continue past Ghidra's short
@@ -3211,28 +3212,10 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         handle_click(window, x, y);
         return 0;
     }
-    case WM_RBUTTONDOWN: {
-        RECT client;
-        RECT viewport;
-        int width;
-        int height;
-        int x;
-        int y;
-        GetClientRect(window, &client);
-        width = client.right - client.left;
-        height = client.bottom - client.top;
-        if (!logical_viewport(width, height, &viewport)) return 0;
-        if (GET_X_LPARAM(lparam) < viewport.left || GET_X_LPARAM(lparam) >= viewport.right ||
-            GET_Y_LPARAM(lparam) < viewport.top || GET_Y_LPARAM(lparam) >= viewport.bottom) {
-            return 0;
-        }
-        x = ((GET_X_LPARAM(lparam) - viewport.left) * LOGICAL_WIDTH) /
-            (viewport.right - viewport.left);
-        y = ((GET_Y_LPARAM(lparam) - viewport.top) * LOGICAL_HEIGHT) /
-            (viewport.bottom - viewport.top);
-        if (order_selected_floater_move(x, y)) InvalidateRect(window, NULL, FALSE);
+    case WM_RBUTTONDOWN:
+        /* Right-click was incorrectly exposed as a worker order. The source
+           input mode and class gates are not yet implemented. */
         return 0;
-    }
     case WM_MOUSEWHEEL:
         if (g_menu.screen == SCREEN_ISLAND) {
             int direction = GET_WHEEL_DELTA_WPARAM(wparam) > 0 ? -1 : 1;

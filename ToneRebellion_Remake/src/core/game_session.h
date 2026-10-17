@@ -8,6 +8,25 @@
 #include <stdint.h>
 
 enum { GAME_SESSION_MAX_FLOATERS = GAME_START_PLAYER_COUNT * GAME_START_FLOATERS_PER_PLAYER };
+enum { GAME_RESOURCE_TYPE_COUNT = 3, GAME_RESOURCE_NONE = 0xff };
+
+typedef enum GameResourceType {
+    GAME_RESOURCE_BUILD_TONE = 0,
+    GAME_RESOURCE_CRYSTAL_TONE = 1,
+    GAME_RESOURCE_MAGIC_TONE = 2
+} GameResourceType;
+
+typedef struct GamePlayerEconomy {
+    /* FUN_0046466f assigns one initial hall per player. These indices bind
+       the player's resource storage to that runtime hall record. */
+    uint8_t hall_island_index;
+    uint16_t hall_location_index;
+    uint16_t hall_x;
+    uint16_t hall_y;
+    /* FUN_0045f755 cycles each Hall reserve mode through raw values 0..2;
+       FUN_0045eaa7 treats mode 2 as an active fill request. */
+    uint8_t stock_mode[GAME_RESOURCE_TYPE_COUNT];
+} GamePlayerEconomy;
 
 struct BuildingRenderCatalog;
 struct IslandLocation;
@@ -27,10 +46,19 @@ typedef struct GameSessionConfig {
 typedef struct GameRuntimeLocation {
     int32_t record_value_10;
     int32_t owner_id;
+    /* On producer items 0x25/0x26/0x27, FUN_00450a71 stores a pending
+       resource code 1/3/2 here when PROD completes; other classes use the
+       same runtime field for different purposes. */
     int32_t record_value_24;
     int32_t bridge_neighbor_island;
+    uint16_t x;
+    uint16_t y;
     uint32_t source_flags;
     uint16_t base_progress;
+    /* Three stock values observed in the hall runtime record at +0x28/+0x2a/
+       +0x2c. Ghidra reads them as short fields; exact signedness/caps remain
+       unconfirmed. */
+    uint16_t resource_stock[GAME_RESOURCE_TYPE_COUNT];
     uint16_t chug_progress;
     uint16_t glyph_progress;
     uint16_t inci_progress;
@@ -55,6 +83,7 @@ typedef struct GameRuntimeIsland {
 typedef struct GameFloaterStart {
     uint8_t island_index;
     uint8_t type_index;
+    uint8_t owner_slot;
     uint16_t x;
     uint16_t y;
     uint16_t destination_x;
@@ -74,6 +103,7 @@ typedef struct GameSession {
     GameStartToneDistribution tone_placements;
     GameFloaterStart floaters[GAME_SESSION_MAX_FLOATERS];
     uint8_t floater_count;
+    GamePlayerEconomy economy[GAME_START_PLAYER_COUNT];
     uint16_t class0_assignments;
     /* FUN_004718eb reads one active flag per WORLDPOS bridge pair. */
     uint32_t active_bridge_mask;
@@ -152,12 +182,6 @@ int game_session_order_floater_move(GameSession *session,
                                     uint16_t destination_y,
                                     uint16_t effective_speed,
                                     uint16_t stop_radius);
-/* Convert a right-click world position using FUN_0041e3eb's 10-pixel grid
-   encoding, then use the initial worker's source-derived movement speed. */
-int game_session_order_floater_move_from_click(GameSession *session,
-                                               uint16_t floater_index,
-                                               uint16_t world_x,
-                                               uint16_t world_y);
 /* Advance queued floater destinations using the FUN_00422d27 step kernel. */
 void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick);
 /* Hit test the visible island's active floaters in session order. The original
@@ -166,6 +190,17 @@ int game_session_floater_at(const GameSession *session,
                             uint8_t island_index,
                             uint16_t x,
                             uint16_t y);
+/* Resource stock fields are attached to each player's initial Hall runtime
+   record. Starting values, caps and mutation rules remain to be verified. */
+int game_session_credit_resource(GameSession *session, uint8_t player_slot,
+                                 GameResourceType type, uint32_t amount);
+int game_session_debit_resource(GameSession *session, uint8_t player_slot,
+                                 GameResourceType type, uint32_t amount);
+/* FUN_0045f755: advance one Hall resource mode modulo three. Returns the new
+   raw mode, or -1 for an invalid player/resource. */
+int game_session_cycle_resource_stock_mode(GameSession *session,
+                                           uint8_t player_slot,
+                                           GameResourceType type);
 /* FUN_00452656 validation and FUN_004528ca runtime initialization. */
 int game_session_place_building(GameSession *session,
                                 const PadCatalog *catalog,

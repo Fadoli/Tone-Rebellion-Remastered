@@ -98,6 +98,13 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
         assert(floater->x == start->marker_x);
         assert(floater->y == start->marker_y);
         assert(floater->movement_speed == 3); /* four initial *work rows in floater.txt */
+        assert(session.economy[player].hall_island_index == start->island_index);
+        assert(session.economy[player].hall_location_index ==
+               start->nearest_site_location_index);
+        assert(session.islands[start->island_index]
+                   .locations[start->nearest_site_location_index]
+                   .resource_stock[GAME_RESOURCE_BUILD_TONE] == 0); /* model default; source start stock unresolved */
+        assert(floater->owner_slot == player);
         assert((session.islands[start->island_index].access_mask & (1U << player)) != 0);
         assert(game_session_can_enter_island(&session, start->island_index,
                                              (uint8_t)(1U << player)));
@@ -205,6 +212,53 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
         assert(link_site_count == 2U * (world.island_count - 1U));
     }
     assert(islands[1].locations[4].renderer_variant == 99);
+}
+
+static void test_hall_resource_ledger_is_safe(void)
+{
+    GameSession session;
+
+    memset(&session, 0, sizeof(session));
+    session.island_count = 1;
+    session.islands[0].location_count = 1;
+    session.economy[2].hall_island_index = 0;
+    session.economy[2].hall_location_index = 0;
+
+    assert(game_session_credit_resource(&session, 2, GAME_RESOURCE_BUILD_TONE, 25));
+    assert(session.islands[0].locations[0]
+               .resource_stock[GAME_RESOURCE_BUILD_TONE] == 25);
+    assert(!game_session_debit_resource(&session, 2, GAME_RESOURCE_BUILD_TONE, 26));
+    assert(session.islands[0].locations[0]
+               .resource_stock[GAME_RESOURCE_BUILD_TONE] == 25);
+    assert(game_session_debit_resource(&session, 2, GAME_RESOURCE_BUILD_TONE, 5));
+    assert(session.islands[0].locations[0]
+               .resource_stock[GAME_RESOURCE_BUILD_TONE] == 20);
+    assert(!game_session_credit_resource(&session, 4, GAME_RESOURCE_BUILD_TONE, 1));
+    assert(!game_session_credit_resource(&session, 2, (GameResourceType)9, 1));
+    session.islands[0].locations[0]
+        .resource_stock[GAME_RESOURCE_BUILD_TONE] = UINT16_MAX;
+    assert(!game_session_credit_resource(&session, 2, GAME_RESOURCE_BUILD_TONE, 1));
+}
+
+static void test_hall_resource_modes_cycle_through_original_three_states(void)
+{
+    GameSession session = {0};
+
+    assert(session.economy[1].stock_mode[GAME_RESOURCE_BUILD_TONE] == 0);
+    assert(game_session_cycle_resource_stock_mode(
+               &session, 1, GAME_RESOURCE_BUILD_TONE) == 1);
+    assert(game_session_cycle_resource_stock_mode(
+               &session, 1, GAME_RESOURCE_BUILD_TONE) == 2);
+    assert(game_session_cycle_resource_stock_mode(
+               &session, 1, GAME_RESOURCE_BUILD_TONE) == 0);
+    assert(game_session_cycle_resource_stock_mode(
+               &session, 1, GAME_RESOURCE_CRYSTAL_TONE) == 1);
+    assert(session.economy[1].stock_mode[GAME_RESOURCE_BUILD_TONE] == 0);
+    assert(session.economy[0].stock_mode[GAME_RESOURCE_CRYSTAL_TONE] == 0);
+    assert(game_session_cycle_resource_stock_mode(
+               &session, GAME_START_PLAYER_COUNT, GAME_RESOURCE_BUILD_TONE) == -1);
+    assert(game_session_cycle_resource_stock_mode(
+               &session, 1, (GameResourceType)7) == -1);
 }
 
 static void test_item_animation_uses_source_flags_and_per_object_counters(void)
@@ -486,40 +540,6 @@ static void test_floater_move_state_advances_only_the_ordered_unit(void)
     assert(!game_session_order_floater_move(&session, 2, 120, 80, 1, 0));
 }
 
-static void test_floater_move_from_click_uses_source_grid_and_worker_speed(void)
-{
-    GameSession session;
-    GameFloaterStart *floater;
-
-    memset(&session, 0, sizeof(session));
-    session.floater_count = 1;
-    floater = &session.floaters[0];
-    floater->movement_speed = 3;
-    floater->x = 100;
-    floater->y = 100;
-
-    assert(game_session_order_floater_move_from_click(&session, 0, 104, 116));
-    assert(floater->destination_x == 100);
-    assert(floater->destination_y == 120);
-    assert(floater->movement_speed == 3);
-    assert(floater->stop_radius == 10);
-    assert(floater->has_move_order);
-    game_session_tick_floater_moves(&session, 1);
-    assert(floater->x == 100 && floater->y == 103);
-
-    /* FUN_0041e569 ends a free-move state within its default 10 px radius. */
-    assert(game_session_order_floater_move(&session, 0, 105, 103, 3, 10));
-    game_session_tick_floater_moves(&session, 2);
-    assert(floater->x == 100 && floater->y == 103);
-    assert(!floater->has_move_order);
-
-    /* The source packs cell coordinates into bytes before expanding them. */
-    assert(game_session_order_floater_move_from_click(&session, 0, 2559, 320));
-    assert(floater->destination_x == 0); /* x cell 256 wraps to byte 0 */
-    assert(floater->destination_y == 320);
-    assert(!game_session_order_floater_move_from_click(&session, 1, 20, 20));
-}
-
 static void test_floater_selection_uses_original_hit_radius_and_island(void)
 {
     GameSession session;
@@ -547,13 +567,14 @@ static void test_floater_selection_uses_original_hit_radius_and_island(void)
 int main(void)
 {
     test_session_initializes_player_starts_and_runtime_items();
+    test_hall_resource_ledger_is_safe();
+    test_hall_resource_modes_cycle_through_original_three_states();
     test_item_animation_uses_source_flags_and_per_object_counters();
     test_tone_pool_uses_two_source_counter_sequences();
     test_active_cons_and_prod_counters_finish_at_source_limits();
     test_initialization_is_transactional_on_bad_world();
     test_building_placement_matches_source_runtime_initialization();
     test_floater_move_state_advances_only_the_ordered_unit();
-    test_floater_move_from_click_uses_source_grid_and_worker_speed();
     test_floater_selection_uses_original_hit_radius_and_island();
     (void)puts("game session unit tests passed");
     return 0;
