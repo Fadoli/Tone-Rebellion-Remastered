@@ -2,7 +2,7 @@
 
 ## Mission
 
-Contribuer à la décompilation statique de `C:\Program Files\Tone\FLOAT.EXE` en suivant le README et l’index de ce dossier. Le binaire original et les archives `TONE00.COB` / `TONE01.COB` sont en lecture seule : ne jamais les exécuter, renommer, modifier ou écrire à côté. Le corpus extrait est déjà disponible dans `C:\git\ToneRebellion_Raw\original_content`. Utiliser ces sources locales et éviter GitHub ou tout accès réseau pour rechercher le contenu. Ne jamais ouvrir, modifier, écraser ou supprimer un projet Ghidra existant. Réutiliser la session REA/Ghidra active et son analyse stable ; ne pas relancer une analyse identique.
+Contribuer à la décompilation statique de `C:\Program Files\Tone\FLOAT.EXE` en suivant le README et l’index de ce dossier. Le binaire original et les archives `TONE00.COB` / `TONE01.COB` sont en lecture seule : ne jamais les exécuter, renommer, modifier ou écrire à côté. Le corpus extrait est disponible dans `C:\git\ToneRebellion_Raw\original_content`, et une copie locale décompressée équivalente de l'ISO se trouve dans `C:\toneIso` (les pistes musicales sont sous `C:\toneIso\THING2`). Utiliser ces sources locales et éviter GitHub ou tout accès réseau pour rechercher le contenu. Ne jamais ouvrir, modifier, écraser ou supprimer un projet Ghidra existant. Réutiliser la session REA/Ghidra active et son analyse stable ; ne pas relancer une analyse identique.
 
 ## Preuve et prudence
 

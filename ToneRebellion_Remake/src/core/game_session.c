@@ -1,6 +1,7 @@
 #include "game_session.h"
 
 #include "building_render.h"
+#include "floater_motion.h"
 #include "iw_construct.h"
 #include "island_render_rules.h"
 #include "pad_catalog.h"
@@ -327,6 +328,10 @@ int game_session_initialize(const WorldDefinition *world,
         unsigned int location_index = start->nearest_site_location_index;
         unsigned int unit;
 
+        /* FUN_0046466f sets island runtime +0x29ac + player*4 for each
+           player's assigned starting island; FUN_0047117d reads this flag. */
+        runtime->access_mask |= (uint8_t)(1U << island_index);
+
         if (location_index >= runtime->location_count ||
             runtime->locations[location_index].record_value_10 != 0) {
             set_error(error, error_capacity, "initial hall location is not empty at runtime");
@@ -354,6 +359,12 @@ int game_session_initialize(const WorldDefinition *world,
             floater->type_index = start->floater_type_index;
             floater->x = start->marker_x;
             floater->y = start->marker_y;
+            floater->destination_x = start->marker_x;
+            floater->destination_y = start->marker_y;
+            /* FUN_0046466f creates each initial unit with class 0. The
+               corresponding *work entries in floater.txt have speed 3;
+               FUN_00422d27 reads that stat through FUN_00464242 (+0x0c). */
+            floater->movement_speed = 3;
         }
     }
     next.floater_count = (uint8_t)floater_cursor;
@@ -396,6 +407,7 @@ int game_session_initialize(const WorldDefinition *world,
                              error, error_capacity)) {
         return 0;
     }
+    next.random_state = rng;
 
     /* FUN_004528ca starts newly instantiated pad objects with flags 0x410,
        zeroed animation fields, and animation-rate field +0x32 set to 1. */
@@ -414,6 +426,47 @@ int game_session_initialize(const WorldDefinition *world,
     }
 
     *out = next;
+    return 1;
+}
+
+int game_session_can_enter_island(const GameSession *session,
+                                  uint8_t island_index,
+                                  uint8_t player_mask)
+{
+    if (session == NULL || island_index >= session->island_count) return 0;
+    return (session->islands[island_index].access_mask & player_mask) != 0;
+}
+
+int game_session_world_map_frame_offset(const GameSession *session,
+                                        uint8_t island_index,
+                                        uint8_t player_mask,
+                                        int hovered)
+{
+    if (session == NULL || island_index >= session->island_count) return -1;
+    if (!game_session_can_enter_island(session, island_index, player_mask)) return 15;
+    return hovered ? 30 : 0;
+}
+
+int game_session_bridge_is_active(const GameSession *session,
+                                  uint8_t bridge_index,
+                                  uint8_t bridge_count)
+{
+    if (session == NULL || bridge_count > WORLD_MAP_MAX_BRIDGES ||
+        bridge_index >= bridge_count) return 0;
+    return (session->active_bridge_mask & (UINT32_C(1) << bridge_index)) != 0;
+}
+
+int game_session_set_bridge_active(GameSession *session,
+                                   uint8_t bridge_index,
+                                   uint8_t bridge_count,
+                                   int active)
+{
+    uint32_t bit;
+    if (session == NULL || bridge_count > WORLD_MAP_MAX_BRIDGES ||
+        bridge_index >= bridge_count) return 0;
+    bit = UINT32_C(1) << bridge_index;
+    if (active) session->active_bridge_mask |= bit;
+    else session->active_bridge_mask &= ~bit;
     return 1;
 }
 
@@ -510,6 +563,116 @@ void game_session_tick_item_animations(GameSession *session,
     }
 }
 
+int game_session_order_floater_move(GameSession *session,
+                                    uint16_t floater_index,
+                                    uint16_t destination_x,
+                                    uint16_t destination_y,
+                                    uint16_t effective_speed,
+                                    uint16_t stop_radius)
+{
+    GameFloaterStart *floater;
+
+    if (session == NULL || floater_index >= session->floater_count ||
+        destination_x >= 2560U || destination_y > 320U || effective_speed == 0) {
+        return 0;
+    }
+
+    floater = &session->floaters[floater_index];
+    floater->destination_x = destination_x;
+    floater->destination_y = destination_y;
+    floater->movement_speed = effective_speed;
+    floater->stop_radius = stop_radius;
+    floater->has_move_order =
+        floater->x != destination_x || floater->y != destination_y;
+    return 1;
+}
+
+int game_session_order_floater_move_from_click(GameSession *session,
+                                               uint16_t floater_index,
+                                               uint16_t world_x,
+                                               uint16_t world_y)
+{
+    const GameFloaterStart *floater;
+    uint8_t packed_x;
+    uint8_t packed_y;
+
+    if (session == NULL || floater_index >= session->floater_count) return 0;
+    floater = &session->floaters[floater_index];
+    if (floater->movement_speed == 0 || world_x >= 2560U || world_y > 320U) return 0;
+
+    /* FUN_0041e3eb packs rounded 10-pixel map cells into high/low bytes;
+       FUN_0041e427 expands those bytes back to coordinates for the mover. */
+    packed_x = (uint8_t)((world_x + 5U) / 10U);
+    packed_y = (uint8_t)((world_y + 5U) / 10U);
+    return game_session_order_floater_move(session, floater_index,
+                                           (uint16_t)packed_x * 10U,
+                                           (uint16_t)packed_y * 10U,
+                                           floater->movement_speed, 0);
+}
+
+void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
+{
+    unsigned int i;
+
+    if (session == NULL) return;
+    for (i = 0; i < session->floater_count; ++i) {
+        GameFloaterStart *floater = &session->floaters[i];
+        FloaterPosition position;
+        FloaterPosition destination;
+        int32_t dx;
+        int32_t dy;
+        int32_t distance;
+
+        if (!floater->has_move_order) continue;
+        dx = (int32_t)floater->destination_x - floater->x;
+        dy = (int32_t)floater->destination_y - floater->y;
+        distance = dx < 0 ? -dx : dx;
+        if ((dy < 0 ? -dy : dy) > distance) distance = dy < 0 ? -dy : dy;
+        if (distance <= floater->stop_radius) {
+            floater->has_move_order = 0;
+            continue;
+        }
+
+        position.x = floater->x;
+        position.y = floater->y;
+        destination.x = floater->destination_x;
+        destination.y = floater->destination_y;
+        (void)floater_motion_step(&position, destination,
+                                  floater->movement_speed, source_tick);
+        floater->x = (uint16_t)position.x;
+        floater->y = (uint16_t)position.y;
+        dx = (int32_t)floater->destination_x - floater->x;
+        dy = (int32_t)floater->destination_y - floater->y;
+        if ((dx < 0 ? -dx : dx) <= floater->stop_radius &&
+            (dy < 0 ? -dy : dy) <= floater->stop_radius) {
+            floater->has_move_order = 0;
+        }
+    }
+}
+
+int game_session_floater_at(const GameSession *session,
+                            uint8_t island_index,
+                            uint16_t x,
+                            uint16_t y)
+{
+    unsigned int i;
+
+    if (session == NULL || island_index >= session->island_count) return -1;
+    for (i = 0; i < session->floater_count; ++i) {
+        const GameFloaterStart *floater = &session->floaters[i];
+        int32_t dx;
+        int32_t dy;
+
+        if (floater->island_index != island_index) continue;
+        dx = (int32_t)x - floater->x;
+        dy = (int32_t)y - floater->y;
+        if (dx < 0) dx = -dx;
+        if (dy < 0) dy = -dy;
+        if ((dx > dy ? dx : dy) < 20) return (int)i;
+    }
+    return -1;
+}
+
 int game_session_place_building(GameSession *session,
                                 const PadCatalog *catalog,
                                 uint8_t player_slot,
@@ -533,6 +696,7 @@ int game_session_place_building(GameSession *session,
     }
     runtime = &session->islands[island_index].locations[location_index];
     if (runtime->renderer_class != 0 || runtime->record_value_10 != 0 ||
+        runtime->owner_id != -1 ||
         !iw_construct_site_size(site, &site_size)) {
         set_error(error, error_capacity, "building placement requires an empty construction site");
         return 0;

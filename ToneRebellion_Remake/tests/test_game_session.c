@@ -97,7 +97,44 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
         assert(floater->type_index == player);
         assert(floater->x == start->marker_x);
         assert(floater->y == start->marker_y);
+        assert(floater->movement_speed == 3); /* four initial *work rows in floater.txt */
+        assert((session.islands[start->island_index].access_mask & (1U << player)) != 0);
+        assert(game_session_can_enter_island(&session, start->island_index,
+                                             (uint8_t)(1U << player)));
+        assert(game_session_world_map_frame_offset(
+                   &session, start->island_index, (uint8_t)(1U << player), 0) == 0);
+        assert(game_session_world_map_frame_offset(
+                   &session, start->island_index, (uint8_t)(1U << player), 1) == 30);
     }
+    {
+        unsigned int island;
+        int found_unassigned = 0;
+        for (island = 0; island < session.island_count; ++island) {
+            if (session.islands[island].access_mask == 0) {
+                found_unassigned = 1;
+                assert(!game_session_can_enter_island(
+                    &session, (uint8_t)island, (uint8_t)(1U << config.selected_tribe)));
+                assert(game_session_world_map_frame_offset(
+                           &session, (uint8_t)island,
+                           (uint8_t)(1U << config.selected_tribe), 0) == 15);
+            }
+        }
+        assert(found_unassigned);
+    }
+    assert(!game_session_can_enter_island(&session, session.island_count, 0xff));
+    assert(!game_session_can_enter_island(NULL, 0, 0xff));
+    assert(game_session_world_map_frame_offset(&session, session.island_count,
+                                               0xff, 1) == -1);
+    assert(game_session_world_map_frame_offset(NULL, 0, 0xff, 1) == -1);
+    assert(!game_session_bridge_is_active(&session, 0, world.bridge_count));
+    assert(game_session_set_bridge_active(&session, 0, world.bridge_count, 1));
+    assert(game_session_bridge_is_active(&session, 0, world.bridge_count));
+    assert(game_session_set_bridge_active(&session, 0, world.bridge_count, 0));
+    assert(!game_session_bridge_is_active(&session, 0, world.bridge_count));
+    assert(!game_session_set_bridge_active(&session, world.bridge_count,
+                                           world.bridge_count, 1));
+    assert(!game_session_bridge_is_active(NULL, 0, world.bridge_count));
+    assert(!game_session_bridge_is_active(&session, 0, WORLD_MAP_MAX_BRIDGES + 1));
     assert(session.islands[0].locations[12].record_value_10 == 2);
     assert(session.islands[1].locations[12].record_value_10 == 2);
     assert(session.islands[0].locations[12].bridge_neighbor_island == 1);
@@ -351,10 +388,101 @@ static void test_building_placement_matches_source_runtime_initialization(void)
                                         &site, 40, error, sizeof(error)));
     assert(runtime->record_value_10 == 0 && runtime->owner_id == -1);
     catalog.items[72].size = 0;
+    runtime->owner_id = 1;
+    assert(!game_session_place_building(&session, &catalog, 2, 0, 0,
+                                        &site, 40, error, sizeof(error)));
+    assert(runtime->record_value_10 == 0 && runtime->owner_id == 1);
+    runtime->owner_id = -1;
     catalog.items[72].building_tone_cost = -1;
     assert(!game_session_place_building(&session, &catalog, 2, 0, 0,
                                         &site, 40, error, sizeof(error)));
     assert(runtime->record_value_10 == 0 && runtime->owner_id == -1);
+}
+
+static void test_floater_move_state_advances_only_the_ordered_unit(void)
+{
+    GameSession session;
+    GameFloaterStart *floater;
+    GameFloaterStart *idle_floater;
+    uint16_t idle_x;
+
+    memset(&session, 0, sizeof(session));
+    session.floater_count = 2;
+    floater = &session.floaters[0];
+    floater->island_index = 0;
+    floater->x = 100;
+    floater->y = 100;
+    idle_floater = &session.floaters[1];
+    idle_floater->island_index = 1;
+    idle_floater->x = 200;
+    idle_floater->y = 200;
+    idle_x = idle_floater->x;
+
+    assert(game_session_order_floater_move(&session, 0, 120, 80, 3, 0));
+    assert(floater->has_move_order);
+    game_session_tick_floater_moves(&session, 1);
+    assert(floater->x == 103 && floater->y == 97);
+    assert(idle_floater->x == idle_x && !idle_floater->has_move_order);
+
+    assert(game_session_order_floater_move(&session, 0, 104, 96, 3, 1));
+    game_session_tick_floater_moves(&session, 2);
+    assert(floater->x == 103 && floater->y == 97);
+    assert(!floater->has_move_order); /* destination is within the stop radius */
+
+    assert(!game_session_order_floater_move(&session, 0, 2560, 100, 1, 0));
+    assert(!game_session_order_floater_move(&session, 0, 120, 80, 0, 0));
+    assert(!game_session_order_floater_move(&session, 2, 120, 80, 1, 0));
+}
+
+static void test_floater_move_from_click_uses_source_grid_and_worker_speed(void)
+{
+    GameSession session;
+    GameFloaterStart *floater;
+
+    memset(&session, 0, sizeof(session));
+    session.floater_count = 1;
+    floater = &session.floaters[0];
+    floater->movement_speed = 3;
+    floater->x = 100;
+    floater->y = 100;
+
+    assert(game_session_order_floater_move_from_click(&session, 0, 104, 116));
+    assert(floater->destination_x == 100);
+    assert(floater->destination_y == 120);
+    assert(floater->movement_speed == 3);
+    assert(floater->has_move_order);
+    game_session_tick_floater_moves(&session, 1);
+    assert(floater->x == 100 && floater->y == 103);
+
+    /* The source packs cell coordinates into bytes before expanding them. */
+    assert(game_session_order_floater_move_from_click(&session, 0, 2559, 320));
+    assert(floater->destination_x == 0); /* x cell 256 wraps to byte 0 */
+    assert(floater->destination_y == 320);
+    assert(!game_session_order_floater_move_from_click(&session, 1, 20, 20));
+}
+
+static void test_floater_selection_uses_original_hit_radius_and_island(void)
+{
+    GameSession session;
+
+    memset(&session, 0, sizeof(session));
+    session.island_count = 2;
+    session.floater_count = 3;
+    session.floaters[0].island_index = 0;
+    session.floaters[0].x = 100;
+    session.floaters[0].y = 100;
+    session.floaters[1].island_index = 0;
+    session.floaters[1].x = 140;
+    session.floaters[1].y = 100;
+    session.floaters[2].island_index = 1;
+    session.floaters[2].x = 100;
+    session.floaters[2].y = 100;
+
+    assert(game_session_floater_at(&session, 0, 119, 119) == 0);
+    assert(game_session_floater_at(&session, 0, 120, 100) == -1);
+    assert(game_session_floater_at(&session, 1, 100, 100) == 2);
+    assert(game_session_floater_at(&session, 2, 100, 100) == -1);
+    assert(game_session_floater_at(NULL, 0, 100, 100) == -1);
 }
 
 int main(void)
@@ -365,6 +493,9 @@ int main(void)
     test_active_cons_and_prod_counters_finish_at_source_limits();
     test_initialization_is_transactional_on_bad_world();
     test_building_placement_matches_source_runtime_initialization();
+    test_floater_move_state_advances_only_the_ordered_unit();
+    test_floater_move_from_click_uses_source_grid_and_worker_speed();
+    test_floater_selection_uses_original_hit_radius_and_island();
     (void)puts("game session unit tests passed");
     return 0;
 }

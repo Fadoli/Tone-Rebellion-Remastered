@@ -9,6 +9,7 @@
 #include "island_haze.h"
 #include "island_render_rules.h"
 #include "curved_text_layout.h"
+#include "game_music.h"
 #include "game_session.h"
 #include "iw_construct.h"
 #include "shp_image.h"
@@ -75,6 +76,7 @@ static SpriteSheet g_pad_art;
 static SpriteSheet g_bridge_trigger_art;
 static SpriteSheet g_temp_hole_art;
 static SpriteSheet g_build_cycle_art;
+static SpriteSheet g_bildtone_art;
 static SpriteSheet g_building_art[PAD_CATALOG_MAX_ITEMS];
 static SpriteSheet g_initial_floater_bodies[4];
 static SpriteSheet g_initial_floater_legs[4];
@@ -88,13 +90,19 @@ static COLORREF g_newgame_palette[256];
 static COLORREF g_map_palette[256];
 static uint32_t g_random_state;
 static unsigned char *g_button_sound;
+static char g_music_directory[MAX_PATH];
+static char g_current_tune[16];
+static int g_music_device_open;
+static int g_music_loops;
 static BitmapFont g_bitmap_font;
 static char g_help_text[HELP_ENTRY_COUNT][1024];
 static char g_newgame_text[8][256];
 static char g_tribe_text[4][2][1024];
+static char g_building_descriptions[PAD_CATALOG_MAX_ITEMS][768];
 static char g_island_names[ISLAND_NAME_COUNT][32];
 static IslandData g_island_surface_data;
 static GameSession g_game_session;
+static GameMusicState g_game_music;
 static int g_game_session_valid;
 static int g_game_session_world_index = -1;
 static WindowCatalog g_window_catalog;
@@ -108,6 +116,7 @@ static int g_island_surface_id = -1;
 static int g_island_scroll_x;
 static int g_hovered_location = -1;
 static int g_selected_location = -1;
+static int g_selected_floater = -1;
 static IwConstructState g_iw_construct;
 static IwConstructInfoState g_iw_construct_info;
 static int32_t g_iw_construct_items[IW_CONSTRUCT_BUILD_CANDIDATE_COUNT];
@@ -124,7 +133,12 @@ static int g_mouse_x;
 static int g_mouse_y;
 
 static void update_window_title(HWND window);
+static void set_background_tune(const char *tune_id);
+static void set_background_tune_once(const char *tune_id);
+static void stop_background_tune(void);
 static int load_game_session_for_selected_world(char *error, size_t error_capacity);
+static int draw_building_preview(HDC dc, uint16_t item_id, uint8_t player_slot,
+                                 int x, int y, uint32_t scale_16_16);
 
 static int begin_new_game(HWND window)
 {
@@ -153,6 +167,159 @@ static void update_window_title(HWND window)
         title = "Tone Rebellion - Island (arrows: scroll, Esc: map)";
     else if (g_menu.screen == SCREEN_LOAD_GAME) title = "Tone Rebellion - Load Game (Esc: back)";
     SetWindowTextA(window, title);
+    if (g_menu.screen != SCREEN_ISLAND) {
+        /* FUN_004489c0 requests ambi1 for the title. The remake keeps this
+           menu bed through setup/map screens. Island-entry music is selected
+           once per realm using FUN_00470fe7's transition table. */
+        set_background_tune("ambi1");
+    }
+}
+
+typedef struct MusicTune {
+    const char *id;
+    const char *file_name;
+} MusicTune;
+
+static const MusicTune g_music_tunes[] = {
+    {"tribe0", "PROTECT.WAV"}, {"tribe1", "SEEKERS.WAV"},
+    {"tribe2", "MYSTICS.WAV"}, {"tribe3", "LIFEGIVE.WAV"},
+    /* sound.txt deliberately maps act indices in reverse file order. */
+    {"act1", "ACT4.WAV"}, {"act2", "ACT3.WAV"},
+    {"act3", "ACT2.WAV"}, {"act4", "ACT1.WAV"},
+    {"start", "START.WAV"}, {"ambi1", "AMBIENT1.WAV"},
+    {"ambi2", "AMBIENT2.WAV"}, {"ambi3", "AMBIENT3.WAV"},
+    {"ambi4", "AMBIENT4.WAV"}, {"levi", "LEVIATAN.WAV"},
+    {"winend", "WINNER.WAV"}, {"loosend", "LOSEND.WAV"}
+};
+
+static int music_file_exists_in(const char *directory, const char *file_name,
+                                char *path, size_t path_capacity)
+{
+    DWORD attributes;
+    int written = snprintf(path, path_capacity, "%s\\%s", directory, file_name);
+    if (written < 0 || (size_t)written >= path_capacity) return 0;
+    attributes = GetFileAttributesA(path);
+    return attributes != INVALID_FILE_ATTRIBUTES &&
+           (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+}
+
+static int resolve_music_directory(const char *file_name,
+                                   char *path, size_t path_capacity)
+{
+    char candidate[MAX_PATH];
+    DWORD environment_length;
+    DWORD executable_length;
+    char *separator;
+
+    if (g_music_directory[0] != '\0' &&
+        music_file_exists_in(g_music_directory, file_name, path, path_capacity)) {
+        return 1;
+    }
+    environment_length = GetEnvironmentVariableA(
+        "TONE_REBELLION_THING2", candidate, (DWORD)sizeof(candidate));
+    if (environment_length > 0 && environment_length < sizeof(candidate) &&
+        music_file_exists_in(candidate, file_name, path, path_capacity)) {
+        (void)strncpy(g_music_directory, candidate, sizeof(g_music_directory) - 1);
+        g_music_directory[sizeof(g_music_directory) - 1] = '\0';
+        return 1;
+    }
+    executable_length = GetModuleFileNameA(NULL, candidate, (DWORD)sizeof(candidate));
+    if (executable_length > 0 && executable_length < sizeof(candidate)) {
+        separator = strrchr(candidate, '\\');
+        if (separator != NULL) {
+            *separator = '\0';
+            if (strlen(candidate) + sizeof("\\THING2") < sizeof(g_music_directory)) {
+                (void)strcpy(g_music_directory, candidate);
+                (void)strcat(g_music_directory, "\\THING2");
+                if (music_file_exists_in(g_music_directory, file_name,
+                                         path, path_capacity)) return 1;
+            }
+        }
+    }
+    if (music_file_exists_in("C:\\toneIso\\THING2", file_name,
+                             path, path_capacity)) {
+        (void)strcpy(g_music_directory, "C:\\toneIso\\THING2");
+        return 1;
+    }
+    return 0;
+}
+
+static void stop_background_tune(void)
+{
+    if (g_music_device_open) {
+        (void)mciSendStringA("stop tone_music", NULL, 0, NULL);
+        (void)mciSendStringA("close tone_music", NULL, 0, NULL);
+        g_music_device_open = 0;
+    }
+    g_current_tune[0] = '\0';
+    g_music_loops = 0;
+}
+
+static void keep_background_tune_playing(void)
+{
+    char mode[32];
+    MCIERROR result;
+
+    if (!g_music_device_open || g_current_tune[0] == '\0') return;
+    result = mciSendStringA("status tone_music mode", mode, sizeof(mode), NULL);
+    if (result == 0 && strcmp(mode, "stopped") == 0) {
+        if (g_music_loops) {
+            (void)mciSendStringA("play tone_music", NULL, 0, NULL);
+        } else {
+            /* FUN_0041c46f requests the `start` tune once; the title handler
+               then requests the looping `ambi1` menu bed. */
+            stop_background_tune();
+            set_background_tune("ambi1");
+        }
+    }
+}
+
+static void set_background_tune_mode(const char *tune_id, int loop)
+{
+    char path[MAX_PATH];
+    char command[MAX_PATH + 64];
+    size_t i;
+    const char *file_name = NULL;
+    MCIERROR result;
+
+    if (tune_id == NULL || strcmp(g_current_tune, tune_id) == 0) return;
+    for (i = 0; i < sizeof(g_music_tunes) / sizeof(g_music_tunes[0]); ++i) {
+        if (strcmp(g_music_tunes[i].id, tune_id) == 0) {
+            file_name = g_music_tunes[i].file_name;
+            break;
+        }
+    }
+    if (file_name == NULL ||
+        !resolve_music_directory(file_name, path, sizeof(path))) return;
+
+    stop_background_tune();
+    {
+        int command_length = snprintf(
+            command, sizeof(command),
+            "open \"%s\" type waveaudio alias tone_music", path);
+        if (command_length < 0 || (size_t)command_length >= sizeof(command)) return;
+    }
+    result = mciSendStringA(command, NULL, 0, NULL);
+    if (result != 0) return;
+    g_music_device_open = 1;
+    result = mciSendStringA("play tone_music", NULL, 0, NULL);
+    if (result != 0) {
+        stop_background_tune();
+        return;
+    }
+    (void)strncpy(g_current_tune, tune_id, sizeof(g_current_tune) - 1);
+    g_current_tune[sizeof(g_current_tune) - 1] = '\0';
+    g_music_loops = loop;
+}
+
+static void set_background_tune(const char *tune_id)
+{
+    set_background_tune_mode(tune_id, 1);
+}
+
+static void set_background_tune_once(const char *tune_id)
+{
+    set_background_tune_mode(tune_id, 0);
 }
 
 static int load_palette(CobArchive *archive, const char *member_name,
@@ -321,6 +488,34 @@ static void draw_sprite(HDC target, const SpriteSheet *sheet, uint32_t frame_ind
     DeleteDC(source);
 }
 
+static void draw_sprite_scaled(HDC target, const SpriteSheet *sheet, uint32_t frame_index,
+                               int x, int y, uint32_t scale_16_16)
+{
+    HDC source;
+    HGDIOBJ previous;
+    BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+    const SpriteFrame *frame;
+    int width;
+    int height;
+    int offset_x;
+    int offset_y;
+    if (sheet == NULL || frame_index >= sheet->frame_count) return;
+    frame = &sheet->frames[frame_index];
+    if (frame->bitmap == NULL) return;
+    width = (int)(((uint64_t)(unsigned)frame->width * scale_16_16) >> 16);
+    height = (int)(((uint64_t)(unsigned)frame->height * scale_16_16) >> 16);
+    if (width <= 0 || height <= 0) return;
+    offset_x = (int)(((int64_t)frame->x_offset * scale_16_16) >> 16);
+    offset_y = (int)(((int64_t)frame->y_offset * scale_16_16) >> 16);
+    source = CreateCompatibleDC(target);
+    if (source == NULL) return;
+    previous = SelectObject(source, frame->bitmap);
+    (void)AlphaBlend(target, x + offset_x, y + offset_y, width, height,
+                     source, 0, 0, frame->width, frame->height, blend);
+    SelectObject(source, previous);
+    DeleteDC(source);
+}
+
 static void draw_sprite_region(HDC target, const SpriteSheet *sheet, uint32_t frame_index,
                                int source_x, int source_y, int width, int height,
                                int destination_x, int destination_y)
@@ -356,6 +551,7 @@ static int load_island_surface(int island_id, int map_island_index,
     SpriteSheet bridge_candidate = {0};
     SpriteSheet temp_hole_candidate = {0};
     SpriteSheet build_cycle_candidate = {0};
+    SpriteSheet bildtone_candidate = {0};
     SpriteSheet building_candidates[PAD_CATALOG_MAX_ITEMS] = {{0}};
     SpriteSheet floater_body_candidates[4] = {{0}};
     SpriteSheet floater_leg_candidates[4] = {{0}};
@@ -413,6 +609,8 @@ static int load_island_surface(int island_id, int map_island_index,
         !load_sprite_sheet(&archive, "data\\temphol0.shp", palette, &temp_hole_candidate,
                            error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\scarrow0.shp", palette, &build_cycle_candidate,
+                           error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\bildtone.shp", palette, &bildtone_candidate,
                            error, error_capacity) ||
         !load_sprite_sheet(&archive, feature_name, palette, &feature_candidate,
                            error, error_capacity)) {
@@ -577,6 +775,7 @@ static int load_island_surface(int island_id, int map_island_index,
     free_sprite_sheet(&g_bridge_trigger_art);
     free_sprite_sheet(&g_temp_hole_art);
     free_sprite_sheet(&g_build_cycle_art);
+    free_sprite_sheet(&g_bildtone_art);
     for (hall_index = 0; hall_index < 4; ++hall_index) {
         free_sprite_sheet(&g_initial_floater_bodies[hall_index]);
         g_initial_floater_bodies[hall_index] = floater_body_candidates[hall_index];
@@ -608,6 +807,8 @@ static int load_island_surface(int island_id, int map_island_index,
     memset(&temp_hole_candidate, 0, sizeof(temp_hole_candidate));
     g_build_cycle_art = build_cycle_candidate;
     memset(&build_cycle_candidate, 0, sizeof(build_cycle_candidate));
+    g_bildtone_art = bildtone_candidate;
+    memset(&bildtone_candidate, 0, sizeof(bildtone_candidate));
     g_island_feature_art = feature_candidate;
     memset(&feature_candidate, 0, sizeof(feature_candidate));
     g_island_height_data = height_data;
@@ -632,6 +833,7 @@ done:
     free_sprite_sheet(&bridge_candidate);
     free_sprite_sheet(&temp_hole_candidate);
     free_sprite_sheet(&build_cycle_candidate);
+    free_sprite_sheet(&bildtone_candidate);
     for (item_id = 0; item_id < PAD_CATALOG_MAX_ITEMS; ++item_id) {
         free_sprite_sheet(&building_candidates[item_id]);
     }
@@ -1541,7 +1743,11 @@ static void world_island_position(const WorldIsland *island, int *x, int *y)
 {
     const float scale_x = 0.12999999523162842f;
     const float scale_y = 0.06000000238418579f;
-    float angle = (float)island->angle_degrees * 0.017453277f;
+    /* Keep WORLDPOS immutable and rotate the remake's map scene by 0.25
+       degree per 33 ms animation tick. */
+    float angle = ((float)island->angle_degrees +
+                   (float)(g_menu.animation_ticks % 1440u) * 0.25f) *
+                  0.017453277f;
     float x_delta = (float)(cos((double)angle) * island->range * scale_x);
     float y_delta = (float)(sin((double)angle) * island->range * scale_y);
     float z_delta = (float)island->z * scale_y;
@@ -1549,12 +1755,21 @@ static void world_island_position(const WorldIsland *island, int *x, int *y)
     *y = 240 - (int)(y_delta + z_delta + 0.5f);
 }
 
-static uint32_t world_island_frame_base(size_t island_index)
+static uint8_t world_map_player_mask(void)
 {
-    if (island_index < 4) {
-        return island_index == (size_t)g_menu.selected_tribe ? 30u : 0u;
-    }
-    return 15u;
+    if (g_game_session.config.selected_tribe >= GAME_START_PLAYER_COUNT) return 0;
+    return (uint8_t)(1U << g_game_session.config.selected_tribe);
+}
+
+static uint32_t world_island_frame_index(size_t island_index, int shape_id,
+                                         int hovered)
+{
+    int offset;
+    if (!g_game_session_valid || island_index >= UINT8_MAX || shape_id < 0) return UINT32_MAX;
+    offset = game_session_world_map_frame_offset(
+        &g_game_session, (uint8_t)island_index, world_map_player_mask(),
+        hovered);
+    return offset < 0 ? UINT32_MAX : (uint32_t)offset + (uint32_t)shape_id;
 }
 
 /* FUN_00472013 walks display items back-to-front and checks the opaque SHP
@@ -1578,7 +1793,9 @@ static int world_island_at(int x, int y)
         int bottom;
         --island_index;
         island = &world->islands[island_index];
-        frame_index = world_island_frame_base(island_index) + (uint32_t)island->shape_id;
+        /* Use the non-hover image's bounds so changing to the highlighted
+           frame cannot make the cursor fall out of its own hit target. */
+        frame_index = world_island_frame_index(island_index, island->shape_id, 0);
         if (frame_index >= g_small_islands.frame_count) continue;
         frame = &g_small_islands.frames[frame_index];
         if (frame->hit_right <= frame->hit_left || frame->hit_bottom <= frame->hit_top) continue;
@@ -1627,6 +1844,60 @@ static void draw_bitmap_label(HDC dc, const char *text, int x, int y, COLORREF c
     }
 }
 
+static void draw_wrapped_bitmap_label(HDC dc, const char *text, int x, int y,
+                                      int max_width, int max_lines, COLORREF color)
+{
+    const char *cursor = text;
+    int line_height = (int)g_bitmap_font.height + 2;
+    int line = 0;
+    if (max_width <= 0 || max_lines <= 0) return;
+    while (*cursor != '\0' && line < max_lines) {
+        const char *line_start;
+        const char *scan;
+        const char *last_space = NULL;
+        char buffer[256];
+        size_t length;
+        while (*cursor == ' ' || *cursor == '\t') ++cursor;
+        line_start = cursor;
+        scan = cursor;
+        while (*scan != '\0' && *scan != '\r' && *scan != '\n') {
+            const char *word_end = scan;
+            while (*word_end != '\0' && *word_end != ' ' && *word_end != '\t' &&
+                   *word_end != '\r' && *word_end != '\n') ++word_end;
+            if (word_end == scan) {
+                ++scan;
+                continue;
+            }
+            if (measure_bitmap_text(NULL, line_start, (size_t)(word_end - line_start)) >
+                max_width) {
+                if (last_space != NULL && last_space > line_start) scan = last_space;
+                else scan = word_end;
+                break;
+            }
+            scan = word_end;
+            if (*scan == ' ' || *scan == '\t') {
+                last_space = scan;
+                while (*scan == ' ' || *scan == '\t') ++scan;
+            }
+        }
+        if (scan == line_start) break;
+        length = (size_t)(scan - line_start);
+        while (length > 0 && (line_start[length - 1] == ' ' ||
+                              line_start[length - 1] == '\t')) --length;
+        if (length >= sizeof(buffer)) length = sizeof(buffer) - 1;
+        memcpy(buffer, line_start, length);
+        buffer[length] = '\0';
+        draw_bitmap_label(dc, buffer, x, y + line * line_height, color);
+        ++line;
+        cursor = scan;
+        while (*cursor == ' ' || *cursor == '\t') ++cursor;
+        if (*cursor == '\r' || *cursor == '\n') {
+            if (*cursor == '\r') ++cursor;
+            if (*cursor == '\n') ++cursor;
+        }
+    }
+}
+
 static int open_island_view(HWND window, int map_island_index)
 {
     const WorldDefinition *world;
@@ -1642,6 +1913,11 @@ static int open_island_view(HWND window, int map_island_index)
             return 0;
         }
     }
+    if (!game_session_can_enter_island(&g_game_session,
+                                       (uint8_t)map_island_index,
+                                       (uint8_t)(1U << g_game_session.config.selected_tribe))) {
+        return 0;
+    }
     island_id = world->islands[map_island_index].shape_id;
     if (!load_island_surface(island_id, map_island_index, error, sizeof(error))) {
         MessageBoxA(window, error, "Tone Rebellion remake - island data error",
@@ -1649,7 +1925,17 @@ static int open_island_view(HWND window, int map_island_index)
         return 0;
     }
     g_menu.selected_map_island = map_island_index;
+    g_selected_floater = -1;
     g_menu.screen = SCREEN_ISLAND;
+    {
+        char tune_id[16];
+        if (game_music_enter_realm(&g_game_music, (uint8_t)island_id,
+                                   (uint8_t)g_game_session.config.selected_tribe,
+                                   &g_game_session.random_state,
+                                   tune_id, sizeof(tune_id))) {
+            set_background_tune(tune_id);
+        }
+    }
     update_window_title(window);
     InvalidateRect(window, NULL, FALSE);
     return 1;
@@ -1676,6 +1962,28 @@ static int update_island_location_hover(int x, int y)
     if (location == g_hovered_location) return 0;
     g_hovered_location = location;
     return 1;
+}
+
+static int order_selected_floater_move(int x, int y)
+{
+    uint32_t world_x;
+    if (g_menu.screen != SCREEN_ISLAND || !g_game_session_valid ||
+        g_selected_floater < 0 || g_iw_construct_open ||
+        g_pending_build_item_id >= 0 || y < 0 || y >= 320) {
+        return 0;
+    }
+    world_x = (uint32_t)x + (uint32_t)g_island_scroll_x;
+    if (world_x >= 2560U ||
+        island_location_at(x, y) >= 0 ||
+        game_session_floater_at(&g_game_session,
+            (uint8_t)g_menu.selected_map_island, (uint16_t)world_x, (uint16_t)y) >= 0) {
+        return 0;
+    }
+    /* FUN_00435826 turns an empty-ground order into packed 10-pixel map
+       coordinates via FUN_0041e3eb; the session helper mirrors that encoding. */
+    return game_session_order_floater_move_from_click(
+        &g_game_session, (uint16_t)g_selected_floater,
+        (uint16_t)world_x, (uint16_t)y);
 }
 
 static int open_iw_construct(int location_index)
@@ -1805,18 +2113,32 @@ static void draw_iw_construct(HDC dc)
     for (column = 0; column < IW_CONSTRUCT_ITEMS_PER_PAGE; ++column) {
         size_t item_index = (size_t)g_iw_construct.page *
                             IW_CONSTRUCT_ITEMS_PER_PAGE + column;
-        int column_width = (window->pane.right - window->pane.left) /
-                           IW_CONSTRUCT_ITEMS_PER_PAGE;
-        int center_x = window->pane.left + column_width * (int)column +
-                       column_width / 2;
+        int pane_width = window->pane.right - window->pane.left;
+        int column_width = pane_width / IW_CONSTRUCT_ITEMS_PER_PAGE;
+        /* FUN_0043aee8 starts at pane_width/8 and advances pane_width/4. */
+        int center_x = window->pane.left + pane_width / 8 +
+                       pane_width * (int)column / IW_CONSTRUCT_ITEMS_PER_PAGE;
         if (item_index >= g_iw_construct_item_count) break;
         {
             uint16_t item_id = (uint16_t)(g_iw_construct_items[item_index] +
                 (int32_t)g_game_session.config.selected_tribe * 16);
             if (item_id < PAD_CATALOG_MAX_ITEMS &&
-                g_building_art[item_id].frame_count != 0) {
-                draw_sprite(dc, &g_building_art[item_id], 0,
-                            center_x - 18, window->pane.bottom - 36);
+                g_building_art[item_id].frame_count != 0 &&
+                item_id < g_pad_catalog.item_count) {
+                const PadCatalogItem *item = &g_pad_catalog.items[item_id];
+                (void)draw_building_preview(dc, item_id,
+                    (uint8_t)g_game_session.config.selected_tribe,
+                    center_x, window->pane.top +
+                    (window->pane.bottom - window->pane.top) - 0x23, 0x8000U);
+                if (item->building_tone_cost > 0) {
+                    int cost_frame = item->building_tone_cost - 1;
+                    if (cost_frame > 0x31) cost_frame = 0x31;
+                    if ((uint32_t)cost_frame < g_bildtone_art.frame_count) {
+                        draw_sprite_scaled(dc, &g_bildtone_art, (uint32_t)cost_frame,
+                            center_x, window->pane.top +
+                            (window->pane.bottom - window->pane.top) - 0x0f, 0x8000U);
+                    }
+                }
             }
         }
         if ((int)column == g_iw_construct.hovered_column) {
@@ -1842,17 +2164,34 @@ static void draw_iw_construct(HDC dc)
         &g_pad_catalog, (uint16_t)(g_iw_construct_info.item_id +
         (int32_t)g_game_session.config.selected_tribe * 16));
     if (info_item != NULL) {
-        uint16_t item_id = (uint16_t)(info_item->item_id +
-            (uint16_t)g_game_session.config.selected_tribe * 16U);
+        uint16_t item_id = info_item->item_id;
         if (item_id < PAD_CATALOG_MAX_ITEMS &&
             g_building_art[item_id].frame_count != 0) {
-            draw_sprite(dc, &g_building_art[item_id], 0,
-                        info_window->pane.right - 64, info_window->pane.top + 0x55);
+            (void)draw_building_preview(dc, item_id,
+                (uint8_t)g_game_session.config.selected_tribe,
+                info_window->pane.left +
+                    (info_window->pane.right - info_window->pane.left) - 0x37,
+                info_window->pane.top + 0x55, 0x10000U);
         }
-        draw_bitmap_label(dc, info_item->shape_id,
-                          info_window->pane.left + 0x25,
-                          info_window->pane.top + 0x58,
-                          RGB(232, 236, 244));
+        if (item_id < g_pad_catalog.item_count && info_item->building_tone_cost > 0) {
+            int cost_frame = info_item->building_tone_cost - 1;
+            if (cost_frame > 0x31) cost_frame = 0x31;
+            if ((uint32_t)cost_frame < g_bildtone_art.frame_count) {
+                draw_sprite(dc, &g_bildtone_art, (uint32_t)cost_frame,
+                            info_window->pane.left + 0x2d,
+                            info_window->pane.top + 0x4b);
+            }
+        }
+        if (item_id < PAD_CATALOG_MAX_ITEMS &&
+            g_building_descriptions[item_id][0] != '\0') {
+            int text_width = (info_window->pane.right - info_window->pane.left) - 0x4f;
+            int text_height = info_window->pane.bottom - info_window->pane.top - 0x60;
+            int line_height = (int)g_bitmap_font.height + 2;
+            int max_lines = line_height > 0 ? text_height / line_height : 0;
+            draw_wrapped_bitmap_label(dc, g_building_descriptions[item_id],
+                info_window->pane.left + 10, info_window->pane.top + 0x58,
+                text_width, max_lines, RGB(232, 236, 244));
+        }
     }
 }
 
@@ -1876,8 +2215,8 @@ static int island_pad_group(const IslandLocation *location)
     return island_pad_size_group(location->kind);
 }
 
-static int draw_runtime_item(HDC dc, const GameRuntimeLocation *runtime_location,
-                             int x, int y)
+static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_location,
+                                    int x, int y, uint32_t scale_16_16)
 {
     int32_t raw_id;
     const BuildingRenderItem *item;
@@ -1899,14 +2238,14 @@ static int draw_runtime_item(HDC dc, const GameRuntimeLocation *runtime_location
         frame = building_render_base_frame_for_state(item, runtime_location->base_progress,
                                                      runtime_location->source_flags);
         if (frame < sheet->frame_count) {
-            draw_sprite(dc, sheet, frame, x, y);
+            draw_sprite_scaled(dc, sheet, frame, x, y, scale_16_16);
             drew = 1;
         }
     }
     if (item->chug.present) {
         frame = building_render_chug_frame(item, runtime_location->chug_progress);
         if (frame < sheet->frame_count) {
-            draw_sprite(dc, sheet, frame, x, y);
+            draw_sprite_scaled(dc, sheet, frame, x, y, scale_16_16);
             drew = 1;
             /* Keep rendering later layers: GLYP is drawn after CHUG by
                FUN_0040bf98 and may be the visible top layer. */
@@ -1915,7 +2254,7 @@ static int draw_runtime_item(HDC dc, const GameRuntimeLocation *runtime_location
     if (item->glyph.present) {
         frame = building_render_glyph_frame(item, runtime_location->glyph_progress);
         if (frame < sheet->frame_count) {
-            draw_sprite(dc, sheet, frame, x, y);
+            draw_sprite_scaled(dc, sheet, frame, x, y, scale_16_16);
             drew = 1;
         }
     }
@@ -1927,7 +2266,7 @@ static int draw_runtime_item(HDC dc, const GameRuntimeLocation *runtime_location
     if (item->inci.present) {
         frame = building_render_inci_frame(item, runtime_location->inci_progress);
         if (frame < sheet->frame_count) {
-            draw_sprite(dc, sheet, frame, x, y);
+            draw_sprite_scaled(dc, sheet, frame, x, y, scale_16_16);
             drew = 1;
         }
     }
@@ -1935,7 +2274,7 @@ static int draw_runtime_item(HDC dc, const GameRuntimeLocation *runtime_location
         frame = building_render_cons_frame(item, runtime_location->construction_progress,
                                            runtime_location->source_flags);
         if (frame < sheet->frame_count) {
-            draw_sprite(dc, sheet, frame, x, y);
+            draw_sprite_scaled(dc, sheet, frame, x, y, scale_16_16);
             drew = 1;
         }
     }
@@ -1945,25 +2284,47 @@ static int draw_runtime_item(HDC dc, const GameRuntimeLocation *runtime_location
         frame = building_render_prod_frame(item, runtime_location->production_progress,
                                            runtime_location->source_flags);
         if (frame < sheet->frame_count) {
-            draw_sprite(dc, sheet, frame, prod_position.x, prod_position.y);
+            draw_sprite_scaled(dc, sheet, frame, prod_position.x, prod_position.y,
+                               scale_16_16);
             drew = 1;
         }
     }
     if (item->occu.present && (runtime_location->source_flags & 8U) != 0) {
         frame = (uint32_t)item->occu.first_frame - 1U;
         if (frame < sheet->frame_count) {
-            draw_sprite(dc, sheet, frame, x, y);
+            draw_sprite_scaled(dc, sheet, frame, x, y, scale_16_16);
             drew = 1;
         }
     }
     if (item->barg.present) {
         frame = building_render_barg_frame(item, runtime_location->barg_progress);
         if (frame < sheet->frame_count) {
-            draw_sprite(dc, sheet, frame, x, y);
+            draw_sprite_scaled(dc, sheet, frame, x, y, scale_16_16);
             drew = 1;
         }
     }
     return drew;
+}
+
+static int draw_runtime_item(HDC dc, const GameRuntimeLocation *runtime_location,
+                             int x, int y)
+{
+    return draw_runtime_item_scaled(dc, runtime_location, x, y, 0x10000U);
+}
+
+/* FUN_0040d3e1 builds a temporary default item and calls FUN_0040bf98 with
+   animation disabled and the requested scale. This shows every declared
+   static/idle layer, rather than drawing the asset's frame zero in isolation. */
+static int draw_building_preview(HDC dc, uint16_t item_id, uint8_t player_slot,
+                                 int x, int y, uint32_t scale_16_16)
+{
+    GameRuntimeLocation preview;
+    memset(&preview, 0, sizeof(preview));
+    preview.record_value_10 = item_id;
+    preview.owner_id = player_slot;
+    preview.source_flags = 0x410U;
+    preview.animation_rate = 1;
+    return draw_runtime_item_scaled(dc, &preview, x, y, scale_16_16);
 }
 
 /* FUN_0040b345 draws feature layers at fixed world coordinates from the
@@ -2050,6 +2411,7 @@ static void render_island_view(HDC dc)
     const int image_top = 0;
     const int status_top = 320;
     const IslandLocation *focus = NULL;
+    const GameFloaterStart *selected_floater = NULL;
     int focus_index = g_hovered_location >= 0 ? g_hovered_location : g_selected_location;
     int saved_dc;
     char text[160];
@@ -2059,6 +2421,14 @@ static void render_island_view(HDC dc)
     if (g_game_session_valid && g_menu.selected_map_island >= 0 &&
         g_menu.selected_map_island < g_game_session.island_count) {
         runtime_island = &g_game_session.islands[g_menu.selected_map_island];
+        if (g_selected_floater >= 0 &&
+            g_selected_floater < g_game_session.floater_count) {
+            const GameFloaterStart *candidate =
+                &g_game_session.floaters[g_selected_floater];
+            if (candidate->island_index == g_menu.selected_map_island) {
+                selected_floater = candidate;
+            }
+        }
     }
 
     fill_rect(dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
@@ -2241,12 +2611,22 @@ static void render_island_view(HDC dc)
                               12, status_top + 150, RGB(111, 135, 166));
         }
     } else {
-        draw_bitmap_label(dc, "CLICK A MARKER TO INSPECT THIS LOCATION",
-                          12, status_top + 140, RGB(143, 181, 217));
-        draw_bitmap_label(dc, runtime_island != NULL
-                                  ? "INITIAL GAME STATE IS ACTIVE"
-                                  : "NO GAME SESSION FOR THIS ISLAND",
-                          12, status_top + 150, RGB(111, 135, 166));
+        if (selected_floater != NULL) {
+            (void)snprintf(text, sizeof(text), "FLOATER %02d  PLAYER %u  X=%u Y=%u",
+                           g_selected_floater, (unsigned)selected_floater->type_index,
+                           (unsigned)selected_floater->x,
+                           (unsigned)selected_floater->y);
+            draw_bitmap_label(dc, text, 12, status_top + 140, RGB(244, 216, 131));
+            draw_bitmap_label(dc, "UNIT SELECTED - MOVEMENT ORDER INPUT NOT YET PORTED",
+                              12, status_top + 150, RGB(169, 208, 232));
+        } else {
+            draw_bitmap_label(dc, "CLICK A MARKER OR FLOATER TO SELECT",
+                              12, status_top + 140, RGB(143, 181, 217));
+            draw_bitmap_label(dc, runtime_island != NULL
+                                      ? "INITIAL GAME STATE IS ACTIVE"
+                                      : "NO GAME SESSION FOR THIS ISLAND",
+                              12, status_top + 150, RGB(111, 135, 166));
+        }
     }
     draw_iw_construct(dc);
 }
@@ -2257,8 +2637,6 @@ static void render_island_view(HDC dc)
 static void render_world_map(HDC dc)
 {
     const WorldDefinition *world;
-    const float scale_x = 0.12999999523162842f; /* 0x3e051eb8 */
-    const float scale_y = 0.06000000238418579f; /* 0x3d75c28f */
     size_t island_index;
 
     fill_rect(dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
@@ -2292,16 +2670,16 @@ static void render_world_map(HDC dc)
         }
         for (size_t bridge_index = 0; bridge_index < world->bridge_count; ++bridge_index) {
             const WorldBridge *bridge = &world->bridges[bridge_index];
+            if (!game_session_bridge_is_active(&g_game_session,
+                    (uint8_t)bridge_index, world->bridge_count)) continue;
             const WorldIsland *a = &world->islands[bridge->island_a];
             const WorldIsland *b = &world->islands[bridge->island_b];
-            float angle_a = (float)a->angle_degrees * 0.017453277f;
-            float angle_b = (float)b->angle_degrees * 0.017453277f;
-            int ax = 320 + (int)(cos((double)angle_a) * a->range * scale_x + 0.5f);
-            int ay = 240 - (int)(sin((double)angle_a) * a->range * scale_y +
-                                  a->z * scale_y + 0.5f);
-            int bx = 320 + (int)(cos((double)angle_b) * b->range * scale_x + 0.5f);
-            int by = 240 - (int)(sin((double)angle_b) * b->range * scale_y +
-                                  b->z * scale_y + 0.5f);
+            int ax;
+            int ay;
+            int bx;
+            int by;
+            world_island_position(a, &ax, &ay);
+            world_island_position(b, &bx, &by);
             int dx = bx - ax;
             int dy = by - ay;
             int length = (int)sqrt((double)dx * dx + (double)dy * dy);
@@ -2332,13 +2710,16 @@ static void render_world_map(HDC dc)
         const WorldIsland *island = &world->islands[island_index];
         int x;
         int y;
-        uint32_t frame = world_island_frame_base(island_index) + (uint32_t)island->shape_id;
+        uint32_t frame = world_island_frame_index(
+            island_index, island->shape_id, g_hovered_island == (int)island_index);
         world_island_position(island, &x, &y);
         draw_sprite(dc, &g_small_islands, frame, x, y);
     }
     {
         int island_index = g_hovered_island >= 0 ? g_hovered_island : g_menu.selected_map_island;
-        if (island_index >= 0 && (size_t)island_index < world->island_count) {
+        if (island_index >= 0 && (size_t)island_index < world->island_count &&
+            game_session_can_enter_island(&g_game_session,
+                (uint8_t)island_index, world_map_player_mask())) {
             int name_index = world->islands[island_index].shape_id;
             if (name_index >= 0 && name_index < ISLAND_NAME_COUNT) {
                 /* FUN_004711e2 centers the current island name at y=0x3c. */
@@ -2514,17 +2895,33 @@ static void handle_click(HWND window, int x, int y)
                 InvalidateRect(window, NULL, FALSE);
             }
         } else {
-            int clicked_location = island_location_at(x, y);
-            if (clicked_location >= 0) {
-                if (g_pending_build_item_id >= 0) {
-                    if (place_pending_building(window, clicked_location)) {
-                        g_selected_location = clicked_location;
-                    }
-                } else {
-                    g_selected_location = clicked_location;
-                    (void)open_iw_construct(clicked_location);
-                }
+            int clicked_floater = g_game_session_valid
+                ? game_session_floater_at(&g_game_session,
+                    (uint8_t)g_menu.selected_map_island,
+                    (uint16_t)(x + g_island_scroll_x), (uint16_t)y)
+                : -1;
+            if (clicked_floater >= 0) {
+                g_selected_floater = clicked_floater;
+                g_selected_location = -1;
+                g_hovered_location = -1;
                 InvalidateRect(window, NULL, FALSE);
+            } else {
+                int clicked_location = island_location_at(x, y);
+                g_selected_floater = -1;
+                if (clicked_location >= 0) {
+                    if (g_pending_build_item_id >= 0) {
+                        if (place_pending_building(window, clicked_location)) {
+                            g_selected_location = clicked_location;
+                        }
+                    } else {
+                        g_selected_location = clicked_location;
+                        (void)open_iw_construct(clicked_location);
+                    }
+                    InvalidateRect(window, NULL, FALSE);
+                } else {
+                    g_selected_location = -1;
+                    InvalidateRect(window, NULL, FALSE);
+                }
             }
         }
     } else if (g_menu.screen == SCREEN_LOAD_GAME) {
@@ -2560,12 +2957,19 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
     case WM_ERASEBKGND:
         return 1;
     case WM_TIMER:
+        if (wparam == 2) {
+            keep_background_tune_playing();
+            return 0;
+        }
         if (wparam == 1 && (g_menu.screen == SCREEN_NEW_GAME ||
+                            g_menu.screen == SCREEN_WORLD_MAP ||
                             g_menu.screen == SCREEN_ISLAND)) {
             ++g_menu.animation_ticks;
             if (g_menu.screen == SCREEN_ISLAND && g_game_session_valid) {
                 game_session_tick_item_animations(&g_game_session,
                                                   &g_building_render_catalog);
+                game_session_tick_floater_moves(&g_game_session,
+                                                g_menu.animation_ticks);
             }
             InvalidateRect(window, NULL, FALSE);
         }
@@ -2650,6 +3054,28 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         y = ((GET_Y_LPARAM(lparam) - viewport.top) * LOGICAL_HEIGHT) /
             (viewport.bottom - viewport.top);
         handle_click(window, x, y);
+        return 0;
+    }
+    case WM_RBUTTONDOWN: {
+        RECT client;
+        RECT viewport;
+        int width;
+        int height;
+        int x;
+        int y;
+        GetClientRect(window, &client);
+        width = client.right - client.left;
+        height = client.bottom - client.top;
+        if (!logical_viewport(width, height, &viewport)) return 0;
+        if (GET_X_LPARAM(lparam) < viewport.left || GET_X_LPARAM(lparam) >= viewport.right ||
+            GET_Y_LPARAM(lparam) < viewport.top || GET_Y_LPARAM(lparam) >= viewport.bottom) {
+            return 0;
+        }
+        x = ((GET_X_LPARAM(lparam) - viewport.left) * LOGICAL_WIDTH) /
+            (viewport.right - viewport.left);
+        y = ((GET_Y_LPARAM(lparam) - viewport.top) * LOGICAL_HEIGHT) /
+            (viewport.bottom - viewport.top);
+        if (order_selected_floater_move(x, y)) InvalidateRect(window, NULL, FALSE);
         return 0;
     }
     case WM_MOUSEWHEEL:
@@ -2744,6 +3170,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         update_window_title(window);
         return 0;
     case WM_DESTROY:
+        stop_background_tune();
         PostQuitMessage(0);
         return 0;
     default:
@@ -2854,6 +3281,7 @@ static int load_game_session_for_selected_world(char *error, size_t error_capaci
                                  error, error_capacity)) return 0;
 
     g_game_session = session;
+    game_music_state_init(&g_game_music);
     g_game_session_world_index = g_menu.world_index;
     g_game_session_valid = 1;
     return 1;
@@ -2890,8 +3318,10 @@ static int load_building_render_catalog(char *error, size_t error_capacity)
     CobArchive archive = {0};
     const CobMember *pad_member;
     const CobMember *animation_member;
+    const CobMember *description_member;
     unsigned char *pad_bytes = NULL;
     unsigned char *animation_bytes = NULL;
+    unsigned char *description_bytes = NULL;
     PadCatalog pads;
     BuildingRenderCatalog animations;
     int success = 0;
@@ -2900,23 +3330,40 @@ static int load_building_render_catalog(char *error, size_t error_capacity)
                           error, error_capacity)) return 0;
     pad_member = cob_archive_find(&archive, "pad.txt");
     animation_member = cob_archive_find(&archive, "bldinf.txt");
-    if (pad_member == NULL || animation_member == NULL) {
+    description_member = cob_archive_find(&archive, "bldtxt.txt");
+    if (pad_member == NULL || animation_member == NULL || description_member == NULL) {
         (void)snprintf(error, error_capacity,
-                       "pad.txt or bldinf.txt was not found in TONE00.COB");
+                       "pad.txt, bldinf.txt or bldtxt.txt was not found in TONE00.COB");
         goto done;
     }
     pad_bytes = (unsigned char *)malloc(pad_member->length == 0 ? 1 : pad_member->length);
     animation_bytes = (unsigned char *)malloc(animation_member->length == 0
                                                ? 1 : animation_member->length);
-    if (pad_bytes == NULL || animation_bytes == NULL ||
+    description_bytes = (unsigned char *)malloc(description_member->length == 0
+                                                  ? 1 : description_member->length);
+    if (pad_bytes == NULL || animation_bytes == NULL || description_bytes == NULL ||
         !cob_archive_read_member(&archive, pad_member, pad_bytes, pad_member->length,
                                  error, error_capacity) ||
         !cob_archive_read_member(&archive, animation_member, animation_bytes,
                                  animation_member->length, error, error_capacity) ||
+        !cob_archive_read_member(&archive, description_member, description_bytes,
+                                 description_member->length, error, error_capacity) ||
         !pad_catalog_load(pad_bytes, pad_member->length, &pads, error, error_capacity) ||
         !building_render_catalog_load(animation_bytes, animation_member->length,
                                        &pads, &animations, error, error_capacity)) {
         goto done;
+    }
+    memset(g_building_descriptions, 0, sizeof(g_building_descriptions));
+    {
+        uint16_t item_index;
+        for (item_index = 0; item_index < pads.item_count; ++item_index) {
+            const PadCatalogItem *item = &pads.items[item_index];
+            if (item->text_id[0] != '\0') {
+                (void)extract_help_entry(description_bytes, description_member->length,
+                    item->text_id, g_building_descriptions[item->item_id],
+                    sizeof(g_building_descriptions[item->item_id]));
+            }
+        }
     }
     g_pad_catalog = pads;
     g_building_render_catalog = animations;
@@ -2924,6 +3371,7 @@ static int load_building_render_catalog(char *error, size_t error_capacity)
 done:
     free(pad_bytes);
     free(animation_bytes);
+    free(description_bytes);
     cob_archive_close(&archive);
     return success;
 }
@@ -3077,7 +3525,11 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
         return 1;
     }
     update_window_title(window);
+    /* The original main loop requests `start` without a repeat flag before
+       the title menu settles on `ambi1`. */
+    set_background_tune_once("start");
     (void)SetTimer(window, 1, 33, NULL);
+    (void)SetTimer(window, 2, 1000, NULL);
     ShowWindow(window, show_command);
     UpdateWindow(window);
     while (GetMessageA(&message, NULL, 0, 0) > 0) {
@@ -3100,6 +3552,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_bridge_trigger_art);
     free_sprite_sheet(&g_temp_hole_art);
     free_sprite_sheet(&g_build_cycle_art);
+    free_sprite_sheet(&g_bildtone_art);
     {
         unsigned int hall_index;
         unsigned int item_index;
@@ -3118,6 +3571,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_newgame_captions);
     free_sprite_sheet(&g_tribe_descriptions);
     bitmap_font_free(&g_bitmap_font);
+    stop_background_tune();
     (void)PlaySoundA(NULL, NULL, 0);
     free(g_button_sound);
     free(g_island_height_data);

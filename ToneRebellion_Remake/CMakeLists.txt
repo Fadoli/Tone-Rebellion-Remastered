@@ -18,6 +18,7 @@ add_library(tone_core STATIC
     src/core/world_map.c
     src/core/game_start.c
     src/core/game_session.c
+    src/core/game_music.c
     src/core/floater_motion.c
     src/core/tone_rng.c
 )
@@ -124,6 +125,12 @@ if(BUILD_TESTING)
     target_compile_features(test_floater_motion PRIVATE c_std_11)
     enable_test_assertions(test_floater_motion)
     add_test(NAME floater_motion_unit COMMAND test_floater_motion)
+
+    add_executable(test_game_music tests/test_game_music.c)
+    target_link_libraries(test_game_music PRIVATE tone_core)
+    target_compile_features(test_game_music PRIVATE c_std_11)
+    enable_test_assertions(test_game_music)
+    add_test(NAME game_music_unit COMMAND test_game_music)
 
     add_executable(test_island_corpus tests/test_island_corpus.c)
     target_link_libraries(test_island_corpus PRIVATE tone_core)

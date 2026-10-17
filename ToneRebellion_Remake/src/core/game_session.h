@@ -44,6 +44,8 @@ typedef struct GameRuntimeLocation {
 
 typedef struct GameRuntimeIsland {
     uint16_t location_count;
+    /* FUN_0047117d checks one per-player access dword at island +0x29ac. */
+    uint8_t access_mask;
     GameRuntimeLocation locations[ISLAND_DATA_MAX_LOCATIONS];
 } GameRuntimeIsland;
 
@@ -52,16 +54,25 @@ typedef struct GameFloaterStart {
     uint8_t type_index;
     uint16_t x;
     uint16_t y;
+    uint16_t destination_x;
+    uint16_t destination_y;
+    uint16_t movement_speed;
+    uint16_t stop_radius;
+    uint8_t has_move_order;
 } GameFloaterStart;
 
 typedef struct GameSession {
     GameSessionConfig config;
+    /* Shared LCG state after the world-start draws modeled by this port. */
+    ToneRng random_state;
     uint8_t island_count;
     GameStartSetup player_starts;
     GameStartToneDistribution tone_placements;
     GameFloaterStart floaters[GAME_SESSION_MAX_FLOATERS];
     uint8_t floater_count;
     uint16_t class0_assignments;
+    /* FUN_004718eb reads one active flag per WORLDPOS bridge pair. */
+    uint32_t active_bridge_mask;
     GameRuntimeIsland islands[WORLD_MAP_MAX_ISLANDS];
 } GameSession;
 
@@ -75,9 +86,10 @@ typedef struct GameSession {
  * full setup succeeds.
  *
  * `home_island_index` represents the unresolved runtime value compared with
- * DAT_006136b0 - 1. RNG draws before/inside the unported 0x17..0x19 loop are
- * outside this model, so this is a consistent initial state model rather than
- * a claim of whole-startup random-stream parity.
+ * DAT_006136b0 - 1. `random_state` preserves the LCG after the modeled draws
+ * for subsequent realm-music selection. RNG draws before/inside the unported
+ * 0x17..0x19 loop are outside this model, so this is not whole-startup stream
+ * parity.
  */
 int game_session_initialize(const WorldDefinition *world,
                             const IslandData *islands_by_world_index,
@@ -85,9 +97,52 @@ int game_session_initialize(const WorldDefinition *world,
                             GameSession *out,
                             char *error, size_t error_capacity);
 
+/* Models FUN_0047117d: any player bit in player_mask with island access set
+   permits entry. The UI passes the selected human tribe's bit. */
+int game_session_can_enter_island(const GameSession *session,
+                                  uint8_t island_index,
+                                  uint8_t player_mask);
+
+/* Models FUN_00471e66's SMISLE variant selection: inaccessible islands use
+   frame group +15, accessible islands +0, and a hovered accessible island
+   +30. Returns -1 when the island index is outside the initialized session. */
+int game_session_world_map_frame_offset(const GameSession *session,
+                                        uint8_t island_index,
+                                        uint8_t player_mask,
+                                        int hovered);
+int game_session_bridge_is_active(const GameSession *session,
+                                  uint8_t bridge_index,
+                                  uint8_t bridge_count);
+int game_session_set_bridge_active(GameSession *session,
+                                   uint8_t bridge_index,
+                                   uint8_t bridge_count,
+                                   int active);
+
 /* Advance the per-location animation fields updated by FUN_00450a71. */
 void game_session_tick_item_animations(GameSession *session,
                                        const struct BuildingRenderCatalog *catalog);
+/* Queue a local move target for one floater; speed and stop radius are explicit
+   because the original derives them from its state/stat tables. */
+int game_session_order_floater_move(GameSession *session,
+                                    uint16_t floater_index,
+                                    uint16_t destination_x,
+                                    uint16_t destination_y,
+                                    uint16_t effective_speed,
+                                    uint16_t stop_radius);
+/* Convert a right-click world position using FUN_0041e3eb's 10-pixel grid
+   encoding, then use the initial worker's source-derived movement speed. */
+int game_session_order_floater_move_from_click(GameSession *session,
+                                               uint16_t floater_index,
+                                               uint16_t world_x,
+                                               uint16_t world_y);
+/* Advance queued floater destinations using the FUN_00422d27 step kernel. */
+void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick);
+/* Hit test the visible island's active floaters in session order. The original
+   FUN_00435581 uses Chebyshev distance < 0x14 (20) for floater selection. */
+int game_session_floater_at(const GameSession *session,
+                            uint8_t island_index,
+                            uint16_t x,
+                            uint16_t y);
 /* FUN_00452656 validation and FUN_004528ca runtime initialization. */
 int game_session_place_building(GameSession *session,
                                 const PadCatalog *catalog,

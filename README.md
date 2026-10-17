@@ -16,6 +16,7 @@
 - Archives du jeu, à côté du binaire : `C:\Program Files\Tone\TONE00.COB` (156 212 octets) et `C:\Program Files\Tone\TONE01.COB` (26 927 860 octets).
 - `C:\Program Files\Tone\COB.CFG` référence `tone00.cob` et `tone01.cob`.
 - Les fichiers extraits sont disponibles dans `C:\git\ToneRebellion_Raw\original_content`. Les 483 entrées des archives sont indexées par nom, taille et chemin vers le membre correspondant du corpus local.
+- Une copie décompressée équivalente de l’ISO est également présente dans `C:\toneIso` (notamment `C:\toneIso\THING2` pour les pistes audio). Pour poursuivre l’analyse des ressources livrées, préférer ce corpus local et les COB installés ; ne pas interroger GitHub.
 - Voir [cob_archives.md](cob_archives.md) pour le format observé et les éléments Ghidra, et [archive_index.jsonl](archive_index.jsonl) pour le détail des membres.
 - Pour la suite, utiliser ces chemins locaux. L’utilisateur a demandé d’éviter GitHub ; ne pas chercher ni télécharger le corpus sur GitHub.
 
