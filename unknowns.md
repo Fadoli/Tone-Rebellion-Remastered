@@ -14,7 +14,7 @@
 - Les pseudocodes Ghidra sont des reconstructions non compilables et non équivalentes au source d’origine.
 - La session Ghidra active est temporaire/éphémère. La fermer supprimerait son projet temporaire et son état d’annotation ; conserver la session pendant les travaux.
 - Le consommateur de `shapeinf.txt` n’est pas encore localisé. Le fichier existe dans le corpus local et ses directives `shape`, `frame` et `offset` sont visibles, mais une recherche de chaîne Ghidra n’a pas établi son call-site.
-- Le premier prototype du remake couvre le modèle de données et le chargement des mondes. SDL3 est choisi pour la couche plateforme, mais l’adaptateur n’est pas encore implémenté. Les gestionnaires des commandes d’écran `WORLDSIZE`, `DIFFICULTY` et `TRIBE0..3`, puis leur liaison à l’initialisation de partie, restent à tracer ; suivre `remake_spec.md`.
+- Le remake dispose désormais d’un écran de surface initial : il charge le panorama et la palette `ISLANDnn`, conserve les octets HZT et parse les sites ordonnés de `ISLANDnn.TXT`. Le viewer permet le défilement et la sélection de sites, mais ne reproduit pas encore le remappage HZT, les sprites des sites, les unités, la construction, ni la simulation. L’interface actuelle est Win32/GDI ; le port SDL3 reste à faire lorsque la dépendance est disponible. Les consommateurs des commandes `WORLDSIZE`, `DIFFICULTY` et `TRIBE0..3`, ainsi que leur liaison au démarrage des règles, restent à tracer ; suivre `remake_spec.md`.
 
 ## Premières observations revalidées
 
@@ -32,7 +32,7 @@
 
 ## Inconnues comportementales après la première cartographie
 
-- Les formats du lecteur commun, de `float.cfg`, `names.txt`, des tags d’effets/formes et des tables de `worldpos.txt` sont partiellement établis dans `data_catalog.md`. Les COB et le corpus extrait sont disponibles localement et vérifiés par membre ; la sémantique de nombreux champs reste inconnue.
+- Les formats du lecteur commun, de `float.cfg`, `names.txt`, des tags d’effets/formes, des tables `worldpos.txt` et des enregistrements `ISLANDnn.TXT` sont partiellement établis dans `data_catalog.md`. Les COB et le corpus extrait sont disponibles localement et vérifiés par membre ; la sémantique de nombreux champs reste inconnue.
 - Les chemins `effects.txt`, `fltinf.txt` et `bldinf.txt` sont reliés aux parseurs par les références d’instruction et appels Ghidra de `FUN_0041c46f` : respectivement `FUN_004153b8`, `FUN_00454d1f` et `FUN_00455833`. Cette liaison de flux ne résout pas encore la signification métier des champs numériques.
 - `FUN_0041bdae` reçoit le callback de fenêtre via le stub `0x4020d6`; son pseudocode explicite seulement certains messages Windows. Les autres sont délégués à `DefWindowProcA` dans le pseudocode disponible.
 - La file d’événements interne est limitée à huit enregistrements observés. Ses conventions sont lisibles pour certains messages Win32, mais les destinataires finaux des actions passent souvent par dispatch virtuel/indirect.

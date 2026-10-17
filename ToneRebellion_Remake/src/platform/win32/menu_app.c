@@ -4,6 +4,7 @@
 
 #include "cob_archive.h"
 #include "font_image.h"
+#include "island_data.h"
 #include "shp_image.h"
 #include "world_map.h"
 
@@ -14,8 +15,8 @@
 
 #include <mmsystem.h>
 
-enum { LOGICAL_WIDTH = 640, LOGICAL_HEIGHT = 480 };
-enum { SCREEN_MAIN_MENU, SCREEN_NEW_GAME, SCREEN_WORLD_MAP, SCREEN_LOAD_GAME };
+enum { LOGICAL_WIDTH = 640, LOGICAL_HEIGHT = 480, ISLAND_NAME_COUNT = 15 };
+enum { SCREEN_MAIN_MENU, SCREEN_NEW_GAME, SCREEN_WORLD_MAP, SCREEN_ISLAND, SCREEN_LOAD_GAME };
 enum { HELP_MAIN_NEWGAME, HELP_MAIN_RESUME, HELP_MAIN_LOAD, HELP_MAIN_EXIT,
        HELP_NEW_EXIT, HELP_NEW_WORLD, HELP_NEW_TRIBE0,
        HELP_NEW_TRIBE1, HELP_NEW_TRIBE2, HELP_NEW_TRIBE3, HELP_NEW_DIFFICULTY,
@@ -27,6 +28,10 @@ typedef struct SpriteFrame {
     int height;
     int x_offset;
     int y_offset;
+    int hit_left;
+    int hit_top;
+    int hit_right;
+    int hit_bottom;
 } SpriteFrame;
 
 typedef struct SpriteSheet {
@@ -39,6 +44,7 @@ typedef struct MenuState {
     int world_index;
     int difficulty;
     int selected_tribe;
+    int selected_map_island;
     int setup_accepted;
     int screen;
     unsigned animation_ticks;
@@ -54,8 +60,11 @@ static SpriteSheet g_big_floaters;
 static SpriteSheet g_difficulty_art;
 static SpriteSheet g_map_background;
 static SpriteSheet g_small_islands;
+static SpriteSheet g_island_surface_art;
+static SpriteSheet g_island_names_art;
 static SpriteSheet g_load_save_art;
 static SpriteSheet g_newgame_captions;
+static SpriteSheet g_tribe_descriptions;
 static SpriteSheet g_menu_help;
 static COLORREF g_newgame_palette[256];
 static COLORREF g_map_palette[256];
@@ -64,9 +73,20 @@ static unsigned char *g_button_sound;
 static BitmapFont g_bitmap_font;
 static char g_help_text[HELP_ENTRY_COUNT][1024];
 static char g_newgame_text[8][256];
+static char g_tribe_text[4][2][1024];
+static char g_island_names[ISLAND_NAME_COUNT][32];
+static IslandData g_island_surface_data;
+static unsigned char *g_island_height_data;
+static size_t g_island_height_length;
+static int g_island_surface_id = -1;
+static int g_island_scroll_x;
+static int g_hovered_location = -1;
+static int g_selected_location = -1;
 static int g_resume_available;
+static unsigned char g_load_slot_valid[8];
 static int g_hovered_help = -1;
 static int g_hovered_newgame_text = -1;
+static int g_hovered_island = -1;
 static int g_mouse_inside;
 static int g_mouse_x;
 static int g_mouse_y;
@@ -78,6 +98,7 @@ static void update_window_title(HWND window)
     const char *title = "Tone Rebellion - Title";
     if (g_menu.screen == SCREEN_NEW_GAME) title = "Tone Rebellion - New Game";
     else if (g_menu.screen == SCREEN_WORLD_MAP) title = "Tone Rebellion - World Map (Esc: setup, Left/Right: size)";
+    else if (g_menu.screen == SCREEN_ISLAND) title = "Tone Rebellion - Island (arrows: scroll, Esc: map)";
     else if (g_menu.screen == SCREEN_LOAD_GAME) title = "Tone Rebellion - Load Game (Esc: back)";
     SetWindowTextA(window, title);
 }
@@ -141,10 +162,16 @@ static int load_sprite_sheet(CobArchive *archive, const char *member_name,
         void *bitmap_bits = NULL;
         HBITMAP bitmap;
         size_t p;
+        int hit_left;
+        int hit_top;
+        int hit_right = -1;
+        int hit_bottom = -1;
         if (!shp_decode_frame(&source, frame_index, &decoded, error, error_capacity)) {
             free(bytes);
             return 0;
         }
+        hit_left = (int)decoded.width;
+        hit_top = (int)decoded.height;
         ZeroMemory(&info, sizeof(info));
         info.bmiHeader.biSize = sizeof(info.bmiHeader);
         info.bmiHeader.biWidth = (LONG)decoded.width;
@@ -164,8 +191,14 @@ static int load_sprite_sheet(CobArchive *archive, const char *member_name,
             DWORD *pixel = (DWORD *)bitmap_bits + p;
             COLORREF color = palette[decoded.pixels[p]];
             if (decoded.opaque[p]) {
+                int pixel_x = (int)(p % decoded.width);
+                int pixel_y = (int)(p / decoded.width);
                 *pixel = 0xff000000u | ((DWORD)GetRValue(color) << 16) |
                          ((DWORD)GetGValue(color) << 8) | (DWORD)GetBValue(color);
+                if (pixel_x < hit_left) hit_left = pixel_x;
+                if (pixel_y < hit_top) hit_top = pixel_y;
+                if (pixel_x + 1 > hit_right) hit_right = pixel_x + 1;
+                if (pixel_y + 1 > hit_bottom) hit_bottom = pixel_y + 1;
             } else {
                 *pixel = 0;
             }
@@ -175,6 +208,10 @@ static int load_sprite_sheet(CobArchive *archive, const char *member_name,
         sheet->frames[frame_index].height = (int)decoded.height;
         sheet->frames[frame_index].x_offset = decoded.x_offset;
         sheet->frames[frame_index].y_offset = decoded.y_offset;
+        sheet->frames[frame_index].hit_left = hit_left;
+        sheet->frames[frame_index].hit_top = hit_top;
+        sheet->frames[frame_index].hit_right = hit_right;
+        sheet->frames[frame_index].hit_bottom = hit_bottom;
         shp_frame_free(&decoded);
     }
     free(bytes);
@@ -213,6 +250,105 @@ static void draw_sprite(HDC target, const SpriteSheet *sheet, uint32_t frame_ind
     DeleteDC(source);
 }
 
+static void draw_sprite_region(HDC target, const SpriteSheet *sheet, uint32_t frame_index,
+                               int source_x, int source_y, int width, int height,
+                               int destination_x, int destination_y)
+{
+    HDC source;
+    HGDIOBJ previous;
+    BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+    const SpriteFrame *frame;
+    if (sheet == NULL || frame_index >= sheet->frame_count || width <= 0 || height <= 0) return;
+    frame = &sheet->frames[frame_index];
+    if (frame->bitmap == NULL || source_x < 0 || source_y < 0 ||
+        source_x + width > frame->width || source_y + height > frame->height) return;
+    source = CreateCompatibleDC(target);
+    if (source == NULL) return;
+    previous = SelectObject(source, frame->bitmap);
+    (void)AlphaBlend(target, destination_x, destination_y, width, height,
+                     source, source_x, source_y, width, height, blend);
+    SelectObject(source, previous);
+    DeleteDC(source);
+}
+
+static int load_island_surface(int island_id, char *error, size_t error_capacity)
+{
+    CobArchive archive = {0};
+    SpriteSheet candidate = {0};
+    COLORREF palette[256];
+    IslandData parsed;
+    unsigned char *height_data = NULL;
+    unsigned char *text_data = NULL;
+    const CobMember *height_member;
+    const CobMember *text_member;
+    char shape_name[48];
+    char palette_name[48];
+    char height_name[48];
+    char text_name[48];
+    const char *archive_path = "C:\\Program Files\\Tone\\TONE01.COB";
+    int success = 0;
+
+    if (island_id < 0 || island_id >= ISLAND_NAME_COUNT) {
+        (void)snprintf(error, error_capacity, "island id is out of the supported range");
+        return 0;
+    }
+    (void)snprintf(shape_name, sizeof(shape_name), "data\\island%02d.shp", island_id);
+    (void)snprintf(palette_name, sizeof(palette_name), "data\\island%02d.pal", island_id);
+    (void)snprintf(height_name, sizeof(height_name), "data\\island%02d.hzt", island_id);
+    (void)snprintf(text_name, sizeof(text_name), "data\\island%02d.txt", island_id);
+    if (!cob_archive_open(archive_path, &archive, error, error_capacity)) return 0;
+    if (!load_palette(&archive, palette_name, palette, error, error_capacity) ||
+        !load_sprite_sheet(&archive, shape_name, palette, &candidate, error, error_capacity)) {
+        goto done;
+    }
+    if (candidate.frame_count != 1 || candidate.frames[0].width != 2560 ||
+        candidate.frames[0].height != 320) {
+        (void)snprintf(error, error_capacity,
+                       "%s does not contain the expected 2560x320 island panorama", shape_name);
+        goto done;
+    }
+    height_member = cob_archive_find(&archive, height_name);
+    text_member = cob_archive_find(&archive, text_name);
+    if (height_member == NULL || text_member == NULL) {
+        (void)snprintf(error, error_capacity, "island height or location member is missing");
+        goto done;
+    }
+    if (height_member->length != 0x0e00) {
+        (void)snprintf(error, error_capacity, "%s has an unexpected HZT length", height_name);
+        goto done;
+    }
+    height_data = (unsigned char *)malloc(height_member->length == 0 ? 1 : height_member->length);
+    text_data = (unsigned char *)malloc(text_member->length == 0 ? 1 : text_member->length);
+    if (height_data == NULL || text_data == NULL ||
+        !cob_archive_read_member(&archive, height_member, height_data, height_member->length,
+                                error, error_capacity) ||
+        !cob_archive_read_member(&archive, text_member, text_data, text_member->length,
+                                error, error_capacity) ||
+        !island_data_load(text_data, text_member->length, &parsed, error, error_capacity)) {
+        goto done;
+    }
+
+    free_sprite_sheet(&g_island_surface_art);
+    free(g_island_height_data);
+    g_island_surface_art = candidate;
+    memset(&candidate, 0, sizeof(candidate));
+    g_island_height_data = height_data;
+    g_island_height_length = height_member->length;
+    height_data = NULL;
+    g_island_surface_data = parsed;
+    g_island_surface_id = island_id;
+    g_island_scroll_x = 0;
+    g_selected_location = -1;
+    g_hovered_location = -1;
+    success = 1;
+done:
+    free_sprite_sheet(&candidate);
+    free(height_data);
+    free(text_data);
+    cob_archive_close(&archive);
+    return success;
+}
+
 static int update_hover_help(int x, int y)
 {
     int help = -1;
@@ -237,7 +373,7 @@ static int update_hover_help(int x, int y)
     return 1;
 }
 
-static int newgame_text_index_at(int x, int y)
+static int tribe_icon_at(int x, int y)
 {
     static const POINT centers[4] = {{170, 240}, {320, 90}, {470, 240}, {320, 390}};
     int tribe;
@@ -245,6 +381,20 @@ static int newgame_text_index_at(int x, int y)
         int dx = x - centers[tribe].x;
         int dy = y - centers[tribe].y;
         if (dx * dx + dy * dy < 2500) return tribe;
+    }
+    return -1;
+}
+
+static int newgame_text_index_at(int x, int y)
+{
+    int tribe = tribe_icon_at(x, y);
+    if (tribe >= 0) return tribe;
+    {
+        int dx = x - 320;
+        int dy = y - 240;
+        int distance_squared = dx * dx + dy * dy;
+        if (distance_squared < 100) return 4;
+        if (distance_squared < 200) return 5;
     }
     if (y >= 423 && y <= 465 && x >= 7 && x <= 75) return 6;
     if (y >= 423 && y <= 464 && x >= 76 && x <= 142) return 5;
@@ -280,6 +430,47 @@ static void draw_newgame_text(HDC dc)
     if (g_menu.screen != SCREEN_NEW_GAME || !g_mouse_inside ||
         g_hovered_newgame_text < 0 || g_hovered_newgame_text >= 8) return;
     draw_sprite(dc, &g_newgame_captions, (uint32_t)g_hovered_newgame_text, 160, 430);
+}
+
+static void draw_tribe_descriptions(HDC dc)
+{
+    const int bottom = 410;
+    const int output_width = 128;
+    const int output_height_scale_numerator = 4;
+    const int output_height_scale_denominator = 5;
+    int left_index;
+    int right_index;
+    const SpriteFrame *left;
+    const SpriteFrame *right;
+    if (g_menu.screen != SCREEN_NEW_GAME || g_menu.selected_tribe < 0 ||
+        g_menu.selected_tribe >= 4) return;
+    left_index = g_menu.selected_tribe * 2;
+    right_index = left_index + 1;
+    if ((uint32_t)right_index >= g_tribe_descriptions.frame_count) return;
+    left = &g_tribe_descriptions.frames[left_index];
+    right = &g_tribe_descriptions.frames[right_index];
+    {
+        const SpriteFrame *frames[2] = {left, right};
+        const int x_positions[2] = {8, LOGICAL_WIDTH - 8 - output_width};
+        int side;
+        BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+        for (side = 0; side < 2; ++side) {
+            HDC source = CreateCompatibleDC(dc);
+            HGDIOBJ previous;
+            int output_height = frames[side]->height * output_height_scale_numerator /
+                                output_height_scale_denominator;
+            if (source == NULL || output_height <= 0 || frames[side]->bitmap == NULL) {
+                if (source != NULL) DeleteDC(source);
+                continue;
+            }
+            previous = SelectObject(source, frames[side]->bitmap);
+            (void)AlphaBlend(dc, x_positions[side], bottom - output_height,
+                             output_width, output_height, source, 0, 0,
+                             frames[side]->width, frames[side]->height, blend);
+            SelectObject(source, previous);
+            DeleteDC(source);
+        }
+    }
 }
 
 static void fill_rect(HDC dc, int left, int top, int right, int bottom, COLORREF color)
@@ -445,6 +636,204 @@ done:
     return success;
 }
 
+static int load_tribe_descriptions(char *error, size_t error_capacity)
+{
+    static const char *keys[4][2] = {
+        {"PROTECT0", "PROTECT1"}, {"SEEKER0", "SEEKER1"},
+        {"MYSTIC0", "MYSTIC1"}, {"LIFE0", "LIFE1"}
+    };
+    CobArchive archive = {0};
+    const CobMember *member;
+    unsigned char *bytes = NULL;
+    int tribe;
+    int part;
+    int success = 0;
+    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE00.COB", &archive,
+                          error, error_capacity)) return 0;
+    member = cob_archive_find(&archive, "newgame.txt");
+    if (member == NULL) {
+        (void)snprintf(error, error_capacity, "newgame.txt was not found in TONE00.COB");
+        goto done;
+    }
+    bytes = (unsigned char *)malloc(member->length == 0 ? 1 : member->length);
+    if (bytes == NULL || !cob_archive_read_member(&archive, member, bytes,
+                                                  member->length, error,
+                                                  error_capacity)) goto done;
+    for (tribe = 0; tribe < 4; ++tribe) {
+        for (part = 0; part < 2; ++part) {
+            if (!extract_help_entry(bytes, member->length, keys[tribe][part],
+                                    g_tribe_text[tribe][part],
+                                    sizeof(g_tribe_text[tribe][part]))) {
+                (void)snprintf(error, error_capacity,
+                               "newgame.txt key %s is missing or empty",
+                               keys[tribe][part]);
+                goto done;
+            }
+        }
+    }
+    success = 1;
+done:
+    free(bytes);
+    cob_archive_close(&archive);
+    return success;
+}
+
+static int parse_island_names(const unsigned char *bytes, size_t length)
+{
+    size_t cursor = 0;
+    int in_island_section = 0;
+    int name_count = 0;
+    while (cursor < length) {
+        size_t line_start = cursor;
+        size_t line_end;
+        size_t first;
+        size_t last;
+        while (cursor < length && bytes[cursor] != '\n') ++cursor;
+        line_end = cursor;
+        if (cursor < length) ++cursor;
+        if (line_end > line_start && bytes[line_end - 1] == '\r') --line_end;
+        first = line_start;
+        last = line_end;
+        while (first < last && (bytes[first] == ' ' || bytes[first] == '\t')) ++first;
+        while (last > first && (bytes[last - 1] == ' ' || bytes[last - 1] == '\t')) --last;
+        if (!in_island_section) {
+            static const char section[] = "// Island Names";
+            if (last - first >= sizeof(section) - 1 &&
+                memcmp(bytes + first, section, sizeof(section) - 1) == 0) {
+                in_island_section = 1;
+            }
+            continue;
+        }
+        if (first == last || bytes[first] == ';' ||
+            (last - first >= 2 && bytes[first] == '/' && bytes[first + 1] == '/')) {
+            continue;
+        }
+        if (name_count >= ISLAND_NAME_COUNT || last - first >= sizeof(g_island_names[0])) {
+            return 0;
+        }
+        memcpy(g_island_names[name_count], bytes + first, last - first);
+        g_island_names[name_count][last - first] = '\0';
+        ++name_count;
+        if (name_count == ISLAND_NAME_COUNT) return 1;
+    }
+    return 0;
+}
+
+static int load_island_names(char *error, size_t error_capacity)
+{
+    CobArchive archive = {0};
+    const CobMember *member;
+    unsigned char *bytes = NULL;
+    int success = 0;
+    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE00.COB", &archive,
+                          error, error_capacity)) return 0;
+    member = cob_archive_find(&archive, "names.txt");
+    if (member == NULL) {
+        (void)snprintf(error, error_capacity, "names.txt was not found in TONE00.COB");
+        goto done;
+    }
+    bytes = (unsigned char *)malloc(member->length == 0 ? 1 : member->length);
+    if (bytes == NULL || !cob_archive_read_member(&archive, member, bytes, member->length,
+                                                  error, error_capacity)) goto done;
+    if (!parse_island_names(bytes, member->length)) {
+        (void)snprintf(error, error_capacity,
+                       "names.txt does not contain the expected 15 island names");
+        goto done;
+    }
+    success = 1;
+done:
+    free(bytes);
+    cob_archive_close(&archive);
+    return success;
+}
+
+static int create_tribe_description_sheet(SpriteSheet *sheet,
+                                          char *error, size_t error_capacity)
+{
+    enum { TEXT_WIDTH = 128, MAX_LINES = 32 };
+    COLORREF description_color = g_newgame_palette[0xbf];
+    DWORD ink = 0xff000000u | ((DWORD)GetRValue(description_color) << 16) |
+                ((DWORD)GetGValue(description_color) << 8) |
+                (DWORD)GetBValue(description_color);
+    int entry;
+    sheet->frames = (SpriteFrame *)calloc(8, sizeof(*sheet->frames));
+    if (sheet->frames == NULL) {
+        (void)snprintf(error, error_capacity, "could not allocate tribe descriptions");
+        return 0;
+    }
+    sheet->frame_count = 8;
+    for (entry = 0; entry < 8; ++entry) {
+        const char *text = g_tribe_text[entry / 2][entry % 2];
+        char lines[MAX_LINES][256];
+        size_t cursor = 0;
+        size_t text_length = strlen(text);
+        int line_count = 0;
+        int line_height = (int)g_bitmap_font.height + 2;
+        int height;
+        BITMAPINFO info;
+        void *bitmap_bits = NULL;
+        HBITMAP bitmap;
+        int line;
+        while (cursor < text_length && line_count < MAX_LINES) {
+            size_t start;
+            size_t last_space = SIZE_MAX;
+            size_t i;
+            int width = 0;
+            while (cursor < text_length && text[cursor] == ' ') ++cursor;
+            start = cursor;
+            for (i = start; i < text_length; ++i) {
+                uint32_t glyph_width;
+                const uint8_t *glyph_pixels;
+                uint32_t code = (unsigned char)text[i];
+                if (!bitmap_font_get_glyph(&g_bitmap_font, code, &glyph_width,
+                                           &glyph_pixels)) {
+                    code = '?';
+                    if (!bitmap_font_get_glyph(&g_bitmap_font, code, &glyph_width,
+                                               &glyph_pixels)) break;
+                }
+                if (width + (int)glyph_width > TEXT_WIDTH && i > start) break;
+                width += (int)glyph_width;
+                if (text[i] == ' ') last_space = i;
+            }
+            if (i < text_length && last_space != SIZE_MAX && last_space >= start) i = last_space;
+            if (i == start && i < text_length) ++i;
+            {
+                size_t count = i - start;
+                if (count >= sizeof(lines[line_count])) count = sizeof(lines[line_count]) - 1;
+                memcpy(lines[line_count], text + start, count);
+                lines[line_count][count] = '\0';
+                ++line_count;
+            }
+            cursor = i;
+            while (cursor < text_length && text[cursor] == ' ') ++cursor;
+        }
+        if (line_count == 0) continue;
+        height = line_count * line_height;
+        ZeroMemory(&info, sizeof(info));
+        info.bmiHeader.biSize = sizeof(info.bmiHeader);
+        info.bmiHeader.biWidth = TEXT_WIDTH;
+        info.bmiHeader.biHeight = -height;
+        info.bmiHeader.biPlanes = 1;
+        info.bmiHeader.biBitCount = 32;
+        info.bmiHeader.biCompression = BI_RGB;
+        bitmap = CreateDIBSection(NULL, &info, DIB_RGB_COLORS, &bitmap_bits, NULL, 0);
+        if (bitmap == NULL || bitmap_bits == NULL) {
+            if (bitmap != NULL) DeleteObject(bitmap);
+            (void)snprintf(error, error_capacity, "could not create tribe description bitmap");
+            return 0;
+        }
+        memset(bitmap_bits, 0, (size_t)TEXT_WIDTH * (size_t)height * sizeof(DWORD));
+        for (line = 0; line < line_count; ++line) {
+            draw_bitmap_text_at((DWORD *)bitmap_bits, TEXT_WIDTH, height, lines[line],
+                                0, line * line_height, ink);
+        }
+        sheet->frames[entry].bitmap = bitmap;
+        sheet->frames[entry].width = TEXT_WIDTH;
+        sheet->frames[entry].height = height;
+    }
+    return 1;
+}
+
 static int create_newgame_caption_sheet(SpriteSheet *sheet,
                                         char *error, size_t error_capacity)
 {
@@ -496,6 +885,58 @@ static int create_newgame_caption_sheet(SpriteSheet *sheet,
     return 1;
 }
 
+static int create_island_name_sheet(SpriteSheet *sheet,
+                                    char *error, size_t error_capacity)
+{
+    enum { TEXT_WIDTH = 640 };
+    int entry;
+    sheet->frames = (SpriteFrame *)calloc(ISLAND_NAME_COUNT, sizeof(*sheet->frames));
+    if (sheet->frames == NULL) {
+        (void)snprintf(error, error_capacity, "could not allocate island-name frames");
+        return 0;
+    }
+    sheet->frame_count = ISLAND_NAME_COUNT;
+    for (entry = 0; entry < ISLAND_NAME_COUNT; ++entry) {
+        BITMAPINFO info;
+        void *bitmap_bits = NULL;
+        HBITMAP bitmap;
+        int text_width = 0;
+        int x;
+        const unsigned char *cursor = (const unsigned char *)g_island_names[entry];
+        while (*cursor != 0) {
+            uint32_t glyph_width;
+            const uint8_t *glyph_pixels;
+            uint32_t code = *cursor < g_bitmap_font.glyph_count ? *cursor : (uint32_t)'?';
+            if (bitmap_font_get_glyph(&g_bitmap_font, code, &glyph_width, &glyph_pixels)) {
+                text_width += (int)glyph_width;
+            }
+            ++cursor;
+        }
+        ZeroMemory(&info, sizeof(info));
+        info.bmiHeader.biSize = sizeof(info.bmiHeader);
+        info.bmiHeader.biWidth = TEXT_WIDTH;
+        info.bmiHeader.biHeight = -(LONG)g_bitmap_font.height;
+        info.bmiHeader.biPlanes = 1;
+        info.bmiHeader.biBitCount = 32;
+        info.bmiHeader.biCompression = BI_RGB;
+        bitmap = CreateDIBSection(NULL, &info, DIB_RGB_COLORS, &bitmap_bits, NULL, 0);
+        if (bitmap == NULL || bitmap_bits == NULL) {
+            if (bitmap != NULL) DeleteObject(bitmap);
+            (void)snprintf(error, error_capacity, "could not create island-name bitmap");
+            return 0;
+        }
+        memset(bitmap_bits, 0, (size_t)TEXT_WIDTH * g_bitmap_font.height * sizeof(DWORD));
+        x = (TEXT_WIDTH - text_width) / 2;
+        if (x < 0) x = 0;
+        draw_bitmap_text_at((DWORD *)bitmap_bits, TEXT_WIDTH, (int)g_bitmap_font.height,
+                            g_island_names[entry], x, 0, 0xffe8e8d8u);
+        sheet->frames[entry].bitmap = bitmap;
+        sheet->frames[entry].width = TEXT_WIDTH;
+        sheet->frames[entry].height = (int)g_bitmap_font.height;
+    }
+    return 1;
+}
+
 /* FUN_004489c0 reads a 0x80-byte resume header and enables RESUME only when
    its final dword matches FUN_00457490's 0x378b8 value. */
 static int resume_header_is_valid(void)
@@ -511,6 +952,33 @@ static int resume_header_is_valid(void)
     marker = (uint32_t)header[0x7c] | ((uint32_t)header[0x7d] << 8) |
              ((uint32_t)header[0x7e] << 16) | ((uint32_t)header[0x7f] << 24);
     return marker == 0x000378b8u;
+}
+
+/* FUN_00458371 scans slots 00.sav through 07.sav. It accepts a slot only
+   when the 0x80-byte header has the game's marker and 1.16 version prefix. */
+static int save_header_is_valid(const char *path)
+{
+    unsigned char header[0x80];
+    FILE *file = fopen(path, "rb");
+    size_t count;
+    uint32_t marker;
+    if (file == NULL) return 0;
+    count = fread(header, 1, sizeof(header), file);
+    (void)fclose(file);
+    if (count != sizeof(header) || memcmp(header, "1.16", 4) != 0) return 0;
+    marker = (uint32_t)header[0x7c] | ((uint32_t)header[0x7d] << 8) |
+             ((uint32_t)header[0x7e] << 16) | ((uint32_t)header[0x7f] << 24);
+    return marker == 0x000378b8u;
+}
+
+static void scan_load_slots(void)
+{
+    int slot;
+    for (slot = 0; slot < 8; ++slot) {
+        char path[MAX_PATH];
+        (void)snprintf(path, sizeof(path), "C:\\Program Files\\Tone\\%02d.SAV", slot);
+        g_load_slot_valid[slot] = (unsigned char)save_header_is_valid(path);
+    }
 }
 
 static int create_help_sheet(SpriteSheet *sheet, char *error, size_t error_capacity)
@@ -724,8 +1192,226 @@ static void render_new_game(HDC dc)
                     (uint32_t)(tribe * 20 + (g_menu.animation_ticks / 3u) % 20u),
                     tribe_centers[tribe].x, tribe_centers[tribe].y);
     }
+    draw_tribe_descriptions(dc);
     draw_hover_help(dc);
     draw_newgame_text(dc);
+}
+
+static void world_island_position(const WorldIsland *island, int *x, int *y)
+{
+    const float scale_x = 0.12999999523162842f;
+    const float scale_y = 0.06000000238418579f;
+    float angle = (float)island->angle_degrees * 0.017453277f;
+    float x_delta = (float)(cos((double)angle) * island->range * scale_x);
+    float y_delta = (float)(sin((double)angle) * island->range * scale_y);
+    float z_delta = (float)island->z * scale_y;
+    *x = 320 + (int)(x_delta + 0.5f);
+    *y = 240 - (int)(y_delta + z_delta + 0.5f);
+}
+
+static uint32_t world_island_frame_base(size_t island_index)
+{
+    if (island_index < 4) {
+        return island_index == (size_t)g_menu.selected_tribe ? 30u : 0u;
+    }
+    return 15u;
+}
+
+/* FUN_00472013 walks display items back-to-front and checks the opaque SHP
+   bounds prepared by FUN_00405e11. The remake uses the same opaque bounds. */
+static int world_island_at(int x, int y)
+{
+    const WorldDefinition *world;
+    size_t island_index;
+    if (g_menu.world_index < 0 || g_menu.world_index >= g_menu.world_map.world_count) return -1;
+    world = &g_menu.world_map.worlds[g_menu.world_index];
+    island_index = world->island_count;
+    while (island_index > 0) {
+        const WorldIsland *island;
+        uint32_t frame_index;
+        const SpriteFrame *frame;
+        int island_x;
+        int island_y;
+        int left;
+        int top;
+        int right;
+        int bottom;
+        --island_index;
+        island = &world->islands[island_index];
+        frame_index = world_island_frame_base(island_index) + (uint32_t)island->shape_id;
+        if (frame_index >= g_small_islands.frame_count) continue;
+        frame = &g_small_islands.frames[frame_index];
+        if (frame->hit_right <= frame->hit_left || frame->hit_bottom <= frame->hit_top) continue;
+        world_island_position(island, &island_x, &island_y);
+        left = island_x + frame->x_offset + frame->hit_left;
+        top = island_y + frame->y_offset + frame->hit_top;
+        right = island_x + frame->x_offset + frame->hit_right;
+        bottom = island_y + frame->y_offset + frame->hit_bottom;
+        if (left < x && x < right && top < y && y < bottom) return (int)island_index;
+    }
+    return -1;
+}
+
+static int update_world_map_hover(int x, int y)
+{
+    int island = g_menu.screen == SCREEN_WORLD_MAP ? world_island_at(x, y) : -1;
+    if (island == g_hovered_island) return 0;
+    g_hovered_island = island;
+    return 1;
+}
+
+static void draw_bitmap_label(HDC dc, const char *text, int x, int y, COLORREF color)
+{
+    const unsigned char *cursor = (const unsigned char *)text;
+    while (*cursor != '\0') {
+        uint32_t code = *cursor < g_bitmap_font.glyph_count ? *cursor : (uint32_t)'?';
+        uint32_t glyph_width;
+        const uint8_t *glyph_pixels;
+        if (bitmap_font_get_glyph(&g_bitmap_font, code, &glyph_width, &glyph_pixels)) {
+            uint32_t row;
+            uint32_t col;
+            for (row = 0; row < g_bitmap_font.height; ++row) {
+                for (col = 0; col < glyph_width; ++col) {
+                    if (glyph_pixels[(size_t)row * glyph_width + col] == 1u) {
+                        int px = x + (int)col;
+                        int py = y + (int)row;
+                        if (px >= 0 && px < LOGICAL_WIDTH && py >= 0 && py < LOGICAL_HEIGHT) {
+                            (void)SetPixelV(dc, px, py, color);
+                        }
+                    }
+                }
+            }
+            x += (int)glyph_width;
+        }
+        ++cursor;
+    }
+}
+
+static int open_island_view(HWND window, int map_island_index)
+{
+    const WorldDefinition *world;
+    int island_id;
+    char error[256];
+    if (g_menu.world_index < 0 || g_menu.world_index >= g_menu.world_map.world_count) return 0;
+    world = &g_menu.world_map.worlds[g_menu.world_index];
+    if (map_island_index < 0 || map_island_index >= world->island_count) return 0;
+    island_id = world->islands[map_island_index].shape_id;
+    if (!load_island_surface(island_id, error, sizeof(error))) {
+        MessageBoxA(window, error, "Tone Rebellion remake - island data error",
+                    MB_OK | MB_ICONERROR);
+        return 0;
+    }
+    g_menu.selected_map_island = map_island_index;
+    g_menu.screen = SCREEN_ISLAND;
+    update_window_title(window);
+    InvalidateRect(window, NULL, FALSE);
+    return 1;
+}
+
+static int island_location_at(int x, int y)
+{
+    const int image_top = 80;
+    int map_x = x + g_island_scroll_x;
+    int map_y = y - image_top;
+    int index = (int)g_island_surface_data.location_count - 1;
+    if (x < 0 || x >= LOGICAL_WIDTH || map_y < 0 || map_y >= 320) return -1;
+    for (; index >= 0; --index) {
+        const IslandLocation *location = &g_island_surface_data.locations[index];
+        int dx = map_x - location->x;
+        int dy = map_y - location->y;
+        if (dx * dx + dy * dy <= 100) return index;
+    }
+    return -1;
+}
+
+static int update_island_location_hover(int x, int y)
+{
+    int location = g_menu.screen == SCREEN_ISLAND ? island_location_at(x, y) : -1;
+    if (location == g_hovered_location) return 0;
+    g_hovered_location = location;
+    return 1;
+}
+
+static COLORREF island_location_color(const char *type)
+{
+    if (strcmp(type, "tone") == 0) return RGB(255, 202, 68);
+    if (strcmp(type, "bridge") == 0) return RGB(61, 218, 248);
+    if (strcmp(type, "special") == 0 || strcmp(type, "levhub") == 0) {
+        return RGB(238, 95, 218);
+    }
+    if (strcmp(type, "feature") == 0 || strcmp(type, "feattrig") == 0) {
+        return RGB(131, 237, 116);
+    }
+    return RGB(104, 174, 255);
+}
+
+static void render_island_view(HDC dc)
+{
+    const int image_top = 80;
+    const int image_bottom = image_top + 320;
+    const int status_top = image_bottom;
+    const IslandLocation *focus = NULL;
+    int focus_index = g_hovered_location >= 0 ? g_hovered_location : g_selected_location;
+    char text[160];
+    uint16_t i;
+
+    fill_rect(dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
+    fill_rect(dc, 0, 0, LOGICAL_WIDTH, image_top, RGB(6, 10, 23));
+    fill_rect(dc, 0, status_top, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(6, 10, 23));
+    if (g_island_height_data == NULL || g_island_height_length != 0x0e00) return;
+    draw_sprite_region(dc, &g_island_surface_art, 0, g_island_scroll_x, 0,
+                       LOGICAL_WIDTH, 320, 0, image_top);
+
+    if (focus_index >= 0 && focus_index < g_island_surface_data.location_count) {
+        focus = &g_island_surface_data.locations[focus_index];
+    }
+    for (i = 0; i < g_island_surface_data.location_count; ++i) {
+        const IslandLocation *location = &g_island_surface_data.locations[i];
+        int x = (int)location->x - g_island_scroll_x;
+        int y = image_top + (int)location->y;
+        COLORREF color = island_location_color(location->type);
+        int dx;
+        int dy;
+        if (x < -4 || x >= LOGICAL_WIDTH + 4) continue;
+        for (dy = -2; dy <= 2; ++dy) {
+            for (dx = -2; dx <= 2; ++dx) {
+                if (dx * dx + dy * dy <= 5) (void)SetPixelV(dc, x + dx, y + dy, color);
+            }
+        }
+    }
+    if (focus != NULL) {
+        int x = (int)focus->x - g_island_scroll_x;
+        int y = image_top + (int)focus->y;
+        HPEN pen = CreatePen(PS_SOLID, 1, RGB(255, 255, 255));
+        HGDIOBJ old_pen = SelectObject(dc, pen);
+        HGDIOBJ old_brush = SelectObject(dc, GetStockObject(NULL_BRUSH));
+        Ellipse(dc, x - 8, y - 8, x + 9, y + 9);
+        SelectObject(dc, old_brush);
+        SelectObject(dc, old_pen);
+        DeleteObject(pen);
+    }
+
+    if (g_island_surface_id >= 0 && g_island_surface_id < ISLAND_NAME_COUNT) {
+        (void)snprintf(text, sizeof(text), "%s   ISLAND %02d",
+                       g_island_names[g_island_surface_id], g_island_surface_id);
+    } else {
+        (void)snprintf(text, sizeof(text), "ISLAND %02d", g_island_surface_id);
+    }
+    draw_bitmap_label(dc, text, 12, 12, RGB(230, 238, 255));
+    (void)snprintf(text, sizeof(text), "VIEW X=%04d / 1920     ARROWS: SCROLL     ESC: WORLD MAP",
+                   g_island_scroll_x);
+    draw_bitmap_label(dc, text, 12, 43, RGB(143, 181, 217));
+    if (focus != NULL) {
+        (void)snprintf(text, sizeof(text), "LOCATION %02u  %s  X=%u Y=%u",
+                       (unsigned)focus->id, focus->type,
+                       (unsigned)focus->x, (unsigned)focus->y);
+        draw_bitmap_label(dc, text, 12, status_top + 18, RGB(244, 216, 131));
+    } else {
+        draw_bitmap_label(dc, "CLICK A MARKER TO INSPECT THIS LOCATION",
+                          12, status_top + 18, RGB(143, 181, 217));
+    }
+    draw_bitmap_label(dc, "SITE MARKERS USE THE SHIPPED ISLANDnn.TXT COORDINATES",
+                      12, status_top + 49, RGB(111, 135, 166));
 }
 
 /* The x87 helpers called by FUN_00471536 continue past Ghidra's short
@@ -807,21 +1493,24 @@ static void render_world_map(HDC dc)
     }
     for (island_index = 0; island_index < world->island_count; ++island_index) {
         const WorldIsland *island = &world->islands[island_index];
-        float angle = (float)island->angle_degrees * 0.017453277f;
-        float x_delta = (float)(cos((double)angle) * island->range * scale_x);
-        float y_delta = (float)(sin((double)angle) * island->range * scale_y);
-        float z_delta = (float)island->z * scale_y;
-        int x = 320 + (int)(x_delta + 0.5f);
-        int y = 240 - (int)(y_delta + z_delta + 0.5f);
-        uint32_t frame_base;
-        if (island_index < 4) {
-            frame_base = island_index == (size_t)g_menu.selected_tribe ? 30u : 0u;
-        } else {
-            frame_base = 15u;
-        }
-        uint32_t frame = frame_base + (uint32_t)island->shape_id;
+        int x;
+        int y;
+        uint32_t frame = world_island_frame_base(island_index) + (uint32_t)island->shape_id;
+        world_island_position(island, &x, &y);
         draw_sprite(dc, &g_small_islands, frame, x, y);
     }
+    {
+        int island_index = g_hovered_island >= 0 ? g_hovered_island : g_menu.selected_map_island;
+        if (island_index >= 0 && (size_t)island_index < world->island_count) {
+            int name_index = world->islands[island_index].shape_id;
+            if (name_index >= 0 && name_index < ISLAND_NAME_COUNT) {
+                /* FUN_004711e2 centers the current island name at y=0x3c. */
+                draw_sprite(dc, &g_island_names_art, (uint32_t)name_index, 0, 48);
+            }
+        }
+    }
+    draw_bitmap_label(dc, "CLICK AN ISLAND TO SELECT  ENTER OR CLICK AGAIN TO OPEN",
+                      12, 454, RGB(160, 190, 222));
 }
 
 static void render_load_game(HDC dc)
@@ -857,6 +1546,8 @@ static void paint_window(HWND window)
             render_new_game(back);
         } else if (g_menu.screen == SCREEN_WORLD_MAP) {
             render_world_map(back);
+        } else if (g_menu.screen == SCREEN_ISLAND) {
+            render_island_view(back);
         } else {
             render_load_game(back);
         }
@@ -893,6 +1584,7 @@ static void paint_window(HWND window)
 
 static void handle_click(HWND window, int x, int y)
 {
+    int clicked_tribe = g_menu.screen == SCREEN_NEW_GAME ? tribe_icon_at(x, y) : -1;
     g_mouse_inside = 1;
     g_mouse_x = x;
     g_mouse_y = y;
@@ -917,6 +1609,17 @@ static void handle_click(HWND window, int x, int y)
     } else if (g_menu.screen == SCREEN_NEW_GAME && y >= 423 && y <= 465 && x >= 7 && x <= 75) {
         g_menu.screen = SCREEN_MAIN_MENU;
         g_menu.setup_accepted = 0;
+    } else if (g_menu.screen == SCREEN_NEW_GAME && clicked_tribe >= 0) {
+        g_menu.selected_tribe = clicked_tribe;
+        g_menu.setup_accepted = 0;
+    } else if (g_menu.screen == SCREEN_NEW_GAME &&
+               (x - 320) * (x - 320) + (y - 240) * (y - 240) < 100) {
+        g_menu.difficulty = (g_menu.difficulty + 1) % g_difficulty_count;
+        g_menu.setup_accepted = 0;
+    } else if (g_menu.screen == SCREEN_NEW_GAME &&
+               (x - 320) * (x - 320) + (y - 240) * (y - 240) < 200) {
+        g_menu.world_index = (g_menu.world_index + 1) % g_menu.world_map.world_count;
+        g_menu.setup_accepted = 0;
     } else if (g_menu.screen == SCREEN_NEW_GAME && y >= 423 && y <= 464 && x >= 76 && x <= 142) {
         g_menu.world_index = (g_menu.world_index + 1) % g_menu.world_map.world_count;
         g_menu.setup_accepted = 0;
@@ -937,7 +1640,37 @@ static void handle_click(HWND window, int x, int y)
         g_menu.setup_accepted = 0;
     } else if (g_menu.screen == SCREEN_NEW_GAME && y >= 419 && y <= 464 && x >= 564 && x <= 633) {
         g_menu.setup_accepted = 1;
+        g_menu.selected_map_island = -1;
+        g_hovered_island = -1;
         g_menu.screen = SCREEN_WORLD_MAP;
+    } else if (g_menu.screen == SCREEN_WORLD_MAP) {
+        int clicked_island = world_island_at(x, y);
+        if (clicked_island >= 0) {
+            if (clicked_island == g_menu.selected_map_island) {
+                (void)open_island_view(window, clicked_island);
+            } else {
+                g_menu.selected_map_island = clicked_island;
+            }
+        }
+    } else if (g_menu.screen == SCREEN_ISLAND) {
+        int clicked_location = island_location_at(x, y);
+        if (clicked_location >= 0) g_selected_location = clicked_location;
+    } else if (g_menu.screen == SCREEN_LOAD_GAME) {
+        /* FUN_00458162 maps the two columns and four rows to slots 00..07.
+           An empty slot closes the load/save screen; a valid slot is kept
+           here with an explicit notice until savegame restoration is ported. */
+        if (y >= 35) {
+            int slot = (y - 28) / 112 + (x / 320) * 4;
+            if (slot >= 0 && slot < 8 && g_load_slot_valid[slot]) {
+                MessageBoxA(window,
+                            "Cette sauvegarde est valide, mais son chargement n'est pas encore pris en charge.",
+                            "Tone Rebellion remake", MB_OK | MB_ICONINFORMATION);
+            } else {
+                g_menu.screen = SCREEN_MAIN_MENU;
+            }
+        } else {
+            g_menu.screen = SCREEN_MAIN_MENU;
+        }
     }
     (void)update_hover_help(x, y);
     (void)update_newgame_text(x, y);
@@ -975,11 +1708,15 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         x = GET_X_LPARAM(lparam);
         y = GET_Y_LPARAM(lparam);
         if (x < viewport.left || x >= viewport.right || y < viewport.top || y >= viewport.bottom) {
-            if (g_mouse_inside || g_hovered_help != -1 || g_hovered_newgame_text != -1) {
+            if (g_mouse_inside || g_hovered_help != -1 || g_hovered_newgame_text != -1 ||
+                g_hovered_island != -1 || g_hovered_location != -1) {
                 g_mouse_inside = 0;
-                if (g_hovered_help != -1 || g_hovered_newgame_text != -1) {
+                if (g_hovered_help != -1 || g_hovered_newgame_text != -1 ||
+                    g_hovered_island != -1 || g_hovered_location != -1) {
                     g_hovered_help = -1;
                     g_hovered_newgame_text = -1;
+                    g_hovered_island = -1;
+                    g_hovered_location = -1;
                     InvalidateRect(window, NULL, FALSE);
                 }
             }
@@ -994,14 +1731,21 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         track.hwndTrack = window;
         (void)TrackMouseEvent(&track);
         if (update_hover_help(g_mouse_x, g_mouse_y) |
-            update_newgame_text(g_mouse_x, g_mouse_y)) InvalidateRect(window, NULL, FALSE);
+            update_newgame_text(g_mouse_x, g_mouse_y) |
+            update_world_map_hover(g_mouse_x, g_mouse_y) |
+            update_island_location_hover(g_mouse_x, g_mouse_y)) {
+            InvalidateRect(window, NULL, FALSE);
+        }
         return 0;
     }
     case WM_MOUSELEAVE:
         g_mouse_inside = 0;
-        if (g_hovered_help != -1 || g_hovered_newgame_text != -1) {
+        if (g_hovered_help != -1 || g_hovered_newgame_text != -1 ||
+            g_hovered_island != -1 || g_hovered_location != -1) {
             g_hovered_help = -1;
             g_hovered_newgame_text = -1;
+            g_hovered_island = -1;
+            g_hovered_location = -1;
             InvalidateRect(window, NULL, FALSE);
         }
         return 0;
@@ -1027,12 +1771,27 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         handle_click(window, x, y);
         return 0;
     }
+    case WM_MOUSEWHEEL:
+        if (g_menu.screen == SCREEN_ISLAND) {
+            int direction = GET_WHEEL_DELTA_WPARAM(wparam) > 0 ? -1 : 1;
+            g_island_scroll_x += direction * 128;
+            if (g_island_scroll_x < 0) g_island_scroll_x = 0;
+            if (g_island_scroll_x > 1920) g_island_scroll_x = 1920;
+            g_hovered_location = -1;
+            InvalidateRect(window, NULL, FALSE);
+        }
+        return 0;
     case WM_KEYDOWN:
         if (wparam == VK_ESCAPE) {
             if (g_menu.screen == SCREEN_LOAD_GAME) {
                 g_menu.screen = SCREEN_MAIN_MENU;
                 InvalidateRect(window, NULL, FALSE);
+            } else if (g_menu.screen == SCREEN_ISLAND) {
+                g_menu.screen = SCREEN_WORLD_MAP;
+                g_hovered_location = -1;
+                InvalidateRect(window, NULL, FALSE);
             } else if (g_menu.screen == SCREEN_WORLD_MAP) {
+                g_hovered_island = -1;
                 g_menu.screen = SCREEN_NEW_GAME;
                 g_menu.setup_accepted = 0;
                 InvalidateRect(window, NULL, FALSE);
@@ -1048,9 +1807,17 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 g_menu.screen = SCREEN_NEW_GAME;
             } else if (g_menu.screen == SCREEN_NEW_GAME) {
                 g_menu.setup_accepted = 1;
+                g_menu.selected_map_island = -1;
+                g_hovered_island = -1;
                 g_menu.screen = SCREEN_WORLD_MAP;
             } else if (g_menu.screen == SCREEN_LOAD_GAME) {
                 g_menu.screen = SCREEN_MAIN_MENU;
+            } else if (g_menu.screen == SCREEN_WORLD_MAP) {
+                int selected = g_menu.selected_map_island;
+                if (selected < 0) selected = g_menu.selected_tribe;
+                (void)open_island_view(window, selected);
+            } else if (g_menu.screen == SCREEN_ISLAND) {
+                if (g_selected_location >= 0) g_hovered_location = g_selected_location;
             } else {
                 g_menu.screen = SCREEN_NEW_GAME;
             }
@@ -1066,6 +1833,15 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             const int count = g_menu.world_map.world_count;
             g_menu.world_index = (g_menu.world_index + count +
                 (wparam == VK_RIGHT ? 1 : -1)) % count;
+            g_menu.selected_map_island = -1;
+            g_hovered_island = -1;
+            InvalidateRect(window, NULL, FALSE);
+        } else if (g_menu.screen == SCREEN_ISLAND &&
+                   (wparam == VK_LEFT || wparam == VK_RIGHT)) {
+            g_island_scroll_x += wparam == VK_RIGHT ? 160 : -160;
+            if (g_island_scroll_x < 0) g_island_scroll_x = 0;
+            if (g_island_scroll_x > 1920) g_island_scroll_x = 1920;
+            g_hovered_location = -1;
             InvalidateRect(window, NULL, FALSE);
         } else if (g_menu.screen == SCREEN_NEW_GAME &&
                    (wparam == VK_LEFT || wparam == VK_RIGHT)) {
@@ -1084,7 +1860,9 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             InvalidateRect(window, NULL, FALSE);
         }
         if (g_mouse_inside && (update_hover_help(g_mouse_x, g_mouse_y) |
-                               update_newgame_text(g_mouse_x, g_mouse_y))) {
+                               update_newgame_text(g_mouse_x, g_mouse_y) |
+                               update_world_map_hover(g_mouse_x, g_mouse_y) |
+                               update_island_location_hover(g_mouse_x, g_mouse_y))) {
             InvalidateRect(window, NULL, FALSE);
         }
         update_window_title(window);
@@ -1229,14 +2007,21 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
         !load_menu_help(error, sizeof(error)) ||
         !create_help_sheet(&g_menu_help, error, sizeof(error)) ||
         !load_newgame_captions(error, sizeof(error)) ||
-        !create_newgame_caption_sheet(&g_newgame_captions, error, sizeof(error))) {
+        !create_newgame_caption_sheet(&g_newgame_captions, error, sizeof(error)) ||
+        !load_island_names(error, sizeof(error)) ||
+        !create_island_name_sheet(&g_island_names_art, error, sizeof(error)) ||
+        !load_tribe_descriptions(error, sizeof(error)) ||
+        !create_tribe_description_sheet(&g_tribe_descriptions,
+                                        error, sizeof(error))) {
         MessageBoxA(NULL, error, "Tone Rebellion remake - data error", MB_OK | MB_ICONERROR);
         return 1;
     }
     g_resume_available = resume_header_is_valid();
+    scan_load_slots();
     g_menu.world_index = 0;
     g_menu.difficulty = 0;
     g_menu.selected_tribe = 0;
+    g_menu.selected_map_island = -1;
     {
         LARGE_INTEGER seed;
         QueryPerformanceCounter(&seed);
@@ -1280,11 +2065,15 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_difficulty_art);
     free_sprite_sheet(&g_map_background);
     free_sprite_sheet(&g_small_islands);
+    free_sprite_sheet(&g_island_surface_art);
+    free_sprite_sheet(&g_island_names_art);
     free_sprite_sheet(&g_load_save_art);
     free_sprite_sheet(&g_menu_help);
     free_sprite_sheet(&g_newgame_captions);
+    free_sprite_sheet(&g_tribe_descriptions);
     bitmap_font_free(&g_bitmap_font);
     (void)PlaySoundA(NULL, NULL, 0);
     free(g_button_sound);
+    free(g_island_height_data);
     return (int)message.wParam;
 }
