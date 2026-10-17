@@ -24,9 +24,24 @@ Index de lecture des pseudocodes : adresse dans `FLOAT.EXE`, rôle déduit du co
 | `0x466ce2` `FUN_00466ce2` | Parcourt collections d’objets et temporisateurs au cours d’une mise à jour; plusieurs champs restent sémantiquement inconnus. | [update](functions/0017_batch_0013.md#fun_00466ce2--0x466ce2) |
 | `0x41e569` `FUN_0041e569` | Tick d’un floater, appelé par `FUN_00466ce2` pour chaque entrée active. Le pseudocode contient plusieurs états et transitions; dans les états `0x0e`/`0x0f`, il compare la position aux coordonnées de destination avec la métrique `FUN_004672a6`, puis appelle `FUN_00422d27` pour avancer lorsque la distance dépasse le rayon d’arrêt. | [floater update](functions/0010_batch_0006.md#fun_0041e569--0x41e569) |
 | `0x422d27` `FUN_00422d27` | Calcule un pas vers la destination d’un floater, borne séparément les deltas x/y, réduit la vitesse près de la cible et utilise le bit bas du tick si le pas réduit devient nul. Les choix de destination, vitesse effective et collisions sont calculés/filtrés ailleurs. | [movement step](functions/0010_batch_0006.md#fun_00422d27--0x422d27) |
+| `0x435581` `FUN_00435581` | Hit-test d’île : ajoute le décalage horizontal monde à x, parcourt la liste active de floaters et accepte une distance de Chebyshev strictement inférieure à `0x14` (20); sinon teste les locations avec des largeurs/états variables. | [island hit tests](functions/0012_batch_0008.md#fun_00435581--0x435581) |
+| `0x435826` `FUN_00435826` | Gestionnaire de sélection appelé pour les clics gauche/droit (messages 6/7 dans `FUN_004337d9`). Appelle le hit-test séparément pour les locations et floaters; émet `0x3f` pour un floater, `0x32` pour une location et traite des actions contextuelles selon boutons/état. L’interprétation complète des commandes résultantes et du déplacement reste partielle. | [island click selection](functions/0012_batch_0008.md#fun_00435826--0x435826) |
 | `0x42cc24` `FUN_0042cc24` | Présente l’image par appels de rendu indirects et GDI (`GetDC`, `ReleaseDC`, `BitBlt`); chemins d’erreur de flip/blit visibles. | [presentation](functions/0011_batch_0007.md#fun_0042cc24--0x42cc24) |
 | `0x41bdae` `FUN_0041bdae` | Callback Win32 : fermeture et activation/désactivation; délègue les autres messages à `DefWindowProcA`. | [window procedure](functions/0010_batch_0006.md#fun_0041bdae--0x41bdae) |
 | `0x41cf86` `FUN_0041cf86` | Demande la fermeture : journalise `Posting Quit Message`, appelle `PostQuitMessage`, modifie un état global. | [quit request](functions/0010_batch_0006.md#fun_0041cf86--0x41cf86) |
+
+## Son et musique
+
+| Adresse / fonction Ghidra | Rôle étayé et observations | Pseudocode |
+|---|---|---|
+| `0x459e84` `FUN_00459e84` | Initialise DirectSound et les buffers de musique et d’effets. Charge `data\\format.wav` et `data\\fxformat.wav` comme formats, puis crée un buffer de musique et un buffer par effet. | [DirectSound init](functions/0016_batch_0012.md#fun_00459e84--0x459e84) |
+| `0x45aafd` `FUN_0045aafd` | Enregistre le nom de piste et deux paramètres sur l’objet sonore, puis demande le démarrage via `FUN_0045b8ac` selon son quatrième argument. | [tune request](functions/0016_batch_0012.md#fun_0045aafd--0x45aafd) |
+| `0x4489c0` `FUN_004489c0` | Pour la commande de l’écran titre, demande la piste `ambi1`; cette piste est déclarée dans `sound.txt` comme `ambient1.wav`. | [title and menu](functions/0014_batch_0010.md#fun_004489c0--0x4489c0) |
+| `0x4576c7` `FUN_004576c7` | Après chargement d’une sauvegarde, construit `tribe%d` depuis l’index de tribu et demande cette piste si elle n’est pas déjà active. | [load-game music](functions/0016_batch_0012.md#fun_004576c7--0x4576c7) |
+| `0x470fe7` `FUN_00470fe7` | Lors d’une transition d’île, demande `tribe%d` sur l’île d’origine, `act%d` pour certains actes, ou `levi` dans le cas correspondant; le changement dépend aussi des flags d’événement runtime. | [island music transition](functions/0018_batch_0014.md#fun_00470fe7--0x470fe7) |
+| `0x45b8d1` `FUN_0045b8d1` | Compare le nom demandé à l’index de piste active, sans sensibilité à la casse. | [active-tune check](functions/0016_batch_0012.md#fun_0045b8d1--0x45b8d1) |
+
+Les noms d'effets et de pistes sont observés dans le code et `sound.txt`. Les 16 entrées `tune` correspondent toutes aux WAV de `C:\toneIso\THING2`, y compris l'inversion des noms d'acte (`act1` → `act4.wav`, ..., `act4` → `act1.wav`). Le remake joue `ambi1` dans les menus/cartes, puis la piste de la tribu choisie à l'entrée d'une île; il utilise MCI pour la lecture répétée. Le routage d'environnement est décrit dans l'[inventaire audio](audio_inventory.md), qui donne aussi les 16 associations et les propriétés RIFF/WAVE vérifiées. Les transitions `act`/`levi` ne sont pas encore portées; le remake ne choisit pas arbitrairement ces pistes.
 
 ## Écran « nouvelle partie » et texte cintré
 
@@ -89,7 +104,32 @@ Index fonctionnel sélectionné, et non affirmation que les 2 410 procédures on
 | `0x461831` `FUN_00461831` | Comparateur des records de classe 2 pour le tri dans `FUN_00461859` : renvoie la différence entre le premier `short` (coordonnée X dans ce contexte) des deux records pointés, donc ordre croissant sur X. | [class-2 location comparator](functions/0017_batch_0013.md#fun_00461831--0x461831) |
 | `0x4777a0` `FUN_004777a0` | Utilitaire générique de tri appelé deux fois par `FUN_00461859`, avec des éléments de quatre octets et un comparateur fourni; l'algorithme de tri lui-même n'est pas interprété ici. | [sort helper](functions/0018_batch_0014.md#fun_004777a0--0x4777a0) |
 
+## IHM de construction sur une île
+
+| Adresse / fonction Ghidra | Rôle étayé et observations | Trace |
+|---|---|---|
+| `0x43aee8` `FUN_0043aee8` | Dessine les quatre colonnes de `IWConstruct`. Calcule le premier centre à `pane_width/8`, puis avance de `pane_width/4`; pour chaque item candidat appelle `FUN_0040d3e1` à l'échelle `0x8000` et dessine ensuite l'indicateur `bildtone` choisi depuis le coût de `pad.txt`. | [Index et Evidence de la fonction](index.jsonl) |
+| `0x43b369` `FUN_0043b369` | Dessine le panneau `IWConstructInfo` pour l'item survolé : rendu d'objet à l'échelle normale, frame d'indicateur de coût et texte descriptif associé à l'identifiant `pad.txt` via `bldtxt.txt`. | [Index et Evidence de la fonction](index.jsonl) |
+| `0x40d3e1` `FUN_0040d3e1` | Construit un objet temporaire, l'initialise via `FUN_004500c4`, lui assigne l'item/joueur puis appelle `FUN_0040bf98` en mode aperçu à l'échelle reçue. | [Index et Evidence de la fonction](index.jsonl) |
+| `0x40bf98` `FUN_0040bf98` | Peint l'objet par couches déclarées dans `bldinf.txt` (`BASE`, `CHUG`, `GLYP`, `INCI`, `CONS`, `PROD`, `OCCU`, `BARG`) et des visuels conditionnels spécifiques. Le mode aperçu n'est pas l'animation de jeu active; un unique frame-0 n'est donc pas une reproduction de cette vue. | [Index et Evidence de la fonction](index.jsonl) |
+| `0x45f121` `FUN_0045f121` | Construit la liste ordonnée des items admissibles selon taille de l'emplacement, coût désactivé et seuil de progression; c'est la source du contenu de la grille. | [Index et Evidence de la fonction](index.jsonl) |
+| `0x43acea` `FUN_0043acea` | Le clic d'un item de grille envoie la sélection (`0x34`) puis ferme la fenêtre (`0x33`). Ce chemin ne démontre pas à lui seul que le bâtiment est payé ou construit immédiatement. | [Index et Evidence de la fonction](index.jsonl) |
+| `0x452656` `FUN_00452656`; `0x452859` `FUN_00452859`; `0x4528ca` `FUN_004528ca` | Validation de l'item contre le site puis écriture de l'ID/propriétaire et initialisation du record. Les références entrantes observées de `FUN_00452859` proviennent de l'initialisation/dynamique du monde (`FUN_0046466f`, `FUN_00464b9e`, `FUN_00450a71`, `FUN_004672ef`), pas directement du clic `FUN_0043acea`; il ne faut donc pas assimiler cette fonction au mécanisme complet de construction du joueur. | [Index et Evidence de la fonction](index.jsonl) |
+
+Le remake reproduit maintenant le centrage des quatre aperçus, les couches composites statiques, l'indicateur `BILDTONE` et la description récupérée par `text_id` dans `bldtxt.txt`. **Interprétation / limites :** l'aperçu synthétique démarre ses compteurs à zéro pour approcher l'objet temporaire de `FUN_0040d3e1`. La route originale qui consomme le message `0x34` et transforme cette sélection en commande de construction reste à retrouver. La logique d'achat (solde de Tone, débit, refus et éventuelle transaction différée/réseau) n'est pas encore établie; le placement immédiat actuel du remake est une approximation de gameplay, pas une reproduction vérifiée.
+
 **Port dans le remake :** `game_start.c` reproduit les starts/pads/floaters et les choix de marqueurs/items; `game_session.c` construit l'état runtime mutable, y compris les IDs de halls par joueur (`0x2a + 16 × joueur`) après `FUN_004641de`, l'appariement classe 2/ponts, et les deux boucles d'affectation classe 0 de `FUN_004637fc`. La vue d'île charge `pad.txt` et `bldinf.txt` depuis `TONE00.COB`, relie les items runtime aux SHP déclarés et applique le calcul de frames de `FUN_0040ab42` aux segments `BASE`/`CHUG`; les pools et pads inoccupés conservent leurs entités et animations dédiées. Le rendu de CHUG est choisi pour l'aperçu animé; la condition de sélection des segments dans la simulation d'origine n'est pas encore entièrement reconstruite. Le rendu des autres unités, des états de combat et les boucles de simulation restent à faire.
+
+## Accès aux îles depuis la carte
+
+| Adresse / fonction Ghidra | Rôle étayé et observations | Pseudocode |
+|---|---|---|
+| `0x46466f` `FUN_0046466f` | Pour chacun des quatre slots joueur, choisit l'île de départ puis met à `1` le dword runtime à `île + 0x29ac + slot*4`. | [initial world setup](functions/0017_batch_0013.md#fun_0046466f--0x46466f) |
+| `0x47117d` `FUN_0047117d` | Parcourt les quatre slots et renvoie vrai si le masque actif `DAT_004bf0f0[DAT_004befec]` contient le bit du slot **et** si le dword runtime correspondant à `île + 0x29ac + slot*4` est non nul. | [island entry gate](functions/0018_batch_0014.md#fun_0047117d--0x47117d) |
+| `0x470fe7` `FUN_00470fe7` | À la sélection d'une île sur la carte, appelle `FUN_0047117d`; seule une réponse vraie permet de poursuivre l'entrée. | [world map island transition](functions/0018_batch_0014.md#fun_00470fe7--0x470fe7) |
+| `0x466b09` `FUN_00466b09` | Le code d'acquisition met à `1` le dword d'accès du slot propriétaire sur l'île; les conditions qui déclenchent cette acquisition restent à tracer. | [island acquisition](functions/0017_batch_0013.md#fun_00466b09--0x466b09) |
+
+**Port remake :** `GameRuntimeIsland.access_mask` représente les quatre dwords observés; `FUN_0046466f` est reproduite en ajoutant le bit de chaque slot à son île de départ. L'ouverture depuis la carte teste le bit de la tribu sélectionnée, pour le modèle mono-joueur actuel. Le masque actif multi-joueur et la mise à jour après conquête restent à porter. Le graphe statique des ponts n'est pas en soi une autorisation d'entrée.
 
 **Validation avec les données :** `tone` est le tag de classe 1 utilisé comme marqueur dans `FUN_0046466f`. Les fichiers `ISLAND00.TXT` à `ISLAND03.TXT` contiennent chacun quatre records `tone`; le test du corpus confirme que les quatre affectations et leurs sites voisins se résolvent avec les règles transcrites. Le post-traitement `FUN_00461859` associe séparément les liens du monde aux emplacements de classe 2; il n'est pas la source des marqueurs `tone`.
 
