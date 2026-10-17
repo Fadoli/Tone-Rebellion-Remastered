@@ -54,6 +54,9 @@ typedef struct GameRuntimeLocation {
     uint16_t x;
     uint16_t y;
     uint32_t source_flags;
+    /* FUN_0041ff2e reads the selected record's word at +0x0a and displays
+       its low nibble plus one as LEVEL. */
+    uint16_t source_level_flags;
     uint16_t base_progress;
     /* Three stock values observed in the hall runtime record at +0x28/+0x2a/
        +0x2c. Ghidra reads them as short fields; exact signedness/caps remain
@@ -84,6 +87,12 @@ typedef struct GameFloaterStart {
     uint8_t island_index;
     uint8_t type_index;
     uint8_t owner_slot;
+    /* Initial class-0 worker fields observed in FUN_00466fe4 and the four
+       *work rows in floater.txt. Current HP is mutable; XP is not exposed by
+       IWLocInfo's worker branch and is deliberately not modeled here. */
+    uint8_t current_hit_points;
+    uint8_t max_hit_points;
+    uint8_t attack_strength;
     uint16_t x;
     uint16_t y;
     uint16_t destination_x;
@@ -190,6 +199,9 @@ int game_session_floater_at(const GameSession *session,
                             uint8_t island_index,
                             uint16_t x,
                             uint16_t y);
+/* FUN_0041ff2e masks the source level word with 0x000f; IWLocInfo displays
+   that value plus one. Returns 0 for a null record. */
+uint8_t game_session_location_display_level(const GameRuntimeLocation *location);
 /* Resource stock fields are attached to each player's initial Hall runtime
    record. Starting values, caps and mutation rules remain to be verified. */
 int game_session_credit_resource(GameSession *session, uint8_t player_slot,

@@ -98,6 +98,16 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
         assert(floater->x == start->marker_x);
         assert(floater->y == start->marker_y);
         assert(floater->movement_speed == 3); /* four initial *work rows in floater.txt */
+        {
+            unsigned int unit;
+            for (unit = 0; unit < start->floater_count; ++unit) {
+                const GameFloaterStart *worker = &session.floaters[
+                    player * GAME_START_FLOATERS_PER_PLAYER + unit];
+                assert(worker->current_hit_points == 3);
+                assert(worker->max_hit_points == 3);
+                assert(worker->attack_strength == 0);
+            }
+        }
         assert(session.economy[player].hall_island_index == start->island_index);
         assert(session.economy[player].hall_location_index ==
                start->nearest_site_location_index);
@@ -564,6 +574,17 @@ static void test_floater_selection_uses_original_hit_radius_and_island(void)
     assert(game_session_floater_at(NULL, 0, 100, 100) == -1);
 }
 
+static void test_location_panel_level_uses_original_low_nibble_plus_one(void)
+{
+    GameRuntimeLocation location;
+
+    memset(&location, 0, sizeof(location));
+    assert(game_session_location_display_level(&location) == 1);
+    location.source_level_flags = 0xabceU;
+    assert(game_session_location_display_level(&location) == 15);
+    assert(game_session_location_display_level(NULL) == 0);
+}
+
 int main(void)
 {
     test_session_initializes_player_starts_and_runtime_items();
@@ -576,6 +597,7 @@ int main(void)
     test_building_placement_matches_source_runtime_initialization();
     test_floater_move_state_advances_only_the_ordered_unit();
     test_floater_selection_uses_original_hit_radius_and_island();
+    test_location_panel_level_uses_original_low_nibble_plus_one();
     (void)puts("game session unit tests passed");
     return 0;
 }

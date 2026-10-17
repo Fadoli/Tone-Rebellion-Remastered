@@ -24,7 +24,8 @@
 
 #include <mmsystem.h>
 
-enum { LOGICAL_WIDTH = 640, LOGICAL_HEIGHT = 480, ISLAND_NAME_COUNT = 15 };
+enum { LOGICAL_WIDTH = 640, LOGICAL_HEIGHT = 480, ISLAND_NAME_COUNT = 15,
+       BUILDING_NAME_COUNT = 64, BUILDING_NAME_CAPACITY = 128 };
 enum { SCREEN_MAIN_MENU, SCREEN_NEW_GAME, SCREEN_WORLD_MAP, SCREEN_ISLAND, SCREEN_LOAD_GAME };
 enum { HELP_MAIN_NEWGAME, HELP_MAIN_RESUME, HELP_MAIN_LOAD, HELP_MAIN_EXIT,
        HELP_NEW_EXIT, HELP_NEW_WORLD, HELP_NEW_TRIBE0,
@@ -103,6 +104,7 @@ static char g_help_text[HELP_ENTRY_COUNT][1024];
 static char g_newgame_text[8][256];
 static char g_tribe_text[4][2][1024];
 static char g_building_descriptions[PAD_CATALOG_MAX_ITEMS][768];
+static char g_building_names[BUILDING_NAME_COUNT][BUILDING_NAME_CAPACITY];
 static char g_island_names[ISLAND_NAME_COUNT][32];
 static IslandData g_island_surface_data;
 static GameSession g_game_session;
@@ -1200,6 +1202,66 @@ static int extract_help_entry(const unsigned char *bytes, size_t length,
     }
     if (output_capacity != 0) output[0] = '\0';
     return 0;
+}
+
+static size_t extract_repeated_help_entries(const unsigned char *bytes, size_t length,
+                                           const char *key,
+                                           char (*outputs)[BUILDING_NAME_CAPACITY],
+                                           size_t output_count)
+{
+    size_t cursor = 0;
+    size_t key_length = strlen(key);
+    size_t found = 0;
+
+    while (cursor < length && found < output_count) {
+        size_t line_start = cursor;
+        size_t line_end;
+        while (cursor < length && bytes[cursor] != '\n') ++cursor;
+        line_end = cursor;
+        if (line_end > line_start && bytes[line_end - 1] == '\r') --line_end;
+        if (line_end - line_start == key_length &&
+            memcmp(bytes + line_start, key, key_length) == 0) {
+            size_t used = 0;
+            if (cursor < length) ++cursor;
+            while (cursor < length) {
+                size_t text_start = cursor;
+                size_t text_end;
+                size_t count;
+                while (cursor < length && bytes[cursor] != '\n') ++cursor;
+                text_end = cursor;
+                if (text_end > text_start && bytes[text_end - 1] == '\r') --text_end;
+                if (text_end - text_start >= 3 &&
+                    memcmp(bytes + text_start, "END", 3) == 0) {
+                    outputs[found][used] = '\0';
+                    ++found;
+                    if (cursor < length) ++cursor;
+                    break;
+                }
+                count = text_end - text_start;
+                while (count > 0 && (bytes[text_start] == ' ' ||
+                                     bytes[text_start] == '\t')) {
+                    ++text_start;
+                    --count;
+                }
+                while (count > 0 && (bytes[text_start + count - 1] == ' ' ||
+                                     bytes[text_start + count - 1] == '\t')) --count;
+                if (count != 0) {
+                    if (used != 0 && used + 1 < BUILDING_NAME_CAPACITY) {
+                        outputs[found][used++] = ' ';
+                    }
+                    if (count >= BUILDING_NAME_CAPACITY - used) {
+                        count = BUILDING_NAME_CAPACITY - used - 1;
+                    }
+                    memcpy(outputs[found] + used, bytes + text_start, count);
+                    used += count;
+                }
+                if (cursor < length) ++cursor;
+            }
+            continue;
+        }
+        if (cursor < length) ++cursor;
+    }
+    return found;
 }
 
 static int load_menu_help(char *error, size_t error_capacity)
@@ -2748,12 +2810,23 @@ static void render_island_view(HDC dc)
             draw_bitmap_label(dc, "WORKER",
                               info->pane.left + 5, info->pane.top + 3,
                               RGB(230, 238, 255));
-            draw_bitmap_label(dc, "HITS 3/3",
-                              info->pane.left + 5, info->pane.top + 23,
-                              RGB(230, 238, 255));
-            draw_bitmap_label(dc, "STRENGTH 0",
-                              info->pane.left + 5, info->pane.top + 33,
-                              RGB(230, 238, 255));
+            {
+                char hit_points_label[24];
+                char strength_label[24];
+                (void)snprintf(hit_points_label, sizeof(hit_points_label),
+                    "HITS %u/%u",
+                    (unsigned int)selected_floater->current_hit_points,
+                    (unsigned int)selected_floater->max_hit_points);
+                (void)snprintf(strength_label, sizeof(strength_label),
+                    "STRENGTH %u",
+                    (unsigned int)selected_floater->attack_strength);
+                draw_bitmap_label(dc, hit_points_label,
+                                  info->pane.left + 5, info->pane.top + 23,
+                                  RGB(230, 238, 255));
+                draw_bitmap_label(dc, strength_label,
+                                  info->pane.left + 5, info->pane.top + 33,
+                                  RGB(230, 238, 255));
+            }
 
             /* FUN_0044338b places the selected unit sprite to the right of
                the text. The island renderer's original base-worker sheets
@@ -2773,6 +2846,51 @@ static void render_island_view(HDC dc)
                 draw_sprite(dc, body_art, 0, sprite_x, sprite_y);
             }
             if (saved_info_dc != 0) RestoreDC(dc, saved_info_dc);
+        }
+    } else if (runtime_island != NULL && g_selected_location >= 0 &&
+               g_selected_location < runtime_island->location_count) {
+        const GameRuntimeLocation *selected_location =
+            &runtime_island->locations[g_selected_location];
+        int32_t raw_item_id = selected_location->record_value_10;
+        if (raw_item_id >= 0x25 && raw_item_id < g_pad_catalog.item_count) {
+            char level_label[24];
+            size_t name_index = (size_t)(raw_item_id - 0x25);
+            const WindowTemplate *info = window_catalog_find(
+                &g_window_catalog, "IWLocInfo", 3);
+            if (name_index < BUILDING_NAME_COUNT &&
+                g_building_names[name_index][0] != '\0' && info != NULL &&
+                g_temp_hole_art.frame_count > 1) {
+                RECT pane = {info->pane.left, info->pane.top,
+                             info->pane.right + 1, info->pane.bottom + 1};
+                int saved_info_dc = SaveDC(dc);
+                (void)IntersectClipRect(dc, pane.left, pane.top,
+                                        pane.right, pane.bottom);
+                draw_sprite(dc, &g_temp_hole_art, 1,
+                            info->pane.left, info->pane.top);
+                /* FUN_0044338b reads BLDNAME through the per-tribe item
+                   ordinal. Runtime item IDs in this port already include
+                   the tribe's 16-item block, so subtracting PIT_BuildToneProducer
+                   (0x25) selects the matching entry in bldname.txt. */
+                draw_bitmap_label(dc, g_building_names[name_index],
+                                  info->pane.left + 5, info->pane.top + 3,
+                                  RGB(230, 238, 255));
+                /* FUN_0044338b displays FUN_0041ff2e()+1 for LEVEL;
+                   FUN_0041ff2e reads the selected runtime word at +0x0a,
+                   masked to its low nibble. */
+                (void)snprintf(level_label, sizeof(level_label), "LEVEL %u",
+                    (unsigned int)game_session_location_display_level(selected_location));
+                draw_bitmap_label(dc, level_label,
+                                  info->pane.left + 5, info->pane.top + 18,
+                                  RGB(230, 238, 255));
+                /* The source paints the selected building in IWLocInfo via
+                   FUN_0042704b. Reuse the same data-driven BASE/CHUG/etc.
+                   layers already used by the island renderer. */
+                (void)draw_runtime_item_scaled(dc, selected_location,
+                    info->pane.right - 42,
+                    info->pane.top + (info->pane.bottom - info->pane.top) / 2,
+                    0x8000U);
+                if (saved_info_dc != 0) RestoreDC(dc, saved_info_dc);
+            }
         }
     }
 }
@@ -3457,9 +3575,11 @@ static int load_building_render_catalog(char *error, size_t error_capacity)
     const CobMember *pad_member;
     const CobMember *animation_member;
     const CobMember *description_member;
+    const CobMember *name_member;
     unsigned char *pad_bytes = NULL;
     unsigned char *animation_bytes = NULL;
     unsigned char *description_bytes = NULL;
+    unsigned char *name_bytes = NULL;
     PadCatalog pads;
     BuildingRenderCatalog animations;
     int success = 0;
@@ -3469,9 +3589,11 @@ static int load_building_render_catalog(char *error, size_t error_capacity)
     pad_member = cob_archive_find(&archive, "pad.txt");
     animation_member = cob_archive_find(&archive, "bldinf.txt");
     description_member = cob_archive_find(&archive, "bldtxt.txt");
-    if (pad_member == NULL || animation_member == NULL || description_member == NULL) {
+    name_member = cob_archive_find(&archive, "bldname.txt");
+    if (pad_member == NULL || animation_member == NULL || description_member == NULL ||
+        name_member == NULL) {
         (void)snprintf(error, error_capacity,
-                       "pad.txt, bldinf.txt or bldtxt.txt was not found in TONE00.COB");
+                       "pad.txt, bldinf.txt, bldtxt.txt or bldname.txt was not found in TONE00.COB");
         goto done;
     }
     pad_bytes = (unsigned char *)malloc(pad_member->length == 0 ? 1 : pad_member->length);
@@ -3479,16 +3601,29 @@ static int load_building_render_catalog(char *error, size_t error_capacity)
                                                ? 1 : animation_member->length);
     description_bytes = (unsigned char *)malloc(description_member->length == 0
                                                   ? 1 : description_member->length);
+    name_bytes = (unsigned char *)malloc(name_member->length == 0
+                                           ? 1 : name_member->length);
     if (pad_bytes == NULL || animation_bytes == NULL || description_bytes == NULL ||
+        name_bytes == NULL ||
         !cob_archive_read_member(&archive, pad_member, pad_bytes, pad_member->length,
                                  error, error_capacity) ||
         !cob_archive_read_member(&archive, animation_member, animation_bytes,
                                  animation_member->length, error, error_capacity) ||
         !cob_archive_read_member(&archive, description_member, description_bytes,
                                  description_member->length, error, error_capacity) ||
+        !cob_archive_read_member(&archive, name_member, name_bytes,
+                                 name_member->length, error, error_capacity) ||
         !pad_catalog_load(pad_bytes, pad_member->length, &pads, error, error_capacity) ||
         !building_render_catalog_load(animation_bytes, animation_member->length,
                                        &pads, &animations, error, error_capacity)) {
+        goto done;
+    }
+    memset(g_building_names, 0, sizeof(g_building_names));
+    if (extract_repeated_help_entries(name_bytes, name_member->length, "BLDNAME",
+                                      g_building_names, BUILDING_NAME_COUNT) !=
+        BUILDING_NAME_COUNT) {
+        (void)snprintf(error, error_capacity,
+                       "bldname.txt did not contain all 64 BLDNAME entries");
         goto done;
     }
     memset(g_building_descriptions, 0, sizeof(g_building_descriptions));
@@ -3507,6 +3642,7 @@ static int load_building_render_catalog(char *error, size_t error_capacity)
     g_building_render_catalog = animations;
     success = 1;
 done:
+    free(name_bytes);
     free(pad_bytes);
     free(animation_bytes);
     free(description_bytes);

@@ -366,6 +366,12 @@ int game_session_initialize(const WorldDefinition *world,
             floater->island_index = start->island_index;
             floater->type_index = start->floater_type_index;
             floater->owner_slot = (uint8_t)island_index;
+            /* FUN_00466fe4 initializes current hits to FUN_00420f28's max.
+               Each tribe's class-0 *work row in floater.txt is 3 HP and
+               0 attack strength. */
+            floater->current_hit_points = 3;
+            floater->max_hit_points = 3;
+            floater->attack_strength = 0;
             floater->x = start->marker_x;
             floater->y = start->marker_y;
             floater->destination_x = start->marker_x;
@@ -759,6 +765,12 @@ int game_session_floater_at(const GameSession *session,
         if ((dx > dy ? dx : dy) < 20) return (int)i;
     }
     return -1;
+}
+
+uint8_t game_session_location_display_level(const GameRuntimeLocation *location)
+{
+    if (location == NULL) return 0;
+    return (uint8_t)((location->source_level_flags & 0x000fU) + 1U);
 }
 
 static GameRuntimeLocation *player_hall(GameSession *session, uint8_t player_slot)
