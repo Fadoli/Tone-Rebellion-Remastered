@@ -12,4 +12,11 @@ uint32_t island_tone_pool_frame(uint32_t animation_ticks, uint16_t world_x);
 /* Only explicit size tags select the three groups in PAD.SHP. */
 int island_pad_size_group(IslandLocationKind kind);
 
+/* PADS uses CHUG 1..9 from bldinf.txt and FUN_0040ab42 adds world_x % 23
+   after dividing the source tick counter by (segment speed + object[+0x0c]).
+   The island prototype supplies zero for that unresolved object modifier. */
+uint32_t island_pad_frame(uint32_t animation_ticks, uint16_t world_x,
+                          unsigned pad_group, unsigned speed_adjustment);
+int island_site_should_draw_pad(int pad_group, int has_drawable_runtime_item);
+
 #endif

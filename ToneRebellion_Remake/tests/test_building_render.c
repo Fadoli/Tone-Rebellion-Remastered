@@ -68,7 +68,8 @@ int main(int argc, char **argv)
         "0 0 0,0,0 0 0 0 None noshape\n"
         "0 0 0,0,0 0 80 0 Levi v-psupp\n"
         "0 0 0,0,0 0 80 0 Levi v-ssupp\n"
-        "0 0 0,0,0 0 50 0 Prot p-hall\n";
+        "0 0 0,0,0 0 50 0 Prot p-hall\n"
+        "0 0 0,0,0 0 50 0 Levi v-chug\n";
     static const unsigned char bldinf_fixture[] =
         "item P-HALL\n"
         "BASE 1 3 50\n"
@@ -77,11 +78,13 @@ int main(int argc, char **argv)
         "CHUG 2 15 2 L\n"
         "item V-SSUPP\n"
         "BASE 1 1 70\n"
+        "CHUG 2 4 3 P\n"
+        "GLYP 22 26\n"
+        "item V-CHUG\n"
         "CHUG 2 4 3 P\n";
     PadCatalog pads;
     BuildingRenderCatalog buildings;
     const BuildingRenderItem *item;
-    BuildingRenderSegment segment;
     char error[128];
 
     assert(pad_catalog_load(pad_fixture, sizeof(pad_fixture) - 1, &pads,
@@ -90,22 +93,28 @@ int main(int argc, char **argv)
                                         &pads, &buildings, error, sizeof(error)));
     item = building_render_find(&buildings, 3);
     assert(item != NULL && item->item_id == 3 && item->base.present && !item->chug.present);
-    /* Inclusive BASE animation and location phase as FUN_0040ab42 applies it. */
+    /* BASE is a static frame; CHUG and GLYP use separate source counters. */
     item = building_render_find(&buildings, 3);
-    assert(building_render_frame(&item->base, 0, 0, 0) == 0);
-    assert(building_render_frame(&item->base, 50, 0, 0) == 1);
-    assert(building_render_frame(&item->base, 0, 2, 0) == 2);
-    assert(building_render_frame(&item->base, 51, 0, 1) == 4);
+    assert(building_render_base_frame(item) == 0);
 
     item = building_render_find(&buildings, 2);
     assert(item != NULL && item->chug.present && item->chug.ping_pong == 1);
-    assert(building_render_frame(&item->chug, 0, 0, 0) == 1);
-    assert(building_render_frame(&item->chug, 3, 0, 0) == 2);
-    assert(building_render_frame(&item->chug, 6, 0, 0) == 3);
-    assert(building_render_frame(&item->chug, 9, 0, 0) == 2);
-
-    memset(&segment, 0, sizeof(segment));
-    assert(building_render_frame(&segment, 1, 1, 0) == 0);
+    assert(building_render_base_frame(item) == 0);
+    assert(building_render_chug_frame(item, 0) == 1);
+    assert(building_render_chug_frame(item, 3) == 2);
+    assert(building_render_chug_frame(item, 6) == 3);
+    assert(building_render_chug_frame(item, 9) == 2);
+    assert(item->glyph.present);
+    assert(building_render_glyph_frame(item, 0) == 21);
+    assert(building_render_glyph_frame(item, 10) == 23);
+    assert(building_render_glyph_frame(item, 20) == 25);
+    assert(building_render_glyph_frame(item, 30) == 23);
+    item = building_render_find(&buildings, 4);
+    assert(item != NULL && !item->base.present && item->chug.present);
+    assert(building_render_base_frame(item) == 1);
+    assert(building_render_chug_frame(item, 0) == 1);
+    item = building_render_find(&buildings, 2);
+    assert(item != NULL && building_render_base_frame(item) == 0);
     if (argc == 3) verify_local_corpus(argv[1], argv[2]);
     else if (argc != 1) return 2;
     (void)puts("building render tests passed");

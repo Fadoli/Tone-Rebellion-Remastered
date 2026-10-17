@@ -1628,14 +1628,14 @@ static int island_pad_group(const IslandLocation *location)
     return island_pad_size_group(location->kind);
 }
 
-static int draw_runtime_building(HDC dc, const GameRuntimeLocation *runtime_location,
-                                 uint16_t world_x, int x, int y)
+static int draw_runtime_item(HDC dc, const GameRuntimeLocation *runtime_location,
+                             int x, int y)
 {
     int32_t raw_id;
     const BuildingRenderItem *item;
-    const BuildingRenderSegment *segment;
     const SpriteSheet *sheet;
     uint32_t frame;
+    int drew = 0;
 
     if (runtime_location == NULL || (raw_id = runtime_location->record_value_10) <= 0 ||
         raw_id >= g_pad_catalog.item_count) return 0;
@@ -1644,13 +1644,33 @@ static int draw_runtime_building(HDC dc, const GameRuntimeLocation *runtime_loca
     sheet = &g_building_art[raw_id];
     if (sheet->frames == NULL || sheet->frame_count == 0) return 0;
 
-    /* FUN_0040ae4d dispatches a building's current animation segment to
-       FUN_0040ab42. The idle preview uses CHUG when declared, otherwise BASE. */
-    segment = item->chug.present ? &item->chug : &item->base;
-    frame = building_render_frame(segment, g_menu.animation_ticks, world_x, 0);
-    if (!segment->present || frame >= sheet->frame_count) return 0;
-    draw_sprite(dc, sheet, frame, x, y);
-    return 1;
+    /* FUN_0040bf98 draws the static/base item layer and then the CHUG layer.
+       The source divides the object's +0x3a progress by CHUG speed. The menu
+       timer is only a provisional source for that per-object counter. */
+    if (item->base.present) {
+        frame = building_render_base_frame(item);
+        if (frame < sheet->frame_count) {
+            draw_sprite(dc, sheet, frame, x, y);
+            drew = 1;
+        }
+    }
+    if (item->chug.present) {
+        frame = building_render_chug_frame(item, g_menu.animation_ticks);
+        if (frame < sheet->frame_count) {
+            draw_sprite(dc, sheet, frame, x, y);
+            drew = 1;
+            /* Keep rendering later layers: GLYP is drawn after CHUG by
+               FUN_0040bf98 and may be the visible top layer. */
+        }
+    }
+    if (item->glyph.present) {
+        frame = building_render_glyph_frame(item, g_menu.animation_ticks);
+        if (frame < sheet->frame_count) {
+            draw_sprite(dc, sheet, frame, x, y);
+            drew = 1;
+        }
+    }
+    return drew;
 }
 
 /* FUN_0040b345 draws feature layers at fixed world coordinates from the
@@ -1816,15 +1836,20 @@ static void render_island_view(HDC dc)
             draw_sprite(dc, &g_tone_field_art, frame, x, y);
             drew_location = 1;
         }
-        if (pad_group >= 0 && g_pad_art.frame_count == 27) {
-            unsigned phase =
-                (g_menu.animation_ticks / (unsigned)(1 + pad_group) + location->x % 23u) % 9u;
-            uint32_t frame = (uint32_t)pad_group * 9u + phase;
-            draw_sprite(dc, &g_pad_art, frame, x, y);
-            drew_location = 1;
-        }
-        if (draw_runtime_building(dc, runtime_location, location->x, x, y)) {
-            drew_location = 1;
+        /* FUN_0040bf98 draws an installed runtime item at this record. Such an
+           item occupies the construction site, so its sprite replaces PAD.SHP.
+           Keep the animated ring only when no drawable item occupies the site. */
+        {
+            int has_runtime_item = draw_runtime_item(dc, runtime_location, x, y);
+            if (has_runtime_item) drew_location = 1;
+            else if (island_site_should_draw_pad(pad_group, has_runtime_item) &&
+                     g_pad_art.frame_count == 27) {
+                uint32_t frame = island_pad_frame(g_menu.animation_ticks,
+                                                  location->x,
+                                                  (unsigned)pad_group, 0);
+                draw_sprite(dc, &g_pad_art, frame, x, y);
+                drew_location = 1;
+            }
         }
         if (drew_location) continue;
         }

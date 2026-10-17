@@ -21,3 +21,20 @@ uint32_t island_tone_pool_frame(uint32_t animation_ticks, uint16_t world_x)
     if (offset > span) offset = cycle - offset;
     return FIRST_FRAME + offset;
 }
+
+uint32_t island_pad_frame(uint32_t animation_ticks, uint16_t world_x,
+                          unsigned pad_group, unsigned speed_adjustment)
+{
+    enum { FIRST_FRAME = 0, FRAMES_PER_GROUP = 9, TICKS_PER_FRAME = 1 };
+    unsigned divisor = TICKS_PER_FRAME + speed_adjustment;
+    uint32_t phase;
+
+    if (divisor == 0) divisor = TICKS_PER_FRAME;
+    phase = animation_ticks / divisor + world_x % 23u;
+    return (uint32_t)pad_group * FRAMES_PER_GROUP + phase % FRAMES_PER_GROUP;
+}
+
+int island_site_should_draw_pad(int pad_group, int has_drawable_runtime_item)
+{
+    return pad_group >= 0 && !has_drawable_runtime_item;
+}

@@ -171,6 +171,11 @@ int building_render_catalog_load(const unsigned char *bytes, size_t length,
                 set_error(error, error_capacity, "invalid CHUG animation segment", line_number);
                 return 0;
             }
+        } else if (current != NULL && ascii_case_equal(tag, "glyp")) {
+            if (!parse_segment(line, 0, &current->glyph)) {
+                set_error(error, error_capacity, "invalid GLYP animation segment", line_number);
+                return 0;
+            }
         }
     }
     *out = parsed;
@@ -185,25 +190,34 @@ const BuildingRenderItem *building_render_find(const BuildingRenderCatalog *cata
     return &catalog->items[item_id];
 }
 
-uint32_t building_render_frame(const BuildingRenderSegment *segment, uint32_t game_ticks,
-                               uint16_t world_x, uint32_t state)
+uint32_t building_render_base_frame(const BuildingRenderItem *item)
 {
+    const BuildingRenderSegment *segment;
+    if (item == NULL) return 0;
+    segment = item->base.present ? &item->base : &item->chug;
+    if (!segment->present || segment->first_frame == 0 ||
+        segment->last_frame < segment->first_frame) return 0;
+    return (uint32_t)segment->first_frame - 1U;
+}
+
+uint32_t building_render_chug_frame(const BuildingRenderItem *item,
+                                    uint32_t animation_ticks)
+{
+    const BuildingRenderSegment *segment;
     uint32_t first;
     uint32_t last;
     uint32_t span;
     uint32_t step;
     uint32_t offset;
-    uint32_t group_offset;
-    uint32_t divisor;
 
-    if (segment == NULL || !segment->present || segment->first_frame == 0 ||
-        segment->last_frame < segment->first_frame) return 0;
+    if (item == NULL || !item->chug.present || item->chug.first_frame == 0 ||
+        item->chug.last_frame < item->chug.first_frame ||
+        item->chug.ticks_per_frame == 0) return 0;
+    segment = &item->chug;
     first = (uint32_t)segment->first_frame - 1U;
     last = (uint32_t)segment->last_frame - 1U;
     span = last - first;
-    divisor = (uint32_t)segment->ticks_per_frame + state;
-    if (divisor == 0) divisor = 1;
-    step = game_ticks / divisor + (uint32_t)world_x % 23U;
+    step = animation_ticks / (uint32_t)segment->ticks_per_frame;
     if (segment->ping_pong != 0 && span != 0) {
         uint32_t cycle = span * 2U;
         offset = step % cycle;
@@ -211,6 +225,21 @@ uint32_t building_render_frame(const BuildingRenderSegment *segment, uint32_t ga
     } else {
         offset = step % (span + 1U);
     }
-    group_offset = state * (span + 1U);
-    return first + group_offset + offset;
+    return first + offset;
+}
+
+uint32_t building_render_glyph_frame(const BuildingRenderItem *item,
+                                     uint32_t animation_ticks)
+{
+    uint32_t first;
+    uint32_t last;
+    uint32_t phase;
+
+    if (item == NULL || !item->glyph.present || item->glyph.first_frame == 0 ||
+        item->glyph.last_frame < item->glyph.first_frame) return 0;
+    first = (uint32_t)item->glyph.first_frame - 1U;
+    last = (uint32_t)item->glyph.last_frame - 1U;
+    phase = animation_ticks % 40U;
+    if (phase > 20U) phase = 40U - phase;
+    return first + ((last - first) * phase) / 20U;
 }
