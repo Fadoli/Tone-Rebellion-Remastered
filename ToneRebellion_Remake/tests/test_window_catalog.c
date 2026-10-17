@@ -165,6 +165,45 @@ static void verify_original_manifest(const char *path)
     assert(window != NULL && window->pane.top == 412 && window->pane.bottom == 444);
     window = window_catalog_find(&catalog, "BC_HallStkM", 3);
     assert(window != NULL && window->pane.top == 440 && window->pane.bottom == 471);
+    assert(window_catalog_hall_panel_mode("BC_GenInfo") ==
+           WINDOW_ISLAND_PANEL_GENERAL);
+    assert(window_catalog_hall_panel_mode("BC_Storage") ==
+           WINDOW_ISLAND_PANEL_INVENTORY);
+    assert(window_catalog_hall_panel_mode("BC_Knowledge") ==
+           WINDOW_ISLAND_PANEL_GLYPHS);
+    assert(window_catalog_hall_panel_mode("BC_Diplomacy") ==
+           WINDOW_ISLAND_PANEL_DIPLOMACY);
+    assert(window_catalog_hall_panel_mode("BC_Trade") ==
+           WINDOW_ISLAND_PANEL_TRADE);
+    assert(window_catalog_hall_panel_mode("BC_Recall") ==
+           WINDOW_ISLAND_PANEL_NONE);
+    {
+        static const char *const hall_controls[] = {
+            "BC_GenInfo", "BC_Storage", "BC_Knowledge",
+            "BC_Diplomacy", "BC_Trade"
+        };
+        static const char *const hall_hit_names[] = {
+            "BC_GenInfo", "BC_Storage", "BC_Knowledge", "BC_Trade", "BC_Diplomacy"
+        };
+        static const int32_t hall_x[] = {470, 510, 539, 574, 604};
+        static const int32_t hall_modes[] = {0, 4, 5, 6, 7};
+        size_t command;
+        for (command = 0; command < sizeof(hall_controls) / sizeof(hall_controls[0]);
+             ++command) {
+            window = window_catalog_find(&catalog, hall_controls[command], 3);
+            assert(window != NULL && window->mouse_focus == 1);
+            assert(window_catalog_hall_panel_mode(window->name) == hall_modes[command]);
+            assert(window_catalog_hit_test_names(&catalog, 3, hall_x[command], 440,
+                hall_hit_names, sizeof(hall_hit_names) / sizeof(hall_hit_names[0])) == window);
+            assert(window_catalog_control_frame(window, 0) == window->shape_frame);
+            assert(window_catalog_control_frame(window, 1) == window->shape_frame + 1);
+        }
+        window = window_catalog_hit_test(&catalog, 3, 510, 440);
+        assert(window != NULL && strcmp(window->name, "BC_DefendFlt") == 0);
+        window = window_catalog_hit_test_names(&catalog, 3, 510, 440,
+            hall_hit_names, sizeof(hall_hit_names) / sizeof(hall_hit_names[0]));
+        assert(window != NULL && strcmp(window->name, "BC_Storage") == 0);
+    }
     {
         static const char *const permanent_buttons[] = {
             "GOTOMAP", "PANIC", "TOGREALM", "TASKLIST"
@@ -176,10 +215,14 @@ static void verify_original_manifest(const char *path)
              ++button) {
             window = window_catalog_find(&catalog, permanent_buttons[button], 3);
             assert(window != NULL && window->mouse_focus == 1);
+            assert(window_catalog_island_button(permanent_buttons[button]) ==
+                   (int)button);
             assert(window_catalog_hit_test(&catalog, 3, button_x[button],
                                            button_y[button]) == window);
         }
     }
+    assert(window_catalog_island_button("not-a-control") ==
+           WINDOW_ISLAND_BUTTON_NONE);
     puts("parsed original windows.txt: 100 descriptors; menu, world, construction and Hall reserve controls found");
 }
 

@@ -328,6 +328,38 @@ const WindowTemplate *window_catalog_hit_test(const WindowCatalog *catalog,
     return NULL;
 }
 
+const WindowTemplate *window_catalog_hit_test_names(
+    const WindowCatalog *catalog, int32_t state, int32_t x, int32_t y,
+    const char *const *names, size_t name_count)
+{
+    size_t i = catalog == NULL ? 0 : catalog->count;
+    if (names == NULL || name_count == 0) return NULL;
+    while (i != 0) {
+        const WindowTemplate *window = &catalog->windows[--i];
+        size_t name_index;
+        int matches_name = 0;
+        int matches_state = 0;
+        if (window->mouse_focus == 0) continue;
+        for (name_index = 0; name_index < name_count; ++name_index) {
+            if (names[name_index] != NULL &&
+                strcmp(window->name, names[name_index]) == 0) {
+                matches_name = 1;
+                break;
+            }
+        }
+        if (!matches_name) continue;
+        for (name_index = 0; name_index < window->state_count; ++name_index) {
+            if (window->states[name_index] == state) {
+                matches_state = 1;
+                break;
+            }
+        }
+        if (matches_state && window->pane.left <= x && x < window->pane.right &&
+            window->pane.top <= y && y < window->pane.bottom) return window;
+    }
+    return NULL;
+}
+
 int32_t window_catalog_hover_frame(int32_t base_frame,
                                    int32_t control_index,
                                    int32_t hovered_control_index)
@@ -345,4 +377,34 @@ int32_t window_catalog_control_frame(const WindowTemplate *control,
         return control->shape_frame;
     if (control->has_hilite_frame) return control->hilite_frame;
     return control->shape_frame + 1;
+}
+
+int window_catalog_hall_panel_mode(const char *control_name)
+{
+    if (control_name == NULL) return WINDOW_ISLAND_PANEL_NONE;
+    if (strcmp(control_name, "BC_GenInfo") == 0)
+        return WINDOW_ISLAND_PANEL_GENERAL;
+    if (strcmp(control_name, "BC_Storage") == 0)
+        return WINDOW_ISLAND_PANEL_INVENTORY;
+    if (strcmp(control_name, "BC_Knowledge") == 0)
+        return WINDOW_ISLAND_PANEL_GLYPHS;
+    if (strcmp(control_name, "BC_Diplomacy") == 0)
+        return WINDOW_ISLAND_PANEL_DIPLOMACY;
+    if (strcmp(control_name, "BC_Trade") == 0)
+        return WINDOW_ISLAND_PANEL_TRADE;
+    return WINDOW_ISLAND_PANEL_NONE;
+}
+
+int window_catalog_island_button(const char *control_name)
+{
+    if (control_name == NULL) return WINDOW_ISLAND_BUTTON_NONE;
+    if (strcmp(control_name, "GOTOMAP") == 0)
+        return WINDOW_ISLAND_BUTTON_MAP;
+    if (strcmp(control_name, "PANIC") == 0)
+        return WINDOW_ISLAND_BUTTON_PANIC;
+    if (strcmp(control_name, "TOGREALM") == 0)
+        return WINDOW_ISLAND_BUTTON_REALM;
+    if (strcmp(control_name, "TASKLIST") == 0)
+        return WINDOW_ISLAND_BUTTON_TASKS;
+    return WINDOW_ISLAND_BUTTON_NONE;
 }
