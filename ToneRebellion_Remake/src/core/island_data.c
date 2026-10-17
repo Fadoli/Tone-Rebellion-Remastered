@@ -189,10 +189,6 @@ int island_data_load(const unsigned char *bytes, size_t length, IslandData *out,
             return 0;
         }
         kind = island_location_kind(type);
-        if (kind == ISLAND_LOCATION_UNKNOWN) {
-            set_error(error, error_capacity, "unknown location type", line_number);
-            return 0;
-        }
         location = &parsed.locations[parsed.location_count];
         location->id = (uint16_t)id;
         location->x = (uint16_t)x;

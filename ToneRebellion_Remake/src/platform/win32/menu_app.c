@@ -339,11 +339,6 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
                            error, error_capacity)) {
         goto done;
     }
-    if (pad_candidate.frame_count != 3) {
-        (void)snprintf(error, error_capacity,
-                       "data\\pad.shp does not contain the three nine-frame size groups");
-        goto done;
-    }
     if (pad_candidate.frame_count != 27) {
         (void)snprintf(error, error_capacity,
                        "data\\pad.shp does not contain the 27 frames used by the pad renderer");
@@ -1410,18 +1405,12 @@ static COLORREF island_location_color(const char *type)
     return RGB(104, 174, 255);
 }
 
-/* FUN_00461b3b maps smpad/mdpad/lgpad to size values 0/1/2. The matching
-   solidpad.shp frames are an asset-based placement inference; the exact
-   original call that associates pad records with these frames remains open.
-   Other location tags remain inspection markers until their state is known. */
-static int island_pad_frame(const char *type)
+/* FUN_00461b3b stores the size in renderer_subtype for class-0 locations.
+   blddraw's FUN_0040ab42 selects one nine-frame group from PAD.SHP. */
+static int island_pad_group(const IslandLocation *location)
 {
-    switch (island_location_kind(type)) {
-    case ISLAND_LOCATION_PAD_SMALL: return 0;
-    case ISLAND_LOCATION_PAD_MEDIUM: return 9;
-    case ISLAND_LOCATION_PAD_LARGE: return 18;
-    default: return -1;
-    }
+    if (location->renderer_class != 0 || location->renderer_subtype > 2) return -1;
+    return (int)location->renderer_subtype;
 }
 
 /* FUN_0040b345 draws feature layers at fixed world coordinates from the
@@ -1529,7 +1518,7 @@ static void render_island_view(HDC dc)
             &g_island_surface_data.locations[g_island_draw_order[i]];
         int x = (int)location->x - g_island_scroll_x;
         int y = image_top + (int)location->y;
-        int pad_frame = island_pad_frame(location->type);
+        int pad_group = island_pad_group(location);
         COLORREF color = island_location_color(location->type);
         int dx;
         int dy;
@@ -1540,8 +1529,11 @@ static void render_island_view(HDC dc)
             continue;
         }
         if (x < -4 || x >= LOGICAL_WIDTH + 4) continue;
-        if (pad_frame >= 0 && g_pad_art.frame_count == 27) {
-            draw_sprite(dc, &g_pad_art, (uint32_t)pad_frame, x, y);
+        if (pad_group >= 0 && g_pad_art.frame_count == 27) {
+            unsigned phase =
+                (g_menu.animation_ticks / (unsigned)(1 + pad_group) + location->x % 23u) % 9u;
+            uint32_t frame = (uint32_t)pad_group * 9u + phase;
+            draw_sprite(dc, &g_pad_art, frame, x, y);
             continue;
         }
         for (dy = -2; dy <= 2; ++dy) {
@@ -1859,7 +1851,8 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
     case WM_ERASEBKGND:
         return 1;
     case WM_TIMER:
-        if (wparam == 1 && g_menu.screen == SCREEN_NEW_GAME) {
+        if (wparam == 1 && (g_menu.screen == SCREEN_NEW_GAME ||
+                            g_menu.screen == SCREEN_ISLAND)) {
             ++g_menu.animation_ticks;
             InvalidateRect(window, NULL, FALSE);
         }

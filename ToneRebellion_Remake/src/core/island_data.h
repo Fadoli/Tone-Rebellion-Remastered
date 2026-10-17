@@ -38,7 +38,8 @@ typedef struct IslandData {
     IslandLocation locations[ISLAND_DATA_MAX_LOCATIONS];
 } IslandData;
 
-/* Parse a shipped ISLANDnn.TXT member without changing record order or IDs. */
+/* Parse an ISLANDnn.TXT member without changing row order or IDs. Unknown tags
+ * are retained in each location's type field and use the renderer fallback. */
 int island_data_load(const unsigned char *bytes, size_t length, IslandData *out,
                      char *error, size_t error_capacity);
 
