@@ -1,5 +1,6 @@
 #include "cob_archive.h"
 #include "island_data.h"
+#include "shp_image.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,6 +18,18 @@ static int is_island_text(const char *name)
            strcmp(base + 8, ".txt") == 0;
 }
 
+static int is_shp_member(const char *name)
+{
+    size_t length = strlen(name);
+    const char *extension;
+    if (length < 4) return 0;
+    extension = name + length - 4;
+    return extension[0] == '.' &&
+           (extension[1] == 's' || extension[1] == 'S') &&
+           (extension[2] == 'h' || extension[2] == 'H') &&
+           (extension[3] == 'p' || extension[3] == 'P');
+}
+
 int main(int argc, char **argv)
 {
     CobArchive archive = {0};
@@ -24,6 +37,8 @@ int main(int argc, char **argv)
     uint32_t i;
     unsigned int files_found = 0;
     unsigned int records_found = 0;
+    unsigned int shapes_found = 0;
+    unsigned int frames_decoded = 0;
 
     if (argc != 2) {
         (void)fprintf(stderr, "usage: test_island_cob <TONE01.COB>\n");
@@ -31,6 +46,48 @@ int main(int argc, char **argv)
     }
     if (!cob_archive_open(argv[1], &archive, error, sizeof(error))) {
         (void)fprintf(stderr, "could not open COB: %s\n", error);
+        return 1;
+    }
+
+    for (i = 0; i < archive.member_count; ++i) {
+        const CobMember *member = cob_archive_member_at(&archive, i);
+        unsigned char *bytes;
+        if (is_shp_member(member->name)) {
+            ShpFile shp;
+            uint32_t frame_index;
+            bytes = (unsigned char *)malloc(member->length == 0 ? 1U : member->length);
+            if (bytes == NULL ||
+                !cob_archive_read_member(&archive, member, bytes, member->length,
+                                         error, sizeof(error)) ||
+                !shp_file_init(&shp, bytes, member->length,
+                               error, sizeof(error))) {
+                (void)fprintf(stderr, "%s: %s\n", member->name,
+                              bytes == NULL ? "out of memory" : error);
+                free(bytes);
+                cob_archive_close(&archive);
+                return 1;
+            }
+            for (frame_index = 0; frame_index < shp.frame_count; ++frame_index) {
+                ShpFrame frame;
+                if (!shp_decode_frame(&shp, frame_index, &frame,
+                                      error, sizeof(error))) {
+                    (void)fprintf(stderr, "%s frame %u: %s\n", member->name,
+                                  (unsigned)frame_index, error);
+                    free(bytes);
+                    cob_archive_close(&archive);
+                    return 1;
+                }
+                shp_frame_free(&frame);
+                ++frames_decoded;
+            }
+            free(bytes);
+            ++shapes_found;
+        }
+    }
+
+    if (shapes_found == 0 || cob_archive_find(&archive, "data\\br-trg01.shp") == NULL) {
+        (void)fprintf(stderr, "expected SHP members including data\\br-trg01.shp\n");
+        cob_archive_close(&archive);
         return 1;
     }
 
@@ -68,5 +125,7 @@ int main(int argc, char **argv)
     }
     (void)printf("parsed %u island COB members (%u location rows)\n",
                  files_found, records_found);
+    (void)printf("decoded %u SHP sheets (%u frames)\n", shapes_found,
+                 frames_decoded);
     return 0;
 }

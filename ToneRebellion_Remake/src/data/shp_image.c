@@ -4,11 +4,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-static uint16_t read_u16(const uint8_t *p)
-{
-    return (uint16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
-}
-
 static uint32_t read_u32(const uint8_t *p)
 {
     return (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
@@ -28,6 +23,7 @@ int shp_file_init(ShpFile *shp, const void *bytes, size_t length,
 {
     const uint8_t *data = (const uint8_t *)bytes;
     uint32_t count;
+    uint32_t frame_index;
     size_t table_bytes;
     if (shp == NULL || data == NULL || length < 8) {
         return fail(error, error_capacity, "SHP header is truncated");
@@ -43,6 +39,23 @@ int shp_file_init(ShpFile *shp, const void *bytes, size_t length,
     if (table_bytes > length - 8) {
         return fail(error, error_capacity, "SHP frame table exceeds the member length");
     }
+    for (frame_index = 0; frame_index < count; ++frame_index) {
+        uint32_t frame_offset = read_u32(data + 8 + (size_t)frame_index * 8);
+        uint32_t previous_offset = frame_index == 0 ? 0 :
+            read_u32(data + 8 + (size_t)(frame_index - 1) * 8);
+        if (frame_offset < 8 + table_bytes || frame_offset > length ||
+            length - frame_offset < 24 ||
+            (frame_index != 0 && frame_offset < previous_offset)) {
+            if (error != NULL && error_capacity != 0) {
+                (void)snprintf(error, error_capacity,
+                               "SHP frame %u offset %lu invalid (previous %lu, length %lu)",
+                               (unsigned)frame_index, (unsigned long)frame_offset,
+                               (unsigned long)previous_offset, (unsigned long)length);
+                error[error_capacity - 1] = '\0';
+            }
+            return 0;
+        }
+    }
     shp->bytes = data;
     shp->length = length;
     shp->frame_count = count;
@@ -54,6 +67,7 @@ int shp_decode_frame(const ShpFile *shp, uint32_t frame_index, ShpFrame *frame,
 {
     const uint8_t *data;
     size_t frame_offset;
+    size_t frame_end;
     size_t cursor;
     size_t pixels_count;
     int32_t left;
@@ -64,6 +78,7 @@ int shp_decode_frame(const ShpFile *shp, uint32_t frame_index, ShpFrame *frame,
     uint32_t y;
     uint8_t pending_control = 0;
     int has_pending_control = 0;
+    uint32_t next_index;
 
     if (shp == NULL || frame == NULL || shp->bytes == NULL ||
         frame_index >= shp->frame_count) {
@@ -72,7 +87,19 @@ int shp_decode_frame(const ShpFile *shp, uint32_t frame_index, ShpFrame *frame,
     memset(frame, 0, sizeof(*frame));
     data = shp->bytes;
     frame_offset = (size_t)read_u32(data + 8 + (size_t)frame_index * 8);
-    if (frame_offset > shp->length || shp->length - frame_offset < 24) {
+    /* Some original sheets alias consecutive frames by storing the same
+       offset more than once. Use the next distinct record as this frame's
+       bound so aliases decode the shared image instead of an empty span. */
+    next_index = frame_index + 1;
+    while (next_index < shp->frame_count &&
+           read_u32(data + 8 + (size_t)next_index * 8) == frame_offset) {
+        ++next_index;
+    }
+    frame_end = next_index < shp->frame_count
+                    ? (size_t)read_u32(data + 8 + (size_t)next_index * 8)
+                    : shp->length;
+    if (frame_offset > shp->length || shp->length - frame_offset < 24 ||
+        frame_end < frame_offset + 24 || frame_end > shp->length) {
         return fail(error, error_capacity, "SHP frame header is outside the member");
     }
     left = (int32_t)read_u32(data + frame_offset + 8);
@@ -97,6 +124,14 @@ int shp_decode_frame(const ShpFile *shp, uint32_t frame_index, ShpFrame *frame,
         return fail(error, error_capacity, "unable to allocate SHP frame pixels");
     }
 
+    /* Empty frames occur in original sheets such as BR-TRG01.SHP. Their
+       offset spans the 24-byte SHP frame header and contains no RLE rows.
+       The leading words are not dimensions (valid source frames can store
+       zero there); the signed bounds at +8/+12/+16/+20 determine geometry. */
+    if (frame_end == frame_offset + 24) {
+        return 1;
+    }
+
     cursor = frame_offset + 24;
     for (y = 0; y < frame->height; ++y) {
         x = 0;
@@ -104,7 +139,7 @@ int shp_decode_frame(const ShpFile *shp, uint32_t frame_index, ShpFrame *frame,
             uint8_t control;
             uint32_t run;
             size_t row = (size_t)y * frame->width;
-            if (cursor >= shp->length) {
+            if (cursor >= frame_end) {
                 shp_frame_free(frame);
                 return fail(error, error_capacity, "SHP RLE stream ended before the frame");
             }
@@ -120,7 +155,7 @@ int shp_decode_frame(const ShpFile *shp, uint32_t frame_index, ShpFrame *frame,
             run = (uint32_t)(control >> 1);
             if (run == 0) {
                 uint8_t skip;
-                if (cursor + 1 >= shp->length) {
+                if (cursor + 1 >= frame_end) {
                     shp_frame_free(frame);
                     return fail(error, error_capacity, "truncated SHP transparent run");
                 }
@@ -136,11 +171,16 @@ int shp_decode_frame(const ShpFile *shp, uint32_t frame_index, ShpFrame *frame,
                 continue;
             }
             if (run > frame->width - x) {
+                char message[128];
+                (void)snprintf(message, sizeof(message),
+                               "SHP color run (%u) exceeds row %u at x=%u (width=%u)",
+                               (unsigned)run, (unsigned)y, (unsigned)x,
+                               (unsigned)frame->width);
                 shp_frame_free(frame);
-                return fail(error, error_capacity, "SHP color run exceeds row width");
+                return fail(error, error_capacity, message);
             }
             if ((control & 1u) != 0) {
-                if (run > shp->length - cursor) {
+                if (run > frame_end - cursor) {
                     shp_frame_free(frame);
                     return fail(error, error_capacity, "truncated SHP literal run");
                 }
@@ -149,7 +189,7 @@ int shp_decode_frame(const ShpFile *shp, uint32_t frame_index, ShpFrame *frame,
                 cursor += run;
             } else {
                 uint8_t color;
-                if (cursor >= shp->length) {
+                if (cursor >= frame_end) {
                     shp_frame_free(frame);
                     return fail(error, error_capacity, "truncated SHP repeated-color run");
                 }
@@ -159,11 +199,6 @@ int shp_decode_frame(const ShpFile *shp, uint32_t frame_index, ShpFrame *frame,
             }
             x += run;
         }
-    }
-    /* The stored 16-bit height and width are retained as format evidence, not trusted as bounds. */
-    if (read_u16(data + frame_offset) == 0 || read_u16(data + frame_offset + 2) == 0) {
-        shp_frame_free(frame);
-        return fail(error, error_capacity, "SHP frame declares an empty dimension");
     }
     return 1;
 }

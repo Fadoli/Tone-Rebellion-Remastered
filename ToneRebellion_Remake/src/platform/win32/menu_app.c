@@ -63,6 +63,7 @@ static SpriteSheet g_map_background;
 static SpriteSheet g_small_islands;
 static SpriteSheet g_island_surface_art;
 static SpriteSheet g_pad_art;
+static SpriteSheet g_bridge_trigger_art;
 static SpriteSheet g_island_feature_art;
 static SpriteSheet g_island_names_art;
 static SpriteSheet g_load_save_art;
@@ -303,6 +304,7 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     CobArchive archive = {0};
     SpriteSheet candidate = {0};
     SpriteSheet pad_candidate = {0};
+    SpriteSheet bridge_candidate = {0};
     SpriteSheet feature_candidate = {0};
     COLORREF palette[256];
     uint8_t palette_rgb6[ISLAND_HAZE_PALETTE_BYTES];
@@ -335,6 +337,8 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
         !load_sprite_sheet(&archive, shape_name, palette, &candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\pad.shp", palette, &pad_candidate,
                            error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\br-trg01.shp", palette, &bridge_candidate,
+                           error, error_capacity) ||
         !load_sprite_sheet(&archive, feature_name, palette, &feature_candidate,
                            error, error_capacity)) {
         goto done;
@@ -342,6 +346,11 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     if (pad_candidate.frame_count != 27) {
         (void)snprintf(error, error_capacity,
                        "data\\pad.shp does not contain the 27 frames used by the pad renderer");
+        goto done;
+    }
+    if (bridge_candidate.frame_count != 23) {
+        (void)snprintf(error, error_capacity,
+                       "data\\br-trg01.shp does not contain its 23 declared animation frames");
         goto done;
     }
     if (candidate.frame_count != 1 || candidate.frames[0].width != 2560 ||
@@ -380,12 +389,15 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
 
     free_sprite_sheet(&g_island_surface_art);
     free_sprite_sheet(&g_pad_art);
+    free_sprite_sheet(&g_bridge_trigger_art);
     free_sprite_sheet(&g_island_feature_art);
     free(g_island_height_data);
     g_island_surface_art = candidate;
     memset(&candidate, 0, sizeof(candidate));
     g_pad_art = pad_candidate;
     memset(&pad_candidate, 0, sizeof(pad_candidate));
+    g_bridge_trigger_art = bridge_candidate;
+    memset(&bridge_candidate, 0, sizeof(bridge_candidate));
     g_island_feature_art = feature_candidate;
     memset(&feature_candidate, 0, sizeof(feature_candidate));
     g_island_height_data = height_data;
@@ -402,6 +414,7 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
 done:
     free_sprite_sheet(&candidate);
     free_sprite_sheet(&pad_candidate);
+    free_sprite_sheet(&bridge_candidate);
     free_sprite_sheet(&feature_candidate);
     free(height_data);
     free(text_data);
@@ -1528,7 +1541,21 @@ static void render_island_view(HDC dc)
                                 -g_island_scroll_x, image_top);
             continue;
         }
+        /* pad.txt identifies class 1 as PIT_Object and class 3 / variant 3
+           as PIT_FeatureTrigger; both entries have no shape asset. */
+        if (location->kind == ISLAND_LOCATION_PAD ||
+            (location->renderer_class == 3 && location->renderer_variant == 3)) {
+            continue;
+        }
         if (x < -4 || x >= LOGICAL_WIDTH + 4) continue;
+        /* The original class-2 bridge site is distinct from class-0 pads.
+           bldinf.txt defines BR-TRG01's static BASE as frame 1; the COB's
+           corresponding SHP stores that frame at index 0. */
+        if (location->renderer_class == 2 &&
+            g_bridge_trigger_art.frame_count == 23) {
+            draw_sprite(dc, &g_bridge_trigger_art, 0, x, y);
+            continue;
+        }
         if (pad_group >= 0 && g_pad_art.frame_count == 27) {
             unsigned phase =
                 (g_menu.animation_ticks / (unsigned)(1 + pad_group) + location->x % 23u) % 9u;
