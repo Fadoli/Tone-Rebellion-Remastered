@@ -91,6 +91,16 @@ static void verify_rejects_incomplete_records(void)
     assert(strstr(error, "incomplete") != NULL);
 }
 
+static void verify_hover_frame_selection(void)
+{
+    /* Empty hover state must keep unmapped background templates on base art. */
+    assert(window_catalog_hover_frame(0, -1, -1) == 0);
+    assert(window_catalog_hover_frame(4, -1, -1) == 4);
+    assert(window_catalog_hover_frame(0, 3, -1) == 0);
+    assert(window_catalog_hover_frame(8, 3, 3) == 9);
+    assert(window_catalog_hover_frame(8, 3, 2) == 8);
+}
+
 static void verify_original_manifest(const char *path)
 {
     WindowCatalog catalog;
@@ -118,6 +128,12 @@ static void verify_original_manifest(const char *path)
            window->pane.right == 447 && window->pane.bottom == 471);
     window = window_catalog_find(&catalog, "IWConstructInfo", 3);
     assert(window != NULL && window->type_id == 0x1c);
+    window = window_catalog_find(&catalog, "BuildCycle", 3);
+    assert(window != NULL && window->type_id == 1);
+    assert(window->pane.left == 282 && window->pane.top == 368 &&
+           window->pane.right == 358 && window->pane.bottom == 391);
+    assert(window->send_message[0] == 0x45);
+    assert(strcmp(window->message_destination, "IWConstruct") == 0);
     window = window_catalog_find(&catalog, "WORLDVIEW", 2);
     assert(window != NULL && window->type_id == 0x0b);
     window = window_catalog_find(&catalog, "BC_TrnStkC", 3);
@@ -130,6 +146,7 @@ int main(int argc, char **argv)
 {
     verify_fixture();
     verify_rejects_incomplete_records();
+    verify_hover_frame_selection();
     if (argc > 1) verify_original_manifest(argv[1]);
     puts("window_catalog tests passed");
     return 0;

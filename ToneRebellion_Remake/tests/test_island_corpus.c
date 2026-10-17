@@ -1,4 +1,5 @@
 #include "island_data.h"
+#include "game_start.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,6 +34,8 @@ int main(int argc, char **argv)
     unsigned int island_id;
     unsigned int files_found = 0;
     unsigned int records_found = 0;
+    IslandData initial_islands[GAME_START_PLAYER_COUNT];
+    unsigned int initial_island_mask = 0;
 
     if (argc != 2) {
         (void)fprintf(stderr, "usage: test_island_corpus <original_content_directory>\n");
@@ -60,6 +63,10 @@ int main(int argc, char **argv)
             free(bytes);
             return 1;
         }
+        if (island_id < GAME_START_PLAYER_COUNT) {
+            initial_islands[island_id] = data;
+            initial_island_mask |= 1U << island_id;
+        }
         records_found += data.location_count;
         free(bytes);
     }
@@ -67,6 +74,21 @@ int main(int argc, char **argv)
     if (files_found == 0) {
         (void)fprintf(stderr, "no ISLANDnn.TXT files found in %s\n", argv[1]);
         return 1;
+    }
+    if (initial_island_mask != (1U << GAME_START_PLAYER_COUNT) - 1U) {
+        (void)fprintf(stderr, "small-world start islands 0-3 are missing from the corpus\n");
+        return 1;
+    }
+    {
+        GameStartSetup setup;
+        char error[256];
+        if (!game_start_assign_locations(initial_islands, GAME_START_PLAYER_COUNT,
+                                         0, 0, &setup, error, sizeof(error))) {
+            (void)fprintf(stderr, "initial placement on small-world corpus islands failed: %s\n",
+                          error);
+            return 1;
+        }
+        (void)printf("resolved four initial starts from the original small-world islands\n");
     }
     (void)printf("parsed %u island files (%u location rows)\n",
                  files_found, records_found);

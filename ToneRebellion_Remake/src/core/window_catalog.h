@@ -68,4 +68,10 @@ const WindowTemplate *window_catalog_hit_test(const WindowCatalog *catalog,
                                                int32_t state, int32_t x,
                                                int32_t y);
 
+/* Select the adjacent SHP frame only when a real control index is hovered.
+   Negative indices represent non-interactive/unmapped templates. */
+int32_t window_catalog_hover_frame(int32_t base_frame,
+                                   int32_t control_index,
+                                   int32_t hovered_control_index);
+
 #endif

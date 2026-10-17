@@ -10,10 +10,12 @@ add_library(tone_core STATIC
     src/core/island_haze.c
     src/core/island_data.c
     src/core/island_render_rules.c
+    src/core/curved_text_layout.c
     src/core/iw_construct.c
     src/core/pad_catalog.c
     src/core/window_catalog.c
     src/core/world_map.c
+    src/core/game_start.c
 )
 target_include_directories(tone_core PUBLIC src/core src/data)
 target_compile_features(tone_core PUBLIC c_std_11)
@@ -76,6 +78,18 @@ if(BUILD_TESTING)
     target_compile_features(test_iw_construct PRIVATE c_std_11)
     enable_test_assertions(test_iw_construct)
     add_test(NAME iw_construct_unit COMMAND test_iw_construct)
+
+    add_executable(test_curved_text_layout tests/test_curved_text_layout.c)
+    target_link_libraries(test_curved_text_layout PRIVATE tone_core)
+    target_compile_features(test_curved_text_layout PRIVATE c_std_11)
+    enable_test_assertions(test_curved_text_layout)
+    add_test(NAME curved_text_layout_unit COMMAND test_curved_text_layout)
+
+    add_executable(test_game_start tests/test_game_start.c)
+    target_link_libraries(test_game_start PRIVATE tone_core)
+    target_compile_features(test_game_start PRIVATE c_std_11)
+    enable_test_assertions(test_game_start)
+    add_test(NAME game_start_unit COMMAND test_game_start)
 
     add_executable(test_island_corpus tests/test_island_corpus.c)
     target_link_libraries(test_island_corpus PRIVATE tone_core)

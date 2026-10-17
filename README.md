@@ -37,6 +37,7 @@ Les pistes `0x478460` (démarrage runtime), `0x41d8e1` (entrée application), `0
 - `functions/` : pages Markdown numérotées contenant le pseudocode Ghidra et les métadonnées des fonctions internes.
 - `unknowns.md` : fonctions externes, thunks, fonctions sans corps, décompilations échouées, fonctions ignorées et limitations avec leurs raisons.
 - `behavior_map.md` : première carte statique du démarrage, du gestionnaire de fenêtre, de la file d’événements, de la mise à jour et du rendu.
+- `FUNCTION_GUIDE.md` : index fonctionnel par adresse pour les routines d’origine déjà reliées à un comportement observable (démarrage, boucle, menus, texte cintré, parseurs, carte et rendu), avec liens vers les pseudocodes Ghidra et séparation des faits/interprétations.
 - `data_catalog.md` : formats de fichiers d’entrée reconstitués à partir des parseurs et chaînes Ghidra, avec degrés de certitude.
 - `remake_spec.md` : premier modèle de données, frontière d’architecture et vertical slice proposé pour le remake.
 - `ToneRebellion_Remake/` : début d’implémentation C11 du modèle de monde et du lecteur de `worldpos.txt`, compilé puis exécuté sur le fichier local `WORLDPOS.TXT`.
@@ -50,7 +51,7 @@ Les pistes `0x478460` (démarrage runtime), `0x41d8e1` (entrée application), `0
 
 Le dossier est initialisé, la cible validée et les 2 410 procédures figurent dans `index.jsonl`. État courant pour le profil Ghidra conservé : 1 507 pseudocodes obtenus (1 493 internes et 14 runtime), 780 thunks et 123 externes exclus avec motif explicite ; aucune fonction interne candidate n’est en attente ou déclarée non décompilable. L’audit documentaire retrouve les 1 507 sections pseudocode avec des blocs complets dans les pages paginées. Les thunks et imports sont indexés, mais ne sont pas des corps de fonctions internes à transcrire.
 
-La première cartographie de comportement relie maintenant l’entrée applicative, la création de fenêtre, l’initialisation des ressources/fenêtres, la file d’événements Win32, la boucle de mise à jour et la présentation graphique. Voir `behavior_map.md` pour les Evidence IDs et les prochaines pistes.
+La cartographie fonctionnelle relie maintenant les principaux rôles aux adresses des fonctions d’origine, avec les dossiers de pseudocode comme preuves. Voir `FUNCTION_GUIDE.md` pour l’index par fonction, et `behavior_map.md` pour le chemin d’exécution et les Evidence IDs.
 
 Une première analyse des parseurs confirme la grammaire du lecteur de textes à clés (`END` par entrée, `ENDTEXT` par fichier), la structure clé/valeur de `float.cfg`, la lecture séquentielle de `names.txt`, plusieurs familles de tags pour les effets/formes et des tables monde dans `worldpos.txt`. Les données sont maintenant disponibles dans le corpus local et leur présence dans les COB est vérifiée ; voir `data_catalog.md` et `cob_archives.md`.
 

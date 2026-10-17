@@ -50,13 +50,14 @@ static void test_tone_location_with_zero_special_value(void)
     assert(data.locations[0].kind == ISLAND_LOCATION_TONE);
     assert(data.locations[0].kind != ISLAND_LOCATION_PAD_SMALL);
     assert(data.locations[0].special_value == 0);
-    assert(data.locations[0].renderer_class == 0);
+    assert(data.locations[0].renderer_class == 1);
     assert(data.locations[0].renderer_subtype == 0);
     assert(data.locations[0].renderer_variant == 0);
     assert(strcmp(data.locations[0].type, "tone") == 0);
     assert(data.locations[2].kind == ISLAND_LOCATION_BRIDGE);
     assert(data.locations[2].renderer_class == 2);
-    assert(data.locations[3].renderer_class == 1);
+    assert(data.locations[3].renderer_class == 0);
+    assert(data.locations[3].renderer_variant == 0);
     assert(data.locations[4].renderer_class == 3);
     assert(data.locations[4].renderer_variant == 3);
 }

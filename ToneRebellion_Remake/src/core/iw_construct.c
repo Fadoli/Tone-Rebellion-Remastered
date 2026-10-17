@@ -15,12 +15,13 @@ static void emit(IwConstructTransition *transition, uint16_t code, int32_t value
     ++transition->message_count;
 }
 
-void iw_construct_init(IwConstructState *state)
+void iw_construct_init(IwConstructState *state, size_t item_count)
 {
     if (state == NULL) return;
     state->page = 0;
     state->hovered_column = -1;
     state->hovered_item_id = -1;
+    state->cycle_button_visible = item_count > IW_CONSTRUCT_ITEMS_PER_PAGE;
     state->dirty = 1;
 }
 
@@ -121,6 +122,7 @@ int iw_construct_info_handle_message(IwConstructInfoState *state,
 const PadCatalogItem *iw_construct_info_item(const IwConstructInfoState *state,
                                              const PadCatalog *catalog)
 {
-    if (state == NULL || state->item_id < 0 || state->item_id > UINT16_MAX) return NULL;
+    if (state == NULL || state->item_id < 0 ||
+        state->item_id > (int32_t)UINT16_MAX) return NULL;
     return pad_catalog_find(catalog, (uint16_t)state->item_id);
 }

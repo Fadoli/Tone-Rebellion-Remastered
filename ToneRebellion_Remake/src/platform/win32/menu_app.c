@@ -7,6 +7,7 @@
 #include "island_data.h"
 #include "island_haze.h"
 #include "island_render_rules.h"
+#include "curved_text_layout.h"
 #include "shp_image.h"
 #include "window_catalog.h"
 #include "world_map.h"
@@ -64,6 +65,7 @@ static SpriteSheet g_difficulty_art;
 static SpriteSheet g_map_background;
 static SpriteSheet g_small_islands;
 static SpriteSheet g_island_surface_art;
+static SpriteSheet g_island_template_art;
 static SpriteSheet g_tone_field_art;
 static SpriteSheet g_pad_art;
 static SpriteSheet g_bridge_trigger_art;
@@ -307,6 +309,7 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     };
     CobArchive archive = {0};
     SpriteSheet candidate = {0};
+    SpriteSheet template_candidate = {0};
     SpriteSheet tone_candidate = {0};
     SpriteSheet pad_candidate = {0};
     SpriteSheet bridge_candidate = {0};
@@ -340,6 +343,8 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     if (!load_palette(&archive, palette_name, palette, palette_rgb6,
                       error, error_capacity) ||
         !load_sprite_sheet(&archive, shape_name, palette, &candidate, error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\isletmp0.shp", palette,
+                           &template_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\tone.shp", palette, &tone_candidate,
                            error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\pad.shp", palette, &pad_candidate,
@@ -348,6 +353,13 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
                            error, error_capacity) ||
         !load_sprite_sheet(&archive, feature_name, palette, &feature_candidate,
                            error, error_capacity)) {
+        goto done;
+    }
+    if (template_candidate.frame_count != 1 ||
+        template_candidate.frames[0].width != LOGICAL_WIDTH ||
+        template_candidate.frames[0].height != 160) {
+        (void)snprintf(error, error_capacity,
+                       "data\\isletmp0.shp does not match the 640x160 ISLETEMP pane");
         goto done;
     }
     if (pad_candidate.frame_count != 27) {
@@ -400,6 +412,7 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     }
 
     free_sprite_sheet(&g_island_surface_art);
+    free_sprite_sheet(&g_island_template_art);
     free_sprite_sheet(&g_tone_field_art);
     free_sprite_sheet(&g_pad_art);
     free_sprite_sheet(&g_bridge_trigger_art);
@@ -407,6 +420,8 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     free(g_island_height_data);
     g_island_surface_art = candidate;
     memset(&candidate, 0, sizeof(candidate));
+    g_island_template_art = template_candidate;
+    memset(&template_candidate, 0, sizeof(template_candidate));
     g_tone_field_art = tone_candidate;
     memset(&tone_candidate, 0, sizeof(tone_candidate));
     g_pad_art = pad_candidate;
@@ -428,6 +443,7 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     success = 1;
 done:
     free_sprite_sheet(&candidate);
+    free_sprite_sheet(&template_candidate);
     free_sprite_sheet(&tone_candidate);
     free_sprite_sheet(&pad_candidate);
     free_sprite_sheet(&bridge_candidate);
@@ -518,43 +534,15 @@ static void draw_newgame_text(HDC dc)
 
 static void draw_tribe_descriptions(HDC dc)
 {
-    const int bottom = 410;
-    const int output_width = 128;
-    const int output_height_scale_numerator = 4;
-    const int output_height_scale_denominator = 5;
     int left_index;
     int right_index;
-    const SpriteFrame *left;
-    const SpriteFrame *right;
     if (g_menu.screen != SCREEN_NEW_GAME || g_menu.selected_tribe < 0 ||
         g_menu.selected_tribe >= 4) return;
     left_index = g_menu.selected_tribe * 2;
     right_index = left_index + 1;
     if ((uint32_t)right_index >= g_tribe_descriptions.frame_count) return;
-    left = &g_tribe_descriptions.frames[left_index];
-    right = &g_tribe_descriptions.frames[right_index];
-    {
-        const SpriteFrame *frames[2] = {left, right};
-        const int x_positions[2] = {8, LOGICAL_WIDTH - 8 - output_width};
-        int side;
-        BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
-        for (side = 0; side < 2; ++side) {
-            HDC source = CreateCompatibleDC(dc);
-            HGDIOBJ previous;
-            int output_height = frames[side]->height * output_height_scale_numerator /
-                                output_height_scale_denominator;
-            if (source == NULL || output_height <= 0 || frames[side]->bitmap == NULL) {
-                if (source != NULL) DeleteDC(source);
-                continue;
-            }
-            previous = SelectObject(source, frames[side]->bitmap);
-            (void)AlphaBlend(dc, x_positions[side], bottom - output_height,
-                             output_width, output_height, source, 0, 0,
-                             frames[side]->width, frames[side]->height, blend);
-            SelectObject(source, previous);
-            DeleteDC(source);
-        }
-    }
+    draw_sprite(dc, &g_tribe_descriptions, (uint32_t)left_index, 0, 0);
+    draw_sprite(dc, &g_tribe_descriptions, (uint32_t)right_index, 0, 0);
 }
 
 static void fill_rect(HDC dc, int left, int top, int right, int bottom, COLORREF color)
@@ -593,6 +581,76 @@ static void draw_bitmap_text_at(DWORD *pixels, int surface_width, int surface_he
             x += (int)glyph_width;
         }
         ++cursor;
+    }
+}
+
+static int32_t measure_bitmap_text(void *context, const char *text, size_t length)
+{
+    size_t i;
+    int32_t width = 0;
+    (void)context;
+    for (i = 0; i < length; ++i) {
+        uint32_t glyph_width;
+        const uint8_t *glyph_pixels;
+        uint32_t code = (unsigned char)text[i];
+        if (code >= g_bitmap_font.glyph_count) code = (uint32_t)'?';
+        if (bitmap_font_get_glyph(&g_bitmap_font, code, &glyph_width, &glyph_pixels))
+            width += (int32_t)glyph_width;
+    }
+    return width;
+}
+
+static void draw_justified_bitmap_line(DWORD *pixels, int surface_width,
+                                       int surface_height, const char *text,
+                                       const CurvedTextLine *line, DWORD ink)
+{
+    char word[1024];
+    size_t cursor = line->offset;
+    size_t end = line->offset + line->length;
+    size_t space_count = 0;
+    size_t i;
+    size_t remainder;
+    int32_t text_width;
+    int32_t extra;
+    int32_t per_space;
+    int32_t single_space_width = measure_bitmap_text(NULL, " ", 1);
+    int x = line->x;
+    for (i = cursor; i < end; ++i) if (text[i] == ' ') ++space_count;
+    text_width = measure_bitmap_text(NULL, text + cursor, end - cursor);
+    extra = line->width - text_width;
+    if (extra < 0) extra = 0;
+    if (space_count == 0) {
+        size_t length = end - cursor;
+        if (length >= sizeof(word)) length = sizeof(word) - 1;
+        memcpy(word, text + cursor, length);
+        word[length] = '\0';
+        draw_bitmap_text_at(pixels, surface_width, surface_height, word,
+                            x, line->y, ink);
+        return;
+    }
+    per_space = extra / (int32_t)space_count;
+    remainder = (size_t)(extra - per_space * (int32_t)space_count);
+    while (cursor < end) {
+        size_t word_end = cursor;
+        size_t word_length;
+        int32_t word_width;
+        while (word_end < end && text[word_end] != ' ') ++word_end;
+        word_length = word_end - cursor;
+        if (word_length >= sizeof(word)) word_length = sizeof(word) - 1;
+        memcpy(word, text + cursor, word_length);
+        word[word_length] = '\0';
+        draw_bitmap_text_at(pixels, surface_width, surface_height, word,
+                            x, line->y, ink);
+        word_width = measure_bitmap_text(NULL, word, word_length);
+        x += word_width;
+        if (word_end < end) {
+            x += single_space_width + per_space;
+            if (remainder != 0) {
+                ++x;
+                --remainder;
+            }
+        }
+        cursor = word_end + 1;
     }
 }
 
@@ -834,7 +892,7 @@ done:
 static int create_tribe_description_sheet(SpriteSheet *sheet,
                                           char *error, size_t error_capacity)
 {
-    enum { TEXT_WIDTH = 128, MAX_LINES = 32 };
+    enum { TEXT_WIDTH = 640, TEXT_HEIGHT = 480, MAX_LINES = CURVED_TEXT_MAX_LINES };
     COLORREF description_color = g_newgame_palette[0xbf];
     DWORD ink = 0xff000000u | ((DWORD)GetRValue(description_color) << 16) |
                 ((DWORD)GetGValue(description_color) << 8) |
@@ -848,55 +906,25 @@ static int create_tribe_description_sheet(SpriteSheet *sheet,
     sheet->frame_count = 8;
     for (entry = 0; entry < 8; ++entry) {
         const char *text = g_tribe_text[entry / 2][entry % 2];
-        char lines[MAX_LINES][256];
-        size_t cursor = 0;
-        size_t text_length = strlen(text);
-        int line_count = 0;
-        int line_height = (int)g_bitmap_font.height + 2;
-        int height;
+        CurvedTextLine lines[MAX_LINES];
+        size_t line_count = 0;
         BITMAPINFO info;
         void *bitmap_bits = NULL;
         HBITMAP bitmap;
-        int line;
-        while (cursor < text_length && line_count < MAX_LINES) {
-            size_t start;
-            size_t last_space = SIZE_MAX;
-            size_t i;
-            int width = 0;
-            while (cursor < text_length && text[cursor] == ' ') ++cursor;
-            start = cursor;
-            for (i = start; i < text_length; ++i) {
-                uint32_t glyph_width;
-                const uint8_t *glyph_pixels;
-                uint32_t code = (unsigned char)text[i];
-                if (!bitmap_font_get_glyph(&g_bitmap_font, code, &glyph_width,
-                                           &glyph_pixels)) {
-                    code = '?';
-                    if (!bitmap_font_get_glyph(&g_bitmap_font, code, &glyph_width,
-                                               &glyph_pixels)) break;
-                }
-                if (width + (int)glyph_width > TEXT_WIDTH && i > start) break;
-                width += (int)glyph_width;
-                if (text[i] == ' ') last_space = i;
-            }
-            if (i < text_length && last_space != SIZE_MAX && last_space >= start) i = last_space;
-            if (i == start && i < text_length) ++i;
-            {
-                size_t count = i - start;
-                if (count >= sizeof(lines[line_count])) count = sizeof(lines[line_count]) - 1;
-                memcpy(lines[line_count], text + start, count);
-                lines[line_count][count] = '\0';
-                ++line_count;
-            }
-            cursor = i;
-            while (cursor < text_length && text[cursor] == ' ') ++cursor;
+        size_t line;
+        if (!curved_text_layout(text,
+                                entry % 2 == 0 ? CURVED_TEXT_LEFT : CURVED_TEXT_RIGHT,
+                                410, (int32_t)g_bitmap_font.height,
+                                measure_bitmap_text, NULL, lines, MAX_LINES,
+                                &line_count)) {
+            (void)snprintf(error, error_capacity,
+                           "could not lay out curved tribe description %d", entry);
+            return 0;
         }
-        if (line_count == 0) continue;
-        height = line_count * line_height;
         ZeroMemory(&info, sizeof(info));
         info.bmiHeader.biSize = sizeof(info.bmiHeader);
         info.bmiHeader.biWidth = TEXT_WIDTH;
-        info.bmiHeader.biHeight = -height;
+        info.bmiHeader.biHeight = -TEXT_HEIGHT;
         info.bmiHeader.biPlanes = 1;
         info.bmiHeader.biBitCount = 32;
         info.bmiHeader.biCompression = BI_RGB;
@@ -906,14 +934,13 @@ static int create_tribe_description_sheet(SpriteSheet *sheet,
             (void)snprintf(error, error_capacity, "could not create tribe description bitmap");
             return 0;
         }
-        memset(bitmap_bits, 0, (size_t)TEXT_WIDTH * (size_t)height * sizeof(DWORD));
-        for (line = 0; line < line_count; ++line) {
-            draw_bitmap_text_at((DWORD *)bitmap_bits, TEXT_WIDTH, height, lines[line],
-                                0, line * line_height, ink);
-        }
+        memset(bitmap_bits, 0, (size_t)TEXT_WIDTH * TEXT_HEIGHT * sizeof(DWORD));
+        for (line = 0; line < line_count; ++line)
+            draw_justified_bitmap_line((DWORD *)bitmap_bits, TEXT_WIDTH,
+                                       TEXT_HEIGHT, text, &lines[line], ink);
         sheet->frames[entry].bitmap = bitmap;
         sheet->frames[entry].width = TEXT_WIDTH;
-        sheet->frames[entry].height = height;
+        sheet->frames[entry].height = TEXT_HEIGHT;
     }
     return 1;
 }
@@ -1229,9 +1256,11 @@ static void draw_configured_buttons(HDC dc, int state, const char *shape_id,
             strcmp(window->shape_id, shape_id) != 0 || window->shape_frame < 0) continue;
         frame = window->shape_frame;
         if (state == 0) {
-            if (template_help_index(window) == g_hovered_help) ++frame;
+            frame = window_catalog_hover_frame(
+                frame, template_help_index(window), g_hovered_help);
         } else if (state == 1) {
-            if (template_caption_index(window) == g_hovered_newgame_text) ++frame;
+            frame = window_catalog_hover_frame(
+                frame, template_caption_index(window), g_hovered_newgame_text);
         }
         draw_sprite(dc, sheet, (uint32_t)frame, window->pane.left, window->pane.top);
     }
@@ -1430,9 +1459,8 @@ static int open_island_view(HWND window, int map_island_index)
 
 static int island_location_at(int x, int y)
 {
-    const int image_top = 80;
     int map_x = x + g_island_scroll_x;
-    int map_y = y - image_top;
+    int map_y = y;
     int index = (int)g_island_surface_data.location_count - 1;
     if (x < 0 || x >= LOGICAL_WIDTH || map_y < 0 || map_y >= 320) return -1;
     for (; index >= 0; --index) {
@@ -1553,25 +1581,30 @@ static void draw_island_feature(HDC dc, int island_id, const IslandLocation *sit
 
 static void render_island_view(HDC dc)
 {
-    const int image_top = 80;
-    const int image_bottom = image_top + 320;
-    const int status_top = image_bottom;
+    const int image_top = 0;
+    const int status_top = 320;
     const IslandLocation *focus = NULL;
     int focus_index = g_hovered_location >= 0 ? g_hovered_location : g_selected_location;
+    int saved_dc;
     char text[160];
     uint16_t i;
 
     fill_rect(dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
-    fill_rect(dc, 0, 0, LOGICAL_WIDTH, image_top, RGB(6, 10, 23));
-    fill_rect(dc, 0, status_top, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(6, 10, 23));
     if (g_island_height_data == NULL ||
-        g_island_height_length != ISLAND_HAZE_FILE_BYTES) return;
+        g_island_height_length != ISLAND_HAZE_FILE_BYTES) {
+        draw_sprite(dc, &g_island_template_art, 0, 0, status_top);
+        return;
+    }
     draw_sprite_region(dc, &g_island_surface_art, 0, g_island_scroll_x, 0,
                        LOGICAL_WIDTH, 320, 0, image_top);
 
     if (focus_index >= 0 && focus_index < g_island_surface_data.location_count) {
         focus = &g_island_surface_data.locations[focus_index];
     }
+    /* windows.txt defines ISLEVIEW as the 640x320 upper pane. Clip sprites to
+       that view so tall SHP frames cannot overwrite the ISLETEMP controls. */
+    saved_dc = SaveDC(dc);
+    (void)IntersectClipRect(dc, 0, 0, LOGICAL_WIDTH, status_top);
     for (i = 0; i < g_island_surface_data.location_count; ++i) {
         const IslandLocation *location =
             &g_island_surface_data.locations[g_island_draw_order[i]];
@@ -1635,6 +1668,11 @@ static void render_island_view(HDC dc)
         SelectObject(dc, old_pen);
         DeleteObject(pen);
     }
+    if (saved_dc != 0) RestoreDC(dc, saved_dc);
+
+    /* ISLETMP is the original 640x160 bottom template at y=320, matching the
+       ISLETMP pane in windows.txt. It uses the active island palette. */
+    draw_sprite(dc, &g_island_template_art, 0, 0, status_top);
 
     if (g_island_surface_id >= 0 && g_island_surface_id < ISLAND_NAME_COUNT) {
         (void)snprintf(text, sizeof(text), "%s   ISLAND %02d",
@@ -1642,21 +1680,21 @@ static void render_island_view(HDC dc)
     } else {
         (void)snprintf(text, sizeof(text), "ISLAND %02d", g_island_surface_id);
     }
-    draw_bitmap_label(dc, text, 12, 12, RGB(230, 238, 255));
+    draw_bitmap_label(dc, text, 12, status_top + 8, RGB(230, 238, 255));
     (void)snprintf(text, sizeof(text), "VIEW X=%04d / 1920     ARROWS: SCROLL     ESC: WORLD MAP",
                    g_island_scroll_x);
-    draw_bitmap_label(dc, text, 12, 43, RGB(143, 181, 217));
+    draw_bitmap_label(dc, text, 12, status_top + 27, RGB(143, 181, 217));
     if (focus != NULL) {
         (void)snprintf(text, sizeof(text), "LOCATION %02u  %s  X=%u Y=%u",
                        (unsigned)focus->id, focus->type,
                        (unsigned)focus->x, (unsigned)focus->y);
-        draw_bitmap_label(dc, text, 12, status_top + 18, RGB(244, 216, 131));
+        draw_bitmap_label(dc, text, 12, status_top + 140, RGB(244, 216, 131));
     } else {
         draw_bitmap_label(dc, "CLICK A MARKER TO INSPECT THIS LOCATION",
-                          12, status_top + 18, RGB(143, 181, 217));
+                          12, status_top + 140, RGB(143, 181, 217));
     }
     draw_bitmap_label(dc, "SITE MARKERS USE THE SHIPPED ISLANDnn.TXT COORDINATES",
-                      12, status_top + 49, RGB(111, 135, 166));
+                      12, status_top + 150, RGB(111, 135, 166));
 }
 
 /* The x87 helpers called by FUN_00471536 continue past Ghidra's short
@@ -2352,6 +2390,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_map_background);
     free_sprite_sheet(&g_small_islands);
     free_sprite_sheet(&g_island_surface_art);
+    free_sprite_sheet(&g_island_template_art);
     free_sprite_sheet(&g_tone_field_art);
     free_sprite_sheet(&g_pad_art);
     free_sprite_sheet(&g_island_feature_art);

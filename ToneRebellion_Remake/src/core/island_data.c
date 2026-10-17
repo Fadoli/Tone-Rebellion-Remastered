@@ -94,11 +94,12 @@ static void set_renderer_fields(IslandLocation *location)
     location->renderer_subtype = 0;
     location->renderer_variant = 0;
     switch (location->kind) {
+    case ISLAND_LOCATION_PAD:
     case ISLAND_LOCATION_PAD_SMALL:
-    case ISLAND_LOCATION_TONE:
         location->renderer_variant = (uint16_t)(location->special_value == 1);
         break;
-    case ISLAND_LOCATION_PAD:
+    case ISLAND_LOCATION_TONE:
+        /* FUN_00461b3b maps "tone" to renderer class 1, the start marker. */
         location->renderer_class = 1;
         break;
     case ISLAND_LOCATION_PAD_MEDIUM:

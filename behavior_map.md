@@ -63,6 +63,22 @@ La boucle de jeu semble utiliser le pump Win32 comme entrée, puis une file d’
 
 Le chemin observé correspond à une boucle cadencée qui collecte les événements, fait avancer plusieurs objets/états et compose une image. Les chaînes et appels de surface sont compatibles avec une présentation à pages et une voie de copie GDI, mais le type exact des interfaces COM et le rôle métier de chaque objet restent à vérifier.
 
+## Création d'une partie et placements initiaux
+
+### Observations Ghidra
+
+- Le dispatch `FUN_004121b7` reçoit les commandes de configuration : type `7` stocke l'indice de taille du monde et type `8` stocke la difficulté. Le type `9` marque la partie démarrée, calcule deux paramètres de génération, appelle `FUN_004637fc` puis ouvre `WORLDVIEW`.
+- `FUN_004637fc` sélectionne une table parmi les mondes chargés par `FUN_004642a3`, charge les îles via `FUN_00461b3b`/`FUN_00461859`, réinitialise plusieurs tableaux et appelle `FUN_0046466f` puis `FUN_00464b9e`. Ensuite, les records de classe 2 reçoivent la valeur d'état `2`; la routine distribue aussi des valeurs/liaisons dans des records de classe 0 encore libres. Les noms métier de plusieurs champs et de la deuxième phase restent inconnus.
+- `FUN_00461859`, exécutée après parsing d'une île, réinitialise les champs d'état de chaque record sans toucher sa classe, puis associe les paires de ponts du monde aux records de classe 2. Si le nombre de records de classe 2 dépasse les paires pertinentes, certains sont ramenés à la classe 0. Ce post-traitement ne fournit pas les marqueurs de classe 1 absents du corpus.
+- `FUN_0046466f` traite quatre slots de joueur. En mode sans bit 0, chaque slot choisit l'île du même indice; les slots pairs marquent le premier record de classe 1 et les slots impairs le quatrième. Le mode alternatif choisit `alternate_island + (slot & 1)` et un ordinal `slot / 2 + 1`.
+- `FUN_00461b3b` compare `pad` à `0x4a4c10` et le classe 0; `tone` à `0x4a4c2c` et le classe 1. Les octets lus par REA à `0x4a4c00` donnent la suite `%d %d %d %s %d\0\0pad\0smpad\0...tone\0\0bridge\0...` (Evidence `ev_346f0482a3c7a5c0cd1c1c4320ec28be7e3b278647786754331652a5a8e798c3`). Ainsi les quatre premiers fichiers du petit monde, qui ont chacun quatre entrées `tone`, fournissent les marqueurs de classe 1 attendus par `FUN_0046466f`.
+- À partir du marqueur, `FUN_0046466f` choisit le premier record de classe 0 avec le champ au décalage `+0x10` égal à zéro à distance minimale. `FUN_004672a6` définit cette distance comme `max(abs(dx), abs(dy))`. L'ordre des lignes tranche les égalités. Le code calcule ensuite les bords de caméra horizontaux et appelle des routines de création d'objet et de quatre « floaters ».
+- `FUN_00462a87` valide une catégorie d'objet (`0..4`), instancie un objet dans le monde et initialise sa position/état. Le placement appelle aussi `FUN_00452859(0x2a, slot)`; le pseudocode visible ne suffit pas à donner à cette valeur un nom gameplay sûr.
+
+### Portée dans le remake
+
+`ToneRebellion_Remake/src/core/game_start.c` reproduit la sélection des îles, des marqueurs et des sites, la règle de distance et les bords de vue. Les créations d'entités, `FUN_00464b9e` et la distribution aléatoire ne sont pas encore portées. Les champs de sortie du nouveau module sont des indices/coordonnées observés; ils ne prétendent pas modéliser les types d'unités ou les effets métier des valeurs opaques.
+
 ## Évidence et dossiers sources
 
 | Sujet | Adresse(s) | Evidence ID(s) | Dossier |
@@ -75,6 +91,7 @@ Le chemin observé correspond à une boucle cadencée qui collecte les événeme
 | Pump de messages | `0x41be0f`, `0x42ef17` | `ev_29ad09d456ae628d3158564a8c1dab7a234851e959fde7b086429c419b386514`; `ev_84932651de367bf515bdf073e6673f51992e52b524f7c4d9a416ce8b8a101e83` | [message processing](functions/0010_batch_0006.md#fun_0041be0f--0x41be0f), [loop dispatch](functions/0012_batch_0008.md#fun_0042ef17--0x42ef17) |
 | File d’événements | `0x42eba0`, `0x42ee48`, `0x469f56` | `ev_4539fa61c9afdfc26f53f63f89c1eeee1db31de6684e55bec209ac2cf5d040ee`; `ev_b1eef3a6b252c5fa1733dbfcf82a66aff0128de7f09b851e71e222f58035aff9`; `ev_3b7d1c7373d2274d945cf5579c6d5b74b907c2a1517b6587e6a2c23a92bec22e` | [input queue](functions/0012_batch_0008.md#fun_0042eba0--0x42eba0), [window events](functions/0018_batch_0014.md#fun_00469f56--0x469f56) |
 | Update et rendu | `0x466ce2`, `0x42cc24`, `0x46bdee` | `ev_b51f2311ff9bd9ad209f0663ea00bfe330e7ff0eff117e8a273292d3112a4e0e`; `ev_29e8acc9ef214546bdb7036b2cbf1e88ffe8105275d37ccc324960fffcdd8da8`; `ev_fa0207968e95f1464cc1c397bc1d8b28d8ffed8238efbbe7a0daf79f16598254` | [update loop](functions/0017_batch_0013.md#fun_00466ce2--0x466ce2), [graphics presentation](functions/0011_batch_0007.md#fun_0042cc24--0x42cc24), [window callback fanout](functions/0018_batch_0014.md#fun_0046bdee--0x46bdee) |
+| New game and world setup | `0x4121b7`, `0x4637fc`, `0x461859`, `0x46466f`, `0x4672a6`, `0x462a87`, `0x452859` | `ev_436ec675045ff47701ee7511eba972fb3eac9f707eccb9322fefc66d4be20300`; `ev_96a46390b086f06a56b3c395f6e1a9de7ba2c2a1c30396c7ca72c63944a1039e`; `ev_60cc3b805a032ead183ce15cfa0965bb14b5d6c84b45414f6d11fbbb2eaca75b`; `ev_ac313cb8cc73f9c102676395cd14cb97b5b1f9355d074df1e6656ce028d2d36f`; `ev_d6e45300f5ee5de4ed13ebfa3da2e5198981b6af36bc072d956c795033a50243`; `ev_352feb8e600eceb96c53f7813bd012e104389976cd0dc42358a78b6a0fcddd24`; `ev_a571ddb810f57eb82ddb7110d751957927677498282088ff2bc3d5256611b345` | [function guide](FUNCTION_GUIDE.md#démarrage-dune-partie-et-placement-initial), [command dispatcher](functions/0009_batch_0005.md#fun_004121b7--0x4121b7), [world setup pseudocode](functions/0017_batch_0013.md#fun_004637fc--0x4637fc) |
 
 ## Prochaines pistes
 

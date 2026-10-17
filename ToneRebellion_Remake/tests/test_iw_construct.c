@@ -10,8 +10,9 @@ static void test_hover_click_and_pages(void)
     IwConstructState state;
     IwConstructTransition event;
 
-    iw_construct_init(&state);
+    iw_construct_init(&state, 7);
     assert(state.page == 0 && state.hovered_column == -1 && state.dirty);
+    assert(state.cycle_button_visible);
     iw_construct_mouse_move(&state, &pane, 192, 394, items, 7, &event);
     assert(event.changed && event.message_count == 1);
     assert(event.messages[0].code == 0x3c && event.messages[0].value == 37);
@@ -45,7 +46,8 @@ static void test_bounds_and_info_messages(void)
     IwConstructInfoState info;
     IwConstructTransition event;
 
-    iw_construct_init(&state);
+    iw_construct_init(&state, 4);
+    assert(!state.cycle_button_visible);
     iw_construct_mouse_move(&state, &pane, 192, 393, items, 4, &event);
     assert(state.hovered_item_id == -1 && event.message_count == 0);
     iw_construct_mouse_move(&state, &pane, 447, 394, items, 4, &event);
@@ -60,9 +62,19 @@ static void test_bounds_and_info_messages(void)
     assert(info.item_id == -1);
 }
 
+static void test_cycle_button_threshold(void)
+{
+    IwConstructState state;
+    iw_construct_init(&state, 5);
+    assert(state.cycle_button_visible);
+    iw_construct_init(&state, 0);
+    assert(!state.cycle_button_visible);
+}
+
 int main(void)
 {
     test_hover_click_and_pages();
     test_bounds_and_info_messages();
+    test_cycle_button_threshold();
     return 0;
 }

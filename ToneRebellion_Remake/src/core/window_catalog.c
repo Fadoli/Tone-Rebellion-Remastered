@@ -327,3 +327,12 @@ const WindowTemplate *window_catalog_hit_test(const WindowCatalog *catalog,
     }
     return NULL;
 }
+
+int32_t window_catalog_hover_frame(int32_t base_frame,
+                                   int32_t control_index,
+                                   int32_t hovered_control_index)
+{
+    if (control_index >= 0 && control_index == hovered_control_index)
+        return base_frame + 1;
+    return base_frame;
+}

@@ -31,6 +31,7 @@ typedef struct IwConstructState {
     uint16_t page;
     int16_t hovered_column;
     int32_t hovered_item_id;
+    uint8_t cycle_button_visible;
     uint8_t dirty;
 } IwConstructState;
 
@@ -43,7 +44,7 @@ typedef struct IwConstructInfoState {
    FUN_0043acea, and FUN_0043b2d1 observations. `item_ids` is the active
    player's ordered build list supplied by game state; it is not synthesized
    from every record in pad.txt. */
-void iw_construct_init(IwConstructState *state);
+void iw_construct_init(IwConstructState *state, size_t item_count);
 void iw_construct_mouse_move(IwConstructState *state, const WindowPane *pane,
                              int32_t x, int32_t y,
                              const int32_t *item_ids, size_t item_count,
