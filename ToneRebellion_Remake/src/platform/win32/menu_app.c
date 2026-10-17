@@ -3,6 +3,7 @@
 #include <windowsx.h>
 
 #include "cob_archive.h"
+#include "building_render.h"
 #include "font_image.h"
 #include "island_data.h"
 #include "island_haze.h"
@@ -71,7 +72,7 @@ static SpriteSheet g_island_template_art;
 static SpriteSheet g_tone_field_art;
 static SpriteSheet g_pad_art;
 static SpriteSheet g_bridge_trigger_art;
-static SpriteSheet g_initial_halls[4];
+static SpriteSheet g_building_art[PAD_CATALOG_MAX_ITEMS];
 static SpriteSheet g_initial_floater_bodies[4];
 static SpriteSheet g_initial_floater_legs[4];
 static SpriteSheet g_island_feature_art;
@@ -94,6 +95,8 @@ static GameSession g_game_session;
 static int g_game_session_valid;
 static int g_game_session_world_index = -1;
 static WindowCatalog g_window_catalog;
+static PadCatalog g_pad_catalog;
+static BuildingRenderCatalog g_building_render_catalog;
 static uint16_t g_island_draw_order[ISLAND_DATA_MAX_LOCATIONS];
 static IslandHaze g_island_haze;
 static unsigned char *g_island_height_data;
@@ -330,7 +333,8 @@ static void draw_sprite_region(HDC target, const SpriteSheet *sheet, uint32_t fr
     DeleteDC(source);
 }
 
-static int load_island_surface(int island_id, char *error, size_t error_capacity)
+static int load_island_surface(int island_id, int map_island_index,
+                               char *error, size_t error_capacity)
 {
     static const uint8_t feature_frame_counts[ISLAND_NAME_COUNT] = {
         5, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 1
@@ -341,7 +345,7 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     SpriteSheet tone_candidate = {0};
     SpriteSheet pad_candidate = {0};
     SpriteSheet bridge_candidate = {0};
-    SpriteSheet hall_candidates[4] = {{0}};
+    SpriteSheet building_candidates[PAD_CATALOG_MAX_ITEMS] = {{0}};
     SpriteSheet floater_body_candidates[4] = {{0}};
     SpriteSheet floater_leg_candidates[4] = {{0}};
     SpriteSheet feature_candidate = {0};
@@ -358,11 +362,6 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     char height_name[48];
     char text_name[48];
     char feature_name[48];
-    static const char *const hall_names[4] = {
-        "data\\p-hall.shp", "data\\s-hall.shp",
-        "data\\m-hall.shp", "data\\l-hall.shp"
-    };
-    static const uint32_t hall_frame_counts[4] = {3, 3, 4, 4};
     static const char *const floater_body_names[4] = {
         "data\\pbod.shp", "data\\sbod.shp", "data\\mbod.shp", "data\\lbod.shp"
     };
@@ -370,12 +369,18 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
         "data\\plegs.shp", "data\\slegs.shp", "data\\mlegs.shp", "data\\llegs.shp"
     };
     unsigned int hall_index;
+    unsigned int item_id;
+    const GameRuntimeIsland *runtime_island = NULL;
     const char *archive_path = "C:\\Program Files\\Tone\\TONE01.COB";
     int success = 0;
 
     if (island_id < 0 || island_id >= ISLAND_NAME_COUNT) {
         (void)snprintf(error, error_capacity, "island id is out of the supported range");
         return 0;
+    }
+    if (g_game_session_valid && g_game_session_world_index == g_menu.world_index &&
+        map_island_index >= 0 && map_island_index < g_game_session.island_count) {
+        runtime_island = &g_game_session.islands[map_island_index];
     }
     (void)snprintf(shape_name, sizeof(shape_name), "data\\island%02d.shp", island_id);
     (void)snprintf(palette_name, sizeof(palette_name), "data\\island%02d.pal", island_id);
@@ -398,16 +403,39 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
                            error, error_capacity)) {
         goto done;
     }
-    for (hall_index = 0; hall_index < 4; ++hall_index) {
-        if (!load_sprite_sheet(&archive, hall_names[hall_index], palette,
-                              &hall_candidates[hall_index], error, error_capacity)) {
-            goto done;
-        }
-        if (hall_candidates[hall_index].frame_count < hall_frame_counts[hall_index]) {
-            (void)snprintf(error, error_capacity,
-                           "%s does not contain the BASE frames used by its starting hall",
-                           hall_names[hall_index]);
-            goto done;
+    /* Load only item sheets referenced by this island's actual runtime records.
+       bldinf.txt supplies their animation ranges; pad.txt supplies the SHP key. */
+    if (runtime_island != NULL) {
+        for (hall_index = 0; hall_index < runtime_island->location_count; ++hall_index) {
+            int32_t raw_id = runtime_island->locations[hall_index].record_value_10;
+            const BuildingRenderItem *definition;
+            char item_shape[BUILDING_RENDER_SHAPE_CAPACITY];
+            char item_member[48];
+            char item_error[128];
+            if (raw_id <= 0 || raw_id >= g_pad_catalog.item_count) continue;
+            item_id = (unsigned int)raw_id;
+            if (building_candidates[item_id].frames != NULL) continue;
+            definition = building_render_find(&g_building_render_catalog,
+                                               (uint16_t)item_id);
+            if (definition == NULL || definition->shape_id[0] == '\0' ||
+                strcmp(definition->shape_id, "noshape") == 0) continue;
+            (void)snprintf(item_shape, sizeof(item_shape), "%s", definition->shape_id);
+            {
+                char *character;
+                for (character = item_shape; *character != '\0'; ++character) {
+                    if (*character >= 'A' && *character <= 'Z') {
+                        *character = (char)(*character - 'A' + 'a');
+                    }
+                }
+            }
+            (void)snprintf(item_member, sizeof(item_member), "data\\%s.shp", item_shape);
+            if (!load_sprite_sheet(&archive, item_member, palette,
+                                   &building_candidates[item_id], item_error,
+                                   sizeof(item_error))) {
+                /* Some data entries are logical items without a drawable SHP. */
+                free_sprite_sheet(&building_candidates[item_id]);
+                continue;
+            }
         }
     }
     /* FUN_0042704b (fltdraw.cpp) draws tribe-specific body and legs sheets.
@@ -489,9 +517,6 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
     free_sprite_sheet(&g_pad_art);
     free_sprite_sheet(&g_bridge_trigger_art);
     for (hall_index = 0; hall_index < 4; ++hall_index) {
-        free_sprite_sheet(&g_initial_halls[hall_index]);
-        g_initial_halls[hall_index] = hall_candidates[hall_index];
-        memset(&hall_candidates[hall_index], 0, sizeof(hall_candidates[hall_index]));
         free_sprite_sheet(&g_initial_floater_bodies[hall_index]);
         g_initial_floater_bodies[hall_index] = floater_body_candidates[hall_index];
         memset(&floater_body_candidates[hall_index], 0,
@@ -500,6 +525,11 @@ static int load_island_surface(int island_id, char *error, size_t error_capacity
         g_initial_floater_legs[hall_index] = floater_leg_candidates[hall_index];
         memset(&floater_leg_candidates[hall_index], 0,
                sizeof(floater_leg_candidates[hall_index]));
+    }
+    for (item_id = 0; item_id < PAD_CATALOG_MAX_ITEMS; ++item_id) {
+        free_sprite_sheet(&g_building_art[item_id]);
+        g_building_art[item_id] = building_candidates[item_id];
+        memset(&building_candidates[item_id], 0, sizeof(building_candidates[item_id]));
     }
     free_sprite_sheet(&g_island_feature_art);
     free(g_island_height_data);
@@ -532,8 +562,10 @@ done:
     free_sprite_sheet(&tone_candidate);
     free_sprite_sheet(&pad_candidate);
     free_sprite_sheet(&bridge_candidate);
+    for (item_id = 0; item_id < PAD_CATALOG_MAX_ITEMS; ++item_id) {
+        free_sprite_sheet(&building_candidates[item_id]);
+    }
     for (hall_index = 0; hall_index < 4; ++hall_index) {
-        free_sprite_sheet(&hall_candidates[hall_index]);
         free_sprite_sheet(&floater_body_candidates[hall_index]);
         free_sprite_sheet(&floater_leg_candidates[hall_index]);
     }
@@ -1541,7 +1573,7 @@ static int open_island_view(HWND window, int map_island_index)
         }
     }
     island_id = world->islands[map_island_index].shape_id;
-    if (!load_island_surface(island_id, error, sizeof(error))) {
+    if (!load_island_surface(island_id, map_island_index, error, sizeof(error))) {
         MessageBoxA(window, error, "Tone Rebellion remake - island data error",
                     MB_OK | MB_ICONERROR);
         return 0;
@@ -1596,25 +1628,29 @@ static int island_pad_group(const IslandLocation *location)
     return island_pad_size_group(location->kind);
 }
 
-static int initial_hall_index(int32_t item_id)
+static int draw_runtime_building(HDC dc, const GameRuntimeLocation *runtime_location,
+                                 uint16_t world_x, int x, int y)
 {
-    switch (item_id) {
-    case 42: return 0; /* pad.txt item 42: p-hall */
-    case 58: return 1; /* item 42 + 16 * player 1: s-hall */
-    case 74: return 2; /* item 42 + 16 * player 2: m-hall */
-    case 90: return 3; /* item 42 + 16 * player 3: l-hall */
-    default: return -1;
-    }
-}
+    int32_t raw_id;
+    const BuildingRenderItem *item;
+    const BuildingRenderSegment *segment;
+    const SpriteSheet *sheet;
+    uint32_t frame;
 
-static uint32_t initial_hall_frame(int hall_index, unsigned int animation_ticks,
-                                   uint16_t world_x)
-{
-    static const uint8_t last_base_frame[4] = {3, 3, 4, 4};
-    const unsigned int frame_count = (unsigned int)last_base_frame[hall_index];
-    /* bldinf BASE uses inclusive 1-based frame bounds. FUN_0040aaeb applies
-       ordinary inclusive modulo when the segment has no ping-pong flag. */
-    return (uint32_t)((animation_ticks / 50U + world_x % 23U) % frame_count);
+    if (runtime_location == NULL || (raw_id = runtime_location->record_value_10) <= 0 ||
+        raw_id >= g_pad_catalog.item_count) return 0;
+    item = building_render_find(&g_building_render_catalog, (uint16_t)raw_id);
+    if (item == NULL || (unsigned int)raw_id >= PAD_CATALOG_MAX_ITEMS) return 0;
+    sheet = &g_building_art[raw_id];
+    if (sheet->frames == NULL || sheet->frame_count == 0) return 0;
+
+    /* FUN_0040ae4d dispatches a building's current animation segment to
+       FUN_0040ab42. The idle preview uses CHUG when declared, otherwise BASE. */
+    segment = item->chug.present ? &item->chug : &item->base;
+    frame = building_render_frame(segment, g_menu.animation_ticks, world_x, 0);
+    if (!segment->present || frame >= sheet->frame_count) return 0;
+    draw_sprite(dc, sheet, frame, x, y);
+    return 1;
 }
 
 /* FUN_0040b345 draws feature layers at fixed world coordinates from the
@@ -1754,34 +1790,23 @@ static void render_island_view(HDC dc)
             runtime_location->bridge_neighbor_island < 0) {
             runtime_class = 0;
         }
-        if (runtime_location != NULL) {
-            int hall_index = initial_hall_index(runtime_location->record_value_10);
-            if (hall_index >= 0) {
-                if (x >= -4 && x < LOGICAL_WIDTH + 4) {
-                    uint32_t frame = initial_hall_frame(hall_index,
-                                                        g_menu.animation_ticks,
-                                                        location->x);
-                    draw_sprite(dc, &g_initial_halls[hall_index], frame, x, y);
-                }
-                continue;
-            }
-        }
         /* The pad catalog's PIT_Object (item 1) and PIT_FeatureTrigger
            (item 3) entries have no shape asset. These item IDs are distinct
            from an island record's renderer_class. */
         if (location->kind == ISLAND_LOCATION_PAD ||
             (location->renderer_class == 3 && location->renderer_variant == 3)) {
-            continue;
+            if (runtime_location == NULL || runtime_location->record_value_10 <= 0) continue;
         }
         if (x < -4 || x >= LOGICAL_WIDTH + 4) continue;
         /* The original class-2 bridge site is distinct from class-0 pads.
            bldinf.txt defines BR-TRG01's static BASE as frame 1; the COB's
            corresponding SHP stores that frame at index 0. */
-        if (runtime_class == 2 &&
-            g_bridge_trigger_art.frame_count == 23) {
+        if (runtime_class == 2 && g_bridge_trigger_art.frame_count == 23) {
             draw_sprite(dc, &g_bridge_trigger_art, 0, x, y);
             continue;
         }
+        {
+            int drew_location = 0;
         /* Island TXT `tone` rows denote unoccupied Tone pools. shapes.txt maps
            POOL to tone.shp; bldinf.txt gives the 2..40 ping-pong animation. */
         if (location->kind == ISLAND_LOCATION_TONE &&
@@ -1789,14 +1814,19 @@ static void render_island_view(HDC dc)
             uint32_t frame = island_tone_pool_frame(g_menu.animation_ticks,
                                                     location->x);
             draw_sprite(dc, &g_tone_field_art, frame, x, y);
-            continue;
+            drew_location = 1;
         }
         if (pad_group >= 0 && g_pad_art.frame_count == 27) {
             unsigned phase =
                 (g_menu.animation_ticks / (unsigned)(1 + pad_group) + location->x % 23u) % 9u;
             uint32_t frame = (uint32_t)pad_group * 9u + phase;
             draw_sprite(dc, &g_pad_art, frame, x, y);
-            continue;
+            drew_location = 1;
+        }
+        if (draw_runtime_building(dc, runtime_location, location->x, x, y)) {
+            drew_location = 1;
+        }
+        if (drew_location) continue;
         }
         for (dy = -2; dy <= 2; ++dy) {
             for (dx = -2; dx <= 2; ++dx) {
@@ -2480,6 +2510,49 @@ done:
     return success;
 }
 
+static int load_building_render_catalog(char *error, size_t error_capacity)
+{
+    CobArchive archive = {0};
+    const CobMember *pad_member;
+    const CobMember *animation_member;
+    unsigned char *pad_bytes = NULL;
+    unsigned char *animation_bytes = NULL;
+    PadCatalog pads;
+    BuildingRenderCatalog animations;
+    int success = 0;
+
+    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE00.COB", &archive,
+                          error, error_capacity)) return 0;
+    pad_member = cob_archive_find(&archive, "pad.txt");
+    animation_member = cob_archive_find(&archive, "bldinf.txt");
+    if (pad_member == NULL || animation_member == NULL) {
+        (void)snprintf(error, error_capacity,
+                       "pad.txt or bldinf.txt was not found in TONE00.COB");
+        goto done;
+    }
+    pad_bytes = (unsigned char *)malloc(pad_member->length == 0 ? 1 : pad_member->length);
+    animation_bytes = (unsigned char *)malloc(animation_member->length == 0
+                                               ? 1 : animation_member->length);
+    if (pad_bytes == NULL || animation_bytes == NULL ||
+        !cob_archive_read_member(&archive, pad_member, pad_bytes, pad_member->length,
+                                 error, error_capacity) ||
+        !cob_archive_read_member(&archive, animation_member, animation_bytes,
+                                 animation_member->length, error, error_capacity) ||
+        !pad_catalog_load(pad_bytes, pad_member->length, &pads, error, error_capacity) ||
+        !building_render_catalog_load(animation_bytes, animation_member->length,
+                                       &pads, &animations, error, error_capacity)) {
+        goto done;
+    }
+    g_pad_catalog = pads;
+    g_building_render_catalog = animations;
+    success = 1;
+done:
+    free(pad_bytes);
+    free(animation_bytes);
+    cob_archive_close(&archive);
+    return success;
+}
+
 static int load_menu_art(char *error, size_t error_capacity)
 {
     CobArchive archive = {0};
@@ -2582,6 +2655,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
 
     if (!load_world_map(error, sizeof(error)) ||
         !load_window_catalog(error, sizeof(error)) ||
+        !load_building_render_catalog(error, sizeof(error)) ||
         !load_menu_art(error, sizeof(error)) ||
         !load_menu_help(error, sizeof(error)) ||
         !create_help_sheet(&g_menu_help, error, sizeof(error)) ||
@@ -2650,10 +2724,13 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_pad_art);
     {
         unsigned int hall_index;
+        unsigned int item_index;
         for (hall_index = 0; hall_index < 4; ++hall_index) {
-            free_sprite_sheet(&g_initial_halls[hall_index]);
             free_sprite_sheet(&g_initial_floater_bodies[hall_index]);
             free_sprite_sheet(&g_initial_floater_legs[hall_index]);
+        }
+        for (item_index = 0; item_index < PAD_CATALOG_MAX_ITEMS; ++item_index) {
+            free_sprite_sheet(&g_building_art[item_index]);
         }
     }
     free_sprite_sheet(&g_island_feature_art);

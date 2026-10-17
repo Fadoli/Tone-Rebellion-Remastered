@@ -1,5 +1,9 @@
 # Original menu graphics reconstruction
 
+## Initial floater drawing on an island
+
+Ghidra identifies `FUN_0042704b` (`fltdraw.cpp`, `0x42704b`) as the painter used to compose a floater from separate body and legs SHP sheets. In the initial-world path, `FUN_0046466f` calls `FUN_00462a87(player, 0, markerX, markerY)` four times per player. Local `fltinf.txt` maps each tribe's worker item to its body and leg shape names; local `shapeinf.txt` maps the base worker to body frame 0 and idle hover legs frames 0–15. `shapes.txt` maps those names to `data\pbod.shp`/`plegs.shp`, `sbod.shp`/`slegs.shp`, `mbod.shp`/`mlegs.shp`, and `lbod.shp`/`llegs.shp`. The remake now loads these eight original sheets from `TONE01.COB` with the selected island palette and draws the initial floater instances on their assigned island, legs first and body over them. The 33 ms UI animation advances the hover frame modulo 16; exact game-tick phase, offsets caused by live movement/collision, and the full state-dependent behavior in `FUN_0042704b` are still unresolved. The underlying rendering observations come from the binary pseudocode; the filenames and frame ranges come from the local original data files.
+
 ## Evidence-backed asset path
 
 The remake reads original assets from `C:\Program Files\Tone\TONE01.COB` in read-only mode. The new-game palette is `data\newgame.pal`; the title screen palette is `data\titscrn.pal`. The asset names and their roles are also present in the local `shapes.txt`: `NEWBACK`, `TITSCRN`, `NEWBUTT`, `GLYPHS`, `NGREALMS`, `BIGFLOAT`, and `LEVIDIFF`.
@@ -64,3 +68,9 @@ The local `windows.txt` descriptor gives `ISLEVIEW` the pane `(0,0)`–`(639,319
 
 
 The island renderer now draws class-2 bridge locations using frame 0 of BR-TRG01.SHP. Static evidence: FUN_00461b3b maps the `bridge` tag to renderer class 2, the shipped `bldinf.txt` declares BR-TRG01 with BASE 1 1, and the COB sheet contains 23 frames. Choosing this base sprite for the map location remains an inference pending comparison with the original game's rendering.
+
+### Runtime building items and their animation segments
+
+The remake now reads `pad.txt` and `bldinf.txt` from `TONE00.COB`. `pad.txt` row IDs identify runtime item records; the `ITEM`/optional `SHAPE` and `BASE`/`CHUG` records in `bldinf.txt` provide the sprite sheet and animation segment. On island load it resolves the runtime IDs actually present there, loads their SHP sheets from `TONE01.COB`, and draws the animated building over its location. This includes the player-specific halls (`0x2a + 16 × player`) and initial tone marker items 6–9. The special unoccupied `POOL` and `PADS` render paths remain separate because those `bldinf` records are named entities rather than `pad.txt` item IDs.
+
+The frame calculation follows the observed `FUN_0040ab42`: convert inclusive one-based `bldinf` frame bounds to zero-based SHP indices; add world X modulo 23 to the tick-derived step; wrap linearly or ping-pong according to the segment; apply the state group offset and state-adjusted divisor. For this preview the remake chooses `CHUG` when present and otherwise `BASE`. Ghidra evidence confirms the segment arithmetic, but the original simulation's state predicate for selecting a segment and its global tick cadence are not yet fully recovered; the remake's 33 ms UI timer therefore approximates timing. Regression coverage is in `tests/test_building_render.c`, including checks against the local original `pad.txt` and `bldinf.txt` corpus when invoked with those files.
