@@ -1,6 +1,7 @@
 #include "game_session.h"
 #include "building_render.h"
 #include "island_render_rules.h"
+#include "pad_catalog.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -82,7 +83,10 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
         const GamePlayerStart *start = &session.player_starts.players[player];
         const GameRuntimeLocation *pad = &session.islands[start->island_index]
             .locations[start->nearest_site_location_index];
+        const GameRuntimeLocation *marker = &session.islands[start->island_index]
+            .locations[start->marker_location_index];
         const GameFloaterStart *floater = &session.floaters[player * GAME_START_FLOATERS_PER_PLAYER];
+        assert((marker->tribe_visibility_mask & (uint8_t)(1U << player)) != 0);
         assert(pad->record_value_10 ==
                GAME_START_INITIAL_PAD_ITEM_ID + (int32_t)player * 16);
         assert(pad->owner_id == (int32_t)player);
@@ -296,6 +300,63 @@ static void test_initialization_is_transactional_on_bad_world(void)
     assert(memcmp(&session, &before, sizeof(session)) == 0);
 }
 
+static void test_building_placement_matches_source_runtime_initialization(void)
+{
+    GameSession session;
+    PadCatalog catalog;
+    IslandLocation site;
+    GameRuntimeLocation *runtime;
+    char error[128];
+
+    memset(&session, 0, sizeof(session));
+    memset(&catalog, 0, sizeof(catalog));
+    memset(&site, 0, sizeof(site));
+    session.island_count = 1;
+    session.islands[0].location_count = 1;
+    runtime = &session.islands[0].locations[0];
+    runtime->renderer_class = 0;
+    runtime->record_value_10 = 0;
+    runtime->owner_id = -1;
+    runtime->source_flags = 0x7ff;
+    runtime->base_progress = 3;
+    runtime->chug_progress = 4;
+    runtime->glyph_progress = 5;
+    runtime->inci_progress = 6;
+    runtime->construction_progress = 7;
+    runtime->production_progress = 8;
+    runtime->animation_rate = 9;
+    runtime->barg_progress = 0.75;
+    catalog.item_count = PAD_CATALOG_MAX_ITEMS;
+    catalog.items[72].item_id = 72; /* base item 40 + player slot 2 * 16 */
+    catalog.items[72].size = 0;
+    catalog.items[72].building_tone_cost = 10;
+    site.kind = ISLAND_LOCATION_PAD_SMALL;
+    site.renderer_subtype = 0;
+
+    assert(game_session_place_building(&session, &catalog, 2, 0, 0,
+                                       &site, 40, error, sizeof(error)));
+    assert(runtime->record_value_10 == 72);
+    assert(runtime->owner_id == 2);
+    assert(runtime->source_flags == 0x410);
+    assert(runtime->record_value_24 == 0);
+    assert(runtime->base_progress == 0 && runtime->chug_progress == 0);
+    assert(runtime->glyph_progress == 0 && runtime->inci_progress == 0);
+    assert(runtime->construction_progress == 0 && runtime->production_progress == 0);
+    assert(runtime->animation_rate == 1 && runtime->barg_progress == 0.0);
+
+    runtime->record_value_10 = 0;
+    runtime->owner_id = -1;
+    catalog.items[72].size = 1;
+    assert(!game_session_place_building(&session, &catalog, 2, 0, 0,
+                                        &site, 40, error, sizeof(error)));
+    assert(runtime->record_value_10 == 0 && runtime->owner_id == -1);
+    catalog.items[72].size = 0;
+    catalog.items[72].building_tone_cost = -1;
+    assert(!game_session_place_building(&session, &catalog, 2, 0, 0,
+                                        &site, 40, error, sizeof(error)));
+    assert(runtime->record_value_10 == 0 && runtime->owner_id == -1);
+}
+
 int main(void)
 {
     test_session_initializes_player_starts_and_runtime_items();
@@ -303,6 +364,7 @@ int main(void)
     test_tone_pool_uses_two_source_counter_sequences();
     test_active_cons_and_prod_counters_finish_at_source_limits();
     test_initialization_is_transactional_on_bad_world();
+    test_building_placement_matches_source_runtime_initialization();
     (void)puts("game session unit tests passed");
     return 0;
 }

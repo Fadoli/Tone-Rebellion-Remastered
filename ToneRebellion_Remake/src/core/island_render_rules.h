@@ -18,6 +18,11 @@ enum {
    ping-pong (FUN_0040ab05); this returns that overlay frame zero-based. */
 uint16_t island_tone_pool_next_counter(int32_t runtime_item_id,
                                        uint16_t chug_progress);
+uint16_t island_tone_pool_render_counter(int32_t runtime_item_id,
+                                         int32_t owner_id,
+                                         uint8_t tribe_visibility_mask,
+                                         unsigned active_tribe,
+                                         uint16_t chug_progress);
 uint32_t island_tone_pool_frame(int32_t runtime_item_id,
                                 uint32_t chug_progress);
 int island_tone_pool_should_draw(int is_tone_location,

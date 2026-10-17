@@ -18,6 +18,7 @@ add_library(tone_core STATIC
     src/core/world_map.c
     src/core/game_start.c
     src/core/game_session.c
+    src/core/floater_motion.c
     src/core/tone_rng.c
 )
 target_include_directories(tone_core PUBLIC src/core src/data)
@@ -117,6 +118,12 @@ if(BUILD_TESTING)
     target_compile_features(test_game_session PRIVATE c_std_11)
     enable_test_assertions(test_game_session)
     add_test(NAME game_session_unit COMMAND test_game_session)
+
+    add_executable(test_floater_motion tests/test_floater_motion.c)
+    target_link_libraries(test_floater_motion PRIVATE tone_core)
+    target_compile_features(test_floater_motion PRIVATE c_std_11)
+    enable_test_assertions(test_floater_motion)
+    add_test(NAME floater_motion_unit COMMAND test_floater_motion)
 
     add_executable(test_island_corpus tests/test_island_corpus.c)
     target_link_libraries(test_island_corpus PRIVATE tone_core)

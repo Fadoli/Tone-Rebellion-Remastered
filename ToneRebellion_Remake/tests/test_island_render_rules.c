@@ -26,6 +26,11 @@ int main(void)
     assert(island_tone_pool_next_counter(ISLAND_TONE_POOL_ITEM_ALTERNATE, 125) == 102);
     assert(island_tone_pool_frame(ISLAND_TONE_POOL_ITEM_ALTERNATE, 102) == 35);
     assert(island_tone_pool_frame(99, 114) == 0);
+    assert(island_tone_pool_render_counter(0, -1, 0, 0, 42) == 0);
+    assert(island_tone_pool_render_counter(0, -1, 1, 0, 42) == 42);
+    assert(island_tone_pool_render_counter(0, 3, 0, 0, 42) == 42);
+    assert(island_tone_pool_render_counter(5, -1, 0, 0, 42) == 42);
+    assert(island_tone_pool_render_counter(0, -1, 0, 0, 90) == 90);
     assert(island_tone_pool_should_draw(1, 0, 0));
     assert(island_tone_pool_should_draw(1, 5, 0));
     assert(!island_tone_pool_should_draw(1, 5, 1));

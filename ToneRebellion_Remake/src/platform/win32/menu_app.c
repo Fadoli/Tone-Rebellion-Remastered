@@ -113,6 +113,7 @@ static IwConstructInfoState g_iw_construct_info;
 static int32_t g_iw_construct_items[IW_CONSTRUCT_BUILD_CANDIDATE_COUNT];
 static size_t g_iw_construct_item_count;
 static int g_iw_construct_open;
+static int32_t g_pending_build_item_id = -1;
 static int g_resume_available;
 static unsigned char g_load_slot_valid[8];
 static int g_hovered_help = -1;
@@ -1739,6 +1740,50 @@ static int update_iw_construct_hover(int x, int y)
     return apply_iw_construct_messages(&transition);
 }
 
+static int select_iw_construct_item(void)
+{
+    IwConstructTransition transition;
+    unsigned int i;
+    int selected = 0;
+
+    iw_construct_mouse_click(&g_iw_construct, g_game_session.config.selected_tribe,
+                             &transition);
+    for (i = 0; i < transition.message_count; ++i) {
+        const IwConstructMessage *message = &transition.messages[i];
+        if (message->code == IW_CONSTRUCT_MSG_SELECT_BUILD) {
+            g_pending_build_item_id = message->value;
+            selected = 1;
+        } else if (message->code == IW_CONSTRUCT_MSG_CLEAR_BUILD && selected) {
+            g_iw_construct_open = 0;
+            (void)iw_construct_info_handle_message(&g_iw_construct_info, 1, 0);
+        }
+    }
+    return selected;
+}
+
+static int place_pending_building(HWND window, int location_index)
+{
+    char error[128];
+    int placed;
+
+    if (g_pending_build_item_id < 0 || location_index < 0 ||
+        location_index >= g_island_surface_data.location_count ||
+        g_menu.selected_map_island < 0) return 0;
+    placed = game_session_place_building(
+        &g_game_session, &g_pad_catalog,
+        (uint8_t)g_game_session.config.selected_tribe,
+        (uint8_t)g_menu.selected_map_island, (uint16_t)location_index,
+        &g_island_surface_data.locations[location_index],
+        (uint16_t)g_pending_build_item_id, error, sizeof(error));
+    if (!placed) {
+        MessageBoxA(window, error, "Tone Rebellion remake - placement error",
+                    MB_OK | MB_ICONINFORMATION);
+        return 0;
+    }
+    g_pending_build_item_id = -1;
+    return 1;
+}
+
 static void draw_iw_construct(HDC dc)
 {
     const WindowTemplate *window;
@@ -2087,8 +2132,15 @@ static void render_island_view(HDC dc)
                                          runtime_item_id,
                                          covered_by_leviathan_building) &&
             g_tone_field_art.frame_count == 40) {
+            uint16_t render_counter = runtime_location != NULL
+                ? island_tone_pool_render_counter(runtime_item_id,
+                    runtime_location->owner_id,
+                    runtime_location->tribe_visibility_mask,
+                    g_game_session.config.selected_tribe,
+                    runtime_location->chug_progress)
+                : 0U;
             uint32_t frame = island_tone_pool_frame(runtime_item_id,
-                runtime_location != NULL ? runtime_location->chug_progress : 0U);
+                render_counter);
             /* FUN_0040bf98 draws POOL's BASE segment, then composites CHUG on
                top. bldinf.txt stores BASE 1 1, hence frame zero in decoded SHP. */
             draw_sprite(dc, &g_tone_field_art, ISLAND_TONE_POOL_BASE_FRAME, x, y);
@@ -2457,14 +2509,22 @@ static void handle_click(HWND window, int x, int y)
             (void)apply_iw_construct_messages(&transition);
             (void)update_iw_construct_hover(x, y);
         } else if (g_iw_construct_open) {
-            /* Source selection dispatches a gameplay build event (0x34). The
-               remake has not ported that event producer/placement yet. */
             (void)update_iw_construct_hover(x, y);
+            if (select_iw_construct_item()) {
+                InvalidateRect(window, NULL, FALSE);
+            }
         } else {
             int clicked_location = island_location_at(x, y);
             if (clicked_location >= 0) {
-                g_selected_location = clicked_location;
-                (void)open_iw_construct(clicked_location);
+                if (g_pending_build_item_id >= 0) {
+                    if (place_pending_building(window, clicked_location)) {
+                        g_selected_location = clicked_location;
+                    }
+                } else {
+                    g_selected_location = clicked_location;
+                    (void)open_iw_construct(clicked_location);
+                }
+                InvalidateRect(window, NULL, FALSE);
             }
         }
     } else if (g_menu.screen == SCREEN_LOAD_GAME) {

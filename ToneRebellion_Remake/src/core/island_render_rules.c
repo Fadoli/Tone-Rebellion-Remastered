@@ -30,6 +30,23 @@ uint16_t island_tone_pool_next_counter(int32_t runtime_item_id,
     return chug_progress;
 }
 
+uint16_t island_tone_pool_render_counter(int32_t runtime_item_id,
+                                         int32_t owner_id,
+                                         uint8_t tribe_visibility_mask,
+                                         unsigned active_tribe,
+                                         uint16_t chug_progress)
+{
+    /* FUN_0040bf98 holds an unowned ID-0 Tone pool at its first CHUG frame
+       while the active tribe's bit is absent and its counter is below 90. */
+    if (runtime_item_id == ISLAND_TONE_POOL_ITEM_DEFAULT && owner_id == -1 &&
+        active_tribe < 8U &&
+        (tribe_visibility_mask & (uint8_t)(1U << active_tribe)) == 0 &&
+        chug_progress < 0x5aU) {
+        return 0;
+    }
+    return chug_progress;
+}
+
 uint32_t island_tone_pool_frame(int32_t runtime_item_id,
                                 uint32_t chug_progress)
 {

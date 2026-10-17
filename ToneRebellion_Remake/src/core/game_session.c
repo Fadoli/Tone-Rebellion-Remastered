@@ -1,7 +1,9 @@
 #include "game_session.h"
 
 #include "building_render.h"
+#include "iw_construct.h"
 #include "island_render_rules.h"
+#include "pad_catalog.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -330,6 +332,12 @@ int game_session_initialize(const WorldDefinition *world,
             set_error(error, error_capacity, "initial hall location is not empty at runtime");
             return 0;
         }
+        /* FUN_0046466f marks each player's selected class-1 tone location in
+           object byte +0x22 with that player's visibility bit. */
+        if (start->marker_location_index < runtime->location_count) {
+            runtime->locations[start->marker_location_index].tribe_visibility_mask |=
+                (uint8_t)(1U << island_index);
+        }
         /* FUN_0046466f calls FUN_00452859(0x2a, player); FUN_004641de
            resolves that base item into the player's 16-entry pad block. */
         runtime->locations[location_index].record_value_10 =
@@ -500,4 +508,61 @@ void game_session_tick_item_animations(GameSession *session,
             }
         }
     }
+}
+
+int game_session_place_building(GameSession *session,
+                                const PadCatalog *catalog,
+                                uint8_t player_slot,
+                                uint8_t island_index,
+                                uint16_t location_index,
+                                const struct IslandLocation *site,
+                                uint16_t base_item_id,
+                                char *error, size_t error_capacity)
+{
+    GameRuntimeLocation *runtime;
+    const PadCatalogItem *item;
+    uint8_t site_size;
+    uint16_t runtime_item_id;
+
+    if (error != NULL && error_capacity != 0) error[0] = '\0';
+    if (session == NULL || catalog == NULL || site == NULL || player_slot >= 4 ||
+        island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count) {
+        set_error(error, error_capacity, "building placement target or player is out of range");
+        return 0;
+    }
+    runtime = &session->islands[island_index].locations[location_index];
+    if (runtime->renderer_class != 0 || runtime->record_value_10 != 0 ||
+        !iw_construct_site_size(site, &site_size)) {
+        set_error(error, error_capacity, "building placement requires an empty construction site");
+        return 0;
+    }
+    if (base_item_id == 0) {
+        set_error(error, error_capacity, "source rejects item ID zero for construction");
+        return 0;
+    }
+    runtime_item_id = (uint16_t)(base_item_id + (uint16_t)player_slot * 16U);
+    item = pad_catalog_find(catalog, runtime_item_id);
+    if (item == NULL || item->size < 0 || item->size > site_size ||
+        item->building_tone_cost == -1) {
+        set_error(error, error_capacity, "building is not allowed on this site");
+        return 0;
+    }
+
+    /* FUN_004528ca writes the player item and owner, clears animation state,
+       sets +0x32 to 1, and initializes object flags to 0x410. */
+    runtime->record_value_10 = runtime_item_id;
+    runtime->owner_id = player_slot;
+    runtime->record_value_24 = 0;
+    runtime->source_flags = 0x410;
+    runtime->base_progress = 0;
+    runtime->chug_progress = 0;
+    runtime->glyph_progress = 0;
+    runtime->inci_progress = 0;
+    runtime->construction_progress = 0;
+    runtime->production_progress = 0;
+    runtime->animation_rate = 1;
+    runtime->barg_progress = 0.0;
+    runtime->tribe_visibility_mask = 0;
+    return 1;
 }
