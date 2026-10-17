@@ -31,6 +31,8 @@
 | `analyze_function` | `ev_6ccf11adf4100a01f329d47d35c0c8bd1d7e5c6fcff4d70ee2a0c846e156a876` | `FUN_00454d1f` | Parseur shape-info avec tags d’animation/interaction. |
 | `analyze_function` | `ev_5d60033e6cc433f212a51343e2761e910c21c813cc1727a5c0375a566c73d999` | `FUN_00455833` | Parseur de records `SHAPE` et données associées. |
 | `analyze_function` | `ev_561df3c3edee5a21c16764f7b95d5fa1e14e3a19d3ca83157c30bd51568c31c9` | `FUN_004642a3` | Parseur de tables monde/îles/positions et appels aux helpers `pad`, `floater`, `spells`. |
+| `analyze_function` | `ev_ac313cb8cc73f9c102676395cd14cb97b5b1f9355d074df1e6656ce028d2d36f` | `FUN_0046466f` | Initialisation de 4 slots de monde/faction, sélection d’un lieu de départ et appels de création d’entités ; sémantiques encore indéterminées. |
+| `analyze_function` | `ev_af395cb5dc0ed1efd405d0c4880d5843648c434a49f9d811e53dccc4b1268377` | `FUN_00464b9e` | Attribution additionnelle de lieux via parcours de tables et choix conditionnels/aléatoires. |
 | `analyze_function` | `ev_a3a1136454b116409a3a18908d27e23488bf809cdcb8d28b4d4d0805f05688e3` | `FUN_0041c46f` | Références Ghidra relient les chaînes `effects.txt`, `fltinf.txt`, `bldinf.txt` aux appels respectifs vers `FUN_004153b8`, `FUN_00454d1f` et `FUN_00455833` ; call-sites `0x41c669`, `0x41c6aa`, `0x41c6b9`. |
 | `read_bytes` | `ev_d64c24d6ebe5f8bcb691202a6d7fad642a6264e07b2bc78e83ce1c39bc21ec8f` | `0x49de40` | Lecture de 16 octets ; `END\0` observé à l’adresse référencée par le parseur de textes. |
 | `read_bytes` | `ev_7dfb26f9c9ef233774c5281b8d6c98964c45d378c4dabe0e36f189713717924f` | `0x49be80` | Lecture de 0x140 octets ; a permis de confirmer le tag `TYPE`, `CAST` et les valeurs de `REALM`. |

@@ -38,6 +38,10 @@ Les pistes `0x478460` (démarrage runtime), `0x41d8e1` (entrée application), `0
 - `unknowns.md` : fonctions externes, thunks, fonctions sans corps, décompilations échouées, fonctions ignorées et limitations avec leurs raisons.
 - `behavior_map.md` : première carte statique du démarrage, du gestionnaire de fenêtre, de la file d’événements, de la mise à jour et du rendu.
 - `data_catalog.md` : formats de fichiers d’entrée reconstitués à partir des parseurs et chaînes Ghidra, avec degrés de certitude.
+- `remake_spec.md` : premier modèle de données, frontière d’architecture et vertical slice proposé pour le remake.
+- `ToneRebellion_Remake/` : début d’implémentation C11 du modèle de monde et du lecteur de `worldpos.txt`, compilé puis exécuté sur le fichier local `WORLDPOS.TXT`.
+- `ToneRebellion_Remake/src/data/cob_archive.*` : lecteur en lecture seule de la table d’archives COB ; le lecteur de monde accepte maintenant directement le membre `data\\worldpos.txt` de `TONE01.COB`.
+- `ToneRebellion_Remake/src/platform/win32/menu_app.c` : prototype de menu interactif Windows, construit et démarré depuis le remake, avec carte du monde, sélection taille/difficulté/tribus et contrôles souris/clavier ; la simulation de partie reste à porter.
 - `cob_archives.md` et `archive_index.jsonl` : format/chargement des archives locales et inventaire avec comparaison des 483 membres extraits.
 - `evidence/manifest.md` : Evidence IDs, paramètres du profil, couverture et pagination des demandes REA.
 - `AGENTS.md` : consignes persistantes pour Codex et les agents de code qui poursuivront l’analyse.

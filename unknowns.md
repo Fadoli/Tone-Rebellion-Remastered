@@ -14,6 +14,7 @@
 - Les pseudocodes Ghidra sont des reconstructions non compilables et non équivalentes au source d’origine.
 - La session Ghidra active est temporaire/éphémère. La fermer supprimerait son projet temporaire et son état d’annotation ; conserver la session pendant les travaux.
 - Le consommateur de `shapeinf.txt` n’est pas encore localisé. Le fichier existe dans le corpus local et ses directives `shape`, `frame` et `offset` sont visibles, mais une recherche de chaîne Ghidra n’a pas établi son call-site.
+- Le premier prototype du remake couvre le modèle de données et le chargement des mondes. SDL3 est choisi pour la couche plateforme, mais l’adaptateur n’est pas encore implémenté. Les gestionnaires des commandes d’écran `WORLDSIZE`, `DIFFICULTY` et `TRIBE0..3`, puis leur liaison à l’initialisation de partie, restent à tracer ; suivre `remake_spec.md`.
 
 ## Premières observations revalidées
 
