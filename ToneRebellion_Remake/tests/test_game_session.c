@@ -110,6 +110,7 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
         assert(floater->x == start->marker_x);
         assert(floater->y == start->marker_y);
         assert(floater->movement_speed == 3); /* four initial *work rows in floater.txt */
+        assert(game_session_count_player_floaters(&session, (uint8_t)player) == 4);
         {
             unsigned int unit;
             for (unit = 0; unit < start->floater_count; ++unit) {
@@ -135,6 +136,9 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
         assert(game_session_world_map_frame_offset(
                    &session, start->island_index, (uint8_t)(1U << player), 1) == 30);
     }
+    assert(game_session_count_player_floaters(NULL, 0) == 0);
+    assert(game_session_count_player_floaters(&session,
+               GAME_START_PLAYER_COUNT) == 0);
     {
         unsigned int island;
         int found_unassigned = 0;

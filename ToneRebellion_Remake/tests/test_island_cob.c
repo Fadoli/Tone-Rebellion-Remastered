@@ -134,8 +134,8 @@ static unsigned int island_ui_frame_requirement(const char *name)
     if (ascii_case_equal(name, "data\\temphol0.shp")) return 8;
     if (ascii_case_equal(name, "data\\glinv.shp")) return 29;
     if (ascii_case_equal(name, "data\\trade.shp")) return 4;
-    if (ascii_case_equal(name, "data\\bildtone.shp") ||
-        ascii_case_equal(name, "data\\tonecrys.shp") ||
+    if (ascii_case_equal(name, "data\\bildtone.shp")) return 25;
+    if (ascii_case_equal(name, "data\\tonecrys.shp") ||
         ascii_case_equal(name, "data\\magctone.shp")) return 5;
     if (ascii_case_equal(name, "data\\alltrigs.shp")) return 29;
     if (ascii_case_equal(name, "data\\diploma.shp")) return 24;

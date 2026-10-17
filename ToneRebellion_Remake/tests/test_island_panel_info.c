@@ -13,6 +13,7 @@ int main(int argc, char **argv)
     int sprite_y;
     int roster_x;
     int roster_y;
+    IslandHallResourceRow resource_row;
     WindowTemplate info_panel = {0};
     IslandPanelSelection panel_selection = {7, -1};
     static const unsigned char plot04[] =
@@ -81,6 +82,20 @@ int main(int argc, char **argv)
                                                        &sprite_x, &sprite_y));
     assert(!island_panel_info_building_sprite_position(&info_panel, NULL,
                                                        &sprite_y));
+    assert(island_panel_info_hall_resource_row(0, &resource_row));
+    assert(resource_row.icon_frame == 24 && resource_row.icon_x == 41 &&
+           resource_row.icon_y == 40 && resource_row.amount_x == 53 &&
+           resource_row.amount_y == 34);
+    assert(island_panel_info_hall_resource_row(1, &resource_row));
+    assert(resource_row.icon_frame == 4 && resource_row.icon_x == 41 &&
+           resource_row.icon_y == 70 && resource_row.amount_x == 53 &&
+           resource_row.amount_y == 63);
+    assert(island_panel_info_hall_resource_row(2, &resource_row));
+    assert(resource_row.icon_frame == 4 && resource_row.icon_x == 41 &&
+           resource_row.icon_y == 97 && resource_row.amount_x == 53 &&
+           resource_row.amount_y == 90);
+    assert(!island_panel_info_hall_resource_row(3, &resource_row));
+    assert(!island_panel_info_hall_resource_row(0, NULL));
     assert(island_panel_info_inventory_key(5, key, sizeof(key)));
     assert(strcmp(key, "BRIDGE00") == 0);
     assert(island_panel_info_inventory_key(6, key, sizeof(key)));
@@ -138,6 +153,10 @@ int main(int argc, char **argv)
         assert(bytes != NULL || file_length == 0);
         assert(fread(bytes, 1, (size_t)file_length, file) == (size_t)file_length);
         assert(fclose(file) == 0);
+        assert(island_panel_info_extract_entry(bytes, (size_t)file_length,
+                                               "POPSTR", description,
+                                               sizeof(description)));
+        assert(strcmp(description, "Pop") == 0);
         for (cryptic_id = 0; cryptic_id < ISLAND_PANEL_INFO_CRYPTIC_COUNT;
              ++cryptic_id) {
             assert(island_panel_info_cryptic_key(cryptic_id, key, sizeof(key)));

@@ -257,6 +257,10 @@ int game_session_floater_at(const GameSession *session,
                             uint8_t island_index,
                             uint16_t x,
                             uint16_t y);
+/* FUN_0046562b(player,-1) counts all active player-owned floater records.
+   This session contains only the modeled active floaters. */
+unsigned int game_session_count_player_floaters(const GameSession *session,
+                                                uint8_t player_slot);
 /* FUN_0041ff2e masks the source level word with 0x000f; IWLocInfo displays
    that value plus one. Returns 0 for a null record. */
 uint8_t game_session_location_display_level(const GameRuntimeLocation *location);

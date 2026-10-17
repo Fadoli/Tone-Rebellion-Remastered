@@ -121,6 +121,7 @@ static char g_help_text[HELP_ENTRY_COUNT][1024];
 static char g_newgame_text[8][256];
 static char g_empty_glyph_text[256];
 static char g_empty_inventory_text[256];
+static char g_hall_population_label[64];
 static char g_inventory_info_text[768];
 static char g_glyph_info_text[768];
 static char g_cryptic_text[ISLAND_PANEL_INFO_CRYPTIC_COUNT][768];
@@ -1563,6 +1564,13 @@ static int load_newgame_captions(char *error, size_t error_capacity)
                             sizeof(g_empty_inventory_text))) {
         (void)snprintf(error, error_capacity,
                        "gamey.txt key NOART is missing or empty");
+        goto done;
+    }
+    if (!extract_help_entry(bytes, member->length, "POPSTR",
+                            g_hall_population_label,
+                            sizeof(g_hall_population_label))) {
+        (void)snprintf(error, error_capacity,
+                       "gamey.txt key POPSTR is missing or empty");
         goto done;
     }
     for (i = 0; i < ISLAND_PANEL_INFO_CRYPTIC_COUNT; ++i) {
@@ -3448,6 +3456,63 @@ static void draw_island_feature(HDC dc, int island_id, const IslandLocation *sit
 #undef FEATURE_FRAME
 }
 
+static void draw_hall_stock_summary(HDC dc, int hall_player,
+                                    const GameRuntimeIsland *island)
+{
+    static const SpriteSheet *const resource_sheets[GAME_RESOURCE_TYPE_COUNT] = {
+        &g_bildtone_art, &g_tone_crys_art, &g_magctone_art
+    };
+    const WindowTemplate *info;
+    const GameRuntimeLocation *hall;
+    RECT pane;
+    int saved_dc;
+    unsigned int resource;
+
+    if (hall_player < 0 || island == NULL ||
+        g_island_panel_mode != WINDOW_ISLAND_PANEL_GENERAL ||
+        g_selected_location < 0 ||
+        (uint16_t)g_selected_location >= island->location_count) return;
+    info = window_catalog_find(&g_window_catalog, "IWLocInfo", 3);
+    if (info == NULL || g_temp_hole_art.frame_count <= 1U) return;
+
+    hall = &island->locations[g_selected_location];
+    pane.left = info->pane.left;
+    pane.top = info->pane.top;
+    pane.right = info->pane.right + 1;
+    pane.bottom = info->pane.bottom + 1;
+    saved_dc = SaveDC(dc);
+    (void)IntersectClipRect(dc, pane.left, pane.top, pane.right, pane.bottom);
+    draw_sprite(dc, &g_temp_hole_art, 1, info->pane.left, info->pane.top);
+    for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
+        IslandHallResourceRow row;
+        char amount[8];
+        if (!island_panel_info_hall_resource_row(resource, &row)) continue;
+        if (resource_sheets[resource]->frame_count > row.icon_frame) {
+            draw_sprite(dc, resource_sheets[resource], row.icon_frame,
+                        info->pane.left + row.icon_x,
+                        info->pane.top + row.icon_y);
+        }
+        (void)snprintf(amount, sizeof(amount), "%d",
+            (int)(int16_t)hall->resource_stock[resource]);
+        draw_bitmap_label(dc, amount,
+                          info->pane.left + row.amount_x,
+                          info->pane.top + row.amount_y,
+                          RGB(230, 238, 255));
+    }
+    {
+        char population[96];
+        unsigned int count = game_session_count_player_floaters(
+            &g_game_session, (uint8_t)hall_player);
+        (void)snprintf(population, sizeof(population), "%s %u",
+                       g_hall_population_label, count);
+        draw_bitmap_label(dc, population,
+                          info->pane.left + 0xb6,
+                          info->pane.top + 0x29,
+                          RGB(230, 238, 255));
+    }
+    RestoreDC(dc, saved_dc);
+}
+
 static void render_island_view(HDC dc)
 {
     const int image_top = 0;
@@ -3664,6 +3729,7 @@ static void render_island_view(HDC dc)
     }
 
     draw_hall_panel(dc, hall_player);
+    draw_hall_stock_summary(dc, hall_player, runtime_island);
 
     /* The five Hall command controls are clickable THALL frames from the
        active island palette. Their descriptors also own the hover bounds. */

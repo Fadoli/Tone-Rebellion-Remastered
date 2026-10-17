@@ -137,6 +137,20 @@ int island_panel_info_building_sprite_position(const WindowTemplate *panel,
     return 1;
 }
 
+int island_panel_info_hall_resource_row(unsigned int resource,
+                                        IslandHallResourceRow *row)
+{
+    static const IslandHallResourceRow rows[ISLAND_PANEL_INFO_HALL_RESOURCE_COUNT] = {
+        {24, 41, 40, 53, 34},
+        {4, 41, 70, 53, 63},
+        {4, 41, 97, 53, 90}
+    };
+
+    if (resource >= ISLAND_PANEL_INFO_HALL_RESOURCE_COUNT || row == NULL) return 0;
+    *row = rows[resource];
+    return 1;
+}
+
 int island_panel_info_extract_entry(const unsigned char *bytes, size_t length,
                                     const char *key,
                                     char *output, size_t output_capacity)

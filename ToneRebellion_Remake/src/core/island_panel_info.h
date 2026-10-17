@@ -11,8 +11,17 @@ enum {
     ISLAND_PANEL_INFO_CRYPTIC = 5,
     ISLAND_PANEL_INFO_INVENTORY_DEFAULT = 6,
     ISLAND_PANEL_INFO_CRYPTIC_COUNT = 21,
+    ISLAND_PANEL_INFO_HALL_RESOURCE_COUNT = 3,
     ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT = 6
 };
+
+typedef struct IslandHallResourceRow {
+    uint8_t icon_frame;
+    int16_t icon_x;
+    int16_t icon_y;
+    int16_t amount_x;
+    int16_t amount_y;
+} IslandHallResourceRow;
 
 typedef enum IslandLocationActionControl {
     ISLAND_LOCATION_ACTION_NONE = 0,
@@ -60,6 +69,11 @@ IslandLocationActionControl island_panel_location_action_control(
    the pane width/height-relative anchor recovered from its draw call. */
 int island_panel_info_building_sprite_position(const WindowTemplate *panel,
                                                int *x, int *y);
+
+/* FUN_00440567 draws the three Hall stock icons and short counters in
+   IWLocInfo-relative coordinates. */
+int island_panel_info_hall_resource_row(unsigned int resource,
+                                        IslandHallResourceRow *row);
 
 /* Reads one key-delimited text entry, trimming horizontal whitespace on keys. */
 int island_panel_info_extract_entry(const unsigned char *bytes, size_t length,

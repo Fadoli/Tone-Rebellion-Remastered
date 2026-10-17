@@ -743,6 +743,22 @@ int game_session_floater_at(const GameSession *session,
     return -1;
 }
 
+unsigned int game_session_count_player_floaters(const GameSession *session,
+                                                uint8_t player_slot)
+{
+    unsigned int count = 0;
+    unsigned int i;
+    unsigned int limit;
+
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT) return 0;
+    limit = session->floater_count;
+    if (limit > GAME_SESSION_MAX_FLOATERS) limit = GAME_SESSION_MAX_FLOATERS;
+    for (i = 0; i < limit; ++i) {
+        if (session->floaters[i].owner_slot == player_slot) ++count;
+    }
+    return count;
+}
+
 uint8_t game_session_location_display_level(const GameRuntimeLocation *location)
 {
     if (location == NULL) return 0;
