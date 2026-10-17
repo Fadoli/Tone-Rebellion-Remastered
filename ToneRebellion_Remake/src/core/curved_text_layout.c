@@ -115,6 +115,10 @@ int curved_text_layout(const char *text, CurvedTextSide side,
     for (guess = 1; guess <= line_capacity; ++guess) {
         size_t actual;
         size_t distance;
+        /* FUN_00428baa starts from bottom_y - measured_text_height. The line
+           callback advances by font_height + 3 before returning its baseline;
+           do not subtract another glyph height here or the whole paragraph
+           moves upward by one row and collides with the tribe emblems. */
         int32_t start_y = bottom_y - (int32_t)guess * step;
         actual = layout_from(text, side, start_y, font_height, measure,
                              measure_context, candidate, line_capacity);
@@ -124,11 +128,18 @@ int curved_text_layout(const char *text, CurvedTextSide side,
             *line_count = actual;
             return 1;
         }
-        distance = actual > guess ? actual - guess : guess - actual;
-        if (distance < best_distance) {
-            best_distance = distance;
-            best_count = actual;
-            memcpy(best, candidate, actual * sizeof(*best));
+        /* A non-converging wrap can gain a line when the guessed start moves
+           into a narrower part of the curve. Keep the closest candidate that
+           ends at or above the callback baseline anchor. The New Game footer
+           begins below that anchor; its room must not be taken by moving the
+           entire paragraph upward. Bounds remain those used to wrap it. */
+        if (actual < guess) {
+            distance = guess - actual;
+            if (distance < best_distance) {
+                best_distance = distance;
+                best_count = actual;
+                memcpy(best, candidate, actual * sizeof(*best));
+            }
         }
     }
     if (best_count == 0 || best_count > line_capacity) return 0;

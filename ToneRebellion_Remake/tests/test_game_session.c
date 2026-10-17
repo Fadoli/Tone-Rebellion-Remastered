@@ -7,6 +7,9 @@
 #include <stdio.h>
 #include <string.h>
 
+_Static_assert(sizeof(GamePendingEvent) == 0x14,
+               "pending event must match FUN_004662b7's 0x14-byte record");
+
 static void set_location(IslandData *island, unsigned int index,
                          uint8_t renderer_class, uint16_t x, uint16_t y,
                          uint16_t initial_value)
@@ -59,6 +62,7 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
     GameSession session;
     char error[160];
     unsigned int player;
+    unsigned int island_index;
 
     make_world(&world, islands);
     memset(&config, 0, sizeof(config));
@@ -78,7 +82,15 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
     assert(session.config.selected_tribe == 3);
     assert(session.island_count == 5);
     assert(session.floater_count == 16);
+    assert(session.pending_event_count == 0);
+    assert(session.pending_events[0].active == 0);
     assert(session.tone_placements.placement_count == 5);
+    for (island_index = 0; island_index < session.island_count; ++island_index) {
+        for (player = 0; player < GAME_START_PLAYER_COUNT; ++player) {
+            assert(session.islands[island_index].source_event_state[player] == 0);
+            assert(session.islands[island_index].source_event3_pending_parity[player] == 0);
+        }
+    }
     for (player = 0; player < GAME_START_PLAYER_COUNT; ++player) {
         const GamePlayerStart *start = &session.player_starts.players[player];
         const GameRuntimeLocation *pad = &session.islands[start->island_index]
@@ -269,6 +281,185 @@ static void test_hall_resource_modes_cycle_through_original_three_states(void)
                &session, GAME_START_PLAYER_COUNT, GAME_RESOURCE_BUILD_TONE) == -1);
     assert(game_session_cycle_resource_stock_mode(
                &session, 1, (GameResourceType)7) == -1);
+}
+
+static void test_inventory_counts_cover_source_item_id_range(void)
+{
+    GameSession session = {0};
+    assert(game_session_inventory_credit(&session, 1, 5, 2));
+    assert(game_session_inventory_credit(&session, 1, 33, 3));
+    assert(session.economy[1].inventory_count[0] == 2);
+    assert(session.economy[1].inventory_count[28] == 3);
+    assert(!game_session_inventory_debit(&session, 1, 5, 3));
+    assert(session.economy[1].inventory_count[0] == 2);
+    assert(game_session_inventory_debit(&session, 1, 5, 2));
+    assert(session.economy[1].inventory_count[0] == 0);
+    session.economy[1].inventory_count[28] = UINT16_MAX;
+    assert(!game_session_inventory_credit(&session, 1, 33, 1));
+    assert(!game_session_inventory_credit(&session, 1, 4, 1));
+    assert(!game_session_inventory_debit(&session, 1, 34, 1));
+    assert(!game_session_inventory_credit(&session, GAME_START_PLAYER_COUNT, 5, 1));
+}
+
+static void test_pending_event_table_matches_source_slots_and_deduplication(void)
+{
+    GameSession session;
+    int first;
+    int second;
+    int i;
+
+    memset(&session, 0, sizeof(session));
+    first = game_session_pending_event_add(&session, 2, 17, 4, 33, 45, 9);
+    assert(first == 0);
+    assert(session.pending_event_count == 1);
+    assert(session.pending_events[first].active == 1);
+    assert(session.pending_events[first].reserved_zero == 0);
+    assert(session.pending_events[first].reserved_one == 1);
+    assert(session.pending_events[first].player_id == 2);
+    assert(session.pending_events[first].payload_0a == 17);
+    assert(session.pending_events[first].action_type == 4);
+    assert(session.pending_events[first].payload_0c == 33);
+    assert(session.pending_events[first].payload_0e == 45);
+    assert(session.pending_events[first].payload_12 == 9);
+
+    /* FUN_004662b7 only deduplicates action types 5 and 13. */
+    second = game_session_pending_event_add(&session, 2, 17, 4, 33, 45, 9);
+    assert(second == 1);
+    assert(session.pending_event_count == 2);
+    assert(game_session_pending_event_add(&session, 2, 17, 5, 33, 45, 9) == 2);
+    assert(game_session_pending_event_add(&session, 3, 99, 5, 33, 45, 9) == -1);
+    assert(session.pending_event_count == 3);
+    assert(session.pending_events[3].active == 0);
+    assert(session.pending_events[3].player_id == 3);
+    assert(session.pending_events[3].payload_0a == 99);
+    assert(game_session_pending_event_add(&session, 2, 17, 13, 33, 45, 9) == 3);
+    assert(game_session_pending_event_add(&session, 2, 17, 13, 33, 45, 9) == -1);
+    assert(session.pending_event_count == 4);
+
+    assert(game_session_pending_event_release(&session, (uint8_t)second));
+    assert(!game_session_pending_event_release(&session, (uint8_t)second));
+    assert(session.pending_events[second].payload_12 == 9);
+    assert(!game_session_pending_event_release(&session,
+                                               GAME_SESSION_MAX_PENDING_EVENTS));
+    assert(session.pending_event_count == 3);
+    assert(!game_session_pending_event_release(NULL, 0));
+
+    memset(&session, 0, sizeof(session));
+    for (i = 0; i < GAME_SESSION_MAX_PENDING_EVENTS; ++i) {
+        assert(game_session_pending_event_add(&session, 0, (int16_t)i, 4,
+                                              0, 0, (int16_t)i) == i);
+    }
+    assert(session.pending_event_count == GAME_SESSION_MAX_PENDING_EVENTS);
+    assert(game_session_pending_event_add(&session, 0, 0, 4, 0, 0, 0) == -1);
+    assert(game_session_pending_event_add(NULL, 0, 0, 4, 0, 0, 0) == -1);
+}
+
+static void test_inventory_action_reserves_source_payload_without_mutation(void)
+{
+    GameSession session = {0};
+    GameRuntimeIsland *island;
+    GameRuntimeLocation *location;
+    int slot;
+
+    session.island_count = 1;
+    island = &session.islands[0];
+    island->location_count = 3;
+    location = &island->locations[0];
+    location->renderer_class = 0;
+    location->owner_id = -1;
+    location->record_value_10 = 0;
+    session.economy[1].inventory_count[0] = 2;
+
+    /* FUN_0042fa0f(0x40): empty class-0 location queues type 4. It does not
+       mutate the location or debit inventory before a later result event. */
+    slot = game_session_queue_inventory_action(&session, 1, 0, 0, 5);
+    assert(slot == 0);
+    assert(session.pending_event_count == 1);
+    assert(session.pending_events[slot].player_id == 1);
+    assert(session.pending_events[slot].payload_0a == 0);
+    assert(session.pending_events[slot].action_type == 4);
+    assert(session.pending_events[slot].payload_0c == 0);
+    assert(session.pending_events[slot].payload_0e == 0);
+    assert(session.pending_events[slot].payload_12 == 5);
+    assert(session.economy[1].inventory_count[0] == 2);
+    assert(location->record_value_10 == 0 && location->owner_id == -1);
+
+    /* Both source rejection alternatives must be retained. */
+    location = &island->locations[1];
+    location->renderer_class = 0;
+    location->record_value_10 = 7;
+    location->owner_id = -1;
+    assert(game_session_queue_inventory_action(&session, 1, 0, 1, 5) == -1);
+    location->record_value_10 = 0;
+    location->owner_id = 0;
+    assert(game_session_queue_inventory_action(&session, 1, 0, 1, 5) == -1);
+    assert(session.pending_event_count == 1);
+
+    /* The source condition is specific to renderer class 0. */
+    location = &island->locations[2];
+    location->renderer_class = 1;
+    location->record_value_10 = 9;
+    location->owner_id = 0;
+    assert(game_session_queue_inventory_action(&session, 1, 0, 2, 33) == 1);
+    assert(session.pending_events[1].payload_0e == 2);
+    assert(session.pending_events[1].payload_12 == 33);
+
+    assert(game_session_queue_inventory_action(NULL, 1, 0, 0, 5) == -1);
+    assert(game_session_queue_inventory_action(&session, GAME_START_PLAYER_COUNT,
+                                               0, 0, 5) == -1);
+    assert(game_session_queue_inventory_action(&session, 1, 1, 0, 5) == -1);
+    assert(game_session_queue_inventory_action(&session, 1, 0, 3, 5) == -1);
+    assert(game_session_queue_inventory_action(&session, 1, 0, 0, 4) == -1);
+    assert(game_session_queue_inventory_action(&session, 1, 0, 0, 34) == -1);
+    assert(session.pending_event_count == 2);
+}
+
+static void test_source_event3_subtype0_queues_and_toggles_only_player_bit(void)
+{
+    GameSession session = {0};
+    session.island_count = 2;
+    session.islands[1].source_event_state[2] = 0xa4U;
+
+    assert(game_session_queue_island_event3_subtype0(&session, 2, 1));
+    assert(session.islands[1].source_event_state[2] == 0xa4U);
+    assert(session.islands[1].source_event3_pending_parity[2] == 1);
+    assert(session.islands[1].source_event3_pending_parity[0] == 0);
+    assert(session.islands[0].source_event3_pending_parity[2] == 0);
+    game_session_dispatch_island_events(&session);
+    assert(session.islands[1].source_event_state[2] == 0xa5U);
+    assert(session.islands[1].source_event_state[0] == 0);
+    assert(session.islands[0].source_event_state[2] == 0);
+    assert(session.islands[1].source_event3_pending_parity[2] == 0);
+
+    assert(game_session_queue_island_event3_subtype0(&session, 2, 1));
+    game_session_dispatch_island_events(&session);
+    assert(session.islands[1].source_event_state[2] == 0xa4U);
+
+    assert(game_session_queue_island_event3_subtype0(&session, 2, 1));
+    assert(game_session_queue_island_event3_subtype0(&session, 2, 1));
+    assert(session.islands[1].source_event3_pending_parity[2] == 0);
+    game_session_dispatch_island_events(&session);
+    assert(session.islands[1].source_event_state[2] == 0xa4U);
+
+    assert(!game_session_queue_island_event3_subtype0(NULL, 0, 0));
+    assert(!game_session_queue_island_event3_subtype0(&session,
+        GAME_START_PLAYER_COUNT, 0));
+    assert(!game_session_queue_island_event3_subtype0(&session, 0, 2));
+    game_session_dispatch_island_events(NULL);
+}
+
+static void test_glyph_ownership_mask_is_player_local_and_idempotent(void)
+{
+    GameSession session = {0};
+    assert(session.economy[0].glyph_mask == 0);
+    assert(game_session_acquire_glyph(&session, 0, 0));
+    assert(game_session_acquire_glyph(&session, 0, 13));
+    assert(game_session_acquire_glyph(&session, 0, 13));
+    assert(session.economy[0].glyph_mask == 0x2001U);
+    assert(session.economy[1].glyph_mask == 0);
+    assert(!game_session_acquire_glyph(&session, 0, 14));
+    assert(!game_session_acquire_glyph(&session, GAME_START_PLAYER_COUNT, 0));
+    assert(!game_session_acquire_glyph(NULL, 0, 0));
 }
 
 static void test_item_animation_uses_source_flags_and_per_object_counters(void)
@@ -599,6 +790,11 @@ int main(void)
     test_session_initializes_player_starts_and_runtime_items();
     test_hall_resource_ledger_is_safe();
     test_hall_resource_modes_cycle_through_original_three_states();
+    test_inventory_counts_cover_source_item_id_range();
+    test_pending_event_table_matches_source_slots_and_deduplication();
+    test_inventory_action_reserves_source_payload_without_mutation();
+    test_source_event3_subtype0_queues_and_toggles_only_player_bit();
+    test_glyph_ownership_mask_is_player_local_and_idempotent();
     test_item_animation_uses_source_flags_and_per_object_counters();
     test_tone_pool_uses_two_source_counter_sequences();
     test_active_cons_and_prod_counters_finish_at_source_limits();

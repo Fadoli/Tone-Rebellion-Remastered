@@ -142,12 +142,34 @@ static void verify_original_manifest(const char *path)
            window->pane.right == 447 && window->pane.bottom == 471);
     window = window_catalog_find(&catalog, "IWConstructInfo", 3);
     assert(window != NULL && window->type_id == 0x1c);
+    window = window_catalog_find(&catalog, "IWTextInfo", 3);
+    assert(window != NULL && window->shape_frame == 2 &&
+           window->pane.left == 456 && window->pane.top == 328 &&
+           window->pane.right == 631 && window->pane.bottom == 395);
+    window = window_catalog_find(&catalog, "IWInventory", 3);
+    assert(window != NULL && window->shape_frame == 1 &&
+           window->pane.left == 192 && window->pane.top == 368 &&
+           window->pane.right == 447 && window->pane.bottom == 471);
     window = window_catalog_find(&catalog, "BuildCycle", 3);
     assert(window != NULL && window->type_id == 1);
     assert(window->pane.left == 282 && window->pane.top == 368 &&
            window->pane.right == 358 && window->pane.bottom == 391);
     assert(window->send_message[0] == 0x45);
     assert(strcmp(window->message_destination, "IWConstruct") == 0);
+    window = window_catalog_find(&catalog, "InvCycle", 3);
+    assert(window != NULL && window->type_id == 1 && window->mouse_focus == 1);
+    assert(window->shape_frame == 0 && window->pane.left == 282 &&
+           window->pane.top == 368 && window->pane.right == 358 &&
+           window->pane.bottom == 391);
+    assert(window->send_message[0] == 69 &&
+           strcmp(window->message_destination, "IWInventory") == 0);
+    {
+        const char *const inventory_control[] = {"InvCycle"};
+        assert(window_catalog_hit_test_names(&catalog, 3, 320, 380,
+            inventory_control, 1) == window);
+        assert(window_catalog_hit_test_names(&catalog, 3, 280, 380,
+            inventory_control, 1) == NULL);
+    }
     window = window_catalog_find(&catalog, "WORLDVIEW", 2);
     assert(window != NULL && window->type_id == 0x0b);
     window = window_catalog_find(&catalog, "BC_TrnStkC", 3);
@@ -165,6 +187,19 @@ static void verify_original_manifest(const char *path)
     assert(window != NULL && window->pane.top == 412 && window->pane.bottom == 444);
     window = window_catalog_find(&catalog, "BC_HallStkM", 3);
     assert(window != NULL && window->pane.top == 440 && window->pane.bottom == 471);
+    {
+        static const char *const stock_controls[] = {
+            "BC_HallStkB", "BC_HallStkC", "BC_HallStkM"
+        };
+        static const int32_t stock_y[] = {400, 430, 455};
+        size_t resource;
+        for (resource = 0; resource < 3; ++resource) {
+            window = window_catalog_hit_test_names(&catalog, 3, 200,
+                stock_y[resource], stock_controls, 3);
+            assert(window != NULL && strcmp(window->name,
+                   stock_controls[resource]) == 0);
+        }
+    }
     assert(window_catalog_hall_panel_mode("BC_GenInfo") ==
            WINDOW_ISLAND_PANEL_GENERAL);
     assert(window_catalog_hall_panel_mode("BC_Storage") ==
@@ -217,8 +252,9 @@ static void verify_original_manifest(const char *path)
             assert(window != NULL && window->mouse_focus == 1);
             assert(window_catalog_island_button(permanent_buttons[button]) ==
                    (int)button);
-            assert(window_catalog_hit_test(&catalog, 3, button_x[button],
-                                           button_y[button]) == window);
+            assert(window_catalog_hit_test_names(&catalog, 3, button_x[button],
+                button_y[button], permanent_buttons,
+                sizeof(permanent_buttons) / sizeof(permanent_buttons[0])) == window);
         }
     }
     assert(window_catalog_island_button("not-a-control") ==

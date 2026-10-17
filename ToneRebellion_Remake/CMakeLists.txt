@@ -18,6 +18,11 @@ add_library(tone_core STATIC
     src/core/world_map.c
     src/core/game_start.c
     src/core/game_session.c
+    src/core/game_inventory.c
+    src/core/game_trade.c
+    src/core/game_diplomacy.c
+    src/core/game_glyph_inventory.c
+    src/core/island_panel_info.c
     src/core/game_music.c
     src/core/floater_motion.c
     src/core/tone_rng.c
@@ -119,6 +124,36 @@ if(BUILD_TESTING)
     target_compile_features(test_game_session PRIVATE c_std_11)
     enable_test_assertions(test_game_session)
     add_test(NAME game_session_unit COMMAND test_game_session)
+
+    add_executable(test_game_inventory tests/test_game_inventory.c)
+    target_link_libraries(test_game_inventory PRIVATE tone_core)
+    target_compile_features(test_game_inventory PRIVATE c_std_11)
+    enable_test_assertions(test_game_inventory)
+    add_test(NAME game_inventory_unit COMMAND test_game_inventory)
+
+    add_executable(test_game_trade tests/test_game_trade.c)
+    target_link_libraries(test_game_trade PRIVATE tone_core)
+    target_compile_features(test_game_trade PRIVATE c_std_11)
+    enable_test_assertions(test_game_trade)
+    add_test(NAME game_trade_unit COMMAND test_game_trade)
+
+    add_executable(test_game_diplomacy tests/test_game_diplomacy.c)
+    target_link_libraries(test_game_diplomacy PRIVATE tone_core)
+    target_compile_features(test_game_diplomacy PRIVATE c_std_11)
+    enable_test_assertions(test_game_diplomacy)
+    add_test(NAME game_diplomacy_unit COMMAND test_game_diplomacy)
+
+    add_executable(test_game_glyph_inventory tests/test_game_glyph_inventory.c)
+    target_link_libraries(test_game_glyph_inventory PRIVATE tone_core)
+    target_compile_features(test_game_glyph_inventory PRIVATE c_std_11)
+    enable_test_assertions(test_game_glyph_inventory)
+    add_test(NAME game_glyph_inventory_unit COMMAND test_game_glyph_inventory)
+
+    add_executable(test_island_panel_info tests/test_island_panel_info.c)
+    target_link_libraries(test_island_panel_info PRIVATE tone_core)
+    target_compile_features(test_island_panel_info PRIVATE c_std_11)
+    enable_test_assertions(test_island_panel_info)
+    add_test(NAME island_panel_info_unit COMMAND test_island_panel_info)
 
     add_executable(test_floater_motion tests/test_floater_motion.c)
     target_link_libraries(test_floater_motion PRIVATE tone_core)

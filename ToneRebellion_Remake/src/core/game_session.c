@@ -802,6 +802,290 @@ int game_session_cycle_resource_stock_mode(GameSession *session,
     return (int)*mode;
 }
 
+int game_session_adjust_trade_offer(GameSession *session, uint8_t player_slot,
+                                    uint8_t resource_row,
+                                    uint8_t target_column, int direction)
+{
+    uint16_t *amount;
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        resource_row >= GAME_RESOURCE_TYPE_COUNT ||
+        target_column >= GAME_TRADE_TARGET_COUNT ||
+        (direction != -1 && direction != 1)) return 0;
+    amount = &session->economy[player_slot].trade_offer[resource_row][target_column];
+    if (direction > 0) {
+        if (*amount < 1000U) {
+            *amount = (uint16_t)(*amount > 990U ? 1000U : *amount + 10U);
+        }
+    } else if (*amount > 0U) {
+        *amount = (uint16_t)(*amount < 10U ? 0U : *amount - 10U);
+    }
+    return 1;
+}
+
+int game_session_clear_trade_offers(GameSession *session, uint8_t player_slot)
+{
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT) return 0;
+    memset(session->economy[player_slot].trade_offer, 0,
+           sizeof(session->economy[player_slot].trade_offer));
+    return 1;
+}
+
+int game_session_commit_trade_offers(GameSession *session, uint8_t player_slot)
+{
+    const GamePlayerEconomy *economy;
+    unsigned int column;
+    unsigned int request_count = 0;
+    unsigned int available_requests;
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT) return -1;
+    if ((unsigned int)session->trade_request_count >
+        (unsigned int)GAME_SESSION_MAX_TRADE_REQUESTS) return -1;
+    economy = &session->economy[player_slot];
+    for (column = 0; column < GAME_TRADE_TARGET_COUNT; ++column) {
+        unsigned int resource;
+        int has_amount = 0;
+        for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
+            if (economy->trade_offer[resource][column] != 0) {
+                has_amount = 1;
+                break;
+            }
+        }
+        if (has_amount) ++request_count;
+    }
+    available_requests = (unsigned int)GAME_SESSION_MAX_TRADE_REQUESTS -
+                         (unsigned int)session->trade_request_count;
+    if (request_count > available_requests) return -1;
+    for (column = 0; column < GAME_TRADE_TARGET_COUNT; ++column) {
+        GameTradeRequest *request;
+        unsigned int resource;
+        int has_amount = 0;
+        for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
+            if (economy->trade_offer[resource][column] != 0) {
+                has_amount = 1;
+                break;
+            }
+        }
+        if (!has_amount) continue;
+        request = &session->trade_requests[session->trade_request_count++];
+        request->source_player = player_slot;
+        request->target_player = (uint8_t)(column < player_slot ? column : column + 1U);
+        for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
+            request->amount[resource] = economy->trade_offer[resource][column];
+        }
+    }
+    (void)game_session_clear_trade_offers(session, player_slot);
+    return (int)request_count;
+}
+
+int game_session_pop_trade_request(GameSession *session, GameTradeRequest *out)
+{
+    if (session == NULL || out == NULL || session->trade_request_count == 0) return 0;
+    *out = session->trade_requests[0];
+    --session->trade_request_count;
+    if (session->trade_request_count != 0) {
+        memmove(&session->trade_requests[0], &session->trade_requests[1],
+                (size_t)session->trade_request_count * sizeof(session->trade_requests[0]));
+    }
+    memset(&session->trade_requests[session->trade_request_count], 0,
+           sizeof(session->trade_requests[0]));
+    return 1;
+}
+
+int game_session_toggle_diplomacy(GameSession *session, uint8_t source_player,
+                                  uint8_t target_player,
+                                  GameDiplomacyAction action)
+{
+    uint8_t target_bit;
+    uint8_t *mask;
+    GameDiplomacyRequest *request;
+    if (session == NULL || source_player >= GAME_START_PLAYER_COUNT ||
+        target_player >= GAME_START_PLAYER_COUNT || source_player == target_player ||
+        (action != GAME_DIPLOMACY_RECIPIENT && action != GAME_DIPLOMACY_POLICY) ||
+        session->diplomacy_request_count >= GAME_SESSION_MAX_DIPLOMACY_REQUESTS) {
+        return 0;
+    }
+    request = &session->diplomacy_requests[session->diplomacy_request_count++];
+    request->source_player = source_player;
+    request->target_player = target_player;
+    request->action = (uint8_t)action;
+    target_bit = (uint8_t)(1U << target_player);
+    mask = action == GAME_DIPLOMACY_POLICY
+        ? &session->diplomacy_policy_mask[source_player]
+        : &session->message_recipient_mask[source_player];
+    *mask ^= target_bit;
+    return 1;
+}
+
+int game_session_pop_diplomacy_request(GameSession *session,
+                                       GameDiplomacyRequest *out)
+{
+    if (session == NULL || out == NULL || session->diplomacy_request_count == 0) {
+        return 0;
+    }
+    *out = session->diplomacy_requests[0];
+    --session->diplomacy_request_count;
+    if (session->diplomacy_request_count != 0) {
+        memmove(&session->diplomacy_requests[0], &session->diplomacy_requests[1],
+                (size_t)session->diplomacy_request_count *
+                sizeof(session->diplomacy_requests[0]));
+    }
+    memset(&session->diplomacy_requests[session->diplomacy_request_count], 0,
+           sizeof(session->diplomacy_requests[0]));
+    return 1;
+}
+
+static uint16_t *player_inventory_count(GameSession *session,
+                                        uint8_t player_slot,
+                                        uint8_t item_id)
+{
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        item_id < GAME_INVENTORY_ITEM_FIRST_ID ||
+        item_id >= GAME_INVENTORY_ITEM_FIRST_ID + GAME_INVENTORY_ITEM_COUNT) {
+        return NULL;
+    }
+    return &session->economy[player_slot].inventory_count[
+        item_id - GAME_INVENTORY_ITEM_FIRST_ID];
+}
+
+int game_session_inventory_credit(GameSession *session, uint8_t player_slot,
+                                  uint8_t item_id, uint32_t amount)
+{
+    uint16_t *count = player_inventory_count(session, player_slot, item_id);
+    if (count == NULL || amount > UINT16_MAX - *count) return 0;
+    *count = (uint16_t)(*count + amount);
+    return 1;
+}
+
+int game_session_inventory_debit(GameSession *session, uint8_t player_slot,
+                                 uint8_t item_id, uint32_t amount)
+{
+    uint16_t *count = player_inventory_count(session, player_slot, item_id);
+    if (count == NULL || amount > *count) return 0;
+    *count = (uint16_t)(*count - amount);
+    return 1;
+}
+
+int game_session_pending_event_add(GameSession *session, int16_t player_id,
+                                   int16_t payload_0a, int16_t action_type,
+                                   int16_t payload_0c, int16_t payload_0e,
+                                   int16_t payload_12)
+{
+    unsigned int slot;
+    GamePendingEvent *event;
+
+    if (session == NULL || session->pending_event_count >=
+        GAME_SESSION_MAX_PENDING_EVENTS) return -1;
+    for (slot = 0; slot < GAME_SESSION_MAX_PENDING_EVENTS; ++slot) {
+        if (session->pending_events[slot].active == 0) break;
+    }
+    if (slot == GAME_SESSION_MAX_PENDING_EVENTS) return -1;
+
+    event = &session->pending_events[slot];
+    memset(event, 0, sizeof(*event));
+    event->player_id = player_id;
+    event->payload_0a = payload_0a;
+    event->action_type = action_type;
+    event->payload_0c = payload_0c;
+    event->payload_0e = payload_0e;
+    event->payload_12 = payload_12;
+    event->active = 1;
+    event->reserved_one = 1;
+    ++session->pending_event_count;
+
+    if (action_type == 5 || action_type == 13) {
+        unsigned int other;
+        for (other = 0; other < GAME_SESSION_MAX_PENDING_EVENTS; ++other) {
+            const GamePendingEvent *candidate = &session->pending_events[other];
+            if (other == slot || candidate->active == 0 ||
+                candidate->action_type != action_type ||
+                candidate->payload_0c != payload_0c ||
+                candidate->payload_0e != payload_0e ||
+                candidate->payload_12 != payload_12) continue;
+            event->active = 0;
+            --session->pending_event_count;
+            return -1;
+        }
+    }
+    return (int)slot;
+}
+
+int game_session_queue_inventory_action(GameSession *session,
+                                        uint8_t player_slot,
+                                        uint8_t island_index,
+                                        uint16_t location_index,
+                                        uint8_t item_id)
+{
+    const GameRuntimeIsland *island;
+    const GameRuntimeLocation *location;
+
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        island_index >= session->island_count ||
+        item_id < GAME_INVENTORY_ITEM_FIRST_ID ||
+        item_id >= GAME_INVENTORY_ITEM_FIRST_ID + GAME_INVENTORY_ITEM_COUNT) {
+        return -1;
+    }
+    island = &session->islands[island_index];
+    if (location_index >= island->location_count) return -1;
+
+    location = &island->locations[location_index];
+    /* FUN_0042fa0f(0x40) only rejects this exact class-0 state. Other
+       location classes follow additional source rules that this check must
+       not silently generalize. */
+    if (location->renderer_class == 0 &&
+        (location->record_value_10 != 0 || location->owner_id != -1)) return -1;
+
+    /* Packet fields observed in FUN_0042fa0f: category 0, type 4, player,
+       current island, zeroed +0x0c, clicked location, selected item. */
+    return game_session_pending_event_add(session, (int16_t)player_slot,
+        (int16_t)island_index, 4, 0, (int16_t)location_index, (int16_t)item_id);
+}
+
+int game_session_queue_island_event3_subtype0(GameSession *session,
+                                              uint8_t player_slot,
+                                              uint8_t island_index)
+{
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        island_index >= session->island_count) return 0;
+    session->islands[island_index].source_event3_pending_parity[player_slot] ^= 1U;
+    return 1;
+}
+
+void game_session_dispatch_island_events(GameSession *session)
+{
+    unsigned int island_index;
+    if (session == NULL) return;
+    for (island_index = 0; island_index < session->island_count; ++island_index) {
+        GameRuntimeIsland *island = &session->islands[island_index];
+        unsigned int player_slot;
+        for (player_slot = 0; player_slot < GAME_START_PLAYER_COUNT; ++player_slot) {
+            if (island->source_event3_pending_parity[player_slot] != 0) {
+                island->source_event_state[player_slot] ^= 1U;
+                island->source_event3_pending_parity[player_slot] = 0;
+            }
+        }
+    }
+}
+
+int game_session_pending_event_release(GameSession *session, uint8_t slot)
+{
+    GamePendingEvent *event;
+    if (session == NULL || slot >= GAME_SESSION_MAX_PENDING_EVENTS) return 0;
+    event = &session->pending_events[slot];
+    if (event->active == 0 || session->pending_event_count == 0) return 0;
+    event->active = 0;
+    --session->pending_event_count;
+    return 1;
+}
+
+int game_session_acquire_glyph(GameSession *session, uint8_t player_slot,
+                               uint8_t glyph_index)
+{
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        glyph_index >= GAME_GLYPH_COUNT) return 0;
+    session->economy[player_slot].glyph_mask = (uint16_t)(
+        session->economy[player_slot].glyph_mask | (uint16_t)(1U << glyph_index));
+    return 1;
+}
+
 int game_session_place_building(GameSession *session,
                                 const PadCatalog *catalog,
                                 uint8_t player_slot,

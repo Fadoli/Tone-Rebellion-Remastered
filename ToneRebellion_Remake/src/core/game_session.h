@@ -2,13 +2,21 @@
 #define TONE_REBELLION_GAME_SESSION_H
 
 #include "game_start.h"
+#include "game_diplomacy.h"
 #include "world_map.h"
 
 #include <stddef.h>
 #include <stdint.h>
 
 enum { GAME_SESSION_MAX_FLOATERS = GAME_START_PLAYER_COUNT * GAME_START_FLOATERS_PER_PLAYER };
+enum { GAME_SESSION_MAX_PENDING_EVENTS = 64 };
+enum { GAME_TRADE_TARGET_COUNT = GAME_START_PLAYER_COUNT - 1,
+       GAME_SESSION_MAX_TRADE_REQUESTS = GAME_START_PLAYER_COUNT * GAME_TRADE_TARGET_COUNT };
+enum { GAME_SESSION_MAX_DIPLOMACY_REQUESTS =
+       GAME_START_PLAYER_COUNT * GAME_TRADE_TARGET_COUNT * 2 };
 enum { GAME_RESOURCE_TYPE_COUNT = 3, GAME_RESOURCE_NONE = 0xff };
+enum { GAME_INVENTORY_ITEM_FIRST_ID = 5, GAME_INVENTORY_ITEM_COUNT = 29,
+       GAME_GLYPH_COUNT = 14 };
 
 typedef enum GameResourceType {
     GAME_RESOURCE_BUILD_TONE = 0,
@@ -23,10 +31,51 @@ typedef struct GamePlayerEconomy {
     uint16_t hall_location_index;
     uint16_t hall_x;
     uint16_t hall_y;
+    /* FUN_0043d59b enumerates player-owned inventory counts for item IDs 5..33.
+       The UI count table is distinct from resources and island placements. */
+    uint16_t inventory_count[GAME_INVENTORY_ITEM_COUNT];
+    /* FUN_0043dee3 reads the player's 14-bit glyph-ownership mask. */
+    uint16_t glyph_mask;
     /* FUN_0045f755 cycles each Hall reserve mode through raw values 0..2;
        FUN_0045eaa7 treats mode 2 as an active fill request. */
     uint8_t stock_mode[GAME_RESOURCE_TYPE_COUNT];
+    /* IWTrade keeps three resource amounts for each of the three other
+       players. Columns use the source display order with the local player
+       omitted (FUN_0043edac / FUN_0043ec78). */
+    uint16_t trade_offer[GAME_RESOURCE_TYPE_COUNT][GAME_TRADE_TARGET_COUNT];
 } GamePlayerEconomy;
+
+/* FUN_0042fa0f's TradeDOIT path emits category-3/type-0xb packets. This
+   outbox records those messages for a future multiplayer transport; it does
+   not apply the transfer locally. */
+typedef struct GameTradeRequest {
+    uint8_t source_player;
+    uint8_t target_player;
+    uint16_t amount[GAME_RESOURCE_TYPE_COUNT];
+} GameTradeRequest;
+
+/* FUN_0043e4f0 emits subtype-10 diplomacy requests. The local arrays mirror
+   the two source per-player flag groups after FUN_00465793 applies a toggle. */
+typedef struct GameDiplomacyRequest {
+    uint8_t source_player;
+    uint8_t target_player;
+    uint8_t action;
+} GameDiplomacyRequest;
+
+/* FUN_004662b7 reserves one of 64 world-action records (stride 0x14). Keep
+   the observed short fields without assigning gameplay meaning to the
+   payload words whose producers/consumers are not fully ported yet. */
+typedef struct GamePendingEvent {
+    uint32_t active;
+    uint16_t reserved_zero;
+    uint16_t reserved_one;
+    int16_t player_id;
+    int16_t payload_0a;
+    int16_t payload_0c;
+    int16_t payload_0e;
+    int16_t action_type;
+    int16_t payload_12;
+} GamePendingEvent;
 
 struct BuildingRenderCatalog;
 struct IslandLocation;
@@ -80,6 +129,12 @@ typedef struct GameRuntimeIsland {
     uint16_t location_count;
     /* FUN_0047117d checks one per-player access dword at island +0x29ac. */
     uint8_t access_mask;
+    /* FUN_00465793 message type 3/subtype 0 toggles bit 0 in one raw dword
+       per player at island +0x29bc. Its gameplay/display meaning is unknown. */
+    uint32_t source_event_state[GAME_START_PLAYER_COUNT];
+    /* Pending type-3/subtype-0 events are represented by parity: each source
+       event only XORs bit 0, so coalescing preserves the post-drain raw word. */
+    uint8_t source_event3_pending_parity[GAME_START_PLAYER_COUNT];
     GameRuntimeLocation locations[ISLAND_DATA_MAX_LOCATIONS];
 } GameRuntimeIsland;
 
@@ -113,6 +168,16 @@ typedef struct GameSession {
     GameFloaterStart floaters[GAME_SESSION_MAX_FLOATERS];
     uint8_t floater_count;
     GamePlayerEconomy economy[GAME_START_PLAYER_COUNT];
+    /* FUN_004662b7's 64-slot deferred-action table, initially zeroed by
+       FUN_004637fc. This stores requests only; effect processing is separate. */
+    uint16_t pending_event_count;
+    GamePendingEvent pending_events[GAME_SESSION_MAX_PENDING_EVENTS];
+    uint16_t trade_request_count;
+    GameTradeRequest trade_requests[GAME_SESSION_MAX_TRADE_REQUESTS];
+    uint8_t diplomacy_policy_mask[GAME_START_PLAYER_COUNT];
+    uint8_t message_recipient_mask[GAME_START_PLAYER_COUNT];
+    uint8_t diplomacy_request_count;
+    GameDiplomacyRequest diplomacy_requests[GAME_SESSION_MAX_DIPLOMACY_REQUESTS];
     uint16_t class0_assignments;
     /* FUN_004718eb reads one active flag per WORLDPOS bridge pair. */
     uint32_t active_bridge_mask;
@@ -206,6 +271,60 @@ int game_session_debit_resource(GameSession *session, uint8_t player_slot,
 int game_session_cycle_resource_stock_mode(GameSession *session,
                                            uint8_t player_slot,
                                            GameResourceType type);
+/* FUN_0043ec78: left/right cell clicks add/subtract 10 and clamp to 0..1000.
+   target_column is the displayed column after omitting player_slot. */
+int game_session_adjust_trade_offer(GameSession *session, uint8_t player_slot,
+                                    uint8_t resource_row,
+                                    uint8_t target_column, int direction);
+/* FUN_0042fa0f messages 4010/4011 clear or enqueue nonzero per-target
+   type-0xb requests and then clear the 3x3 offer table. Returns packet count,
+   or -1 if invalid/full (offers remain intact on failure). */
+int game_session_clear_trade_offers(GameSession *session, uint8_t player_slot);
+int game_session_commit_trade_offers(GameSession *session, uint8_t player_slot);
+int game_session_pop_trade_request(GameSession *session, GameTradeRequest *out);
+/* FUN_0043e4f0 / FUN_00465793: enqueue one subtype-10 toggle and update the
+   corresponding local flag as if the queued event had been dispatched. */
+int game_session_toggle_diplomacy(GameSession *session, uint8_t source_player,
+                                  uint8_t target_player,
+                                  GameDiplomacyAction action);
+int game_session_pop_diplomacy_request(GameSession *session,
+                                       GameDiplomacyRequest *out);
+/* FUN_0043d59b reads counts for IDs 5..33; FUN_00425084 increments a count
+   when a produced item cannot be placed, and FUN_00452eac decrements it when
+   an inventory item is consumed. These helpers model those count changes. */
+int game_session_inventory_credit(GameSession *session, uint8_t player_slot,
+                                  uint8_t item_id, uint32_t amount);
+int game_session_inventory_debit(GameSession *session, uint8_t player_slot,
+                                  uint8_t item_id, uint32_t amount);
+/* Models the record reservation and duplicate rule in FUN_004662b7. Returns
+   the reserved slot, or -1 when full/duplicate/invalid. Only action types 5
+   and 13 are deduplicated by the source table. */
+int game_session_pending_event_add(GameSession *session, int16_t player_id,
+                                   int16_t payload_0a, int16_t action_type,
+                                   int16_t payload_0c, int16_t payload_0e,
+                                   int16_t payload_12);
+/* FUN_0042fa0f(0x40): queue an inventory-use request for a clicked island
+   location. Mirrors its class-0 occupied-location rejection and stores the
+   source's island/location/item payload; it does not apply the item effect or
+   debit inventory before the later result event succeeds. */
+int game_session_queue_inventory_action(GameSession *session,
+                                        uint8_t player_slot,
+                                        uint8_t island_index,
+                                        uint16_t location_index,
+                                        uint8_t item_id);
+/* PANIC message 0x3b queues type 3/subtype 0. Parity coalescing retains the
+   same state after FUN_00466221 drains the local action queue. */
+int game_session_queue_island_event3_subtype0(GameSession *session,
+                                              uint8_t player_slot,
+                                              uint8_t island_index);
+/* Apply the queued type-3/subtype-0 effects at an island simulation tick. */
+void game_session_dispatch_island_events(GameSession *session);
+/* Clears a modelled pending slot and updates its active count. This does not
+   reproduce FUN_00466533's unrelated engine callbacks. */
+int game_session_pending_event_release(GameSession *session, uint8_t slot);
+/* FUN_004503bd sets one ownership bit after the source acquisition condition. */
+int game_session_acquire_glyph(GameSession *session, uint8_t player_slot,
+                               uint8_t glyph_index);
 /* FUN_00452656 validation and FUN_004528ca runtime initialization. */
 int game_session_place_building(GameSession *session,
                                 const PadCatalog *catalog,

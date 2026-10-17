@@ -122,6 +122,19 @@ static int manifest_contains(char names[][64], size_t name_count, const char *na
     return 0;
 }
 
+static unsigned int island_ui_frame_requirement(const char *name)
+{
+    if (ascii_case_equal(name, "data\\thall0.shp")) return 10;
+    if (ascii_case_equal(name, "data\\glinv.shp")) return 29;
+    if (ascii_case_equal(name, "data\\trade.shp")) return 4;
+    if (ascii_case_equal(name, "data\\bildtone.shp") ||
+        ascii_case_equal(name, "data\\tonecrys.shp") ||
+        ascii_case_equal(name, "data\\magctone.shp")) return 5;
+    if (ascii_case_equal(name, "data\\alltrigs.shp")) return 29;
+    if (ascii_case_equal(name, "data\\diploma.shp")) return 24;
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     CobArchive archive = {0};
@@ -135,6 +148,7 @@ int main(int argc, char **argv)
     unsigned int floater_body_sheets_found = 0;
     unsigned int floater_leg_sheets_found = 0;
     unsigned int island_template_sheets_found = 0;
+    unsigned int island_ui_sheets_found = 0;
     char shape_names[512][64];
     size_t shape_name_count = 0;
 
@@ -180,6 +194,22 @@ int main(int argc, char **argv)
                 free(bytes);
                 cob_archive_close(&archive);
                 return 1;
+            }
+            {
+                unsigned int required_ui_frames =
+                    island_ui_frame_requirement(member->name);
+                if (required_ui_frames != 0) {
+                    if (shp.frame_count < required_ui_frames) {
+                        (void)fprintf(stderr,
+                                      "%s: expected at least %u UI frames, found %u\n",
+                                      member->name, required_ui_frames,
+                                      (unsigned)shp.frame_count);
+                        free(bytes);
+                        cob_archive_close(&archive);
+                        return 1;
+                    }
+                    ++island_ui_sheets_found;
+                }
             }
             if (island_template_variant(member->name) >= 0) {
                 ShpFrame frame;
@@ -261,11 +291,12 @@ int main(int argc, char **argv)
     }
 
     if (shapes_found == 0 || halls_found != 4 || island_template_sheets_found != 4 ||
+        island_ui_sheets_found != 8 ||
         floater_body_sheets_found != 4 || floater_leg_sheets_found != 4 ||
         cob_archive_find(&archive, "data\\br-trg01.shp") == NULL ||
         !manifest_contains(shape_names, shape_name_count, "data\\br-trg01.shp")) {
         (void)fprintf(stderr,
-                      "expected four starting hall sheets, four tribe templates, four worker bodies, four worker leg sheets, and manifested data\\br-trg01.shp\n");
+                      "expected Hall/UI and Trade resource sheets, four tribe templates, four worker bodies, four worker leg sheets, and manifested data\\br-trg01.shp\n");
         cob_archive_close(&archive);
         return 1;
     }
@@ -304,7 +335,7 @@ int main(int argc, char **argv)
     }
     (void)printf("parsed %u island COB members (%u location rows)\n",
                  files_found, records_found);
-    (void)printf("decoded %u SHP sheets (%u frames)\n", shapes_found,
+    (void)printf("decoded %u SHP sheets (%u frames), including island UI sheets\n", shapes_found,
                  frames_decoded);
     return 0;
 }

@@ -1,0 +1,123 @@
+#include "island_panel_info.h"
+
+#include <stdio.h>
+#include <string.h>
+
+const char *island_panel_info_default_key(int panel_mode)
+{
+    switch (panel_mode) {
+    case WINDOW_ISLAND_PANEL_INVENTORY:
+        return "COLLART";
+    case WINDOW_ISLAND_PANEL_GLYPHS:
+        return "GLYSTONE";
+    default:
+        return NULL;
+    }
+}
+
+int island_panel_info_inventory_key(unsigned int item_id,
+                                    char *output, size_t output_capacity)
+{
+    const char *prefix;
+    unsigned int suffix;
+    int written;
+
+    if (output == NULL || output_capacity == 0) return 0;
+    output[0] = '\0';
+    if (item_id == 5) {
+        prefix = "BRIDGE";
+        suffix = 0;
+    } else if (item_id >= 6 && item_id <= 33) {
+        prefix = "PLOT";
+        suffix = item_id - 6;
+    } else {
+        return 0;
+    }
+    written = snprintf(output, output_capacity, "%s%02u", prefix, suffix);
+    if (written < 0 || (size_t)written >= output_capacity) {
+        output[0] = '\0';
+        return 0;
+    }
+    return 1;
+}
+
+int island_panel_info_building_sprite_position(const WindowTemplate *panel,
+                                               int *x, int *y)
+{
+    int width;
+    int height;
+
+    if (panel == NULL || x == NULL || y == NULL) return 0;
+    width = panel->pane.right - panel->pane.left;
+    height = panel->pane.bottom - panel->pane.top;
+    if (width <= 0 || height <= 0) return 0;
+    /* FUN_0044338b passes (pane width - 0x32, pane height / 2 + 5)
+       to FUN_0042704b; that renderer's coordinates are pane-local. */
+    *x = panel->pane.left + width - 0x32;
+    *y = panel->pane.top + height / 2 + 5;
+    return 1;
+}
+
+int island_panel_info_extract_entry(const unsigned char *bytes, size_t length,
+                                    const char *key,
+                                    char *output, size_t output_capacity)
+{
+    size_t cursor = 0;
+    size_t key_length;
+
+    if (bytes == NULL || key == NULL || output == NULL || output_capacity == 0) {
+        return 0;
+    }
+    output[0] = '\0';
+    key_length = strlen(key);
+    while (cursor < length) {
+        size_t line_start = cursor;
+        size_t line_end;
+        while (cursor < length && bytes[cursor] != '\n') ++cursor;
+        line_end = cursor;
+        if (line_end > line_start && bytes[line_end - 1] == '\r') --line_end;
+        while (line_end > line_start &&
+               (bytes[line_end - 1] == ' ' || bytes[line_end - 1] == '\t')) {
+            --line_end;
+        }
+        if (line_end - line_start == key_length &&
+            memcmp(bytes + line_start, key, key_length) == 0) {
+            size_t used = 0;
+            if (cursor < length) ++cursor;
+            while (cursor < length) {
+                size_t text_start = cursor;
+                size_t text_end;
+                size_t count;
+                while (cursor < length && bytes[cursor] != '\n') ++cursor;
+                text_end = cursor;
+                if (text_end > text_start && bytes[text_end - 1] == '\r') --text_end;
+                if (text_end - text_start >= 3 &&
+                    memcmp(bytes + text_start, "END", 3) == 0) {
+                    output[used] = '\0';
+                    return used != 0;
+                }
+                count = text_end - text_start;
+                while (count > 0 && (bytes[text_start] == ' ' ||
+                                     bytes[text_start] == '\t')) {
+                    ++text_start;
+                    --count;
+                }
+                while (count > 0 && (bytes[text_start + count - 1] == ' ' ||
+                                     bytes[text_start + count - 1] == '\t')) --count;
+                if (count != 0) {
+                    if (used != 0 && used + 1 < output_capacity) output[used++] = ' ';
+                    if (count >= output_capacity - used) {
+                        count = output_capacity - used - 1;
+                    }
+                    memcpy(output + used, bytes + text_start, count);
+                    used += count;
+                }
+                if (cursor < length) ++cursor;
+            }
+            output[0] = '\0';
+            return 0;
+        }
+        if (cursor < length) ++cursor;
+    }
+    return 0;
+}
