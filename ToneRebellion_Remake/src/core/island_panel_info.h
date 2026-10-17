@@ -10,7 +10,8 @@ enum {
     ISLAND_PANEL_INFO_INVENTORY_DETAIL = 2,
     ISLAND_PANEL_INFO_CRYPTIC = 5,
     ISLAND_PANEL_INFO_INVENTORY_DEFAULT = 6,
-    ISLAND_PANEL_INFO_CRYPTIC_COUNT = 21
+    ISLAND_PANEL_INFO_CRYPTIC_COUNT = 21,
+    ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT = 6
 };
 
 typedef enum IslandLocationActionControl {
@@ -28,6 +29,16 @@ typedef struct IslandPanelSelection {
    selected-floater pointer; its selected-location pointer remains intact. */
 void island_panel_select_floater(IslandPanelSelection *selection,
                                 int32_t floater_index);
+
+/* FUN_00440567 and FUN_00440451 use these six IWLocInfo-relative anchors.
+   Their hit boxes are strict 15-pixel half-width/height rectangles, and the
+   source item ID 0x2f selects a separate anchor table. */
+int island_panel_info_roster_position(unsigned int slot, int special_layout,
+                                      int *x, int *y);
+int island_panel_info_roster_hit_test(int32_t pane_x, int32_t pane_y,
+                                      int32_t x, int32_t y,
+                                      int special_layout,
+                                      uint8_t occupied_slots);
 
 /* Default IWTextInfo descriptions selected when these Hall panels open. */
 const char *island_panel_info_default_key(int panel_mode);

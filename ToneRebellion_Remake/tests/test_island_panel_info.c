@@ -11,6 +11,8 @@ int main(int argc, char **argv)
     char description[768];
     int sprite_x;
     int sprite_y;
+    int roster_x;
+    int roster_y;
     WindowTemplate info_panel = {0};
     IslandPanelSelection panel_selection = {7, -1};
     static const unsigned char plot04[] =
@@ -53,6 +55,21 @@ int main(int argc, char **argv)
     assert(panel_selection.location_index == 7);
     assert(panel_selection.floater_index == 3);
     island_panel_select_floater(NULL, 9);
+    assert(island_panel_info_roster_position(0, 0, &roster_x, &roster_y));
+    assert(roster_x == 230 && roster_y == 21);
+    assert(island_panel_info_roster_position(3, 0, &roster_x, &roster_y));
+    assert(roster_x == 195 && roster_y == 35);
+    assert(island_panel_info_roster_position(0, 1, &roster_x, &roster_y));
+    assert(roster_x == 220 && roster_y == 28);
+    assert(island_panel_info_roster_position(5, 1, &roster_x, &roster_y));
+    assert(roster_x == 170 && roster_y == 55);
+    assert(!island_panel_info_roster_position(6, 0, &roster_x, &roster_y));
+    assert(island_panel_info_roster_hit_test(192, 368, 422, 389, 0, 0x01) == 0);
+    assert(island_panel_info_roster_hit_test(192, 368, 436, 403, 0, 0x01) == 0);
+    assert(island_panel_info_roster_hit_test(192, 368, 437, 403, 0, 0x01) == -1);
+    assert(island_panel_info_roster_hit_test(192, 368, 422, 389, 0, 0) == -1);
+    assert(island_panel_info_roster_hit_test(192, 368, 412, 396, 1, 0x01) == 0);
+    assert(island_panel_info_roster_hit_test(192, 368, 412, 396, 1, 0x02) == -1);
     info_panel.pane.left = 192;
     info_panel.pane.top = 368;
     info_panel.pane.right = 447;

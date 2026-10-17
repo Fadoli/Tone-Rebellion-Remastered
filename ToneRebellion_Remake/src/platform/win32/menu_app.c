@@ -2455,6 +2455,51 @@ static int selected_hall_player(void)
     return (int)player;
 }
 
+/* The source roster query FUN_0045d7e8 selects entries from the player's
+   list by level. The current session models only the four initial level-0
+   workers, so their owner-list order is the only roster subset we can render. */
+static uint8_t collect_initial_worker_roster(unsigned int player,
+                                             int indices[ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT])
+{
+    uint8_t count = 0;
+    unsigned int i;
+    if (indices == NULL || player >= GAME_START_PLAYER_COUNT ||
+        !g_game_session_valid) return 0;
+    for (i = 0; i < ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT; ++i) indices[i] = -1;
+    for (i = 0; i < g_game_session.floater_count &&
+         count < ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT; ++i) {
+        const GameFloaterStart *floater = &g_game_session.floaters[i];
+        if (floater->owner_slot != player || floater->type_index >= 4) continue;
+        indices[count++] = (int)i;
+    }
+    return count;
+}
+
+static int selected_hall_roster_hit_test(int x, int y)
+{
+    int roster[ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT];
+    const WindowTemplate *info;
+    int player = selected_hall_player();
+    uint8_t count;
+    uint8_t occupied = 0;
+    uint8_t slot;
+    int special_layout = 0;
+    const GameRuntimeIsland *island;
+    if (player < 0) return -1;
+    count = collect_initial_worker_roster((unsigned int)player, roster);
+    if (count == 0) return -1;
+    for (slot = 0; slot < count; ++slot) occupied |= (uint8_t)(1u << slot);
+    island = &g_game_session.islands[g_menu.selected_map_island];
+    if ((uint16_t)g_selected_location < island->location_count) {
+        special_layout = island->locations[g_selected_location].record_value_10 == 0x2f;
+    }
+    info = window_catalog_find(&g_window_catalog, "IWLocInfo", 3);
+    if (info == NULL) return -1;
+    slot = (uint8_t)island_panel_info_roster_hit_test(
+        info->pane.left, info->pane.top, x, y, special_layout, occupied);
+    return slot < ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT ? roster[slot] : -1;
+}
+
 static int hall_stock_control_at(int x, int y)
 {
     static const char *const names[] = {
@@ -3847,6 +3892,58 @@ static void render_island_view(HDC dc)
             }
         }
     }
+    /* FUN_00440567 redraws the six IWLocInfo roster slots after preparing
+       them in FUN_0044034e. This prototype has only the initial class-0
+       workers, and the selected starting Hall is the only modeled roster
+       context with a source-backed player list. */
+    {
+        int player = selected_hall_player();
+        if (player >= 0) {
+            const WindowTemplate *info = window_catalog_find(
+                &g_window_catalog, "IWLocInfo", 3);
+            int roster[ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT];
+            uint8_t count = collect_initial_worker_roster((unsigned int)player,
+                                                          roster);
+            uint8_t slot;
+            if (info != NULL && count != 0) {
+                RECT pane = {info->pane.left, info->pane.top,
+                             info->pane.right + 1, info->pane.bottom + 1};
+                int saved_roster_dc = SaveDC(dc);
+                (void)IntersectClipRect(dc, pane.left, pane.top,
+                                        pane.right, pane.bottom);
+                for (slot = 0; slot < count; ++slot) {
+                    const GameFloaterStart *floater =
+                        &g_game_session.floaters[roster[slot]];
+                    const SpriteSheet *body_art;
+                    const SpriteSheet *leg_art;
+                    int offset_x;
+                    int offset_y;
+                    if (!island_panel_info_roster_position(slot, 0,
+                                                          &offset_x, &offset_y)) {
+                        continue;
+                    }
+                    body_art = floater->facing_left
+                        ? &g_initial_floater_bodies_flipped[floater->type_index]
+                        : &g_initial_floater_bodies[floater->type_index];
+                    leg_art = floater->facing_left
+                        ? &g_initial_floater_legs_flipped[floater->type_index]
+                        : &g_initial_floater_legs[floater->type_index];
+                    if (leg_art->frame_count != 0) {
+                        draw_sprite(dc, leg_art,
+                            g_menu.animation_ticks % leg_art->frame_count,
+                            info->pane.left + offset_x,
+                            info->pane.top + offset_y);
+                    }
+                    if (body_art->frame_count != 0) {
+                        draw_sprite(dc, body_art, 0,
+                            info->pane.left + offset_x,
+                            info->pane.top + offset_y);
+                    }
+                }
+                if (saved_roster_dc != 0) RestoreDC(dc, saved_roster_dc);
+            }
+        }
+    }
     draw_location_action_panel(dc);
 }
 
@@ -4241,6 +4338,8 @@ static void handle_click(HWND window, int x, int y)
             int button_index = island_control != NULL
                 ? island_button_index(island_control->name) : -1;
             int stock_control = hall_player >= 0 ? hall_stock_control_at(x, y) : -1;
+            int clicked_roster_floater = hall_player >= 0
+                ? selected_hall_roster_hit_test(x, y) : -1;
             int hall_panel_mode = hall_control != NULL
                 ? window_catalog_hall_panel_mode(hall_control->name)
                 : WINDOW_ISLAND_PANEL_NONE;
@@ -4319,6 +4418,17 @@ static void handle_click(HWND window, int x, int y)
                 (void)game_session_cycle_resource_stock_mode(
                     &g_game_session, (uint8_t)hall_player,
                     (GameResourceType)stock_control);
+            } else if (clicked_roster_floater >= 0) {
+                IslandPanelSelection selection = {
+                    g_selected_location, g_selected_floater
+                };
+                /* FUN_0042fa0f's 0x3f branch changes the floater selection
+                   while retaining the selected IWLocInfo location context. */
+                island_panel_select_floater(&selection,
+                                             clicked_roster_floater);
+                g_selected_location = selection.location_index;
+                g_selected_floater = clicked_roster_floater;
+                g_hovered_location = -1;
             } else {
                 int clicked_floater = g_game_session_valid
                     ? game_session_floater_at(&g_game_session,

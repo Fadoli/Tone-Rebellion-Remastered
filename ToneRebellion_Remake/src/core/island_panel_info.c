@@ -10,6 +10,52 @@ void island_panel_select_floater(IslandPanelSelection *selection,
     selection->floater_index = floater_index;
 }
 
+int island_panel_info_roster_position(unsigned int slot, int special_layout,
+                                      int *x, int *y)
+{
+    static const int normal_x[ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT] =
+        {230, 230, 230, 195, 195, 160};
+    static const int normal_y[ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT] =
+        {21, 55, 89, 35, 72, 55};
+    static const int special_x[ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT] =
+        {220, 999, 999, 220, 999, 170};
+    static const int special_y[ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT] =
+        {28, 999, 999, 82, 999, 55};
+
+    if (slot >= ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT || x == NULL || y == NULL) {
+        return 0;
+    }
+    *x = special_layout ? special_x[slot] : normal_x[slot];
+    *y = special_layout ? special_y[slot] : normal_y[slot];
+    return 1;
+}
+
+int island_panel_info_roster_hit_test(int32_t pane_x, int32_t pane_y,
+                                      int32_t x, int32_t y,
+                                      int special_layout,
+                                      uint8_t occupied_slots)
+{
+    unsigned int slot;
+    for (slot = 0; slot < ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT; ++slot) {
+        int anchor_x;
+        int anchor_y;
+        int64_t dx;
+        int64_t dy;
+        if ((occupied_slots & (uint8_t)(1u << slot)) == 0 ||
+            !island_panel_info_roster_position(slot, special_layout,
+                                               &anchor_x, &anchor_y) ||
+            anchor_x == 999 || anchor_y == 999) {
+            continue;
+        }
+        dx = (int64_t)x - pane_x - anchor_x;
+        dy = (int64_t)y - pane_y - anchor_y;
+        if (dx < 0) dx = -dx;
+        if (dy < 0) dy = -dy;
+        if (dx < 15 && dy < 15) return (int)slot;
+    }
+    return -1;
+}
+
 int island_panel_info_cryptic_key(unsigned int cryptic_id,
                                   char *output, size_t output_capacity)
 {
