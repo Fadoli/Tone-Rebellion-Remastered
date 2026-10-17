@@ -3,6 +3,7 @@
 #include <windowsx.h>
 
 #include "cob_archive.h"
+#include "font_image.h"
 #include "shp_image.h"
 #include "world_map.h"
 
@@ -15,6 +16,10 @@
 
 enum { LOGICAL_WIDTH = 640, LOGICAL_HEIGHT = 480 };
 enum { SCREEN_MAIN_MENU, SCREEN_NEW_GAME, SCREEN_WORLD_MAP, SCREEN_LOAD_GAME };
+enum { HELP_MAIN_NEWGAME, HELP_MAIN_RESUME, HELP_MAIN_LOAD, HELP_MAIN_EXIT,
+       HELP_NEW_EXIT, HELP_NEW_WORLD, HELP_NEW_TRIBE0,
+       HELP_NEW_TRIBE1, HELP_NEW_TRIBE2, HELP_NEW_TRIBE3, HELP_NEW_DIFFICULTY,
+       HELP_NEW_BEGIN, HELP_ENTRY_COUNT };
 
 typedef struct SpriteFrame {
     HBITMAP bitmap;
@@ -50,11 +55,21 @@ static SpriteSheet g_difficulty_art;
 static SpriteSheet g_map_background;
 static SpriteSheet g_small_islands;
 static SpriteSheet g_load_save_art;
+static SpriteSheet g_newgame_captions;
+static SpriteSheet g_menu_help;
 static COLORREF g_newgame_palette[256];
 static COLORREF g_map_palette[256];
 static uint32_t g_random_state;
 static unsigned char *g_button_sound;
-static HFONT g_menu_font;
+static BitmapFont g_bitmap_font;
+static char g_help_text[HELP_ENTRY_COUNT][1024];
+static char g_newgame_text[8][256];
+static int g_resume_available;
+static int g_hovered_help = -1;
+static int g_hovered_newgame_text = -1;
+static int g_mouse_inside;
+static int g_mouse_x;
+static int g_mouse_y;
 
 static const int g_difficulty_count = 5;
 
@@ -198,6 +213,75 @@ static void draw_sprite(HDC target, const SpriteSheet *sheet, uint32_t frame_ind
     DeleteDC(source);
 }
 
+static int update_hover_help(int x, int y)
+{
+    int help = -1;
+    if (g_menu.screen == SCREEN_MAIN_MENU) {
+        if (y >= 337 && y <= 399 && x >= 99 && x <= 240) help = HELP_MAIN_NEWGAME;
+        else if (g_resume_available && y >= 269 && y <= 332 && x >= 262 && x <= 377)
+            help = HELP_MAIN_RESUME;
+        else if (y >= 337 && y <= 399 && x >= 402 && x <= 540) help = HELP_MAIN_LOAD;
+        else if (y >= 407 && y <= 469 && x >= 255 && x <= 375) help = HELP_MAIN_EXIT;
+    } else if (g_menu.screen == SCREEN_NEW_GAME) {
+        if (y >= 423 && y <= 465 && x >= 7 && x <= 75) help = HELP_NEW_EXIT;
+        else if (y >= 423 && y <= 464 && x >= 76 && x <= 142) help = HELP_NEW_WORLD;
+        else if (y >= 443 && y <= 476 && x >= 143 && x <= 195) help = HELP_NEW_TRIBE0;
+        else if (y >= 445 && y <= 474 && x >= 196 && x <= 250) help = HELP_NEW_TRIBE1;
+        else if (y >= 441 && y <= 474 && x >= 391 && x <= 443) help = HELP_NEW_TRIBE2;
+        else if (y >= 440 && y <= 476 && x >= 444 && x <= 494) help = HELP_NEW_TRIBE3;
+        else if (y >= 420 && y <= 464 && x >= 495 && x <= 562) help = HELP_NEW_DIFFICULTY;
+        else if (y >= 419 && y <= 464 && x >= 564 && x <= 633) help = HELP_NEW_BEGIN;
+    }
+    if (help == g_hovered_help) return 0;
+    g_hovered_help = help;
+    return 1;
+}
+
+static int newgame_text_index_at(int x, int y)
+{
+    static const POINT centers[4] = {{170, 240}, {320, 90}, {470, 240}, {320, 390}};
+    int tribe;
+    for (tribe = 0; tribe < 4; ++tribe) {
+        int dx = x - centers[tribe].x;
+        int dy = y - centers[tribe].y;
+        if (dx * dx + dy * dy < 2500) return tribe;
+    }
+    if (y >= 423 && y <= 465 && x >= 7 && x <= 75) return 6;
+    if (y >= 423 && y <= 464 && x >= 76 && x <= 142) return 5;
+    if (y >= 443 && y <= 476 && x >= 143 && x <= 195) return 0;
+    if (y >= 445 && y <= 474 && x >= 196 && x <= 250) return 1;
+    if (y >= 441 && y <= 474 && x >= 391 && x <= 443) return 2;
+    if (y >= 440 && y <= 476 && x >= 444 && x <= 494) return 3;
+    if (y >= 420 && y <= 464 && x >= 495 && x <= 562) return 4;
+    if (y >= 419 && y <= 464 && x >= 564 && x <= 633) return 7;
+    return -1;
+}
+
+static int update_newgame_text(int x, int y)
+{
+    int text_index = g_menu.screen == SCREEN_NEW_GAME ? newgame_text_index_at(x, y) : -1;
+    if (text_index == g_hovered_newgame_text) return 0;
+    g_hovered_newgame_text = text_index;
+    return 1;
+}
+
+static void draw_hover_help(HDC dc)
+{
+    if (g_menu.screen != SCREEN_MAIN_MENU || !g_mouse_inside || g_hovered_help < 0 ||
+        (uint32_t)g_hovered_help >= g_menu_help.frame_count) return;
+    /* Keep contextual help away from the title buttons and their baked-in
+       captions. Anchoring it to the pointer covered the active control. */
+    draw_sprite(dc, &g_menu_help, (uint32_t)g_hovered_help,
+                12, 12);
+}
+
+static void draw_newgame_text(HDC dc)
+{
+    if (g_menu.screen != SCREEN_NEW_GAME || !g_mouse_inside ||
+        g_hovered_newgame_text < 0 || g_hovered_newgame_text >= 8) return;
+    draw_sprite(dc, &g_newgame_captions, (uint32_t)g_hovered_newgame_text, 160, 430);
+}
+
 static void fill_rect(HDC dc, int left, int top, int right, int bottom, COLORREF color)
 {
     RECT rect = {left, top, right, bottom};
@@ -206,20 +290,320 @@ static void fill_rect(HDC dc, int left, int top, int right, int bottom, COLORREF
     DeleteObject(brush);
 }
 
-static void draw_menu_label(HDC dc, const wchar_t *text, int left, int top,
-                            int right, int bottom)
+static void draw_bitmap_text_at(DWORD *pixels, int surface_width, int surface_height,
+                                const char *text, int x, int y, DWORD ink)
 {
-    RECT rect = {left, top, right, bottom};
-    HGDIOBJ previous_font = NULL;
-    COLORREF previous_color;
-    int previous_background;
-    if (g_menu_font != NULL) previous_font = SelectObject(dc, g_menu_font);
-    previous_color = SetTextColor(dc, RGB(238, 221, 166));
-    previous_background = SetBkMode(dc, TRANSPARENT);
-    DrawTextW(dc, text, -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-    SetBkMode(dc, previous_background);
-    SetTextColor(dc, previous_color);
-    if (previous_font != NULL) SelectObject(dc, previous_font);
+    const unsigned char *cursor = (const unsigned char *)text;
+    while (*cursor != 0) {
+        uint32_t glyph_width;
+        const uint8_t *glyph_pixels;
+        uint32_t code = *cursor < g_bitmap_font.glyph_count ? *cursor : (uint32_t)'?';
+        uint32_t row;
+        if (bitmap_font_get_glyph(&g_bitmap_font, code, &glyph_width, &glyph_pixels)) {
+            uint32_t col;
+            for (row = 0; row < g_bitmap_font.height; ++row) {
+                for (col = 0; col < glyph_width; ++col) {
+                    if (glyph_pixels[(size_t)row * glyph_width + col] != 0xffu) {
+                        int px = x + (int)col;
+                        int py = y + (int)row;
+                        if (px >= 0 && px < surface_width && py >= 0 && py < surface_height) {
+                            pixels[(size_t)py * (size_t)surface_width + (size_t)px] = ink;
+                        }
+                    }
+                }
+            }
+            x += (int)glyph_width;
+        }
+        ++cursor;
+    }
+}
+
+static int extract_help_entry(const unsigned char *bytes, size_t length,
+                              const char *key, char *output, size_t output_capacity)
+{
+    size_t cursor = 0;
+    size_t key_length = strlen(key);
+    while (cursor < length) {
+        size_t line_start = cursor;
+        size_t line_end;
+        while (cursor < length && bytes[cursor] != '\n') ++cursor;
+        line_end = cursor;
+        if (line_end > line_start && bytes[line_end - 1] == '\r') --line_end;
+        if (line_end - line_start == key_length &&
+            memcmp(bytes + line_start, key, key_length) == 0) {
+            size_t used = 0;
+            if (cursor < length) ++cursor;
+            while (cursor < length) {
+                size_t text_start = cursor;
+                size_t text_end;
+                size_t count;
+                while (cursor < length && bytes[cursor] != '\n') ++cursor;
+                text_end = cursor;
+                if (text_end > text_start && bytes[text_end - 1] == '\r') --text_end;
+                if (text_end - text_start >= 3 &&
+                    memcmp(bytes + text_start, "END", 3) == 0) {
+                    output[used] = '\0';
+                    return used != 0;
+                }
+                count = text_end - text_start;
+                while (count > 0 && (bytes[text_start] == ' ' || bytes[text_start] == '\t')) {
+                    ++text_start;
+                    --count;
+                }
+                while (count > 0 && (bytes[text_start + count - 1] == ' ' ||
+                                     bytes[text_start + count - 1] == '\t')) --count;
+                if (count != 0) {
+                    if (used != 0 && used + 1 < output_capacity) output[used++] = ' ';
+                    if (count >= output_capacity - used) count = output_capacity - used - 1;
+                    memcpy(output + used, bytes + text_start, count);
+                    used += count;
+                }
+                if (cursor < length) ++cursor;
+            }
+            break;
+        }
+        if (cursor < length) ++cursor;
+    }
+    if (output_capacity != 0) output[0] = '\0';
+    return 0;
+}
+
+static int load_menu_help(char *error, size_t error_capacity)
+{
+    static const char *keys[HELP_ENTRY_COUNT] = {
+        "NEWGAME", "RESUME", "LOADGAME", "EXITAPP",
+        "EXITNEWGAME", "WORLDSIZE", "TRIBE0", "TRIBE1", "TRIBE2",
+        "TRIBE3", "DIFFICULTY", "BEGINGAME"
+    };
+    CobArchive archive = {0};
+    const CobMember *member;
+    unsigned char *bytes;
+    int i;
+    int success = 0;
+    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE00.COB", &archive,
+                          error, error_capacity)) return 0;
+    member = cob_archive_find(&archive, "tonehelp.txt");
+    if (member == NULL) {
+        (void)snprintf(error, error_capacity, "tonehelp.txt was not found in TONE00.COB");
+        goto done;
+    }
+    bytes = (unsigned char *)malloc(member->length);
+    if (bytes == NULL || !cob_archive_read_member(&archive, member, bytes,
+                                                  member->length, error,
+                                                  error_capacity)) {
+        free(bytes);
+        goto done;
+    }
+    for (i = 0; i < HELP_ENTRY_COUNT; ++i) {
+        if (!extract_help_entry(bytes, member->length, keys[i], g_help_text[i],
+                                sizeof(g_help_text[i]))) {
+            (void)snprintf(error, error_capacity, "help text key %s is missing or empty", keys[i]);
+            free(bytes);
+            goto done;
+        }
+    }
+    free(bytes);
+    success = 1;
+done:
+    cob_archive_close(&archive);
+    return success;
+}
+
+static int load_newgame_captions(char *error, size_t error_capacity)
+{
+    CobArchive archive = {0};
+    const CobMember *member;
+    unsigned char *bytes = NULL;
+    int success = 0;
+    int i;
+    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE00.COB", &archive,
+                          error, error_capacity)) return 0;
+    member = cob_archive_find(&archive, "gamey.txt");
+    if (member == NULL) {
+        (void)snprintf(error, error_capacity, "gamey.txt was not found in TONE00.COB");
+        goto done;
+    }
+    bytes = (unsigned char *)malloc(member->length == 0 ? 1 : member->length);
+    if (bytes == NULL || !cob_archive_read_member(&archive, member, bytes, member->length,
+                                                   error, error_capacity)) goto done;
+    for (i = 0; i < 8; ++i) {
+        char key[16];
+        (void)snprintf(key, sizeof(key), "NEWGAME%d", i);
+        if (!extract_help_entry(bytes, member->length, key, g_newgame_text[i],
+                                sizeof(g_newgame_text[i]))) {
+            (void)snprintf(error, error_capacity, "gamey.txt key %s is missing or empty", key);
+            goto done;
+        }
+    }
+    success = 1;
+done:
+    free(bytes);
+    cob_archive_close(&archive);
+    return success;
+}
+
+static int create_newgame_caption_sheet(SpriteSheet *sheet,
+                                        char *error, size_t error_capacity)
+{
+    int entry;
+    sheet->frames = (SpriteFrame *)calloc(8, sizeof(*sheet->frames));
+    if (sheet->frames == NULL) {
+        (void)snprintf(error, error_capacity, "could not allocate New Game captions");
+        return 0;
+    }
+    sheet->frame_count = 8;
+    for (entry = 0; entry < 8; ++entry) {
+        BITMAPINFO info;
+        void *bitmap_bits = NULL;
+        HBITMAP bitmap;
+        int text_width = 0;
+        int x = 0;
+        const unsigned char *cursor = (const unsigned char *)g_newgame_text[entry];
+        while (*cursor != 0) {
+            uint32_t glyph_width;
+            const uint8_t *glyph_pixels;
+            uint32_t code = *cursor < g_bitmap_font.glyph_count ? *cursor : (uint32_t)'?';
+            if (bitmap_font_get_glyph(&g_bitmap_font, code, &glyph_width, &glyph_pixels)) {
+                text_width += (int)glyph_width;
+            }
+            ++cursor;
+        }
+        ZeroMemory(&info, sizeof(info));
+        info.bmiHeader.biSize = sizeof(info.bmiHeader);
+        info.bmiHeader.biWidth = 320;
+        info.bmiHeader.biHeight = -(LONG)g_bitmap_font.height;
+        info.bmiHeader.biPlanes = 1;
+        info.bmiHeader.biBitCount = 32;
+        info.bmiHeader.biCompression = BI_RGB;
+        bitmap = CreateDIBSection(NULL, &info, DIB_RGB_COLORS, &bitmap_bits, NULL, 0);
+        if (bitmap == NULL || bitmap_bits == NULL) {
+            if (bitmap != NULL) DeleteObject(bitmap);
+            (void)snprintf(error, error_capacity, "could not create New Game caption bitmap");
+            return 0;
+        }
+        memset(bitmap_bits, 0, (size_t)320 * g_bitmap_font.height * sizeof(DWORD));
+        x = (320 - text_width) / 2;
+        if (x < 0) x = 0;
+        draw_bitmap_text_at((DWORD *)bitmap_bits, 320, (int)g_bitmap_font.height,
+                            g_newgame_text[entry], x, 0, 0xffffe88au);
+        sheet->frames[entry].bitmap = bitmap;
+        sheet->frames[entry].width = 320;
+        sheet->frames[entry].height = (int)g_bitmap_font.height;
+    }
+    return 1;
+}
+
+/* FUN_004489c0 reads a 0x80-byte resume header and enables RESUME only when
+   its final dword matches FUN_00457490's 0x378b8 value. */
+static int resume_header_is_valid(void)
+{
+    unsigned char header[0x80];
+    FILE *file = fopen("C:\\Program Files\\Tone\\resume.gam", "rb");
+    size_t count;
+    uint32_t marker;
+    if (file == NULL) return 0;
+    count = fread(header, 1, sizeof(header), file);
+    (void)fclose(file);
+    if (count != sizeof(header)) return 0;
+    marker = (uint32_t)header[0x7c] | ((uint32_t)header[0x7d] << 8) |
+             ((uint32_t)header[0x7e] << 16) | ((uint32_t)header[0x7f] << 24);
+    return marker == 0x000378b8u;
+}
+
+static int create_help_sheet(SpriteSheet *sheet, char *error, size_t error_capacity)
+{
+    int entry;
+    sheet->frames = (SpriteFrame *)calloc(HELP_ENTRY_COUNT, sizeof(*sheet->frames));
+    if (sheet->frames == NULL) {
+        (void)snprintf(error, error_capacity, "could not allocate contextual help frames");
+        return 0;
+    }
+    sheet->frame_count = HELP_ENTRY_COUNT;
+    for (entry = 0; entry < HELP_ENTRY_COUNT; ++entry) {
+        char lines[16][256];
+        const char *text = g_help_text[entry];
+        size_t text_length = strlen(text);
+        size_t cursor = 0;
+        int line_count = 0;
+        int height;
+        BITMAPINFO info;
+        void *bitmap_bits = NULL;
+        HBITMAP bitmap;
+        int line;
+        while (cursor < text_length && line_count < 16) {
+            size_t start;
+            size_t last_space = SIZE_MAX;
+            size_t i;
+            int width = 0;
+            while (cursor < text_length && text[cursor] == ' ') ++cursor;
+            start = cursor;
+            for (i = start; i < text_length; ++i) {
+                uint32_t glyph_width;
+                const uint8_t *glyph_pixels;
+                uint32_t code = (unsigned char)text[i];
+                if (!bitmap_font_get_glyph(&g_bitmap_font, code, &glyph_width,
+                                           &glyph_pixels)) {
+                    code = '?';
+                    (void)bitmap_font_get_glyph(&g_bitmap_font, code, &glyph_width,
+                                                &glyph_pixels);
+                }
+                if (width + (int)glyph_width > 304 && i > start) break;
+                width += (int)glyph_width;
+                if (text[i] == ' ') last_space = i;
+            }
+            if (i < text_length && last_space != SIZE_MAX && last_space >= start) i = last_space;
+            if (i == start && i < text_length) ++i;
+            {
+                size_t count = i - start;
+                if (count >= sizeof(lines[line_count])) count = sizeof(lines[line_count]) - 1;
+                memcpy(lines[line_count], text + start, count);
+                lines[line_count][count] = '\0';
+                ++line_count;
+            }
+            cursor = i;
+            while (cursor < text_length && text[cursor] == ' ') ++cursor;
+        }
+        if (line_count == 0) continue;
+        height = 12 + line_count * ((int)g_bitmap_font.height + 2);
+        ZeroMemory(&info, sizeof(info));
+        info.bmiHeader.biSize = sizeof(info.bmiHeader);
+        info.bmiHeader.biWidth = 320;
+        info.bmiHeader.biHeight = -height;
+        info.bmiHeader.biPlanes = 1;
+        info.bmiHeader.biBitCount = 32;
+        info.bmiHeader.biCompression = BI_RGB;
+        bitmap = CreateDIBSection(NULL, &info, DIB_RGB_COLORS, &bitmap_bits, NULL, 0);
+        if (bitmap == NULL || bitmap_bits == NULL) {
+            if (bitmap != NULL) DeleteObject(bitmap);
+            (void)snprintf(error, error_capacity, "could not create contextual help bitmap");
+            return 0;
+        }
+        memset(bitmap_bits, 0, (size_t)320 * (size_t)height * 4);
+        {
+            DWORD *surface = (DWORD *)bitmap_bits;
+            int x;
+            int y;
+            const DWORD background = 0xe80b1320u;
+            const DWORD border = 0xffe8d79au;
+            for (y = 0; y < height; ++y) {
+                for (x = 0; x < 320; ++x) {
+                    if (x < 2 || x >= 318 || y < 2 || y >= height - 2)
+                        surface[(size_t)y * 320 + x] = border;
+                    else
+                        surface[(size_t)y * 320 + x] = background;
+                }
+            }
+            for (line = 0; line < line_count; ++line) {
+                draw_bitmap_text_at(surface, 320, height, lines[line], 8,
+                                    6 + line * ((int)g_bitmap_font.height + 2),
+                                    0xffe5e7eau);
+            }
+        }
+        sheet->frames[entry].bitmap = bitmap;
+        sheet->frames[entry].width = 320;
+        sheet->frames[entry].height = height;
+    }
+    return 1;
 }
 
 /* FUN_00474b90 is the game's 15-bit MSVC-style LCG. The original seeds it
@@ -252,10 +636,13 @@ static void render_main_menu(HDC dc)
 {
     fill_rect(dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
     draw_sprite(dc, &g_title_art, 0, 0, 0);
-    draw_sprite(dc, &g_title_art, 2, 262, 269);
-    draw_sprite(dc, &g_title_art, 4, 99, 337);
-    draw_sprite(dc, &g_title_art, 6, 402, 337);
-    draw_sprite(dc, &g_title_art, 8, 255, 407);
+    draw_sprite(dc, &g_title_art,
+                2u + (g_resume_available && g_hovered_help == HELP_MAIN_RESUME ? 1u : 0u),
+                262, 269);
+    draw_sprite(dc, &g_title_art, 4u + (g_hovered_help == HELP_MAIN_NEWGAME ? 1u : 0u), 99, 337);
+    draw_sprite(dc, &g_title_art, 6u + (g_hovered_help == HELP_MAIN_LOAD ? 1u : 0u), 402, 337);
+    draw_sprite(dc, &g_title_art, 8u + (g_hovered_help == HELP_MAIN_EXIT ? 1u : 0u), 255, 407);
+    draw_hover_help(dc);
 }
 
 static void render_new_game(HDC dc)
@@ -304,23 +691,14 @@ static void render_new_game(HDC dc)
         }
     }
     draw_sprite(dc, &g_new_buttons, 0, 0, 0);
-    draw_sprite(dc, &g_new_buttons, 1, 7, 423);
-    draw_sprite(dc, &g_new_buttons, 3, 76, 423);
-    draw_sprite(dc, &g_new_buttons, 5, 143, 443);
-    draw_sprite(dc, &g_new_buttons, 7, 196, 445);
-    draw_sprite(dc, &g_new_buttons, 9, 391, 441);
-    draw_sprite(dc, &g_new_buttons, 11, 444, 440);
-    draw_sprite(dc, &g_new_buttons, 13, 495, 420);
-    draw_sprite(dc, &g_new_buttons, 15, 564, 419);
-    /* FUN_0044ec5d registers these named text controls for the button panes. */
-    draw_menu_label(dc, L"Quitter", 7, 405, 75, 423);
-    draw_menu_label(dc, L"Monde", 76, 405, 142, 423);
-    draw_menu_label(dc, L"Tarks", 143, 425, 195, 443);
-    draw_menu_label(dc, L"Zygons", 196, 425, 250, 443);
-    draw_menu_label(dc, L"Céphéens", 391, 422, 443, 440);
-    draw_menu_label(dc, L"Dyla", 444, 421, 494, 439);
-    draw_menu_label(dc, L"Difficulté", 495, 402, 562, 420);
-    draw_menu_label(dc, L"Jouer", 564, 401, 633, 419);
+    draw_sprite(dc, &g_new_buttons, 1u + (g_hovered_help == HELP_NEW_EXIT ? 1u : 0u), 7, 423);
+    draw_sprite(dc, &g_new_buttons, 3u + (g_hovered_help == HELP_NEW_WORLD ? 1u : 0u), 76, 423);
+    draw_sprite(dc, &g_new_buttons, 5u + (g_hovered_help == HELP_NEW_TRIBE0 ? 1u : 0u), 143, 443);
+    draw_sprite(dc, &g_new_buttons, 7u + (g_hovered_help == HELP_NEW_TRIBE1 ? 1u : 0u), 196, 445);
+    draw_sprite(dc, &g_new_buttons, 9u + (g_hovered_help == HELP_NEW_TRIBE2 ? 1u : 0u), 391, 441);
+    draw_sprite(dc, &g_new_buttons, 11u + (g_hovered_help == HELP_NEW_TRIBE3 ? 1u : 0u), 444, 440);
+    draw_sprite(dc, &g_new_buttons, 13u + (g_hovered_help == HELP_NEW_DIFFICULTY ? 1u : 0u), 495, 420);
+    draw_sprite(dc, &g_new_buttons, 15u + (g_hovered_help == HELP_NEW_BEGIN ? 1u : 0u), 564, 419);
     draw_sprite(dc, &g_realm_art, (uint32_t)g_menu.selected_tribe, 60, 40);
     draw_sprite(dc, &g_realm_art,
                 (uint32_t)((g_menu.selected_tribe + 1) % 4), 140, 40);
@@ -343,6 +721,8 @@ static void render_new_game(HDC dc)
                     (uint32_t)(tribe * 20 + (g_menu.animation_ticks / 3u) % 20u),
                     tribe_centers[tribe].x, tribe_centers[tribe].y);
     }
+    draw_hover_help(dc);
+    draw_newgame_text(dc);
 }
 
 /* The x87 helpers called by FUN_00471536 continue past Ghidra's short
@@ -510,6 +890,11 @@ static void paint_window(HWND window)
 
 static void handle_click(HWND window, int x, int y)
 {
+    g_mouse_inside = 1;
+    g_mouse_x = x;
+    g_mouse_y = y;
+    (void)update_hover_help(x, y);
+    (void)update_newgame_text(x, y);
     if (g_button_sound != NULL) {
         (void)PlaySoundA((LPCSTR)g_button_sound, NULL,
                         SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
@@ -518,6 +903,9 @@ static void handle_click(HWND window, int x, int y)
         if (y >= 337 && y <= 399 && x >= 99 && x <= 240) {
             g_menu.screen = SCREEN_NEW_GAME;
             g_menu.setup_accepted = 0;
+        } else if (g_resume_available && y >= 269 && y <= 332 && x >= 262 && x <= 377) {
+            MessageBoxA(window, "La reprise d'une sauvegarde n'est pas encore prise en charge.",
+                        "Tone Rebellion remake", MB_OK | MB_ICONINFORMATION);
         } else if (y >= 337 && y <= 399 && x >= 402 && x <= 540) {
             g_menu.screen = SCREEN_LOAD_GAME;
         } else if (y >= 407 && y <= 469 && x >= 255 && x <= 375) {
@@ -548,6 +936,8 @@ static void handle_click(HWND window, int x, int y)
         g_menu.setup_accepted = 1;
         g_menu.screen = SCREEN_WORLD_MAP;
     }
+    (void)update_hover_help(x, y);
+    (void)update_newgame_text(x, y);
     update_window_title(window);
     InvalidateRect(window, NULL, FALSE);
 }
@@ -564,6 +954,51 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
     case WM_TIMER:
         if (wparam == 1 && g_menu.screen == SCREEN_NEW_GAME) {
             ++g_menu.animation_ticks;
+            InvalidateRect(window, NULL, FALSE);
+        }
+        return 0;
+    case WM_MOUSEMOVE: {
+        RECT client;
+        RECT viewport;
+        TRACKMOUSEEVENT track;
+        int width;
+        int height;
+        int x;
+        int y;
+        GetClientRect(window, &client);
+        width = client.right - client.left;
+        height = client.bottom - client.top;
+        if (!logical_viewport(width, height, &viewport)) return 0;
+        x = GET_X_LPARAM(lparam);
+        y = GET_Y_LPARAM(lparam);
+        if (x < viewport.left || x >= viewport.right || y < viewport.top || y >= viewport.bottom) {
+            if (g_mouse_inside || g_hovered_help != -1 || g_hovered_newgame_text != -1) {
+                g_mouse_inside = 0;
+                if (g_hovered_help != -1 || g_hovered_newgame_text != -1) {
+                    g_hovered_help = -1;
+                    g_hovered_newgame_text = -1;
+                    InvalidateRect(window, NULL, FALSE);
+                }
+            }
+            return 0;
+        }
+        g_mouse_x = (x - viewport.left) * LOGICAL_WIDTH / (viewport.right - viewport.left);
+        g_mouse_y = (y - viewport.top) * LOGICAL_HEIGHT / (viewport.bottom - viewport.top);
+        g_mouse_inside = 1;
+        ZeroMemory(&track, sizeof(track));
+        track.cbSize = sizeof(track);
+        track.dwFlags = TME_LEAVE;
+        track.hwndTrack = window;
+        (void)TrackMouseEvent(&track);
+        if (update_hover_help(g_mouse_x, g_mouse_y) |
+            update_newgame_text(g_mouse_x, g_mouse_y)) InvalidateRect(window, NULL, FALSE);
+        return 0;
+    }
+    case WM_MOUSELEAVE:
+        g_mouse_inside = 0;
+        if (g_hovered_help != -1 || g_hovered_newgame_text != -1) {
+            g_hovered_help = -1;
+            g_hovered_newgame_text = -1;
             InvalidateRect(window, NULL, FALSE);
         }
         return 0;
@@ -643,6 +1078,10 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         } else if (g_menu.screen == SCREEN_NEW_GAME && wparam >= '1' && wparam <= '4') {
             g_menu.selected_tribe = (int)(wparam - '1');
             g_menu.setup_accepted = 0;
+            InvalidateRect(window, NULL, FALSE);
+        }
+        if (g_mouse_inside && (update_hover_help(g_mouse_x, g_mouse_y) |
+                               update_newgame_text(g_mouse_x, g_mouse_y))) {
             InvalidateRect(window, NULL, FALSE);
         }
         update_window_title(window);
@@ -732,6 +1171,24 @@ static int load_menu_art(char *error, size_t error_capacity)
             }
         }
     }
+    {
+        const CobMember *font = cob_archive_find(&archive, "data\\bgoutfnt.fnt");
+        unsigned char *bytes = NULL;
+        if (font == NULL) {
+            (void)snprintf(error, error_capacity, "data\\bgoutfnt.fnt was not found in TONE01.COB");
+            goto done;
+        }
+        bytes = (unsigned char *)malloc(font->length);
+        if (bytes == NULL ||
+            !cob_archive_read_member(&archive, font, bytes, font->length,
+                                     error, error_capacity) ||
+            !bitmap_font_init(&g_bitmap_font, bytes, font->length,
+                              error, error_capacity)) {
+            free(bytes);
+            goto done;
+        }
+        free(bytes);
+    }
     memcpy(g_newgame_palette, newgame_palette, sizeof(g_newgame_palette));
     memcpy(g_map_palette, mainmap_palette, sizeof(g_map_palette));
     success = 1;
@@ -748,6 +1205,9 @@ done:
         free_sprite_sheet(&g_map_background);
         free_sprite_sheet(&g_small_islands);
         free_sprite_sheet(&g_load_save_art);
+        bitmap_font_free(&g_bitmap_font);
+        free(g_button_sound);
+        g_button_sound = NULL;
     }
     return success;
 }
@@ -762,16 +1222,18 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     (void)previous_instance;
     (void)command_line;
 
-    if (!load_world_map(error, sizeof(error)) || !load_menu_art(error, sizeof(error))) {
+    if (!load_world_map(error, sizeof(error)) || !load_menu_art(error, sizeof(error)) ||
+        !load_menu_help(error, sizeof(error)) ||
+        !create_help_sheet(&g_menu_help, error, sizeof(error)) ||
+        !load_newgame_captions(error, sizeof(error)) ||
+        !create_newgame_caption_sheet(&g_newgame_captions, error, sizeof(error))) {
         MessageBoxA(NULL, error, "Tone Rebellion remake - data error", MB_OK | MB_ICONERROR);
         return 1;
     }
+    g_resume_available = resume_header_is_valid();
     g_menu.world_index = 0;
     g_menu.difficulty = 0;
     g_menu.selected_tribe = 0;
-    g_menu_font = CreateFontW(-10, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-                              DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                              ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Arial");
     {
         LARGE_INTEGER seed;
         QueryPerformanceCounter(&seed);
@@ -816,8 +1278,10 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_map_background);
     free_sprite_sheet(&g_small_islands);
     free_sprite_sheet(&g_load_save_art);
+    free_sprite_sheet(&g_menu_help);
+    free_sprite_sheet(&g_newgame_captions);
+    bitmap_font_free(&g_bitmap_font);
     (void)PlaySoundA(NULL, NULL, 0);
-    if (g_menu_font != NULL) DeleteObject(g_menu_font);
     free(g_button_sound);
     return (int)message.wParam;
 }
