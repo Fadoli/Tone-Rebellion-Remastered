@@ -117,6 +117,11 @@ int game_start_assign_locations(const IslandData *islands, size_t island_count,
         start->nearest_site_location_index = (uint16_t)nearest_index;
         start->nearest_site_x = island->locations[nearest_index].x;
         start->nearest_site_y = island->locations[nearest_index].y;
+        start->marker_x = marker->x;
+        start->marker_y = marker->y;
+        start->initial_pad_item_id = GAME_START_INITIAL_PAD_ITEM_ID;
+        start->floater_type_index = (uint8_t)player;
+        start->floater_count = GAME_START_FLOATERS_PER_PLAYER;
         {
             int left = (int)start->nearest_site_x - 0x140;
             if (left < 0) left = 0;

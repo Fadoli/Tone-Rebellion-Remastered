@@ -1620,8 +1620,9 @@ static void render_island_view(HDC dc)
                                 -g_island_scroll_x, image_top);
             continue;
         }
-        /* pad.txt identifies class 1 as PIT_Object and class 3 / variant 3
-           as PIT_FeatureTrigger; both entries have no shape asset. */
+        /* The pad catalog's PIT_Object (item 1) and PIT_FeatureTrigger
+           (item 3) entries have no shape asset. These item IDs are distinct
+           from an island record's renderer_class. */
         if (location->kind == ISLAND_LOCATION_PAD ||
             (location->renderer_class == 3 && location->renderer_variant == 3)) {
             continue;

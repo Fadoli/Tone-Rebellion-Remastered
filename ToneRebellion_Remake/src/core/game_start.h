@@ -6,7 +6,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
-enum { GAME_START_PLAYER_COUNT = 4, GAME_START_MAX_ISLANDS = 16 };
+enum {
+    GAME_START_PLAYER_COUNT = 4,
+    GAME_START_MAX_ISLANDS = 16,
+    GAME_START_INITIAL_PAD_ITEM_ID = 0x2a,
+    GAME_START_FLOATERS_PER_PLAYER = 4
+};
 
 typedef struct GamePlayerStart {
     uint8_t island_index;
@@ -14,6 +19,11 @@ typedef struct GamePlayerStart {
     uint16_t nearest_site_location_index;
     uint16_t nearest_site_x;
     uint16_t nearest_site_y;
+    uint16_t marker_x;
+    uint16_t marker_y;
+    uint16_t initial_pad_item_id;
+    uint8_t floater_type_index;
+    uint8_t floater_count;
     uint16_t view_left;
     uint16_t view_right;
 } GamePlayerStart;

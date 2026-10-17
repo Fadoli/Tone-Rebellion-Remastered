@@ -48,6 +48,11 @@ static void test_classic_four_player_assignment(void)
         assert(setup.players[i].nearest_site_location_index == expected_site);
         assert(setup.players[i].nearest_site_x == islands[i].locations[expected_site].x);
         assert(setup.players[i].nearest_site_y == (expected_site == 5 ? 101 : 120));
+        assert(setup.players[i].marker_x == islands[i].locations[i & 1U ? 3 : 0].x);
+        assert(setup.players[i].marker_y == 100);
+        assert(setup.players[i].initial_pad_item_id == 0x2a);
+        assert(setup.players[i].floater_type_index == i);
+        assert(setup.players[i].floater_count == 4);
         assert(setup.players[i].view_left == expected_left);
         assert(setup.players[i].view_right == setup.players[i].view_left + 0x27f);
     }
