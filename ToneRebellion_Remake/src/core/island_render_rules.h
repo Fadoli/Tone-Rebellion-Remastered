@@ -39,4 +39,31 @@ uint32_t island_pad_frame(uint32_t animation_ticks, uint16_t world_x,
                           unsigned pad_group, unsigned speed_adjustment);
 int island_site_should_draw_pad(int pad_group, int site_occupied_by_item);
 
+/* FUN_0042fa0f (message 2003) normalizes and flips each of the three
+   independent FUN_0042704b overlay-enable globals. */
+uint8_t island_toggle_realm_overlay_flags(uint8_t flags);
+
+/* FUN_0042704b's health badge for a class-0 worker is FLTINFO frame
+   0x15-max_hp. Its anchor is the body's opaque left edge minus eight (or
+   inclusive right edge when mirrored), top-aligned, then shifted +2 X. */
+int island_worker_health_badge_layout(uint8_t max_hit_points, int facing_left,
+                                      int32_t body_hit_left,
+                                      int32_t body_hit_top,
+                                      int32_t body_hit_right_exclusive,
+                                      uint32_t *frame,
+                                      int32_t *x, int32_t *y);
+
+/* FUN_0042003c resolves the starting *work row's realm to FLTINFO frames
+   22..25. When a current location is available, 0x10000 increments the realm
+   modulo four and takes precedence over 0x20000, which decrements it. */
+int island_worker_realm_badge_layout(uint8_t realm,
+                                     int has_current_location,
+                                     uint32_t current_location_flags,
+                                     int facing_left,
+                                     int32_t body_hit_left,
+                                     int32_t body_hit_top,
+                                     int32_t body_hit_right_exclusive,
+                                     uint32_t *frame,
+                                     int32_t *x, int32_t *y);
+
 #endif

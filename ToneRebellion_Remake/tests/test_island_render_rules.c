@@ -48,6 +48,72 @@ int main(void)
     /* Occupancy suppresses the site ring even if the item's SHP is unresolved. */
     assert(!island_site_should_draw_pad(0, 1));
     assert(!island_site_should_draw_pad(-1, 0));
+    assert(island_toggle_realm_overlay_flags(0) == 7);
+    assert(island_toggle_realm_overlay_flags(7) == 0);
+    assert(island_toggle_realm_overlay_flags(1) == 6);
+    assert(island_toggle_realm_overlay_flags(2) == 5);
+    assert(island_toggle_realm_overlay_flags(4) == 3);
+    /* The source compares each global with zero; nonzero values normalize. */
+    assert(island_toggle_realm_overlay_flags(0xff) == 0);
+    {
+        uint32_t frame = 0;
+        int32_t x = 0;
+        int32_t y = 0;
+        /* Initial workers have 3 HP: source frame 21-3, left-edge anchor. */
+        assert(island_worker_health_badge_layout(3, 0, 12, 27, 33,
+                                                 &frame, &x, &y));
+        assert(frame == 18 && x == 6 && y == 27);
+        /* Mirrored sprites anchor from the inclusive opaque right edge. */
+        assert(island_worker_health_badge_layout(3, 1, 12, 27, 33,
+                                                 &frame, &x, &y));
+        assert(frame == 18 && x == 34 && y == 27);
+        /* FUN_0042704b caps max HP at ten before selecting FLTINFO art. */
+        assert(island_worker_health_badge_layout(255, 0, 12, 27, 33,
+                                                 &frame, &x, &y));
+        assert(frame == 11);
+        assert(!island_worker_health_badge_layout(3, 0, 12, 27, 12,
+                                                 &frame, &x, &y));
+    }
+    {
+        uint32_t frame = 0;
+        int32_t x = 0;
+        int32_t y = 0;
+        unsigned realm;
+        for (realm = 0; realm < 4; ++realm) {
+            assert(island_worker_realm_badge_layout((uint8_t)realm, 0, 0, 0,
+                                                     12, 27, 33,
+                                                     &frame, &x, &y));
+            assert(frame == 22U + realm && x == 4 && y == 27);
+            assert(island_worker_realm_badge_layout((uint8_t)realm, 0, 0, 1,
+                                                     12, 27, 33,
+                                                     &frame, &x, &y));
+            assert(frame == 22U + realm && x == 32 && y == 27);
+        }
+        assert(!island_worker_realm_badge_layout(4, 0, 0, 0, 12, 27, 33,
+                                                 &frame, &x, &y));
+        assert(!island_worker_realm_badge_layout(0, 0, 0, 0, 12, 27, 12,
+                                                 &frame, &x, &y));
+        assert(island_worker_realm_badge_layout(0, 1, 0x10000u, 0,
+                                                 12, 27, 33,
+                                                 &frame, &x, &y));
+        assert(frame == 23);
+        assert(island_worker_realm_badge_layout(3, 1, 0x10000u, 0,
+                                                 12, 27, 33,
+                                                 &frame, &x, &y));
+        assert(frame == 22); /* increment wraps from realm 3 to realm 0 */
+        assert(island_worker_realm_badge_layout(0, 1, 0x20000u, 0,
+                                                 12, 27, 33,
+                                                 &frame, &x, &y));
+        assert(frame == 25); /* decrement wraps from realm 0 to realm 3 */
+        assert(island_worker_realm_badge_layout(0, 1, 0x30000u, 0,
+                                                 12, 27, 33,
+                                                 &frame, &x, &y));
+        assert(frame == 23); /* 0x10000 takes precedence when both are set */
+        assert(island_worker_realm_badge_layout(0, 0, 0x20000u, 0,
+                                                 12, 27, 33,
+                                                 &frame, &x, &y));
+        assert(frame == 22); /* flags do not act without selected-location context */
+    }
     (void)puts("island render rule tests passed");
     return 0;
 }

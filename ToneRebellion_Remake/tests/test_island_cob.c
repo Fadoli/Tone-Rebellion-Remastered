@@ -73,6 +73,11 @@ static int initial_worker_shape_kind(const char *name)
     return 0;
 }
 
+static int is_newgame_button_sheet(const char *name)
+{
+    return ascii_case_equal(name, "data\\ngmeintr.shp");
+}
+
 static int read_shape_manifest(const char *content_dir,
                                char names[][64], size_t capacity,
                                size_t *name_count)
@@ -125,6 +130,8 @@ static int manifest_contains(char names[][64], size_t name_count, const char *na
 static unsigned int island_ui_frame_requirement(const char *name)
 {
     if (ascii_case_equal(name, "data\\thall0.shp")) return 10;
+    if (ascii_case_equal(name, "data\\thbutt.shp")) return 6;
+    if (ascii_case_equal(name, "data\\temphol0.shp")) return 8;
     if (ascii_case_equal(name, "data\\glinv.shp")) return 29;
     if (ascii_case_equal(name, "data\\trade.shp")) return 4;
     if (ascii_case_equal(name, "data\\bildtone.shp") ||
@@ -132,6 +139,7 @@ static unsigned int island_ui_frame_requirement(const char *name)
         ascii_case_equal(name, "data\\magctone.shp")) return 5;
     if (ascii_case_equal(name, "data\\alltrigs.shp")) return 29;
     if (ascii_case_equal(name, "data\\diploma.shp")) return 24;
+    if (ascii_case_equal(name, "data\\fltinfo.shp")) return 26;
     return 0;
 }
 
@@ -149,6 +157,9 @@ int main(int argc, char **argv)
     unsigned int floater_leg_sheets_found = 0;
     unsigned int island_template_sheets_found = 0;
     unsigned int island_ui_sheets_found = 0;
+    unsigned int health_badge_frames_found = 0;
+    unsigned int realm_badge_frames_found = 0;
+    unsigned int newgame_footer_frames_found = 0;
     char shape_names[512][64];
     size_t shape_name_count = 0;
 
@@ -282,6 +293,63 @@ int main(int argc, char **argv)
                     cob_archive_close(&archive);
                     return 1;
                 }
+                if (ascii_case_equal(member->name, "data\\fltinfo.shp") &&
+                    frame_index == 18) {
+                    size_t pixel;
+                    size_t opaque_pixels = 0;
+                    for (pixel = 0; pixel < (size_t)frame.width * frame.height;
+                         ++pixel) {
+                        if (frame.opaque[pixel]) ++opaque_pixels;
+                    }
+                    if (frame.width != 5 || frame.height != 12 || opaque_pixels == 0) {
+                        (void)fprintf(stderr,
+                                      "%s frame 18: expected a visible 5x12 health badge\n",
+                                      member->name);
+                        shp_frame_free(&frame);
+                        free(bytes);
+                        cob_archive_close(&archive);
+                        return 1;
+                    }
+                    ++health_badge_frames_found;
+                }
+                if (ascii_case_equal(member->name, "data\\fltinfo.shp") &&
+                    frame_index >= 22 && frame_index <= 25) {
+                    size_t pixel;
+                    size_t opaque_pixels = 0;
+                    for (pixel = 0; pixel < (size_t)frame.width * frame.height;
+                         ++pixel) {
+                        if (frame.opaque[pixel]) ++opaque_pixels;
+                    }
+                    if (frame.width == 0 || frame.height == 0 || opaque_pixels == 0) {
+                        (void)fprintf(stderr,
+                                      "%s frame %u: expected a visible realm badge\n",
+                                      member->name, (unsigned)frame_index);
+                        shp_frame_free(&frame);
+                        free(bytes);
+                        cob_archive_close(&archive);
+                        return 1;
+                    }
+                    ++realm_badge_frames_found;
+                }
+                if (is_newgame_button_sheet(member->name) && frame_index == 0) {
+                    size_t pixel;
+                    size_t opaque_pixels = 0;
+                    for (pixel = 0; pixel < (size_t)frame.width * frame.height;
+                         ++pixel) {
+                        if (frame.opaque[pixel]) ++opaque_pixels;
+                    }
+                    if (frame.width != 640 || frame.height != 73 ||
+                        frame.y_offset != 407 || opaque_pixels == 0) {
+                        (void)fprintf(stderr,
+                                      "%s frame 0: expected the 640x73 footer overlay at y=407\n",
+                                      member->name);
+                        shp_frame_free(&frame);
+                        free(bytes);
+                        cob_archive_close(&archive);
+                        return 1;
+                    }
+                    ++newgame_footer_frames_found;
+                }
                 shp_frame_free(&frame);
                 ++frames_decoded;
             }
@@ -291,12 +359,15 @@ int main(int argc, char **argv)
     }
 
     if (shapes_found == 0 || halls_found != 4 || island_template_sheets_found != 4 ||
-        island_ui_sheets_found != 8 ||
+        island_ui_sheets_found != 11 ||
+        health_badge_frames_found != 1 ||
+        realm_badge_frames_found != 4 ||
+        newgame_footer_frames_found != 1 ||
         floater_body_sheets_found != 4 || floater_leg_sheets_found != 4 ||
         cob_archive_find(&archive, "data\\br-trg01.shp") == NULL ||
         !manifest_contains(shape_names, shape_name_count, "data\\br-trg01.shp")) {
         (void)fprintf(stderr,
-                      "expected Hall/UI and Trade resource sheets, four tribe templates, four worker bodies, four worker leg sheets, and manifested data\\br-trg01.shp\n");
+                      "expected Hall/UI and Trade resource sheets, the New Game footer overlay, four tribe templates, four worker bodies, four worker leg sheets, and manifested data\\br-trg01.shp\n");
         cob_archive_close(&archive);
         return 1;
     }

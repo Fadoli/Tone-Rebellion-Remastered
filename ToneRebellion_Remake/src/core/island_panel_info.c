@@ -3,6 +3,39 @@
 #include <stdio.h>
 #include <string.h>
 
+void island_panel_select_floater(IslandPanelSelection *selection,
+                                int32_t floater_index)
+{
+    if (selection == NULL) return;
+    selection->floater_index = floater_index;
+}
+
+int island_panel_info_cryptic_key(unsigned int cryptic_id,
+                                  char *output, size_t output_capacity)
+{
+    int written;
+    if (output == NULL || output_capacity == 0) return 0;
+    output[0] = '\0';
+    if (cryptic_id >= ISLAND_PANEL_INFO_CRYPTIC_COUNT) return 0;
+    written = snprintf(output, output_capacity, "CRYPTIC%u", cryptic_id);
+    if (written < 0 || (size_t)written >= output_capacity) {
+        output[0] = '\0';
+        return 0;
+    }
+    return 1;
+}
+
+IslandLocationActionControl island_panel_location_action_control(
+    int32_t item_id, int32_t owner_id, int32_t current_player_id)
+{
+    if (current_player_id < 0 || owner_id != current_player_id ||
+        item_id == 0 || item_id == 1 || item_id == 0x28) {
+        return ISLAND_LOCATION_ACTION_NONE;
+    }
+    return item_id == 0x2a ? ISLAND_LOCATION_ACTION_HALL_MOVE
+                           : ISLAND_LOCATION_ACTION_MOVE;
+}
+
 const char *island_panel_info_default_key(int panel_mode)
 {
     switch (panel_mode) {

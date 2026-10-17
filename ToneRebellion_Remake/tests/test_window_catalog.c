@@ -146,6 +146,20 @@ static void verify_original_manifest(const char *path)
     assert(window != NULL && window->shape_frame == 2 &&
            window->pane.left == 456 && window->pane.top == 328 &&
            window->pane.right == 631 && window->pane.bottom == 395);
+    window = window_catalog_find(&catalog, "IWLocControl", 3);
+    assert(window != NULL && window->shape_frame == 7 &&
+           window->pane.left == 456 && window->pane.top == 396 &&
+           window->pane.right == 631 && window->pane.bottom == 471);
+    window = window_catalog_find(&catalog, "IWMove", 3);
+    assert(window != NULL && window->mouse_focus == 1 &&
+           strcmp(window->shape_id, "THBUTT") == 0 && window->shape_frame == 5 &&
+           window->pane.left == 243 && window->pane.top == 440 &&
+           window->pane.right == 298 && window->pane.bottom == 471);
+    window = window_catalog_find(&catalog, "IWHallMove", 3);
+    assert(window != NULL && window->mouse_focus == 1 &&
+           strcmp(window->shape_id, "THBUTT") == 0 && window->shape_frame == 5 &&
+           window->pane.left == 375 && window->pane.top == 435 &&
+           window->pane.right == 430 && window->pane.bottom == 469);
     window = window_catalog_find(&catalog, "IWInventory", 3);
     assert(window != NULL && window->shape_frame == 1 &&
            window->pane.left == 192 && window->pane.top == 368 &&

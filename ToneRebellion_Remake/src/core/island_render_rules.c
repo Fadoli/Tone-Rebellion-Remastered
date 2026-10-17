@@ -92,3 +92,56 @@ int island_site_should_draw_pad(int pad_group, int site_occupied_by_item)
 {
     return pad_group >= 0 && !site_occupied_by_item;
 }
+
+uint8_t island_toggle_realm_overlay_flags(uint8_t flags)
+{
+    uint8_t toggled = 0;
+    unsigned bit;
+    for (bit = 0; bit < 3; ++bit) {
+        if ((flags & (uint8_t)(1u << bit)) == 0)
+            toggled |= (uint8_t)(1u << bit);
+    }
+    return toggled;
+}
+
+int island_worker_health_badge_layout(uint8_t max_hit_points, int facing_left,
+                                      int32_t body_hit_left,
+                                      int32_t body_hit_top,
+                                      int32_t body_hit_right_exclusive,
+                                      uint32_t *frame,
+                                      int32_t *x, int32_t *y)
+{
+    uint8_t hp = max_hit_points;
+    if (frame == NULL || x == NULL || y == NULL ||
+        body_hit_right_exclusive <= body_hit_left) return 0;
+    if (hp > 10u) hp = 10u;
+    *frame = 0x15u - hp;
+    *x = (facing_left ? body_hit_right_exclusive - 1 : body_hit_left - 8) + 2;
+    *y = body_hit_top;
+    return 1;
+}
+
+int island_worker_realm_badge_layout(uint8_t realm,
+                                     int has_current_location,
+                                     uint32_t current_location_flags,
+                                     int facing_left,
+                                     int32_t body_hit_left,
+                                     int32_t body_hit_top,
+                                     int32_t body_hit_right_exclusive,
+                                     uint32_t *frame,
+                                     int32_t *x, int32_t *y)
+{
+    if (realm >= 4u || frame == NULL || x == NULL || y == NULL ||
+        body_hit_right_exclusive <= body_hit_left) return 0;
+    if (has_current_location) {
+        if ((current_location_flags & UINT32_C(0x10000)) != 0) {
+            realm = (uint8_t)((realm + 1u) & 3u);
+        } else if ((current_location_flags & UINT32_C(0x20000)) != 0) {
+            realm = (uint8_t)((realm + 3u) & 3u);
+        }
+    }
+    *frame = 0x16u + realm;
+    *x = facing_left ? body_hit_right_exclusive - 1 : body_hit_left - 8;
+    *y = body_hit_top;
+    return 1;
+}
