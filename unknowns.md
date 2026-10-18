@@ -9,6 +9,7 @@
 
 ## À traiter
 
+- Le contrôleur d'ordres au niveau des floaters est localisé : `FUN_004211bb` exécute les ordres, `FUN_0042219e` les réévalue, et `FUN_00420a55` sélectionne des candidats. La table `FA_*` et les branches Leviathan 9–17 sont désormais documentées dans [enemy AI](behavior/enemy-ai.md). Restent à résoudre les priorités et sémantiques des candidats, les conditions et règles de la stratégie globale CPU, la sélection autonome de sorts, et l'effet exact de `DIFFICULTY` sur les ordres.
 - Aucune fonction interne candidate ne reste en attente dans l’index pour le profil analysé. Le résultat couvre les 2 410 procédures observées par Ghidra, sans garantir que Ghidra ait reconnu toute région de code possible du binaire.
 - Les 780 thunks sont indexées comme wrappers exclus du lot interne ; leur cible Ghidra est conservée lorsqu’elle est disponible.
 - Les 123 fonctions externes sont indexées comme imports sans corps décompilable.

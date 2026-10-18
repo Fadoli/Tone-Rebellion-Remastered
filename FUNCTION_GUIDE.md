@@ -10,6 +10,7 @@ Index des notes de comportement. Elles separent les observations Ghidra/donnees 
 - [Ressources, Hall et taches](behavior/island-resources-and-tasks.md)
 - [Acces aux iles depuis la carte](behavior/world-map.md)
 - [Inventory, glyphes, Trade et Diplomatie](behavior/island-panels.md)
+- [Enemy AI and autonomous unit behavior](behavior/enemy-ai.md)
 
 ## Sources detaillees
 
