@@ -41,7 +41,6 @@ static unsigned char *read_file(const char *path, size_t *length)
 
 static int32_t measure_curved_font(void *context, const char *text, size_t length)
 {
-    enum { CURVED_HEIGHT = 11 };
     const BitmapFont *font = (const BitmapFont *)context;
     int32_t width = 0;
     size_t i;
@@ -49,12 +48,10 @@ static int32_t measure_curved_font(void *context, const char *text, size_t lengt
         uint32_t glyph_width;
         const uint8_t *pixels;
         uint32_t code = (unsigned char)text[i];
-        uint32_t scaled_width;
         if (code >= font->glyph_count) code = (uint32_t)'?';
         if (!bitmap_font_get_glyph(font, code, &glyph_width, &pixels)) continue;
-        scaled_width = (glyph_width * CURVED_HEIGHT + font->height / 2u) /
-                       font->height;
-        width += (int32_t)(scaled_width == 0 ? 1 : scaled_width);
+        width += (int32_t)((glyph_width * 12u + font->height / 2u) /
+                           font->height);
     }
     return width;
 }
@@ -68,7 +65,7 @@ static void test_original_description_bytes(const unsigned char *font_bytes,
         "PROTECT0", "PROTECT1", "SEEKER0", "SEEKER1",
         "MYSTIC0", "MYSTIC1", "LIFE0", "LIFE1"
     };
-    enum { TEXT_CAPACITY = 2048, FOOTER_TOP = 407, CURVED_HEIGHT = 11,
+    enum { TEXT_CAPACITY = 2048, FOOTER_TOP = 407, CURVED_HEIGHT = 13,
            MIN_FIRST_LINE_Y = 80 };
     BitmapFont font = {0};
     char error[128];
@@ -78,6 +75,7 @@ static void test_original_description_bytes(const unsigned char *font_bytes,
     assert(font_bytes != NULL && text_bytes != NULL);
     assert(bitmap_font_init(&font, font_bytes, font_length,
                             error, sizeof(error)));
+    assert(font.height == CURVED_HEIGHT);
     for (entry = 0; entry < 8; ++entry) {
         CurvedTextLine lines[CURVED_TEXT_MAX_LINES];
         size_t line_count = 0;
@@ -92,9 +90,12 @@ static void test_original_description_bytes(const unsigned char *font_bytes,
                                   CURVED_HEIGHT, measure_curved_font, &font,
                                   lines, CURVED_TEXT_MAX_LINES, &line_count));
         assert(line_count != 0);
+        assert(lines[line_count - 1].y >=
+               CURVED_TEXT_NEWGAME_LAST_LINE_Y - 2 * CURVED_HEIGHT);
         if (lines[0].y < MIN_FIRST_LINE_Y)
-            fprintf(stderr, "%s: first line y=%d, lines=%lu\n", keys[entry],
-                    (int)lines[0].y, (unsigned long)line_count);
+            fprintf(stderr, "%s: first=%d last=%d lines=%lu\n", keys[entry],
+                    (int)lines[0].y, (int)lines[line_count - 1].y,
+                    (unsigned long)line_count);
         assert(lines[0].y >= MIN_FIRST_LINE_Y);
         for (line = 0; line < line_count; ++line) {
             int32_t expected_x;
@@ -104,6 +105,9 @@ static void test_original_description_bytes(const unsigned char *font_bytes,
             assert(lines[line].x == expected_x &&
                    lines[line].width == expected_width);
             assert(lines[line].y + CURVED_HEIGHT <= FOOTER_TOP);
+            if (line != 0)
+                assert(lines[line].y - lines[line - 1].y ==
+                       CURVED_HEIGHT + 1);
         }
     }
     bitmap_font_free(&font);
@@ -241,7 +245,7 @@ static void test_single_line_ends_at_bottom_target(void)
 static void test_newgame_text_clears_footer(void)
 {
     const int32_t glyph_width = 8;
-    const int32_t font_height = 11;
+    const int32_t font_height = 13;
     const int32_t footer_frame_y = 407;
     CurvedTextLine lines[CURVED_TEXT_MAX_LINES];
     size_t count = 0;

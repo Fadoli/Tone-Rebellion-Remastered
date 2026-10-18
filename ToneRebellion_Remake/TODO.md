@@ -6,8 +6,8 @@ Porter uniquement les comportements établis par le binaire et les données loca
 
 - [ ] Tracer le consommateur de l'ordre 9 issu du type 34, son événement 7 et les montants de coût absents de `DAT_005eac08`; `0x4c` est un chemin distinct.
 - [ ] Identifier le callback et la garde de classe des ordres directs avant d'exposer les commandes soldat/mage.
-- [ ] Finir les panneaux d'unités/bâtiments : mapper les champs de `CHARGE` et tracer chaque action avant d'ajouter des boutons. Le roster actuel ne couvre que les quatre ouvriers initiaux.
-- [ ] Compléter les badges état/charge de `TOGREALM` et identifier les consommateurs de `PANIC`. Royaume et santé sont rendus pour les quatre ouvriers initiaux.
+- [ ] Finir les panneaux d'unités/bâtiments : l'écriture de `+0x22` est établie pour les floaters, mais pas les clés stats du Hall/site; tracer chaque action avant d'ajouter des boutons. Le roster actuel ne couvre que les quatre ouvriers initiaux.
+- [ ] Mapper les champs runtime nécessaires aux badges état/charge; établir le sens visuel ou gameplay du mot d'île basculé par `PANIC`. L'événement et son écriture XOR sont identifiés, mais pas l'effet du mot.
 - [ ] Tracer l'initialisation/écriture de `DAT_006191f8` et la formule de `% WORKSTR` avant d'afficher surplus et ouvriers.
 - [ ] Relier les tâches aux compteurs Inventory; établir le producteur des deux bits Hall qui déclenchent l'acquisition Glyphes avant de porter ce chemin.
 - [ ] Remplacer le placement immédiat par la construction différée source : coûts, sélection d'unité, ordre, trajet et achèvement.
@@ -26,9 +26,11 @@ Porter uniquement les comportements établis par le binaire et les données loca
 - [x] Commandes de barre d'île, badges santé/royaume et descriptions de survol actuellement portées.
 - [x] Sons de menu et sélection de musique du royaume.
 - [x] Icônes des quatre joueurs dans la bannière Diplomatie à partir des ouvriers initiaux et des ancres source; animation et autres états en attente.
-- [x] Panneaux Tasks / effets : paires `SCROLL.SHP` rattachées à `IWTasks` (mode 2) et `IWEffList` (mode 8 debug) selon le dispatch source; défilement et données des tâches restent à porter.
+- [x] Panneaux Tasks / effets : paires `SCROLL.SHP` et survol `MOUSEFOCUS` portés pour `IWTasks`/`IWEffList`; données des tâches restent à porter. `InvCycle` utilise aussi son frame de survol.
 - [x] `TOGREALM` inverse ses trois flags; royaume (`FLTINFO` 22–25) et santé (`0x15−maxHP`) sont rendus pour les ouvriers initiaux. Les autres badges attendent leurs champs runtime.
-- [x] Build du 18/10/2026 : CTest 19/19 et mise en page des 8 paragraphes depuis les COB; exécutable 270291 octets, SHA-256 `7C3657D2FEC9B7CF73686F117A2A26FCAC3B4C6D2E8A5F221E9C3D2239FAA3A5`.
+- [x] `PANIC` émet l'événement local type 3/sous-type 0 et le dispatch bascule le bit 0 du mot d'île par joueur; la sémantique reste inconnue.
+- [x] Texte New Game : 13 rangées source, largeur 12/13 et interligne 1 px; les huit paragraphes COB passent les bornes et dégagent emblèmes/pied de page.
+- [x] Build du 18/10/2026 : CTest 19/19, manifeste `windows.txt` (100 descripteurs), décodage COB (210 sheets/4821 images); exécutable 271445 octets, SHA-256 `8DC166107617498E8344338E9C2AA78776C39239E61EB120CC9BDF0F2D1FB2D1`.
 
 ## Références
 

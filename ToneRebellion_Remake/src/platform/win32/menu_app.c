@@ -940,8 +940,8 @@ static int load_island_surface(int island_id, int map_island_index,
                        "data\\br-trg01.shp does not contain its 23 declared animation frames");
         goto done;
     }
-    if (temp_hole_candidate.frame_count < 8 || build_cycle_candidate.frame_count < 1 ||
-        task_scroll_candidate.frame_count < 3 ||
+    if (temp_hole_candidate.frame_count < 8 || build_cycle_candidate.frame_count < 2 ||
+        task_scroll_candidate.frame_count < 4 ||
         hall_stock_candidate.frame_count < 6 || main_buttons_candidate.frame_count < 8 ||
         hall_command_candidate.frame_count < 10 ||
         floater_info_candidate.frame_count < 26 ||
@@ -1280,11 +1280,11 @@ static int32_t measure_bitmap_text(void *context, const char *text, size_t lengt
     return width;
 }
 
-enum { CURVED_TEXT_RENDER_HEIGHT = 11 };
+enum { CURVED_TEXT_WIDTH_SCALE = 12 };
 
 static uint32_t curved_glyph_width(uint32_t source_width)
 {
-    uint32_t width = (source_width * CURVED_TEXT_RENDER_HEIGHT +
+    uint32_t width = (source_width * CURVED_TEXT_WIDTH_SCALE +
                       g_bitmap_font.height / 2u) / g_bitmap_font.height;
     return width == 0 ? 1u : width;
 }
@@ -1320,16 +1320,15 @@ static void draw_curved_bitmap_text_at(DWORD *pixels, int surface_width,
                                   &glyph_pixels)) {
             uint32_t width = curved_glyph_width(source_width);
             uint32_t row;
-            for (row = 0; row < CURVED_TEXT_RENDER_HEIGHT; ++row) {
-                uint32_t source_row =
-                    row * g_bitmap_font.height / CURVED_TEXT_RENDER_HEIGHT;
+            for (row = 0; row < g_bitmap_font.height; ++row) {
                 uint32_t col;
                 for (col = 0; col < width; ++col) {
                     uint32_t source_col = col * source_width / width;
                     int px = x + (int)col;
                     int py = y + (int)row;
-                    if (glyph_pixels[(size_t)source_row * source_width + source_col] == 1u &&
-                        px >= 0 && px < surface_width && py >= 0 && py < surface_height) {
+                    if (glyph_pixels[(size_t)row * source_width + source_col] == 1u &&
+                        px >= 0 && px < surface_width &&
+                        py >= 0 && py < surface_height) {
                         pixels[(size_t)py * (size_t)surface_width + (size_t)px] = ink;
                     }
                 }
@@ -1796,7 +1795,7 @@ static int create_tribe_description_sheet(SpriteSheet *sheet,
         if (!curved_text_layout(text,
                                 entry % 2 == 0 ? CURVED_TEXT_LEFT : CURVED_TEXT_RIGHT,
                                 CURVED_TEXT_NEWGAME_LAST_LINE_Y,
-                                CURVED_TEXT_RENDER_HEIGHT,
+                                (int)g_bitmap_font.height,
                                 measure_curved_bitmap_text, NULL, lines, MAX_LINES,
                                 &line_count)) {
             (void)snprintf(error, error_capacity,
@@ -3070,6 +3069,11 @@ static void draw_hall_panel(HDC dc, int hall_player)
         static const char *const task_scroll_names[] = {
             "scrollup", "scrolldn", "escrollup", "escrolldn"
         };
+        const WindowTemplate *hover_scroll = g_mouse_inside
+            ? window_catalog_hit_test_names(&g_window_catalog, 3,
+                  g_mouse_x, g_mouse_y, task_scroll_names,
+                  sizeof(task_scroll_names) / sizeof(task_scroll_names[0]))
+            : NULL;
         size_t task_index;
         if (panel_state == WINDOW_ISLAND_PANEL_TASKS) {
             for (task_index = 0;
@@ -3105,11 +3109,13 @@ static void draw_hall_panel(HDC dc, int hall_player)
                 &g_window_catalog, task_scroll_names[task_index], 3);
             if (control != NULL &&
                 window_catalog_scroll_panel_mode(control->name) == panel_state &&
-                control->shape_frame >= 0 &&
-                g_task_scroll_art.frame_count > (uint32_t)control->shape_frame) {
+                control->shape_frame >= 0) {
+                int frame = window_catalog_control_frame(
+                    control, control == hover_scroll);
+                if (frame < 0 || g_task_scroll_art.frame_count <= (uint32_t)frame)
+                    continue;
                 /* FUN_0042fa0f routes each pair to its distinct list panel. */
-                draw_sprite(dc, &g_task_scroll_art,
-                            (uint32_t)control->shape_frame,
+                draw_sprite(dc, &g_task_scroll_art, (uint32_t)frame,
                             control->pane.left, control->pane.top);
             }
         }
@@ -3176,6 +3182,11 @@ static void draw_hall_panel(HDC dc, int hall_player)
         size_t slot;
         const WindowTemplate *cycle = window_catalog_find(
             &g_window_catalog, "InvCycle", 3);
+        const char *const cycle_names[] = {"InvCycle"};
+        const WindowTemplate *hover_cycle = g_mouse_inside
+            ? window_catalog_hit_test_names(&g_window_catalog, 3,
+                  g_mouse_x, g_mouse_y, cycle_names, 1)
+            : NULL;
         if (entry_count == 0) {
             int width = measure_bitmap_text(NULL, g_empty_inventory_text,
                                            strlen(g_empty_inventory_text));
@@ -3242,10 +3253,12 @@ static void draw_hall_panel(HDC dc, int hall_player)
                 }
             }
         }
-        if (entry_count > GAME_INVENTORY_PAGE_SIZE && cycle != NULL &&
-            cycle->shape_frame >= 0) {
-            draw_sprite(dc, &g_build_cycle_art, (uint32_t)cycle->shape_frame,
-                        cycle->pane.left, cycle->pane.top);
+        if (entry_count > GAME_INVENTORY_PAGE_SIZE && cycle != NULL) {
+            int frame = window_catalog_control_frame(cycle, cycle == hover_cycle);
+            if (frame >= 0 && g_build_cycle_art.frame_count > (uint32_t)frame) {
+                draw_sprite(dc, &g_build_cycle_art, (uint32_t)frame,
+                            cycle->pane.left, cycle->pane.top);
+            }
         }
     }
     if (panel_state == WINDOW_ISLAND_PANEL_GLYPHS) {

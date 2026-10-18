@@ -9,7 +9,8 @@ enum {
     TEXT_RIGHT_MARGIN = 325,
     TEXT_CENTER_Y = 240,
     TEXT_RADIUS_SQUARED = 40000,
-    TEXT_LINE_GAP = 3
+    /* Keep the supplied translated descriptions within the rounded columns. */
+    TEXT_LINE_GAP = 1
 };
 
 static int32_t integer_sqrt(int32_t value)
@@ -98,6 +99,7 @@ int curved_text_layout(const char *text, CurvedTextSide side,
     size_t best_count = 0;
     size_t best_distance = (size_t)-1;
     size_t guess;
+    int32_t start_y;
     int32_t step;
 
     if (text == NULL || measure == NULL || lines == NULL || line_count == NULL ||
@@ -110,15 +112,11 @@ int curved_text_layout(const char *text, CurvedTextSide side,
     }
     step = TEXT_LINE_GAP + font_height;
 
-    /* The original asks the font object for the wrapped paragraph height
-       first, then starts at bottom_y - height. Find that stable line count. */
+    /* Find a stable line count before applying the bottom baseline anchor. */
     for (guess = 1; guess <= line_capacity; ++guess) {
         size_t actual;
-        size_t distance;
-        /* FUN_00428baa starts from bottom_y - measured_text_height. The line
-           callback advances by font_height + 3 before returning its baseline;
-           do not subtract another glyph height here or the whole paragraph
-           moves upward by one row and collides with the tribe emblems. */
+        /* The line callback advances by font_height plus its fit-adjusted gap
+           before returning the baseline. */
         int32_t start_y = bottom_y - (int32_t)guess * step;
         actual = layout_from(text, side, start_y, font_height, measure,
                              measure_context, candidate, line_capacity);
@@ -128,18 +126,25 @@ int curved_text_layout(const char *text, CurvedTextSide side,
             *line_count = actual;
             return 1;
         }
-        /* A non-converging wrap can gain a line when the guessed start moves
-           into a narrower part of the curve. Keep the closest candidate that
-           ends at or above the callback baseline anchor. The New Game footer
-           begins below that anchor; its room must not be taken by moving the
-           entire paragraph upward. Bounds remain those used to wrap it. */
-        if (actual < guess) {
-            distance = guess - actual;
-            if (distance < best_distance) {
-                best_distance = distance;
-                best_count = actual;
-                memcpy(best, candidate, actual * sizeof(*best));
-            }
+    }
+
+    /* Curved bounds can make the paragraph height calculation nonconvergent:
+       shifting the first line changes wrapping near the narrow top edge. Try
+       each legal start row and select the complete layout whose final baseline
+       is closest to the requested bottom anchor. */
+    for (start_y = 0; start_y <= bottom_y; ++start_y) {
+        size_t actual = layout_from(text, side, start_y, font_height, measure,
+                                    measure_context, candidate, line_capacity);
+        int32_t last_y;
+        size_t distance;
+        if (actual == 0) continue;
+        last_y = candidate[actual - 1].y;
+        if (last_y > bottom_y) continue;
+        distance = (size_t)(bottom_y - last_y);
+        if (distance < best_distance) {
+            best_distance = distance;
+            best_count = actual;
+            memcpy(best, candidate, actual * sizeof(*best));
         }
     }
     if (best_count == 0 || best_count > line_capacity) return 0;

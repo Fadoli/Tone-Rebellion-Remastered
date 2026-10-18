@@ -195,6 +195,10 @@ static void verify_original_manifest(const char *path)
                    window->send_message[0] == scroll_messages[scroll_index] &&
                    window->send_message[1] == 0 && window->send_message[2] == 0 &&
                    strcmp(window->message_destination, "MASTER") == 0);
+            assert(window_catalog_control_frame(window, 0) ==
+                   scroll_frames[scroll_index]);
+            assert(window_catalog_control_frame(window, 1) ==
+                   scroll_frames[scroll_index] + 1);
         }
     }
     window = window_catalog_find(&catalog, "BuildCycle", 3);
@@ -210,6 +214,8 @@ static void verify_original_manifest(const char *path)
            window->pane.bottom == 391);
     assert(window->send_message[0] == 69 &&
            strcmp(window->message_destination, "IWInventory") == 0);
+    assert(window_catalog_control_frame(window, 0) == 0 &&
+           window_catalog_control_frame(window, 1) == 1);
     {
         const char *const inventory_control[] = {"InvCycle"};
         assert(window_catalog_hit_test_names(&catalog, 3, 320, 380,
