@@ -204,6 +204,9 @@ static void draw_location_action_panel(HDC dc);
 static int load_game_session_for_selected_world(char *error, size_t error_capacity);
 static int draw_building_preview(HDC dc, uint16_t item_id, uint8_t player_slot,
                                  int x, int y, uint32_t scale_16_16);
+static int draw_runtime_item_scaled(HDC dc,
+                                    const GameRuntimeLocation *runtime_location,
+                                    int x, int y, uint32_t scale_16_16);
 
 static int begin_new_game(HWND window)
 {
@@ -3550,6 +3553,34 @@ static void draw_hall_panel(HDC dc, int hall_player)
                             task_info_panel->pane.top + 0x2b,
                             RGB(185, 205, 220));
                     }
+                    /* FUN_004469d6 resolves payload island/site into the
+                       runtime location and calls FUN_0040bf98 only when its
+                       dword at +4 is zero. GameRuntimeLocation.owner_id maps
+                       that field; its current item layers supply the preview. */
+                    if (task_info_panel != NULL && g_game_session_valid &&
+                        selected_event->payload_0a >= 0 &&
+                        (unsigned int)selected_event->payload_0a <
+                            g_game_session.island_count) {
+                        GameRuntimeIsland *target_island =
+                            &g_game_session.islands[
+                                (unsigned int)selected_event->payload_0a];
+                        if (selected_event->payload_0e >= 0 &&
+                            (unsigned int)selected_event->payload_0e <
+                                target_island->location_count) {
+                            GameRuntimeLocation *target_location =
+                                &target_island->locations[
+                                    (unsigned int)selected_event->payload_0e];
+                            int preview_x;
+                            int preview_y;
+                            if (island_panel_info_task_target_preview_position(
+                                    task_info_panel, selected_event->action_type,
+                                    target_location->owner_id,
+                                    &preview_x, &preview_y)) {
+                                (void)draw_runtime_item_scaled(dc, target_location,
+                                    preview_x, preview_y, 0x8000U);
+                            }
+                        }
+                    }
                     {
                         if (selected_event->action_type == 5) {
                             uint16_t item_id;
@@ -3641,6 +3672,33 @@ static void draw_hall_panel(HDC dc, int hall_player)
                                                 &icon_x, &icon_y)) {
                                             draw_sprite(dc, sheet, 4,
                                                         icon_x, icon_y);
+                                        }
+                                    }
+                                }
+                                {
+                                    int artifact_frame =
+                                        island_panel_info_task_artifact_frame(
+                                            selected_event->payload_12);
+                                    if (artifact_frame >= 0 &&
+                                        (uint32_t)artifact_frame <
+                                            g_inventory_item_art.frame_count) {
+                                        const SpriteFrame *icon =
+                                            &g_inventory_item_art.frames[
+                                                (unsigned int)artifact_frame];
+                                        int icon_x;
+                                        int icon_y;
+                                        if (island_panel_info_task_icon_position(
+                                                task_info_panel,
+                                                icon->x_offset, icon->y_offset,
+                                                icon->hit_left, icon->hit_top,
+                                                icon->hit_right, icon->hit_bottom,
+                                                0, &icon_x, &icon_y)) {
+                                            /* FUN_004469d6 draws TRIGGERS at
+                                               item_id - 5; local shapes.txt
+                                               maps that sheet to alltrigs.shp. */
+                                            draw_sprite(dc, &g_inventory_item_art,
+                                                (uint32_t)artifact_frame,
+                                                icon_x, icon_y);
                                         }
                                     }
                                 }

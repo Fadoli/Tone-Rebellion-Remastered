@@ -190,6 +190,10 @@ int main(int argc, char **argv)
                                                 &task_category_key));
     assert(strcmp(task_title_key, "DELIVER") == 0 &&
            strcmp(task_category_key, "MTONE") == 0);
+    assert(island_panel_info_task_artifact_frame(5) == 0);
+    assert(island_panel_info_task_artifact_frame(33) == 28);
+    assert(island_panel_info_task_artifact_frame(4) == -1);
+    assert(island_panel_info_task_artifact_frame(34) == -1);
     info_panel.pane.left = 192;
     info_panel.pane.top = 368;
     info_panel.pane.right = 447;
@@ -197,8 +201,27 @@ int main(int argc, char **argv)
     assert(island_panel_info_task_icon_position(&info_panel, -2, 1,
         4, 3, 20, 15, 10, &task_icon_x, &task_icon_y));
     assert(task_icon_x == 319 && task_icon_y == 409);
+    assert(island_panel_info_task_icon_position(&info_panel, -2, 1,
+        4, 3, 20, 15, 0, &task_icon_x, &task_icon_y));
+    assert(task_icon_x == 309 && task_icon_y == 409);
+    assert(island_panel_info_task_icon_position(&info_panel, -2, 1,
+        4, 3, 20, 15, 0, &task_icon_x, &task_icon_y));
+    assert(task_icon_x == 309 && task_icon_y == 409);
     assert(!island_panel_info_task_icon_position(NULL, 0, 0,
         0, 0, 1, 1, 10, &task_icon_x, &task_icon_y));
+    assert(island_panel_info_task_target_preview_position(&info_panel, 4, 0,
+        &task_icon_x, &task_icon_y));
+    assert(task_icon_x == 417 && task_icon_y == 461);
+    assert(island_panel_info_task_target_preview_position(&info_panel, 0xd, 0,
+        &task_icon_x, &task_icon_y));
+    assert(!island_panel_info_task_target_preview_position(&info_panel, 4, -1,
+        &task_icon_x, &task_icon_y));
+    assert(!island_panel_info_task_target_preview_position(&info_panel, 4, 1,
+        &task_icon_x, &task_icon_y));
+    assert(!island_panel_info_task_target_preview_position(&info_panel, 5, 0,
+        &task_icon_x, &task_icon_y));
+    assert(!island_panel_info_task_target_preview_position(NULL, 4, 0,
+        &task_icon_x, &task_icon_y));
     assert(island_panel_info_construction_task_indices(0x25, 0,
         &construction_catalog_item_id, &construction_name_index));
     assert(construction_catalog_item_id == 0x25 && construction_name_index == 0);

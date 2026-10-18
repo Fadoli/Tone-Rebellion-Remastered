@@ -148,6 +148,8 @@ const char *island_panel_info_task_priority_key(int16_t priority);
 int island_panel_info_task_transfer_keys(int16_t action_type, int16_t item_id,
                                          const char **title_key,
                                          const char **category_key);
+/* FUN_004469d6 maps artifact transfer IDs 5..33 to TRIGGERS frames 0..28. */
+int island_panel_info_task_artifact_frame(int16_t item_id);
 /* FUN_004469d6/FUN_004119ba centers the transfer icon's opaque bounds in
    IWTaskInfo; the source adds a 10px x offset for resource IDs 1..3. */
 int island_panel_info_task_icon_position(const WindowTemplate *panel,
@@ -156,6 +158,11 @@ int island_panel_info_task_icon_position(const WindowTemplate *panel,
                                          int opaque_left, int opaque_top,
                                          int opaque_right, int opaque_bottom,
                                          int extra_x, int *draw_x, int *draw_y);
+/* FUN_004469d6 previews its target location only when runtime owner +4 is 0. */
+int island_panel_info_task_target_preview_position(const WindowTemplate *panel,
+                                                   int16_t action_type,
+                                                   int32_t owner_id,
+                                                   int *draw_x, int *draw_y);
 /* FUN_004469d6 normalizes construction task IDs from 0x25..0x34 and indexes
    the 16-entry BLDNAME block for the task's player. */
 int island_panel_info_construction_task_indices(int16_t item_id,

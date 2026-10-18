@@ -354,6 +354,12 @@ int island_panel_info_task_transfer_keys(int16_t action_type, int16_t item_id,
     return 1;
 }
 
+int island_panel_info_task_artifact_frame(int16_t item_id)
+{
+    if (item_id < 5 || item_id >= 0x22) return -1;
+    return item_id - 5;
+}
+
 int island_panel_info_task_icon_position(const WindowTemplate *panel,
                                          int frame_x_offset,
                                          int frame_y_offset,
@@ -378,6 +384,20 @@ int island_panel_info_task_icon_position(const WindowTemplate *panel,
         opaque_left - frame_x_offset + extra_x;
     *draw_y = panel->pane.top + (height - opaque_height) / 2 -
         opaque_top - frame_y_offset;
+    return 1;
+}
+
+int island_panel_info_task_target_preview_position(const WindowTemplate *panel,
+                                                   int16_t action_type,
+                                                   int32_t owner_id,
+                                                   int *draw_x, int *draw_y)
+{
+    if (panel == NULL || draw_x == NULL || draw_y == NULL ||
+        (action_type != 4 && action_type != 0xd) || owner_id != 0 ||
+        panel->pane.right - panel->pane.left < 0x1e ||
+        panel->pane.bottom - panel->pane.top < 10) return 0;
+    *draw_x = panel->pane.right - 0x1e;
+    *draw_y = panel->pane.bottom - 10;
     return 1;
 }
 
