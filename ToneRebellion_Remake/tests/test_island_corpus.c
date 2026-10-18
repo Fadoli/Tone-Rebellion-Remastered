@@ -1,6 +1,7 @@
 #include "island_data.h"
 #include "game_start.h"
 #include "game_session.h"
+#include "pad_catalog.h"
 #include "world_map.h"
 
 #include <stdio.h>
@@ -108,6 +109,10 @@ int main(int argc, char **argv)
         IslandData world_islands[WORLD_MAP_MAX_ISLANDS];
         GameSessionConfig config;
         GameSession session;
+        PadCatalog pad_catalog;
+        char pad_path[1024];
+        unsigned char *pad_bytes;
+        size_t pad_length;
 
         if (written < 0 || (size_t)written >= sizeof(path) ||
             !world_map_load_file(path, &map, error, sizeof(error))) {
@@ -118,6 +123,17 @@ int main(int argc, char **argv)
             (void)fprintf(stderr, "WORLDPOS.TXT contains no worlds\n");
             return 1;
         }
+        written = snprintf(pad_path, sizeof(pad_path), "%s/pad.txt", argv[1]);
+        pad_bytes = written < 0 || (size_t)written >= sizeof(pad_path)
+            ? NULL : read_file(pad_path, &pad_length);
+        if (pad_bytes == NULL ||
+            !pad_catalog_load(pad_bytes, pad_length, &pad_catalog,
+                              error, sizeof(error))) {
+            (void)fprintf(stderr, "could not load local pad.txt: %s\n", error);
+            free(pad_bytes);
+            return 1;
+        }
+        free(pad_bytes);
         for (world_index = 0;
              world_index < map.worlds[0].island_count;
              ++world_index) {
@@ -134,7 +150,8 @@ int main(int argc, char **argv)
         config.world_index = 0;
         config.home_island_index = 0; /* explicit fixture value; binary global is unresolved */
         config.random_seed = 1;
-        if (!game_session_initialize(&map.worlds[0], world_islands, &config,
+        if (!game_session_initialize(&map.worlds[0], world_islands,
+                                     &pad_catalog, &config,
                                      &session, error, sizeof(error))) {
             (void)fprintf(stderr, "game session from local corpus failed: %s\n", error);
             return 1;

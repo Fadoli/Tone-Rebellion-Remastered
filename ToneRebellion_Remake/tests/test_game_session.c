@@ -24,6 +24,17 @@ static void set_location(IslandData *island, unsigned int index,
     island->location_count = (uint16_t)(index + 1U);
 }
 
+static void make_pad_catalog(PadCatalog *catalog)
+{
+    unsigned int item;
+    memset(catalog, 0, sizeof(*catalog));
+    catalog->item_count = 101;
+    for (item = 0; item < catalog->item_count; ++item) {
+        catalog->items[item].item_id = (uint16_t)item;
+        catalog->items[item].movement_cost[0] = 15;
+    }
+}
+
 static void make_world(WorldDefinition *world, IslandData islands[5])
 {
     unsigned int island_index;
@@ -60,18 +71,20 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
     IslandData islands[5];
     GameSessionConfig config;
     GameSession session;
+    PadCatalog catalog;
     char error[160];
     unsigned int player;
     unsigned int island_index;
 
     make_world(&world, islands);
+    make_pad_catalog(&catalog);
     memset(&config, 0, sizeof(config));
     config.world_index = 1;
     config.difficulty = 2;
     config.selected_tribe = 3;
     config.home_island_index = 0;
     config.random_seed = 1;
-    if (!game_session_initialize(&world, islands, &config, &session,
+    if (!game_session_initialize(&world, islands, &catalog, &config, &session,
                                  error, sizeof(error))) {
         (void)fprintf(stderr, "session initialization failed: %s\n", error);
         assert(0);
@@ -135,6 +148,9 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
                    .resource_stock[GAME_RESOURCE_CRYSTAL_TONE] == 0);
         assert(session.islands[start->island_index]
                    .locations[start->nearest_site_location_index]
+                   .source_value_34 == 15);
+        assert(session.islands[start->island_index]
+                   .locations[start->nearest_site_location_index]
                    .resource_stock[GAME_RESOURCE_MAGIC_TONE] == 0);
         assert(floater->owner_slot == player);
         assert((session.islands[start->island_index].access_mask & (1U << player)) != 0);
@@ -144,6 +160,39 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
                    &session, start->island_index, (uint8_t)(1U << player), 0) == 0);
         assert(game_session_world_map_frame_offset(
                    &session, start->island_index, (uint8_t)(1U << player), 1) == 30);
+    }
+    {
+        GamePendingEvent repair;
+        const GamePlayerEconomy *economy = &session.economy[0];
+        GameRuntimeLocation *hall = &session.islands[economy->hall_island_index]
+            .locations[economy->hall_location_index];
+        int16_t current;
+        int16_t maximum;
+        memset(&repair, 0, sizeof(repair));
+        repair.active = 1;
+        repair.action_type = 0x12;
+        repair.payload_0a = (int16_t)economy->hall_location_index;
+        repair.payload_0e = (int16_t)economy->hall_island_index;
+        hall->source_value_34 = 7;
+        hall->source_capacity_4a = 2;
+        assert(game_session_repair_task_values(&session, &catalog, &repair,
+                                               &current, &maximum));
+        assert(current == 7 && maximum == 25);
+        repair.payload_0a = INT16_MAX;
+        assert(!game_session_repair_task_values(&session, &catalog, &repair,
+                                                &current, &maximum));
+        repair.payload_0a = (int16_t)economy->hall_location_index;
+        repair.payload_0e = INT16_MAX;
+        assert(!game_session_repair_task_values(&session, &catalog, &repair,
+                                                &current, &maximum));
+        repair.payload_0e = (int16_t)economy->hall_island_index;
+        repair.action_type = 5;
+        assert(!game_session_repair_task_values(&session, &catalog, &repair,
+                                                &current, &maximum));
+        repair.action_type = 0x12;
+        hall->source_capacity_4a = -3;
+        assert(!game_session_repair_task_values(&session, &catalog, &repair,
+                                                &current, &maximum));
     }
     assert(game_session_count_player_floaters(NULL, 0) == 0);
     assert(game_session_count_player_floaters(&session,
@@ -821,15 +870,17 @@ static void test_initialization_is_transactional_on_bad_world(void)
     GameSessionConfig config;
     GameSession session;
     GameSession before;
+    PadCatalog catalog;
     char error[160];
 
     make_world(&world, islands);
+    make_pad_catalog(&catalog);
     world.island_count = 3;
     memset(&config, 0, sizeof(config));
     config.home_island_index = 0;
     memset(&session, 0xa5, sizeof(session));
     before = session;
-    assert(!game_session_initialize(&world, islands, &config, &session,
+    assert(!game_session_initialize(&world, islands, &catalog, &config, &session,
                                     error, sizeof(error)));
     assert(strstr(error, "cannot support the four start slots") != NULL);
     assert(memcmp(&session, &before, sizeof(session)) == 0);
@@ -853,6 +904,7 @@ static void test_building_placement_matches_source_runtime_initialization(void)
     runtime->record_value_10 = 0;
     runtime->owner_id = -1;
     runtime->source_flags = 0x7ff;
+    runtime->source_capacity_4a = 3;
     runtime->base_progress = 3;
     runtime->chug_progress = 4;
     runtime->glyph_progress = 5;
@@ -865,6 +917,7 @@ static void test_building_placement_matches_source_runtime_initialization(void)
     catalog.items[72].item_id = 72; /* base item 40 + player slot 2 * 16 */
     catalog.items[72].size = 0;
     catalog.items[72].building_tone_cost = 10;
+    catalog.items[72].movement_cost[0] = 25;
     site.kind = ISLAND_LOCATION_PAD_SMALL;
     site.renderer_subtype = 0;
 
@@ -872,6 +925,8 @@ static void test_building_placement_matches_source_runtime_initialization(void)
                                        &site, 40, error, sizeof(error)));
     assert(runtime->record_value_10 == 72);
     assert(runtime->owner_id == 2);
+    assert(runtime->source_value_34 == 25);
+    assert(runtime->source_capacity_4a == 0);
     assert(runtime->source_flags == 0x410);
     assert(runtime->record_value_24 == 0);
     assert(runtime->base_progress == 0 && runtime->chug_progress == 0);

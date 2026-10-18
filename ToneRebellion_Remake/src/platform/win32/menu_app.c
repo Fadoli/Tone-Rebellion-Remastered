@@ -3236,6 +3236,30 @@ static void draw_task_stock_gauge(HDC dc, const WindowTemplate *panel,
     }
 }
 
+static void draw_task_repair_gauge(HDC dc, const WindowTemplate *panel,
+                                   const GamePendingEvent *event, int row_y)
+{
+    int16_t current;
+    int16_t maximum;
+    unsigned int fill_width;
+    int gauge_x;
+    int gauge_y;
+    if (!g_game_session_valid || panel == NULL || event == NULL ||
+        g_task_icon_art.frame_count <= 9U ||
+        !game_session_repair_task_values(&g_game_session, &g_pad_catalog,
+                                         event, &current, &maximum) ||
+        !island_panel_info_repair_gauge_fill(current, maximum, 70U, &fill_width))
+        return;
+    gauge_x = panel->pane.left + 0xaa;
+    gauge_y = panel->pane.top + row_y;
+    draw_sprite(dc, &g_task_icon_art, 9U, gauge_x, gauge_y);
+    if (fill_width != 0U) {
+        fill_rect(dc, gauge_x + 2, gauge_y + 2,
+                  gauge_x + 2 + (int)fill_width, gauge_y + 5,
+                  g_island_palette[0]);
+    }
+}
+
 static void draw_hall_panel(HDC dc, int hall_player)
 {
     const WindowTemplate *panel = NULL;
@@ -3395,6 +3419,10 @@ static void draw_hall_panel(HDC dc, int hall_player)
                             task_list_panel->pane.top + position.y + 7);
                         draw_task_stock_gauge(dc, task_list_panel, hall_player,
                             (unsigned int)row.resource_icon_type, position.y);
+                    }
+                    if (event->action_type == 0x12) {
+                        draw_task_repair_gauge(dc, task_list_panel, event,
+                                               position.y);
                     }
                 }
             }
@@ -5730,7 +5758,7 @@ static int load_game_session_for_selected_world(char *error, size_t error_capaci
     config.home_island_index = 0;
     config.randomize_class0_assignment = 0;
     config.random_seed = g_random_state;
-    if (!game_session_initialize(world, island_records, &config, &session,
+    if (!game_session_initialize(world, island_records, &g_pad_catalog, &config, &session,
                                  error, error_capacity)) return 0;
 
     g_game_session = session;

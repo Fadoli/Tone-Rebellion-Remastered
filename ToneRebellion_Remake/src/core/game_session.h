@@ -116,6 +116,9 @@ typedef struct GameRuntimeLocation {
     /* Raw Hall fields read by FUN_0045eaa7. The active-bit writer is still
        unknown, so these begin at the zeroed runtime value. */
     int16_t source_capacity_4a;
+    /* FUN_004528ca initializes runtime +0x34 from FUN_00450978; repair task
+       rows later read this mutable short from their target location. */
+    int16_t source_value_34;
     uint32_t source_flags_1c;
     uint16_t chug_progress;
     uint16_t glyph_progress;
@@ -191,8 +194,9 @@ typedef struct GameSession {
 } GameSession;
 
 /*
- * Builds the initial, mutable gameplay state from a selected WORLDPOS world
- * and its ISLANDnn.TXT records (ordered by world-island index). The port
+ * Builds the initial, mutable gameplay state from a selected WORLDPOS world,
+ * its ISLANDnn.TXT records (ordered by world-island index), and parsed pad
+ * records required to initialize source runtime fields. The port
  * models FUN_004500c4 field resets, FUN_0046466f start descriptors and initial
  * pads/floaters, applies FUN_00464b9e marker item placements, sets class-2
  * record state and reproduces the two class-0 assignment loops in
@@ -207,9 +211,17 @@ typedef struct GameSession {
  */
 int game_session_initialize(const WorldDefinition *world,
                             const IslandData *islands_by_world_index,
+                            const PadCatalog *pad_catalog,
                             const GameSessionConfig *config,
                             GameSession *out,
                             char *error, size_t error_capacity);
+
+/* FUN_004459e6 reads payload +0x0a as location and +0x0e as island for a
+   repair row. Returns its current +0x34 and FUN_00450978 maximum. */
+int game_session_repair_task_values(const GameSession *session,
+                                    const PadCatalog *pad_catalog,
+                                    const GamePendingEvent *event,
+                                    int16_t *current, int16_t *maximum);
 
 /* Models FUN_0047117d: any player bit in player_mask with island access set
    permits entry. The UI passes the selected human tribe's bit. */

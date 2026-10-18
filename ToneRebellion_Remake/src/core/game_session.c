@@ -240,8 +240,42 @@ static int assign_class0_links(const WorldDefinition *world,
     return 1;
 }
 
+static int source_value_34_max(const PadCatalog *catalog,
+                               const GameRuntimeLocation *location,
+                               int16_t *maximum)
+{
+    const PadCatalogItem *item;
+    int32_t base_item_id;
+    int32_t value;
+
+    if (catalog == NULL || location == NULL || maximum == NULL ||
+        location->owner_id < -1 || location->owner_id > GAME_START_PLAYER_COUNT ||
+        location->record_value_10 < 0) return 0;
+    if (location->owner_id == -1) {
+        *maximum = -1;
+        return 1;
+    }
+    base_item_id = location->record_value_10;
+    if (location->owner_id < GAME_START_PLAYER_COUNT)
+        base_item_id -= location->owner_id * 16;
+    if (base_item_id <= 1) {
+        *maximum = -1;
+        return 1;
+    }
+    item = pad_catalog_find(catalog, (uint16_t)location->record_value_10);
+    if (item == NULL) return 0;
+    /* FUN_0046303b stores the third parsed integer (first movement-cost
+       component) at pad record +0x0e; FUN_00450978 adds source +0x4a * 5. */
+    value = (int32_t)item->movement_cost[0] +
+            (int32_t)location->source_capacity_4a * 5;
+    if (value < INT16_MIN || value > INT16_MAX) return 0;
+    *maximum = (int16_t)value;
+    return 1;
+}
+
 int game_session_initialize(const WorldDefinition *world,
                             const IslandData *islands_by_world_index,
+                            const PadCatalog *pad_catalog,
                             const GameSessionConfig *config,
                             GameSession *out,
                             char *error, size_t error_capacity)
@@ -255,8 +289,10 @@ int game_session_initialize(const WorldDefinition *world,
     unsigned int floater_cursor = 0;
 
     if (error != NULL && error_capacity != 0) error[0] = '\0';
-    if (world == NULL || islands_by_world_index == NULL || config == NULL || out == NULL) {
-        set_error(error, error_capacity, "world, island records, config and output are required");
+    if (world == NULL || islands_by_world_index == NULL || pad_catalog == NULL ||
+        config == NULL || out == NULL) {
+        set_error(error, error_capacity,
+                  "world, island records, pad catalog, config and output are required");
         return 0;
     }
     if (world->island_count < GAME_START_PLAYER_COUNT ||
@@ -311,6 +347,7 @@ int game_session_initialize(const WorldDefinition *world,
             /* FUN_004500c4 initializes owner to -1 and clears +0x10 except for class 3. */
             state->record_value_10 = location->renderer_class == 3 ? location->renderer_variant : 0;
             state->owner_id = -1;
+            state->source_value_34 = -1;
             state->record_value_24 = 0;
             state->bridge_neighbor_island = bridge_neighbors[island_index][location_index];
             state->x = location->x;
@@ -444,10 +481,39 @@ int game_session_initialize(const WorldDefinition *world,
                 state->glyph_progress = 0;
                 state->animation_rate = 1;
             }
+            if (state->owner_id >= 0 &&
+                state->record_value_10 > 0 &&
+                !source_value_34_max(pad_catalog, state, &state->source_value_34)) {
+                set_error(error, error_capacity,
+                          "runtime item has no pad record for source field +0x34");
+                return 0;
+            }
         }
     }
 
     *out = next;
+    return 1;
+}
+
+int game_session_repair_task_values(const GameSession *session,
+                                    const PadCatalog *pad_catalog,
+                                    const GamePendingEvent *event,
+                                    int16_t *current, int16_t *maximum)
+{
+    const GameRuntimeLocation *location;
+    int16_t computed_maximum;
+
+    if (session == NULL || pad_catalog == NULL || event == NULL ||
+        current == NULL || maximum == NULL || event->active == 0 ||
+        event->action_type != 0x12 || event->payload_0a < 0 ||
+        event->payload_0e < 0 || event->payload_0e >= session->island_count) return 0;
+    if ((uint16_t)event->payload_0a >=
+        session->islands[event->payload_0e].location_count) return 0;
+    location = &session->islands[event->payload_0e].locations[event->payload_0a];
+    if (!source_value_34_max(pad_catalog, location, &computed_maximum) ||
+        location->source_value_34 == -1 || computed_maximum <= 0) return 0;
+    *current = location->source_value_34;
+    *maximum = computed_maximum;
     return 1;
 }
 
@@ -1274,6 +1340,11 @@ int game_session_place_building(GameSession *session,
        sets +0x32 to 1, and initializes object flags to 0x410. */
     runtime->record_value_10 = runtime_item_id;
     runtime->owner_id = player_slot;
+    runtime->source_capacity_4a = 0;
+    if (!source_value_34_max(catalog, runtime, &runtime->source_value_34)) {
+        set_error(error, error_capacity, "building has no usable source field +0x34");
+        return 0;
+    }
     runtime->record_value_24 = 0;
     runtime->source_flags = 0x410;
     runtime->base_progress = 0;

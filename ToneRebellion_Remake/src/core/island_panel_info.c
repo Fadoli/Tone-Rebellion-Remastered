@@ -246,6 +246,31 @@ int island_panel_info_stock_gauge_fill(uint16_t stock,
     return 1;
 }
 
+int island_panel_info_repair_gauge_fill(int16_t current, int16_t maximum,
+                                        unsigned int gauge_width,
+                                        unsigned int *fill_width)
+{
+    uint64_t scaled;
+    uint64_t denominator;
+    uint64_t whole;
+    uint64_t remainder;
+    if (fill_width == NULL || current < 0 || maximum <= 0) return 0;
+    if (current >= maximum) {
+        *fill_width = gauge_width;
+        return 1;
+    }
+    scaled = (uint64_t)(uint16_t)current * gauge_width;
+    denominator = (uint16_t)maximum;
+    whole = scaled / denominator;
+    remainder = scaled % denominator;
+    /* FUN_004118df converts ratio*width through x87 __ftol (nearest, ties
+       to even under the default Windows rounding mode). */
+    if (remainder * 2U > denominator ||
+        (remainder * 2U == denominator && (whole & 1U) != 0)) ++whole;
+    *fill_width = (unsigned int)whole;
+    return 1;
+}
+
 int island_panel_info_task_row_position(const WindowTemplate *panel,
                                        unsigned int visible_rows,
                                        unsigned int visible_index,

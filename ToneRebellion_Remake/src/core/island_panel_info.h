@@ -120,6 +120,10 @@ int island_panel_info_stock_gauge_fill(uint16_t stock,
                                        int16_t source_field_4a,
                                        unsigned int gauge_width,
                                        unsigned int *fill_width);
+/* FUN_004459e6 scales repair target +0x34 against FUN_00450978 and caps at 1. */
+int island_panel_info_repair_gauge_fill(int16_t current, int16_t maximum,
+                                        unsigned int gauge_width,
+                                        unsigned int *fill_width);
 /* FUN_004459e6 centers visible 13px rows vertically and draws the icon at x=25,
    label at x=45; returned y is the pane-local row origin. */
 int island_panel_info_task_row_position(const WindowTemplate *panel,

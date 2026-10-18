@@ -114,6 +114,21 @@ int main(int argc, char **argv)
     assert(gauge_fill == 70);
     assert(!island_panel_info_stock_gauge_fill(50, -3, 70, &gauge_fill));
     assert(!island_panel_info_stock_gauge_fill(50, 0, 70, NULL));
+    assert(island_panel_info_repair_gauge_fill(0, 3, 70, &gauge_fill));
+    assert(gauge_fill == 0);
+    assert(island_panel_info_repair_gauge_fill(1, 3, 70, &gauge_fill));
+    assert(gauge_fill == 23);
+    assert(island_panel_info_repair_gauge_fill(1, 4, 70, &gauge_fill));
+    assert(gauge_fill == 18);
+    assert(island_panel_info_repair_gauge_fill(3, 4, 70, &gauge_fill));
+    assert(gauge_fill == 52);
+    assert(island_panel_info_repair_gauge_fill(3, 3, 70, &gauge_fill));
+    assert(gauge_fill == 70);
+    assert(island_panel_info_repair_gauge_fill(8, 3, 70, &gauge_fill));
+    assert(gauge_fill == 70);
+    assert(!island_panel_info_repair_gauge_fill(-1, 3, 70, &gauge_fill));
+    assert(!island_panel_info_repair_gauge_fill(1, 0, 70, &gauge_fill));
+    assert(!island_panel_info_repair_gauge_fill(1, 3, 70, NULL));
     assert(island_panel_info_task_row(0xd, 0, &task_row));
     assert(strcmp(task_row.label_key, "OARTIFACT") == 0 &&
            task_row.task_icon_frame == 4);
