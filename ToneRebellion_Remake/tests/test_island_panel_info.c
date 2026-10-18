@@ -115,6 +115,20 @@ int main(int argc, char **argv)
     assert(strcmp(key, "PLOT27") == 0);
     assert(!island_panel_info_inventory_key(4, key, sizeof(key)));
     assert(!island_panel_info_inventory_key(34, key, sizeof(key)));
+    assert(island_panel_info_inventory_detail_index(
+               ISLAND_PANEL_INFO_INVENTORY_DETAIL, 5) == 0);
+    selected_inventory_item = 12;
+    assert(island_panel_info_inventory_detail_index(
+               ISLAND_PANEL_INFO_INVENTORY_DETAIL, selected_inventory_item) == 7);
+    /* The chosen item remains the info target after the local hover clears. */
+    hovered_inventory_item = -1;
+    assert(hovered_inventory_item == -1 && selected_inventory_item == 12);
+    assert(island_panel_info_inventory_detail_index(
+               ISLAND_PANEL_INFO_INVENTORY_DETAIL, selected_inventory_item) == 7);
+    assert(island_panel_info_inventory_detail_index(
+               ISLAND_PANEL_INFO_INVENTORY_DEFAULT, selected_inventory_item) == -1);
+    assert(island_panel_info_inventory_detail_index(
+               ISLAND_PANEL_INFO_INVENTORY_DETAIL, 34) == -1);
     assert(island_panel_info_extract_entry(plot04, sizeof(plot04) - 1,
                                            "PLOT04", description,
                                            sizeof(description)));

@@ -132,6 +132,14 @@ int island_panel_info_inventory_key(unsigned int item_id,
     return 1;
 }
 
+int island_panel_info_inventory_detail_index(int info_mode,
+                                             int selected_item_id)
+{
+    if (info_mode != ISLAND_PANEL_INFO_INVENTORY_DETAIL ||
+        selected_item_id < 5 || selected_item_id > 33) return -1;
+    return selected_item_id - 5;
+}
+
 int island_panel_info_building_sprite_position(const WindowTemplate *panel,
                                                int *x, int *y)
 {

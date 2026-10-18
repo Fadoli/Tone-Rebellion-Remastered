@@ -27,10 +27,11 @@ Porter uniquement les comportements établis par le binaire et les données loca
 - [x] Sons de menu et sélection de musique du royaume.
 - [x] Icônes des quatre joueurs dans la bannière Diplomatie à partir des ouvriers initiaux et des ancres source; animation et autres états en attente.
 - [x] Panneaux Tasks / effets : paires `SCROLL.SHP` et survol `MOUSEFOCUS` portés pour `IWTasks`/`IWEffList`; données des tâches restent à porter. `InvCycle` utilise aussi son frame de survol.
+- [x] Inventory : la fiche `IWTextInfo` suit l'ID sélectionné après la fin du survol; couvert par `test_island_panel_info`.
 - [x] `TOGREALM` inverse ses trois flags; royaume (`FLTINFO` 22–25) et santé (`0x15−maxHP`) sont rendus pour les ouvriers initiaux. Les autres badges attendent leurs champs runtime.
 - [x] `PANIC` émet l'événement local type 3/sous-type 0 et le dispatch bascule le bit 0 du mot d'île par joueur; la sémantique reste inconnue.
 - [x] Texte New Game : 13 rangées source, largeur 12/13 et interligne 1 px; les huit paragraphes COB passent les bornes et dégagent emblèmes/pied de page.
-- [x] Build du 18/10/2026 : CTest 19/19 et huit descriptions COB validées; exécutable 271407 octets, SHA-256 `E036F8502110E4FAF60078CF2A2015C5292524A86055BB722EC7F20630CB37FB`.
+- [x] Build du 18/10/2026 : CTest 19/19; exécutable 271467 octets, SHA-256 `F97102FA18FC278EAEE24A0AA59D05488AB42F549C5ADB3C7683BC832EBE9903`.
 
 ## Références
 

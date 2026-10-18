@@ -2899,9 +2899,10 @@ static void draw_hall_info_panel(HDC dc, int panel_state)
 
     if (panel_state == WINDOW_ISLAND_PANEL_INVENTORY) {
         if (g_inventory_info_mode == ISLAND_PANEL_INFO_INVENTORY_DETAIL) {
-            if (g_hovered_inventory_item >= 5 && g_hovered_inventory_item <= 33) {
-                text = g_inventory_item_info_text[g_hovered_inventory_item - 5];
-            }
+            int detail_index = island_panel_info_inventory_detail_index(
+                g_inventory_info_mode, g_selected_inventory_item);
+            if (detail_index >= 0)
+                text = g_inventory_item_info_text[detail_index];
         } else {
             text = g_inventory_info_text;
         }

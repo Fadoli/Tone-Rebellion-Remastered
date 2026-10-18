@@ -96,6 +96,8 @@ The island screen now opens the construction grid when an empty class-0 pad is c
 
 The task/effect scroll controls and inventory cycle control now use the catalog's adjacent hover frames when their local descriptors set `MOUSEFOCUS 1`. The COB manifest test requires all four `SCROLL.SHP` frames and both `SCARROW` frames used by those states; list data and scroll behavior remain incomplete.
 
+The Inventory info pane now reads the last selected item ID, which the source sends to `IWTextInfo` in detail mode 2 (`FUN_0043d45c`/`FUN_0043d41a`); clearing the pointer hover no longer clears the detail text. This selection/hover distinction is covered by `test_island_panel_info`. The source input event mapping is still unresolved, so the existing hover-to-select gesture remains a remake assumption.
+
 ### Trade panel input and table
 
 The Trade table uses the three source resource sheets in row order and the IWTrade pane-relative cell ranges from FUN_0043ec78. Left/right clicks adjust by 10 and clamp each value to 0..1000. TradeZERO clears all nine offers. TradeDOIT creates one outbound type-0xb request per other player with nonzero amounts, preserving the original recipient order, then clears the offer table. The remake retains those outgoing requests in GameSession; it does not apply them to Hall stock because multiplayer transport is not implemented. This is a source-derived partial UI port, not evidence of completed trade parity. See test_game_trade and FUNCTION_GUIDE.md.
