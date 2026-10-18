@@ -45,6 +45,14 @@ target_link_libraries(remake_inspect_cob PRIVATE tone_core)
 target_compile_features(remake_inspect_cob PRIVATE c_std_11)
 
 if(BUILD_TESTING)
+    find_program(NODE_EXECUTABLE NAMES node)
+    if(NODE_EXECUTABLE)
+        add_test(
+            NAME documentation_integrity
+            COMMAND ${NODE_EXECUTABLE} --test "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_docs_integrity.mjs"
+        )
+    endif()
+
     function(enable_test_assertions target)
         if(MSVC)
             target_compile_options(${target} PRIVATE /UNDEBUG)
@@ -185,4 +193,11 @@ if(WIN32)
     if(NOT MSVC)
         target_link_libraries(remake_menu PRIVATE m)
     endif()
+    add_custom_command(TARGET remake_menu POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:remake_menu>"
+            "${CMAKE_CURRENT_SOURCE_DIR}/ToneRebellion_Remake.exe"
+        COMMENT "Updating the ready-to-launch ToneRebellion_Remake.exe"
+        VERBATIM
+    )
 endif()
