@@ -114,21 +114,21 @@ int main(int argc, char **argv)
     assert(gauge_fill == 70);
     assert(!island_panel_info_stock_gauge_fill(50, -3, 70, &gauge_fill));
     assert(!island_panel_info_stock_gauge_fill(50, 0, 70, NULL));
-    assert(island_panel_info_repair_gauge_fill(0, 3, 70, &gauge_fill));
+    assert(island_panel_info_task_gauge_fill(0, 3, 70, &gauge_fill));
     assert(gauge_fill == 0);
-    assert(island_panel_info_repair_gauge_fill(1, 3, 70, &gauge_fill));
+    assert(island_panel_info_task_gauge_fill(1, 3, 70, &gauge_fill));
     assert(gauge_fill == 23);
-    assert(island_panel_info_repair_gauge_fill(1, 4, 70, &gauge_fill));
+    assert(island_panel_info_task_gauge_fill(1, 4, 70, &gauge_fill));
     assert(gauge_fill == 18);
-    assert(island_panel_info_repair_gauge_fill(3, 4, 70, &gauge_fill));
+    assert(island_panel_info_task_gauge_fill(3, 4, 70, &gauge_fill));
     assert(gauge_fill == 52);
-    assert(island_panel_info_repair_gauge_fill(3, 3, 70, &gauge_fill));
+    assert(island_panel_info_task_gauge_fill(3, 3, 70, &gauge_fill));
     assert(gauge_fill == 70);
-    assert(island_panel_info_repair_gauge_fill(8, 3, 70, &gauge_fill));
+    assert(island_panel_info_task_gauge_fill(8, 3, 70, &gauge_fill));
     assert(gauge_fill == 70);
-    assert(!island_panel_info_repair_gauge_fill(-1, 3, 70, &gauge_fill));
-    assert(!island_panel_info_repair_gauge_fill(1, 0, 70, &gauge_fill));
-    assert(!island_panel_info_repair_gauge_fill(1, 3, 70, NULL));
+    assert(!island_panel_info_task_gauge_fill(-1, 3, 70, &gauge_fill));
+    assert(!island_panel_info_task_gauge_fill(1, 0, 70, &gauge_fill));
+    assert(!island_panel_info_task_gauge_fill(1, 3, 70, NULL));
     assert(island_panel_info_task_row(0xd, 0, &task_row));
     assert(strcmp(task_row.label_key, "OARTIFACT") == 0 &&
            task_row.task_icon_frame == 4);
@@ -140,6 +140,24 @@ int main(int argc, char **argv)
         assert(task_position.icon_x == 25 && task_position.label_x == 45 &&
            task_position.secondary_icon_x == 150 &&
            task_position.resource_icon_x == 135 && task_position.y == 6);
+    {
+        int highlight_top;
+        int highlight_height;
+        assert(island_panel_info_task_highlight_position(&info_panel, 7, 0,
+                                                        &highlight_top,
+                                                        &highlight_height));
+        assert(highlight_top == 3 && highlight_height == 13);
+        assert(island_panel_info_task_highlight_position(&info_panel, 7, 6,
+                                                        &highlight_top,
+                                                        &highlight_height));
+        assert(highlight_top == 81 && highlight_height == 13);
+        assert(!island_panel_info_task_highlight_position(&info_panel, 7, 7,
+                                                         &highlight_top,
+                                                         &highlight_height));
+        assert(!island_panel_info_task_highlight_position(&info_panel, 0, 0,
+                                                         &highlight_top,
+                                                         &highlight_height));
+    }
     assert(island_panel_info_task_row_position(&info_panel, 7, 6,
                                                &task_position));
     assert(task_position.y == 84);

@@ -28,7 +28,7 @@ Porter uniquement les comportements établis par le binaire et les données loca
 - [x] Commandes de barre d'île, badges santé/royaume et descriptions de survol actuellement portées.
 - [x] Sons de menu et sélection de musique du royaume.
 - [x] Icônes des quatre joueurs dans la bannière Diplomatie à partir des ouvriers initiaux et des ancres source; animation et autres états en attente.
-- [x] Tasks : lignes/défilement des actions 5, 0x12, 4 et 0xd; clic sélectionne le slot et affiche priorité. `IWTaskInfo` montre `BLDCONST`, l’aperçu statique de construction et les détails de transfert; les jauges STOCK/REPAIR sont portées. Valeur REPAIR initialisée uniquement, simulation dommages/réparations absente. `IWTaskOptions` change la priorité ou libère le slot après garde d'identité.
+- [x] Tasks : lignes/défilement des actions 5, 0x12, 4 et 0xd; clic sélectionne le slot et affiche priorité. `IWTaskInfo` montre `BLDCONST`, l’aperçu statique source et les détails de transfert; jauges CONSTR/STOCK/REPAIR portées. Les coordonnées `+0x0a/+0x0e` sont résolues île/emplacement. Producteur CONSTR et simulation de progression/réparation restent absents. `IWTaskOptions` change la priorité ou libère le slot après garde d'identité.
 - [x] `IWTaskOptions` : boutons dessinés depuis `PRIOR.SHP` aux panes de `windows.txt`, avec survol et routage source de leurs commandes.
 - [x] Réserves Hall : au tick, demande type 4 créée/retirée selon mode, stock, bit Hall et lien de slot observés; annulation utilisateur nettoie le lien modélisé. Les demandes liées sont rendues comme `STOCK` avec les deux cadres TASKICON et l’icône ressource.
 - [x] Clic d'un glyphe possédé : mémorise l'index et arme le curseur source du mode `0x11`; le clic carte et son effet restent en attente des gardes/consommateur.
@@ -37,7 +37,7 @@ Porter uniquement les comportements établis par le binaire et les données loca
 - [x] `TOGREALM` inverse ses trois flags; royaume (`FLTINFO` 22–25) et santé (`0x15−maxHP`) sont rendus pour les ouvriers initiaux. Les autres badges attendent leurs champs runtime.
 - [x] `PANIC` émet l'événement local type 3/sous-type 0 et le dispatch bascule le bit 0 du mot d'île par joueur; la sémantique reste inconnue.
 - [x] Texte New Game : hauteur source 13 px sans réduction verticale; largeur ramenée à 11/13 et interligne `+1` comme compromis de traduction (la source avance de `+3`); huit paragraphes testés dans la zone utile.
-- [ ] Compléter `IWTaskInfo` (surbrillance des lignes, aperçu Hall incomplet); porter les liens de flotteurs et autres tables annulées; mapper les autres actions, leurs producteurs runtime et leur libération.
+- [ ] Compléter `IWTaskInfo` (aperçu Hall incomplet); porter les liens de flotteurs et autres tables annulées; mapper les autres actions, leurs producteurs runtime et leur libération.
 
 ## Références
 

@@ -216,12 +216,18 @@ int game_session_initialize(const WorldDefinition *world,
                             GameSession *out,
                             char *error, size_t error_capacity);
 
-/* FUN_004459e6 reads payload +0x0a as location and +0x0e as island for a
-   repair row. Returns its current +0x34 and FUN_00450978 maximum. */
+/* FUN_004459e6 uses payload +0x0a as island and +0x0e as location. Repair
+   reads current +0x34 and FUN_00450978 maximum at that target. */
 int game_session_repair_task_values(const GameSession *session,
                                     const PadCatalog *pad_catalog,
                                     const GamePendingEvent *event,
                                     int16_t *current, int16_t *maximum);
+/* Construction rows read target +0x28 and pad record +0x04 via
+   FUN_004641de(player,payload+0x12). */
+int game_session_construction_task_values(const GameSession *session,
+                                          const PadCatalog *pad_catalog,
+                                          const GamePendingEvent *event,
+                                          int16_t *current, int16_t *maximum);
 
 /* Models FUN_0047117d: any player bit in player_mask with island access set
    permits entry. The UI passes the selected human tribe's bit. */

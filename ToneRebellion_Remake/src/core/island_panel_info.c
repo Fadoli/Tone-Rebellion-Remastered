@@ -246,9 +246,9 @@ int island_panel_info_stock_gauge_fill(uint16_t stock,
     return 1;
 }
 
-int island_panel_info_repair_gauge_fill(int16_t current, int16_t maximum,
-                                        unsigned int gauge_width,
-                                        unsigned int *fill_width)
+int island_panel_info_task_gauge_fill(int16_t current, int16_t maximum,
+                                      unsigned int gauge_width,
+                                      unsigned int *fill_width)
 {
     uint64_t scaled;
     uint64_t denominator;
@@ -289,6 +289,20 @@ int island_panel_info_task_row_position(const WindowTemplate *panel,
     position->secondary_icon_x = 150;
     position->resource_icon_x = 135;
     position->y = (int16_t)row_y;
+    return 1;
+}
+
+int island_panel_info_task_highlight_position(const WindowTemplate *panel,
+                                              unsigned int visible_rows,
+                                              unsigned int visible_index,
+                                              int *top, int *height)
+{
+    IslandTaskRowPosition row;
+    if (top == NULL || height == NULL ||
+        !island_panel_info_task_row_position(panel, visible_rows,
+                                             visible_index, &row)) return 0;
+    *top = row.y - 3;
+    *height = 13;
     return 1;
 }
 

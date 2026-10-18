@@ -120,16 +120,22 @@ int island_panel_info_stock_gauge_fill(uint16_t stock,
                                        int16_t source_field_4a,
                                        unsigned int gauge_width,
                                        unsigned int *fill_width);
-/* FUN_004459e6 scales repair target +0x34 against FUN_00450978 and caps at 1. */
-int island_panel_info_repair_gauge_fill(int16_t current, int16_t maximum,
-                                        unsigned int gauge_width,
-                                        unsigned int *fill_width);
+/* FUN_004459e6 scales task current/max values through x87 __ftol, capped at 1. */
+int island_panel_info_task_gauge_fill(int16_t current, int16_t maximum,
+                                      unsigned int gauge_width,
+                                      unsigned int *fill_width);
 /* FUN_004459e6 centers visible 13px rows vertically and draws the icon at x=25,
    label at x=45; returned y is the pane-local row origin. */
 int island_panel_info_task_row_position(const WindowTemplate *panel,
                                        unsigned int visible_rows,
                                        unsigned int visible_index,
                                        IslandTaskRowPosition *position);
+/* FUN_004459e6 clips the selected-row palette remap to a 13px band whose
+   top begins three pixels before the row origin. */
+int island_panel_info_task_highlight_position(const WindowTemplate *panel,
+                                              unsigned int visible_rows,
+                                              unsigned int visible_index,
+                                              int *top, int *height);
 /* FUN_0044590d's 13px row lookup, including its negative-index clamp and
    source-slot scroll offset. Returns -1 when the projected index is absent. */
 int island_panel_info_task_index_at_y(const WindowTemplate *panel,

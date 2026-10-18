@@ -32,6 +32,7 @@ static void make_pad_catalog(PadCatalog *catalog)
     for (item = 0; item < catalog->item_count; ++item) {
         catalog->items[item].item_id = (uint16_t)item;
         catalog->items[item].movement_cost[0] = 15;
+        catalog->items[item].hit_points = 15;
     }
 }
 
@@ -171,8 +172,8 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
         memset(&repair, 0, sizeof(repair));
         repair.active = 1;
         repair.action_type = 0x12;
-        repair.payload_0a = (int16_t)economy->hall_location_index;
-        repair.payload_0e = (int16_t)economy->hall_island_index;
+        repair.payload_0a = (int16_t)economy->hall_island_index;
+        repair.payload_0e = (int16_t)economy->hall_location_index;
         hall->source_value_34 = 7;
         hall->source_capacity_4a = 2;
         assert(game_session_repair_task_values(&session, &catalog, &repair,
@@ -181,11 +182,11 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
         repair.payload_0a = INT16_MAX;
         assert(!game_session_repair_task_values(&session, &catalog, &repair,
                                                 &current, &maximum));
-        repair.payload_0a = (int16_t)economy->hall_location_index;
+        repair.payload_0a = (int16_t)economy->hall_island_index;
         repair.payload_0e = INT16_MAX;
         assert(!game_session_repair_task_values(&session, &catalog, &repair,
                                                 &current, &maximum));
-        repair.payload_0e = (int16_t)economy->hall_island_index;
+        repair.payload_0e = (int16_t)economy->hall_location_index;
         repair.action_type = 5;
         assert(!game_session_repair_task_values(&session, &catalog, &repair,
                                                 &current, &maximum));
@@ -193,6 +194,51 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
         hall->source_capacity_4a = -3;
         assert(!game_session_repair_task_values(&session, &catalog, &repair,
                                                 &current, &maximum));
+    }
+    {
+        GameSession task_session;
+        PadCatalog task_catalog;
+        GameRuntimeLocation *target;
+        GamePendingEvent task;
+        int16_t current;
+        int16_t maximum;
+        memset(&task_session, 0, sizeof(task_session));
+        memset(&task_catalog, 0, sizeof(task_catalog));
+        memset(&task, 0, sizeof(task));
+        task_session.island_count = 2;
+        task_session.islands[1].location_count = 3;
+        target = &task_session.islands[1].locations[2];
+        target->record_value_10 = 0x25;
+        target->owner_id = 0;
+        target->source_value_34 = 9;
+        target->source_capacity_4a = 1;
+        target->resource_stock[0] = 20;
+        task_catalog.item_count = 0x36;
+        task_catalog.items[0x25].item_id = 0x25;
+        task_catalog.items[0x25].movement_cost[0] = 33;
+        task_catalog.items[0x25].hit_points = 15;
+        task_catalog.items[0x35].item_id = 0x35;
+        task_catalog.items[0x35].building_tone_cost = 40;
+        task.active = 1;
+        task.player_id = 1;
+        task.payload_0a = 1;
+        task.payload_0e = 2;
+        task.action_type = 0x12;
+        assert(game_session_repair_task_values(&task_session, &task_catalog,
+                                              &task, &current, &maximum));
+        assert(current == 9 && maximum == 20);
+        task.action_type = 5;
+        task.payload_12 = 0x25;
+        assert(game_session_construction_task_values(&task_session, &task_catalog,
+                                                    &task, &current, &maximum));
+        assert(current == 20 && maximum == 40);
+        task.payload_0a = 2;
+        assert(!game_session_construction_task_values(&task_session, &task_catalog,
+                                                     &task, &current, &maximum));
+        task.payload_0a = 1;
+        task.payload_0e = 3;
+        assert(!game_session_construction_task_values(&task_session, &task_catalog,
+                                                     &task, &current, &maximum));
     }
     assert(game_session_count_player_floaters(NULL, 0) == 0);
     assert(game_session_count_player_floaters(&session,
@@ -918,6 +964,7 @@ static void test_building_placement_matches_source_runtime_initialization(void)
     catalog.items[72].size = 0;
     catalog.items[72].building_tone_cost = 10;
     catalog.items[72].movement_cost[0] = 25;
+    catalog.items[72].hit_points = 17;
     site.kind = ISLAND_LOCATION_PAD_SMALL;
     site.renderer_subtype = 0;
 
@@ -925,7 +972,7 @@ static void test_building_placement_matches_source_runtime_initialization(void)
                                        &site, 40, error, sizeof(error)));
     assert(runtime->record_value_10 == 72);
     assert(runtime->owner_id == 2);
-    assert(runtime->source_value_34 == 25);
+    assert(runtime->source_value_34 == 17);
     assert(runtime->source_capacity_4a == 0);
     assert(runtime->source_flags == 0x410);
     assert(runtime->record_value_24 == 0);

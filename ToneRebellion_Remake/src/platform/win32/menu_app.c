@@ -22,6 +22,7 @@
 #include "tone_rng.h"
 
 #include <math.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -3201,6 +3202,74 @@ static int hall_resource_task_index(int hall_player, int slot)
     return -1;
 }
 
+static uint8_t nearest_island_palette_index(COLORREF color)
+{
+    unsigned int best_distance = UINT_MAX;
+    unsigned int best_index = 0;
+    unsigned int index;
+    for (index = 0; index < 255U; ++index) {
+        int red = (int)GetRValue(color) - (int)GetRValue(g_island_palette[index]);
+        int green = (int)GetGValue(color) - (int)GetGValue(g_island_palette[index]);
+        int blue = (int)GetBValue(color) - (int)GetBValue(g_island_palette[index]);
+        unsigned int distance = (unsigned int)(red * red + green * green + blue * blue);
+        if (distance < best_distance) {
+            best_distance = distance;
+            best_index = index;
+            if (distance == 0U) break;
+        }
+    }
+    return (uint8_t)best_index;
+}
+
+static void draw_task_row_highlight(HDC dc, const WindowTemplate *panel,
+                                    unsigned int visible_rows,
+                                    unsigned int visible_index)
+{
+    const SpriteFrame *mask_frame;
+    DIBSECTION mask_dib;
+    int row_top;
+    int row_height;
+    int left;
+    int right;
+    int y;
+    if (panel == NULL || panel->shape_frame < 0 ||
+        (uint32_t)panel->shape_frame >= g_temp_hole_art.frame_count ||
+        !island_panel_info_task_highlight_position(panel, visible_rows,
+                                                   visible_index,
+                                                   &row_top, &row_height)) return;
+    mask_frame = &g_temp_hole_art.frames[(uint32_t)panel->shape_frame];
+    ZeroMemory(&mask_dib, sizeof(mask_dib));
+    if (mask_frame->bitmap == NULL ||
+        GetObjectA(mask_frame->bitmap, sizeof(mask_dib), &mask_dib) <
+            (int)sizeof(mask_dib) || mask_dib.dsBm.bmBits == NULL ||
+        mask_dib.dsBm.bmBitsPixel != 32 ||
+        mask_dib.dsBm.bmWidthBytes < mask_frame->width * 4) return;
+    left = panel->pane.left;
+    right = panel->pane.right;
+    if (right <= left) return;
+    for (y = row_top + panel->pane.top; y < row_top + panel->pane.top + row_height; ++y) {
+        int mask_y = y - panel->pane.top - mask_frame->y_offset;
+        int x;
+        if (mask_y < 0 || mask_y >= mask_frame->height) continue;
+        for (x = left; x < right; ++x) {
+            int mask_x = x - panel->pane.left - mask_frame->x_offset;
+            const uint32_t *mask_row;
+            COLORREF background;
+            uint8_t source_index;
+            uint8_t remapped_index;
+            if (mask_x < 0 || mask_x >= mask_frame->width) continue;
+            mask_row = (const uint32_t *)((const unsigned char *)mask_dib.dsBm.bmBits +
+                (size_t)mask_y * (size_t)mask_dib.dsBm.bmWidthBytes);
+            if ((mask_row[mask_x] >> 24) == 0U) continue;
+            background = GetPixel(dc, x, y);
+            if (background == CLR_INVALID) continue;
+            source_index = nearest_island_palette_index(background);
+            remapped_index = island_haze_remap(&g_island_haze, 1, 1, source_index);
+            (void)SetPixelV(dc, x, y, g_island_palette[remapped_index]);
+        }
+    }
+}
+
 static void draw_task_stock_gauge(HDC dc, const WindowTemplate *panel,
                                   int hall_player, unsigned int resource,
                                   int row_y)
@@ -3248,7 +3317,32 @@ static void draw_task_repair_gauge(HDC dc, const WindowTemplate *panel,
         g_task_icon_art.frame_count <= 9U ||
         !game_session_repair_task_values(&g_game_session, &g_pad_catalog,
                                          event, &current, &maximum) ||
-        !island_panel_info_repair_gauge_fill(current, maximum, 70U, &fill_width))
+        !island_panel_info_task_gauge_fill(current, maximum, 70U, &fill_width))
+        return;
+    gauge_x = panel->pane.left + 0xaa;
+    gauge_y = panel->pane.top + row_y;
+    draw_sprite(dc, &g_task_icon_art, 9U, gauge_x, gauge_y);
+    if (fill_width != 0U) {
+        fill_rect(dc, gauge_x + 2, gauge_y + 2,
+                  gauge_x + 2 + (int)fill_width, gauge_y + 5,
+                  g_island_palette[0]);
+    }
+}
+
+static void draw_task_construction_gauge(HDC dc, const WindowTemplate *panel,
+                                         const GamePendingEvent *event,
+                                         int row_y)
+{
+    int16_t current;
+    int16_t maximum;
+    unsigned int fill_width;
+    int gauge_x;
+    int gauge_y;
+    if (!g_game_session_valid || panel == NULL || event == NULL ||
+        g_task_icon_art.frame_count <= 9U ||
+        !game_session_construction_task_values(&g_game_session, &g_pad_catalog,
+                                                event, &current, &maximum) ||
+        !island_panel_info_task_gauge_fill(current, maximum, 70U, &fill_width))
         return;
     gauge_x = panel->pane.left + 0xaa;
     gauge_y = panel->pane.top + row_y;
@@ -3390,6 +3484,12 @@ static void draw_hall_panel(HDC dc, int hall_player)
                             (unsigned int)visible_index, &position)) continue;
                     label = task_label_text(row.label_key);
                     if (label == NULL || label[0] == '\0') continue;
+                    if (task_slots[(size_t)offset + visible_index] ==
+                        g_selected_task_slot) {
+                        draw_task_row_highlight(dc, task_list_panel,
+                            (unsigned int)visible_rows,
+                            (unsigned int)visible_index);
+                    }
                     if (row.task_icon_frame >= 0 &&
                         g_task_icon_art.frame_count >
                             (uint32_t)row.task_icon_frame) {
@@ -3423,6 +3523,9 @@ static void draw_hall_panel(HDC dc, int hall_player)
                     if (event->action_type == 0x12) {
                         draw_task_repair_gauge(dc, task_list_panel, event,
                                                position.y);
+                    } else if (event->action_type == 5) {
+                        draw_task_construction_gauge(dc, task_list_panel, event,
+                                                     position.y);
                     }
                 }
             }

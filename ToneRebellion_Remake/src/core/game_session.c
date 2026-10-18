@@ -264,9 +264,9 @@ static int source_value_34_max(const PadCatalog *catalog,
     }
     item = pad_catalog_find(catalog, (uint16_t)location->record_value_10);
     if (item == NULL) return 0;
-    /* FUN_0046303b stores the third parsed integer (first movement-cost
-       component) at pad record +0x0e; FUN_00450978 adds source +0x4a * 5. */
-    value = (int32_t)item->movement_cost[0] +
+    /* FUN_0046303b stores the seventh parsed integer (pad.txt hit points)
+       at record +0x0e; FUN_00450978 adds runtime +0x4a * 5. */
+    value = (int32_t)item->hit_points +
             (int32_t)location->source_capacity_4a * 5;
     if (value < INT16_MIN || value > INT16_MAX) return 0;
     *maximum = (int16_t)value;
@@ -506,15 +506,40 @@ int game_session_repair_task_values(const GameSession *session,
     if (session == NULL || pad_catalog == NULL || event == NULL ||
         current == NULL || maximum == NULL || event->active == 0 ||
         event->action_type != 0x12 || event->payload_0a < 0 ||
-        event->payload_0e < 0 || event->payload_0e >= session->island_count) return 0;
-    if ((uint16_t)event->payload_0a >=
-        session->islands[event->payload_0e].location_count) return 0;
-    location = &session->islands[event->payload_0e].locations[event->payload_0a];
+        event->payload_0e < 0 || event->payload_0a >= session->island_count) return 0;
+    if ((uint16_t)event->payload_0e >=
+        session->islands[event->payload_0a].location_count) return 0;
+    location = &session->islands[event->payload_0a].locations[event->payload_0e];
     if (!source_value_34_max(pad_catalog, location, &computed_maximum) ||
         location->source_value_34 == -1 || computed_maximum <= 0) return 0;
     *current = location->source_value_34;
     *maximum = computed_maximum;
     return 1;
+}
+
+int game_session_construction_task_values(const GameSession *session,
+                                          const PadCatalog *pad_catalog,
+                                          const GamePendingEvent *event,
+                                          int16_t *current, int16_t *maximum)
+{
+    const GameRuntimeLocation *location;
+    const PadCatalogItem *item;
+    int32_t item_id;
+    if (session == NULL || pad_catalog == NULL || event == NULL ||
+        current == NULL || maximum == NULL || event->active == 0 ||
+        event->action_type != 5 || event->payload_0a < 0 ||
+        event->payload_0e < 0 || event->payload_0a >= session->island_count ||
+        event->player_id < 0 || event->player_id >= GAME_START_PLAYER_COUNT) return 0;
+    if ((uint16_t)event->payload_0e >=
+        session->islands[event->payload_0a].location_count) return 0;
+    location = &session->islands[event->payload_0a].locations[event->payload_0e];
+    item_id = (int32_t)event->payload_12 + (int32_t)event->player_id * 16;
+    if (item_id < 0 || item_id > 100) return 0;
+    item = pad_catalog_find(pad_catalog, (uint16_t)item_id);
+    if (item == NULL || item->building_tone_cost <= 0) return 0;
+    *current = (int16_t)location->resource_stock[0];
+    *maximum = item->building_tone_cost;
+    return *current >= 0;
 }
 
 int game_session_can_enter_island(const GameSession *session,
