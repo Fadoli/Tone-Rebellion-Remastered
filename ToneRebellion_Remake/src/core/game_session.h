@@ -97,6 +97,10 @@ typedef struct GameSessionConfig {
 typedef struct GameRuntimeLocation {
     int32_t record_value_10;
     int32_t owner_id;
+    /* Source signed short +0x18. FUN_00452c31 requires this != -1 before
+       owner Inventory is available on non-Hall locations; FUN_004528ca sets
+       it for source item IDs 0x2c..0x32. Slot assignment is not yet modeled. */
+    int16_t source_location_slot_18;
     /* On producer items 0x25/0x26/0x27, FUN_00450a71 stores a pending
        resource code 1/3/2 here when PROD completes; other classes use the
        same runtime field for different purposes. */
@@ -120,6 +124,9 @@ typedef struct GameRuntimeLocation {
        rows later read this mutable short from their target location. */
     int16_t source_value_34;
     uint32_t source_flags_1c;
+    /* Producer items 0x25..0x27 use source +0x0c to start PROD after the
+       running object's cadence reaches 20; separate from BASE +0x4a. */
+    uint16_t producer_cadence;
     uint16_t chug_progress;
     uint16_t glyph_progress;
     uint16_t inci_progress;
@@ -294,6 +301,26 @@ int game_session_credit_resource(GameSession *session, uint8_t player_slot,
                                  GameResourceType type, uint32_t amount);
 int game_session_debit_resource(GameSession *session, uint8_t player_slot,
                                  GameResourceType type, uint32_t amount);
+/* FUN_00452eac: consume a matching output, Hall stock (1..3), or owner
+   Inventory item (5..33), following the source branch order. */
+int game_session_consume_location_resource(GameSession *session,
+                                           uint8_t island_index,
+                                           uint16_t location_index,
+                                           int32_t resource_code);
+/* FUN_00452c31: test pending output, Hall stock, or owner Inventory; the raw
+   +0x18 eligibility guard is represented, but slot allocation is not. */
+int game_session_location_resource_available(const GameSession *session,
+                                             uint8_t island_index,
+                                             uint16_t location_index,
+                                             int32_t resource_code);
+/* FUN_0045f2a1 reads this location's pad.txt movement tuple and multiplies
+   each short by runtime +0x4a + 1. The order matches stocks +0x28/+0x2a/+0x2c.
+   This calculates costs only; source eligibility remains a separate check. */
+int game_session_location_move_costs(const GameSession *session,
+                                     const PadCatalog *catalog,
+                                     uint8_t island_index,
+                                     uint16_t location_index,
+                                     int32_t costs[GAME_RESOURCE_TYPE_COUNT]);
 /* FUN_0045f755: advance one Hall resource mode modulo three. Returns the new
    raw mode, or -1 for an invalid player/resource. */
 int game_session_cycle_resource_stock_mode(GameSession *session,

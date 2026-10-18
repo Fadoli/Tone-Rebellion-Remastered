@@ -77,10 +77,10 @@ const char *island_panel_info_default_key(int panel_mode);
 /* FUN_00439673 formats Inventory hover IDs 5..33 as BRIDGE00/PLOT00..27. */
 int island_panel_info_inventory_key(unsigned int item_id,
                                     char *output, size_t output_capacity);
-/* FUN_0043d45c sends the selected ID to IWTextInfo mode 2; selection is
-   separate from the current pointer hover. Returns the text-array index. */
+/* FUN_0043d45c sends the hovered ID (including -1) to IWTextInfo mode 2.
+   Returns its text-array index, or -1 when no item is hovered. */
 int island_panel_info_inventory_detail_index(int info_mode,
-                                             int selected_item_id);
+                                             int hovered_item_id);
 
 /* FUN_0042f150 loads CRYPTIC0..20; FUN_00439673 uses these in mode 5. */
 int island_panel_info_cryptic_key(unsigned int cryptic_id,

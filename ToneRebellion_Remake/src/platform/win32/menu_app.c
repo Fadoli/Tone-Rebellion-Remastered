@@ -2768,11 +2768,8 @@ static int update_inventory_hover(int x, int y)
     int hovered = inventory_item_at(x, y);
     if (hovered == g_hovered_inventory_item) return 0;
     g_hovered_inventory_item = hovered;
-    /* FUN_0043d41a publishes the panel's selected item through global
-       message 0x42; the source keeps that global after local hover clears. */
-    if (hovered >= GAME_INVENTORY_ITEM_FIRST_ID) {
-        g_selected_inventory_item = hovered;
-    }
+    /* FUN_0043d45c sends the hovered ID to IWTextInfo; 0x42 selection is
+       emitted only by FUN_0043d41a on click. */
     g_inventory_info_mode = ISLAND_PANEL_INFO_INVENTORY_DETAIL;
     return 1;
 }
@@ -3017,7 +3014,7 @@ static void draw_hall_info_panel(HDC dc, int panel_state)
     if (panel_state == WINDOW_ISLAND_PANEL_INVENTORY) {
         if (g_inventory_info_mode == ISLAND_PANEL_INFO_INVENTORY_DETAIL) {
             int detail_index = island_panel_info_inventory_detail_index(
-                g_inventory_info_mode, g_selected_inventory_item);
+                g_inventory_info_mode, g_hovered_inventory_item);
             if (detail_index >= 0)
                 text = g_inventory_item_info_text[detail_index];
         } else {
@@ -5172,6 +5169,25 @@ static void handle_click(HWND window, int x, int y)
             }
         }
     } else if (g_menu.screen == SCREEN_ISLAND) {
+        if (g_island_panel_mode == WINDOW_ISLAND_PANEL_INVENTORY) {
+            const WindowTemplate *inventory_panel = window_catalog_find(
+                &g_window_catalog, "IWInventory", 3);
+            if (inventory_panel != NULL &&
+                x >= inventory_panel->pane.left &&
+                x <= inventory_panel->pane.right &&
+                y >= inventory_panel->pane.top + 24 &&
+                y <= inventory_panel->pane.bottom) {
+                int clicked_item = inventory_item_at(x, y);
+                g_selected_inventory_item = game_inventory_click_selection(
+                    g_selected_inventory_item, clicked_item);
+                if (clicked_item >= GAME_INVENTORY_ITEM_FIRST_ID &&
+                    g_glyph_interaction_cursor != NULL) {
+                    SetCursor(g_glyph_interaction_cursor);
+                }
+                InvalidateRect(window, NULL, FALSE);
+                return;
+            }
+        }
         if (g_island_panel_mode == WINDOW_ISLAND_PANEL_TASKS) {
             static const char *const task_option_names[] = {
                 "TaskNorm", "TaskHigh", "TaskExcl", "TaskKill"
@@ -5260,17 +5276,19 @@ static void handle_click(HWND window, int x, int y)
                 x <= glyph_panel->pane.right && y >= glyph_panel->pane.top &&
                 y <= glyph_panel->pane.bottom) {
                 (void)update_glyph_hover(x, y);
-                if (g_hovered_glyph >= 0) {
+                if (game_glyph_inventory_click_selection(&g_selected_glyph,
+                        g_hovered_glyph, 1) && g_hovered_glyph >= 0) {
                     /* IWGlyphs sends message 0x43 with its owned, hovered ID.
                        The source then arms interaction mode 0x11. The later
                        map-command guards/effect are not modelled here. */
-                    g_selected_glyph = g_hovered_glyph;
                     if (g_glyph_interaction_cursor != NULL) {
                         SetCursor(g_glyph_interaction_cursor);
                     }
-                    InvalidateRect(window, NULL, FALSE);
-                    return;
                 }
+                /* FUN_0043dcae consumes an in-pane click even when
+                   FUN_0043dd9d has no hovered ID to send. */
+                InvalidateRect(window, NULL, FALSE);
+                return;
             }
         }
         {
@@ -5536,7 +5554,9 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
 {
     switch (message) {
     case WM_SETCURSOR:
-        if (g_menu.screen == SCREEN_ISLAND && g_selected_glyph >= 0 &&
+        if (g_menu.screen == SCREEN_ISLAND &&
+            game_glyph_inventory_cursor_slot(g_selected_glyph,
+                                               g_selected_inventory_item) == 0x0b &&
             LOWORD(lparam) == HTCLIENT && g_glyph_interaction_cursor != NULL) {
             SetCursor(g_glyph_interaction_cursor);
             return TRUE;
@@ -5642,16 +5662,21 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         }
         return 0;
     }
-    case WM_MOUSELEAVE:
+    case WM_MOUSELEAVE: {
+        int glyph_hover_changed;
         g_mouse_inside = 0;
         (void)update_iw_construct_hover(-1, -1);
         (void)update_diplomacy_hover(-1, -1);
+        glyph_hover_changed = g_island_panel_mode == WINDOW_ISLAND_PANEL_GLYPHS
+            ? game_glyph_inventory_mouse_leave(&g_hovered_glyph,
+                                               &g_glyph_info_default) : 0;
         if (g_hovered_help != -1 || g_hovered_newgame_text != -1 ||
             g_hovered_island != -1 || g_hovered_location != -1 ||
             g_hovered_hall_stock != -1 || g_hovered_island_button != -1 ||
             g_hovered_hall_command != WINDOW_ISLAND_PANEL_NONE ||
             g_hovered_location_action != ISLAND_LOCATION_ACTION_NONE ||
-            g_hovered_inventory_item != -1 || g_diplomacy_hover_valid) {
+            g_hovered_inventory_item != -1 || g_diplomacy_hover_valid ||
+            glyph_hover_changed) {
             if (g_hovered_inventory_item != -1 &&
                 g_island_panel_mode == WINDOW_ISLAND_PANEL_INVENTORY) {
                 g_inventory_info_mode = ISLAND_PANEL_INFO_INVENTORY_DETAIL;
@@ -5669,6 +5694,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             InvalidateRect(window, NULL, FALSE);
         }
         return 0;
+    }
     case WM_LBUTTONUP: {
         RECT client;
         RECT viewport;

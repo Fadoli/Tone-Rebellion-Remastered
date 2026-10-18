@@ -28,13 +28,31 @@ int main(int argc, char **argv)
     assert(game_glyph_inventory_hit_test(0, centers, 40, 50) == -1);
     assert(game_glyph_inventory_hit_test(1U, NULL, 40, 50) == -1);
     {
+        int selected = 3;
+        assert(game_glyph_inventory_click_selection(&selected, -1, 1));
+        assert(selected == 3);
+        assert(game_glyph_inventory_click_selection(&selected, 13, 1));
+        assert(selected == 13);
+        assert(game_glyph_inventory_click_selection(&selected, 14, 1));
+        assert(selected == 13);
+        assert(!game_glyph_inventory_click_selection(&selected, 0, 0));
+        assert(selected == 13);
+        assert(game_glyph_inventory_click_selection(NULL, 0, 1));
+        assert(!game_glyph_inventory_click_selection(NULL, 0, 0));
+    }
+    {
         int hovered = game_glyph_inventory_update_hover(-1, 1U, centers,
                                                         1, 40, 50);
+        int info_is_default = 0;
         assert(hovered == 0);
         assert(game_glyph_inventory_update_hover(hovered, 1U, NULL,
                                                   0, -1, -1) == 0);
         assert(game_glyph_inventory_update_hover(hovered, 1U, centers,
                                                   1, 56, 50) == -1);
+        assert(game_glyph_inventory_mouse_leave(&hovered, &info_is_default));
+        assert(hovered == -1 && info_is_default == 1);
+        assert(!game_glyph_inventory_mouse_leave(&hovered, &info_is_default));
+        assert(!game_glyph_inventory_mouse_leave(NULL, &info_is_default));
     }
     assert(game_glyph_inventory_key(0, key, sizeof(key)));
     assert(strcmp(key, "GLYPH00") == 0);

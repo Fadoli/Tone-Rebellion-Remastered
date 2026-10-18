@@ -107,6 +107,15 @@ static void test_icons_are_centered_by_opaque_bounds(void)
                                           0, 0, 1, 1, NULL, &draw_y));
 }
 
+static void test_click_selects_hovered_item(void)
+{
+    int selected = game_inventory_click_selection(-1, 12);
+    assert(selected == 12);
+    /* FUN_0043d41a emits no selection event when no item is hovered. */
+    assert(game_inventory_click_selection(selected, -1) == 12);
+    assert(game_inventory_click_selection(selected, 34) == 12);
+}
+
 int main(void)
 {
     test_collects_owned_items_in_source_order();
@@ -114,6 +123,7 @@ int main(void)
     test_empty_and_null_inputs();
     test_source_inventory_cell_hit_test();
     test_icons_are_centered_by_opaque_bounds();
+    test_click_selects_hovered_item();
     puts("game_inventory tests passed");
     return 0;
 }

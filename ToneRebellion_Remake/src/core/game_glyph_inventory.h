@@ -26,6 +26,14 @@ int game_glyph_inventory_update_hover(
     int previous_glyph, uint16_t glyph_mask,
     const GameGlyphCenter centers[GAME_GLYPH_COUNT], int event_in_pane,
     int x, int y);
+/* FUN_0043dcae consumes clicks inside IWGlyphs. FUN_0043dd9d sends 0x43
+   only for a hovered glyph, so an empty-cell click preserves the armed ID. */
+int game_glyph_inventory_click_selection(int *selected_glyph,
+                                         int hovered_glyph,
+                                         int event_in_pane);
+/* FUN_0043dcae event 1 clears hover and restores the default GLYSTONE text. */
+int game_glyph_inventory_mouse_leave(int *hovered_glyph,
+                                     int *info_is_default);
 
 /* FUN_00439673 resolves hovered glyph descriptions as GLYPH%02d. */
 int game_glyph_inventory_key(unsigned int glyph_index,

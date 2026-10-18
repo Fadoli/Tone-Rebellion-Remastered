@@ -288,6 +288,7 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
     assert(session.islands[4].locations[12].bridge_neighbor_island == -1);
     assert(session.islands[4].locations[13].record_value_10 == 7);
     assert(session.islands[4].locations[13].owner_id == -1);
+    assert(session.islands[4].locations[13].source_location_slot_18 == -1);
     {
         GameRuntimeLocation *bridge_a = &session.islands[0].locations[12];
         GameRuntimeLocation *bridge_b = &session.islands[1].locations[12];
@@ -467,6 +468,111 @@ static void test_inventory_counts_cover_source_item_id_range(void)
     assert(!game_session_inventory_credit(&session, 1, 4, 1));
     assert(!game_session_inventory_debit(&session, 1, 34, 1));
     assert(!game_session_inventory_credit(&session, GAME_START_PLAYER_COUNT, 5, 1));
+}
+
+static void test_location_resource_consumption_matches_source_guards(void)
+{
+    GameSession session = {0};
+    GameRuntimeLocation *location;
+    session.island_count = 1;
+    session.islands[0].location_count = 2;
+    location = &session.islands[0].locations[0];
+    location->record_value_10 = 0x25;
+    location->record_value_24 = 2;
+
+    assert(game_session_location_resource_available(&session, 0, 0, 2));
+    assert(!game_session_location_resource_available(&session, 0, 0, 1));
+    assert(!game_session_consume_location_resource(&session, 0, 0, 1));
+    assert(location->record_value_24 == 2);
+    assert(game_session_consume_location_resource(&session, 0, 0, 2));
+    assert(location->record_value_24 == 0);
+    assert(!game_session_location_resource_available(&session, 0, 0, 2));
+    assert(!game_session_consume_location_resource(&session, 0, 0, 2));
+
+    location = &session.islands[0].locations[1];
+    location->record_value_10 = 0x2a;
+    location->owner_id = 0;
+    location->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 1;
+    assert(game_session_location_resource_available(&session, 0, 1, 2));
+    assert(game_session_consume_location_resource(&session, 0, 1, 2));
+    assert(location->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] == 0);
+    assert(!game_session_location_resource_available(&session, 0, 1, 2));
+    assert(!game_session_consume_location_resource(&session, 0, 1, 2));
+    assert(!game_session_consume_location_resource(&session, 0, 1, 4));
+
+    session.economy[0].inventory_count[0] = 1;
+    assert(game_session_location_resource_available(&session, 0, 1, 5));
+    assert(game_session_consume_location_resource(&session, 0, 1, 5));
+    assert(session.economy[0].inventory_count[0] == 0);
+    assert(!game_session_location_resource_available(&session, 0, 1, 5));
+    assert(!game_session_consume_location_resource(&session, 0, 1, 5));
+
+    /* FUN_00452c31 gates non-Hall inventory availability on source +0x18,
+       but FUN_00452eac's debit path does not repeat that gate. */
+    location = &session.islands[0].locations[0];
+    location->record_value_10 = 0x2c;
+    location->owner_id = 0;
+    location->source_location_slot_18 = -1;
+    session.economy[0].inventory_count[0] = 1;
+    assert(!game_session_location_resource_available(&session, 0, 0, 5));
+    assert(game_session_consume_location_resource(&session, 0, 0, 5));
+    assert(session.economy[0].inventory_count[0] == 0);
+    session.economy[0].inventory_count[0] = 1;
+    location->source_location_slot_18 = 3;
+    assert(game_session_location_resource_available(&session, 0, 0, 5));
+    assert(game_session_consume_location_resource(&session, 0, 0, 5));
+    assert(session.economy[0].inventory_count[0] == 0);
+
+    assert(!game_session_consume_location_resource(&session, 0, 1, 34));
+    assert(!game_session_consume_location_resource(&session, 0, 2, 2));
+    assert(!game_session_consume_location_resource(&session, 1, 0, 2));
+    assert(!game_session_consume_location_resource(NULL, 0, 0, 2));
+    assert(!game_session_location_resource_available(&session, 0, 2, 2));
+    assert(!game_session_location_resource_available(NULL, 0, 0, 2));
+}
+
+static void test_location_move_costs_use_pad_tuple_and_runtime_multiplier(void)
+{
+    static const uint16_t hall_item_ids[GAME_START_PLAYER_COUNT] = {
+        0x2a, 0x3a, 0x4a, 0x5a
+    };
+    GameSession session = {0};
+    PadCatalog catalog = {0};
+    unsigned int player;
+
+    session.island_count = 1;
+    session.islands[0].location_count = GAME_START_PLAYER_COUNT;
+    catalog.item_count = 0x5b;
+    for (player = 0; player < GAME_START_PLAYER_COUNT; ++player) {
+        GameRuntimeLocation *hall = &session.islands[0].locations[player];
+        PadCatalogItem *item = &catalog.items[hall_item_ids[player]];
+        int32_t costs[GAME_RESOURCE_TYPE_COUNT] = {-1, -1, -1};
+
+        hall->record_value_10 = hall_item_ids[player];
+        hall->source_capacity_4a = (int16_t)player;
+        item->item_id = hall_item_ids[player];
+        item->movement_cost[0] = 15;
+        item->movement_cost[1] = 0;
+        item->movement_cost[2] = 15;
+        assert(game_session_location_move_costs(&session, &catalog, 0,
+                                                (uint16_t)player, costs));
+        assert(costs[0] == (int32_t)(player + 1U) * 15);
+        assert(costs[1] == 0);
+        assert(costs[2] == (int32_t)(player + 1U) * 15);
+    }
+
+    {
+        int32_t costs[GAME_RESOURCE_TYPE_COUNT] = {7, 8, 9};
+        assert(!game_session_location_move_costs(&session, &catalog, 1, 0,
+                                                 costs));
+        assert(costs[0] == 7 && costs[1] == 8 && costs[2] == 9);
+        session.islands[0].locations[0].record_value_10 = 0xffff;
+        assert(!game_session_location_move_costs(&session, &catalog, 0, 0,
+                                                 costs));
+        assert(costs[0] == 7 && costs[1] == 8 && costs[2] == 9);
+        assert(!game_session_location_move_costs(&session, &catalog, 0, 0,
+                                                 NULL));
+    }
 }
 
 static void test_pending_event_table_matches_source_slots_and_deduplication(void)
@@ -909,6 +1015,99 @@ static void test_active_cons_and_prod_counters_finish_at_source_limits(void)
     assert((location->source_flags & 0x002U) == 0);
 }
 
+static void test_producer_cadence_starts_prod_and_waits_for_output_consumption(void)
+{
+    GameSession session;
+    BuildingRenderCatalog catalog;
+    GameRuntimeLocation *location;
+    BuildingRenderItem *item;
+    unsigned int tick;
+
+    memset(&session, 0, sizeof(session));
+    memset(&catalog, 0, sizeof(catalog));
+    session.island_count = 1;
+    session.islands[0].location_count = 1;
+    location = &session.islands[0].locations[0];
+    location->record_value_10 = 0x25;
+    location->owner_id = 0;
+    location->renderer_class = 0;
+    location->source_flags = 0x411U;
+    location->animation_rate = 1;
+    catalog.item_count = 0x28;
+    item = &catalog.items[0x25];
+    item->item_id = 0x25;
+    item->present = 1;
+    item->prod.present = 1;
+    item->prod.threshold = 2;
+
+    location->source_flags = 0x410U;
+    game_session_tick_item_animations(&session, &catalog);
+    assert(location->producer_cadence == 0);
+    assert((location->source_flags & 0x002U) == 0);
+    location->source_flags = 0x411U;
+    for (tick = 0; tick < 19; ++tick) {
+        game_session_tick_item_animations(&session, &catalog);
+    }
+    assert(location->producer_cadence == 19);
+    assert((location->source_flags & 0x002U) == 0);
+    game_session_tick_item_animations(&session, &catalog);
+    assert(location->producer_cadence == 0);
+    assert((location->source_flags & 0x002U) != 0);
+    assert(location->production_progress == 0);
+
+    game_session_tick_item_animations(&session, &catalog);
+    assert(location->production_progress == 1);
+    assert(location->record_value_24 == 0);
+    game_session_tick_item_animations(&session, &catalog);
+    assert((location->source_flags & 0x002U) == 0);
+    assert(location->record_value_24 == 1);
+    for (tick = 0; tick < 25; ++tick) {
+        game_session_tick_item_animations(&session, &catalog);
+    }
+    assert(location->record_value_24 == 1);
+    assert(location->producer_cadence == 0);
+    assert((location->source_flags & 0x002U) == 0);
+
+    location->record_value_24 = 0;
+    location->animation_rate = 2;
+    for (tick = 0; tick < 10; ++tick) {
+        game_session_tick_item_animations(&session, &catalog);
+    }
+    assert(location->producer_cadence == 0);
+    assert((location->source_flags & 0x002U) != 0);
+
+    location->source_flags = 0x411U;
+    location->record_value_10 = 0x26;
+    location->animation_rate = 1;
+    location->record_value_24 = 0;
+    location->production_progress = 0;
+    item = &catalog.items[0x26];
+    item->item_id = 0x26;
+    item->present = 1;
+    item->prod.present = 1;
+    item->prod.threshold = 1;
+    for (tick = 0; tick < 20; ++tick) {
+        game_session_tick_item_animations(&session, &catalog);
+    }
+    game_session_tick_item_animations(&session, &catalog);
+    assert(location->record_value_24 == 3);
+
+    location->source_flags = 0x411U;
+    location->record_value_10 = 0x27;
+    location->record_value_24 = 0;
+    location->production_progress = 0;
+    item = &catalog.items[0x27];
+    item->item_id = 0x27;
+    item->present = 1;
+    item->prod.present = 1;
+    item->prod.threshold = 1;
+    for (tick = 0; tick < 20; ++tick) {
+        game_session_tick_item_animations(&session, &catalog);
+    }
+    game_session_tick_item_animations(&session, &catalog);
+    assert(location->record_value_24 == 2);
+}
+
 static void test_initialization_is_transactional_on_bad_world(void)
 {
     WorldDefinition world;
@@ -949,6 +1148,7 @@ static void test_building_placement_matches_source_runtime_initialization(void)
     runtime->renderer_class = 0;
     runtime->record_value_10 = 0;
     runtime->owner_id = -1;
+    runtime->source_location_slot_18 = -1;
     runtime->source_flags = 0x7ff;
     runtime->source_capacity_4a = 3;
     runtime->base_progress = 3;
@@ -972,11 +1172,13 @@ static void test_building_placement_matches_source_runtime_initialization(void)
                                        &site, 40, error, sizeof(error)));
     assert(runtime->record_value_10 == 72);
     assert(runtime->owner_id == 2);
+    assert(runtime->source_location_slot_18 == -1);
     assert(runtime->source_value_34 == 17);
     assert(runtime->source_capacity_4a == 0);
     assert(runtime->source_flags == 0x410);
     assert(runtime->record_value_24 == 0);
-    assert(runtime->base_progress == 0 && runtime->chug_progress == 0);
+    assert(runtime->base_progress == 0 && runtime->producer_cadence == 0);
+    assert(runtime->chug_progress == 0);
     assert(runtime->glyph_progress == 0 && runtime->inci_progress == 0);
     assert(runtime->construction_progress == 0 && runtime->production_progress == 0);
     assert(runtime->animation_rate == 1 && runtime->barg_progress == 0.0);
@@ -1096,6 +1298,8 @@ int main(void)
     test_hall_resource_modes_cycle_through_original_three_states();
     test_hall_stock_mode_creates_and_releases_linked_resource_tasks();
     test_inventory_counts_cover_source_item_id_range();
+    test_location_resource_consumption_matches_source_guards();
+    test_location_move_costs_use_pad_tuple_and_runtime_multiplier();
     test_pending_event_table_matches_source_slots_and_deduplication();
     test_task_projection_matches_source_filter_and_cap();
     test_task_command_dispatch_guards_and_effects();
@@ -1105,6 +1309,7 @@ int main(void)
     test_item_animation_uses_source_flags_and_per_object_counters();
     test_tone_pool_uses_two_source_counter_sequences();
     test_active_cons_and_prod_counters_finish_at_source_limits();
+    test_producer_cadence_starts_prod_and_waits_for_output_consumption();
     test_initialization_is_transactional_on_bad_world();
     test_building_placement_matches_source_runtime_initialization();
     test_floater_move_state_advances_only_simulation_assigned_destinations();

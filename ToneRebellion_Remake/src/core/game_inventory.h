@@ -30,6 +30,8 @@ int game_inventory_hit_test(const GameInventoryEntry *entries,
                             int x, int y,
                             int pane_left, int pane_top,
                             int pane_right, int pane_bottom);
+/* FUN_0043d41a emits selection message 0x42 only for a hovered item. */
+int game_inventory_click_selection(int selected_item_id, int hovered_item_id);
 /* FUN_0043d6a3 centers FUN_00405e11's opaque frame bounds in each cell.
    The returned origin is suitable for a renderer that adds frame offsets. */
 int game_inventory_sprite_position(int cell_left, int cell_top,

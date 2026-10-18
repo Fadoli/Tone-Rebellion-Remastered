@@ -41,6 +41,29 @@ int game_glyph_inventory_update_hover(
     return game_glyph_inventory_hit_test(glyph_mask, centers, x, y);
 }
 
+int game_glyph_inventory_click_selection(int *selected_glyph,
+                                         int hovered_glyph,
+                                         int event_in_pane)
+{
+    if (!event_in_pane) return 0;
+    if (selected_glyph != NULL && hovered_glyph >= 0 &&
+        hovered_glyph < GAME_GLYPH_COUNT) {
+        *selected_glyph = hovered_glyph;
+    }
+    return 1;
+}
+
+int game_glyph_inventory_mouse_leave(int *hovered_glyph,
+                                     int *info_is_default)
+{
+    int changed;
+    if (hovered_glyph == NULL || info_is_default == NULL) return 0;
+    changed = *hovered_glyph != -1 || !*info_is_default;
+    *hovered_glyph = -1;
+    *info_is_default = 1;
+    return changed;
+}
+
 int game_glyph_inventory_key(unsigned int glyph_index,
                              char *output, size_t output_capacity)
 {

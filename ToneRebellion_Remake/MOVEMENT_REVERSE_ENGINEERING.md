@@ -87,3 +87,54 @@ the flag producer in `FUN_00423068` and the renderer in `FUN_0042704b`; flipped
 the facing/mirror behavior: the original anchor adjustment and state-specific
 render offsets in `FUN_00423068` are not fully reproduced by the current island
 view, which draws a smaller subset of unit states.
+
+## Order 9 from the Hall move context
+
+`FUN_0045f4f5` starts the move context after its eligibility checks; it does
+not issue order 9. `FUN_0045f5c5` ends the context: for target item `0x2a`,
+a different target plus successful `FUN_0046562b(owner, 8)` writes order 9
+into a floater task slot. Dropping on the same object takes a position-adjustment
+path. Evidence: `ev_6c942de9a792a73d84fdfda4bddbe5dc35196c59fa13110da77051c6b3595d63`,
+`ev_d98532f21ef6f26838f03f508eb96bbceb47d6dbbc1a3a7678ffbfca8c9c8bf3`,
+`ev_b8ac2fd034c03491f78284865a603e7dda1ce800bc85e544b13add76dde36154`.
+
+`FUN_004211bb` consumes order 9 under state 0 (case 8). It first searches
+within Chebyshev distance 250; if no candidate qualifies, it searches within 90,
+filters candidates, and applies weighted random selection to the top ten. It
+then advances through states 15/16 to 6/7. Evidence:
+`ev_96f90fdc7951d5fe26fcf0b495de08970ec0e6984d64572c67ff099abac40957`,
+`ev_92d9bb1718fe3eeebfe376dbac88ead112d0c4f1f89113bc3a4cc866df7dbf24`,
+`ev_2b7c3a4d07a47624e5bda9eda2a57d60b965635fa529ab925962c1b77d88b010`,
+`ev_0a150ef6299ccee55e14aeab45e2de16381b5142b4063cda099503d87e818883`,
+`ev_76a4661cb67067b44054706649c3ff1f80a7e9eec7116d8c36177f340ab15b36`,
+`ev_f359bbf9ea4d68be9d7184310b58199071b1e8115a49a149ab72415feb7659db`,
+`ev_667d311b6cd4f6b516c22975cd0e46ce337aa32ce5fe70c0d2ddd040239feb55`.
+`FUN_0042219e` is not this consumer; its subtype-9 check concerns a type-4 floater.
+
+`FUN_0042fa0f` maps the `IWMove`/`IWHallMove` names to `IWTextInfo` message
+`0x3039` with parameters `(5,1)`. Separately, the `IWLocInfo` callback
+`FUN_00441d3e` handles event 6: after its guards, it sends message `0x48`
+when the move-context field is zero, otherwise `0x4a`. `FUN_0042970c` routes
+that message according to context field `+0x48`. Independently,
+`FUN_00465793` routes event category 3 subtypes 5/6 through thunks to
+`FUN_0045f4f5`/`FUN_0045f5c5`. The evidence does not connect the `0x48`
+dispatch to a type-3/subtype-5 event, nor establish that event 6 originates
+from the `IWMove` window. The selection/commit UI route remains unknown.
+Evidence:
+`ev_66dacbd51cf6785b063a74bf329239127645ce19926b671235f30adca57b2aea`,
+`ev_0e2ae16cc91e4a0449490e69d05f4c816b864c449ede69614ee500146eee0178`,
+`ev_721b02ae62d9e81fff934679f3d0f672a102544ced812b19041e4d27311fc4f1`,
+`ev_bcb9a925483956dd92de831e72742c3a6510dbd9a56729b017c9c5223fe5c3a5`,
+`ev_90fc7b398e8cc430ee898f0371c196e285bf0f21c5cd78aa04fcdd060294d4ce`,
+`ev_560d29325f0c28f11d75fd2ff0fe5274983745b3f9f1033098d16fb61c40a5e0`,
+`ev_77f09bcf65be7f4df49ff369b2957df1474ade7c97d5617e72fa5148d5de9daf`,
+`ev_1f480a49add06ef2e880e52e23d9c4de797b5916cf878e1c456d1852e5004238`,
+`ev_72dddc006c4e1e255f9d20a50da596f1d4c1e470e033ced969a4b8d9fb1f9e80`,
+`ev_2cea27d9cb11506662c6b3865f086398830c1271ba3439dd01827cb3b8737048`.
+
+The four Hall rows in local `original_content/pad.txt` give base cost
+`(15,0,15)`; `game_session_location_move_costs` applies the observed
+`+0x4a + 1` multiplier to a runtime location's raw `+0x4a` field. Target
+selection and the UI trigger are not ported yet. Cost evidence:
+`ev_166ec7236cb49a5bd45dcbc859b69f029d1132243f92ee2e155015d72a50dedd`,
+`ev_f92b05e1bac76d2be3a91b76e6eb420474e1d04db600d49cc8d4a55edf30587d`.

@@ -72,6 +72,16 @@ int game_inventory_hit_test(const GameInventoryEntry *entries,
     return entries[first + slot].item_id;
 }
 
+int game_inventory_click_selection(int selected_item_id, int hovered_item_id)
+{
+    if (hovered_item_id < GAME_INVENTORY_ITEM_FIRST_ID ||
+        hovered_item_id >= GAME_INVENTORY_ITEM_FIRST_ID +
+                               GAME_INVENTORY_ITEM_COUNT) {
+        return selected_item_id;
+    }
+    return hovered_item_id;
+}
+
 int game_inventory_sprite_position(int cell_left, int cell_top,
                                    int cell_width, int cell_height,
                                    int frame_x_offset, int frame_y_offset,

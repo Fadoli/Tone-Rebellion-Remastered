@@ -347,6 +347,7 @@ int game_session_initialize(const WorldDefinition *world,
             /* FUN_004500c4 initializes owner to -1 and clears +0x10 except for class 3. */
             state->record_value_10 = location->renderer_class == 3 ? location->renderer_variant : 0;
             state->owner_id = -1;
+            state->source_location_slot_18 = -1;
             state->source_value_34 = -1;
             state->record_value_24 = 0;
             state->bridge_neighbor_island = bridge_neighbors[island_index][location_index];
@@ -757,6 +758,22 @@ void game_session_tick_item_animations(GameSession *session,
                 }
             }
 
+            /* FUN_00450a71 starts producer PROD cycles from source +0x0c
+               when the object is running, no output is pending, and PROD is
+               idle. It adds +0x32 and starts at a strict value > 0x13. */
+            if (producer_resource_code(state) != 0 &&
+                state->record_value_24 == 0 &&
+                (state->source_flags & 0x001U) != 0 &&
+                (state->source_flags & 0x002U) == 0) {
+                state->producer_cadence = (uint16_t)(state->producer_cadence +
+                                                     state->animation_rate);
+                if (state->producer_cadence > 0x13U) {
+                    state->source_flags |= 0x002U;
+                    state->production_progress = 0;
+                    state->producer_cadence = 0;
+                }
+            }
+
             /* The same source tick advances CONS (+0x40) while flag 0x004 is
                set. FUN_00456b8d resolves a construction descriptor; its +0x0a
                threshold is stored as CONS's first parameter by bldinf.txt. */
@@ -898,6 +915,97 @@ int game_session_debit_resource(GameSession *session, uint8_t player_slot,
     stock = &hall->resource_stock[type];
     if (amount > *stock) return 0;
     *stock = (uint16_t)(*stock - amount);
+    return 1;
+}
+
+int game_session_consume_location_resource(GameSession *session,
+                                           uint8_t island_index,
+                                           uint16_t location_index,
+                                           int32_t resource_code)
+{
+    GameRuntimeLocation *location;
+    if (session == NULL || island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count) return 0;
+    location = &session->islands[island_index].locations[location_index];
+    if (location->record_value_24 == resource_code) {
+        location->record_value_24 = 0;
+        return 1;
+    }
+    if (location->record_value_10 == 0x2a) {
+        if (resource_code >= 1 && resource_code <= GAME_RESOURCE_TYPE_COUNT) {
+            uint16_t *stock = &location->resource_stock[resource_code - 1];
+            if (*stock > 0) {
+                --*stock;
+                return 1;
+            }
+        }
+    }
+    if (location->owner_id >= 0 &&
+        location->owner_id < GAME_START_PLAYER_COUNT &&
+        resource_code >= GAME_INVENTORY_ITEM_FIRST_ID &&
+        resource_code < GAME_INVENTORY_ITEM_FIRST_ID + GAME_INVENTORY_ITEM_COUNT) {
+        uint16_t *count = &session->economy[location->owner_id].inventory_count[
+            resource_code - GAME_INVENTORY_ITEM_FIRST_ID];
+        if (*count > 0) {
+            --*count;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int game_session_location_resource_available(const GameSession *session,
+                                             uint8_t island_index,
+                                             uint16_t location_index,
+                                             int32_t resource_code)
+{
+    const GameRuntimeLocation *location;
+    if (session == NULL || island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count) return 0;
+    location = &session->islands[island_index].locations[location_index];
+    if (location->record_value_24 == resource_code) return 1;
+    if (location->record_value_10 == 0x2a &&
+        resource_code >= 1 && resource_code <= GAME_RESOURCE_TYPE_COUNT &&
+        location->resource_stock[resource_code - 1] > 0) return 1;
+    if (location->owner_id >= 0 && location->owner_id < GAME_START_PLAYER_COUNT &&
+        (location->record_value_10 == 0x2a ||
+         location->source_location_slot_18 != -1) &&
+        resource_code >= GAME_INVENTORY_ITEM_FIRST_ID &&
+        resource_code < GAME_INVENTORY_ITEM_FIRST_ID + GAME_INVENTORY_ITEM_COUNT &&
+        session->economy[location->owner_id].inventory_count[
+            resource_code - GAME_INVENTORY_ITEM_FIRST_ID] > 0) return 1;
+    return 0;
+}
+
+int game_session_location_move_costs(const GameSession *session,
+                                     const PadCatalog *catalog,
+                                     uint8_t island_index,
+                                     uint16_t location_index,
+                                     int32_t costs[GAME_RESOURCE_TYPE_COUNT])
+{
+    const GameRuntimeLocation *location;
+    const PadCatalogItem *item;
+    int32_t result[GAME_RESOURCE_TYPE_COUNT];
+    int32_t multiplier;
+    unsigned int resource;
+
+    if (session == NULL || catalog == NULL || costs == NULL ||
+        island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count) {
+        return 0;
+    }
+    location = &session->islands[island_index].locations[location_index];
+    if (location->record_value_10 < 0 ||
+        location->record_value_10 > INT32_C(65535))
+        return 0;
+    item = pad_catalog_find(catalog, (uint16_t)location->record_value_10);
+    if (item == NULL) return 0;
+
+    multiplier = (int32_t)location->source_capacity_4a + 1;
+    for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
+        result[resource] = (int32_t)item->movement_cost[resource] * multiplier;
+    }
+    memcpy(costs, result, sizeof(result));
     return 1;
 }
 
@@ -1361,8 +1469,8 @@ int game_session_place_building(GameSession *session,
         return 0;
     }
 
-    /* FUN_004528ca writes the player item and owner, clears animation state,
-       sets +0x32 to 1, and initializes object flags to 0x410. */
+    /* FUN_004528ca sets +0x32 to 1 and flags to 0x410. The source does not
+       explicitly reset producer +0x0c; new remake placements start it at 0. */
     runtime->record_value_10 = runtime_item_id;
     runtime->owner_id = player_slot;
     runtime->source_capacity_4a = 0;
@@ -1373,6 +1481,7 @@ int game_session_place_building(GameSession *session,
     runtime->record_value_24 = 0;
     runtime->source_flags = 0x410;
     runtime->base_progress = 0;
+    runtime->producer_cadence = 0;
     runtime->chug_progress = 0;
     runtime->glyph_progress = 0;
     runtime->inci_progress = 0;
