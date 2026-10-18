@@ -4,7 +4,7 @@ Porter uniquement les comportements établis par le binaire et les données loca
 
 ## À faire
 
-- [ ] Finir `IWMove`/`IWHallMove` : `FUN_0044003d` sélectionne un des six IDs liés au lieu via `0x3f`; `0x32` (aucun slot) et le clic droit `0x4d`/`0x3d` ne sont pas encore reliés à leurs effets. `FUN_00441d3e` envoie séparément `0x48`; son lien au dispatcher reste inconnu. Tracer l'affectation des IDs avant de brancher le roster initial. Voir [fonctions](../functions/0013_batch_0009.md#fun_0044003d--0x44003d).
+- [ ] Compléter les clics de déplacement : le roster `IWLocInfo` sélectionne un ouvrier via `0x3f` et garde le lieu. Restent l'effet de `0x32`, le clic droit `0x4d`/`0x3d` et le lien de `0x48` au dispatcher; ne pas assimiler les IDs runtime au roster remake sans preuve. Voir [fonctions](../functions/0013_batch_0009.md#fun_0044003d--0x44003d).
 - [ ] Relier les producteurs d’événements Tasks et tracer leur libération; `FUN_004637fc` initialise les 64 indicateurs actifs, `FUN_004662b7` alloue les slots et `FUN_00466533` en libère.
 - [ ] Identifier le callback et la garde de classe des ordres directs avant d'exposer les commandes soldat/mage.
 - [ ] Finir les panneaux d'unités/bâtiments : l'écriture de `+0x22` est établie pour les floaters, mais pas les clés stats du Hall/site; tracer chaque action avant d'ajouter des boutons. Le roster actuel ne couvre que les quatre ouvriers initiaux.

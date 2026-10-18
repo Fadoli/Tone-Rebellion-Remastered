@@ -247,9 +247,18 @@ int main(int argc, char **argv)
     assert(island_panel_info_roster_hit_test(192, 368, 422, 389, 0, 0x01) == 0);
     assert(island_panel_info_roster_hit_test(192, 368, 436, 403, 0, 0x01) == 0);
     assert(island_panel_info_roster_hit_test(192, 368, 437, 403, 0, 0x01) == -1);
+    assert(island_panel_info_roster_hit_test(192, 368, 422, 389, 0, 0x03) == 0);
+    assert(island_panel_info_roster_hit_test(192, 368, 422, 423, 0, 0x02) == 1);
+    assert(island_panel_info_roster_hit_test(192, 368, 422, 457, 0, 0x04) == 2);
+    assert(island_panel_info_roster_hit_test(192, 368, 387, 403, 0, 0x08) == 3);
+    assert(island_panel_info_roster_hit_test(192, 368, 387, 440, 0, 0x10) == 4);
+    assert(island_panel_info_roster_hit_test(192, 368, 352, 423, 0, 0x20) == 5);
+    assert(island_panel_info_roster_hit_test(192, 368, 437, 422, 0, 0x02) == -1);
     assert(island_panel_info_roster_hit_test(192, 368, 422, 389, 0, 0) == -1);
     assert(island_panel_info_roster_hit_test(192, 368, 412, 396, 1, 0x01) == 0);
     assert(island_panel_info_roster_hit_test(192, 368, 412, 396, 1, 0x02) == -1);
+    assert(island_panel_info_roster_hit_test(192, 368, 412, 450, 1, 0x08) == 3);
+    assert(island_panel_info_roster_hit_test(192, 368, 362, 423, 1, 0x20) == 5);
     info_panel.pane.left = 192;
     info_panel.pane.top = 368;
     info_panel.pane.right = 447;
