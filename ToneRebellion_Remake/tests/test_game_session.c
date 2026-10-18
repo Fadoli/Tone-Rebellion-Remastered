@@ -324,7 +324,7 @@ static void test_pending_event_table_matches_source_slots_and_deduplication(void
     assert(session.pending_event_count == 1);
     assert(session.pending_events[first].active == 1);
     assert(session.pending_events[first].reserved_zero == 0);
-    assert(session.pending_events[first].reserved_one == 1);
+    assert(session.pending_events[first].priority == 1);
     assert(session.pending_events[first].player_id == 2);
     assert(session.pending_events[first].payload_0a == 17);
     assert(session.pending_events[first].action_type == 4);
@@ -362,6 +362,40 @@ static void test_pending_event_table_matches_source_slots_and_deduplication(void
     assert(session.pending_event_count == GAME_SESSION_MAX_PENDING_EVENTS);
     assert(game_session_pending_event_add(&session, 0, 0, 4, 0, 0, 0) == -1);
     assert(game_session_pending_event_add(NULL, 0, 0, 4, 0, 0, 0) == -1);
+}
+
+static void test_task_projection_matches_source_filter_and_cap(void)
+{
+    GameSession session = {0};
+    uint8_t slots[GAME_SESSION_MAX_TASKS];
+    uint8_t short_output[4] = {0xff, 0xff, 0xff, 0xff};
+    int index;
+
+    assert(game_session_pending_event_add(&session, 2, 0, 4, 0, 1, 5) == 0);
+    assert(game_session_pending_event_add(&session, 2, 0, 0xb, 0, 1, 5) == 1);
+    assert(game_session_pending_event_add(&session, 3, 0, 4, 0, 1, 5) == 2);
+    assert(game_session_pending_event_add(&session, 2, 0, 13, 0, 1, 5) == 3);
+    for (index = 0; index < 36; ++index) {
+        assert(game_session_pending_event_add(&session, 2, (int16_t)index,
+            4, 0, 1, (int16_t)index) == index + 4);
+    }
+
+    assert(game_session_collect_task_slots(&session, 2, slots,
+           GAME_SESSION_MAX_TASKS) == GAME_SESSION_MAX_TASKS);
+    assert(slots[0] == 0 && slots[1] == 3);
+    for (index = 0; index < 30; ++index)
+        assert(slots[index + 2] == index + 4);
+    assert(game_session_collect_task_slots(&session, 2, short_output, 3) ==
+           GAME_SESSION_MAX_TASKS);
+    assert(short_output[0] == 0 && short_output[1] == 3 &&
+           short_output[2] == 4 && short_output[3] == 0xff);
+    assert(game_session_collect_task_slots(&session, 2, NULL, 0) ==
+           GAME_SESSION_MAX_TASKS);
+    assert(game_session_collect_task_slots(&session, 3, slots,
+           GAME_SESSION_MAX_TASKS) == 1);
+    assert(slots[0] == 2);
+    assert(game_session_collect_task_slots(NULL, 2, slots,
+           GAME_SESSION_MAX_TASKS) == 0);
 }
 
 static void test_inventory_action_reserves_source_payload_without_mutation(void)
@@ -802,6 +836,7 @@ int main(void)
     test_hall_resource_modes_cycle_through_original_three_states();
     test_inventory_counts_cover_source_item_id_range();
     test_pending_event_table_matches_source_slots_and_deduplication();
+    test_task_projection_matches_source_filter_and_cap();
     test_inventory_action_reserves_source_payload_without_mutation();
     test_source_event3_subtype0_queues_and_toggles_only_player_bit();
     test_glyph_ownership_mask_is_player_local_and_idempotent();

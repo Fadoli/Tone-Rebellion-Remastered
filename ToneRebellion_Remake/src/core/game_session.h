@@ -9,7 +9,7 @@
 #include <stdint.h>
 
 enum { GAME_SESSION_MAX_FLOATERS = GAME_START_PLAYER_COUNT * GAME_START_FLOATERS_PER_PLAYER };
-enum { GAME_SESSION_MAX_PENDING_EVENTS = 64 };
+enum { GAME_SESSION_MAX_PENDING_EVENTS = 64, GAME_SESSION_MAX_TASKS = 32 };
 enum { GAME_TRADE_TARGET_COUNT = GAME_START_PLAYER_COUNT - 1,
        GAME_SESSION_MAX_TRADE_REQUESTS = GAME_START_PLAYER_COUNT * GAME_TRADE_TARGET_COUNT };
 enum { GAME_SESSION_MAX_DIPLOMACY_REQUESTS =
@@ -62,13 +62,12 @@ typedef struct GameDiplomacyRequest {
     uint8_t action;
 } GameDiplomacyRequest;
 
-/* FUN_004662b7 reserves one of 64 world-action records (stride 0x14). Keep
-   the observed short fields without assigning gameplay meaning to the
-   payload words whose producers/consumers are not fully ported yet. */
+/* FUN_004662b7 reserves one of 64 world-action records (stride 0x14).
+   Priority is initialized to 1 there and read as such by FUN_004469d6. */
 typedef struct GamePendingEvent {
     uint32_t active;
     uint16_t reserved_zero;
-    uint16_t reserved_one;
+    uint16_t priority;
     int16_t player_id;
     int16_t payload_0a;
     int16_t payload_0c;
@@ -307,6 +306,13 @@ int game_session_pending_event_add(GameSession *session, int16_t player_id,
                                    int16_t payload_0a, int16_t action_type,
                                    int16_t payload_0c, int16_t payload_0e,
                                    int16_t payload_12);
+/* FUN_004455d1 projects active 0x14-byte slots for one player, omits action
+   type 0xb, preserves table order, and caps the list at 32. Returns the total
+   projected count, writing at most capacity source slot indices. */
+size_t game_session_collect_task_slots(const GameSession *session,
+                                       int16_t player_id,
+                                       uint8_t *slot_indices,
+                                       size_t capacity);
 /* FUN_0042fa0f(0x40): queue an inventory-use request for a clicked island
    location. Mirrors its class-0 occupied-location rejection and stores the
    source's island/location/item payload; it does not apply the item effect or

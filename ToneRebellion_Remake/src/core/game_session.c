@@ -1008,7 +1008,7 @@ int game_session_pending_event_add(GameSession *session, int16_t player_id,
     event->payload_0e = payload_0e;
     event->payload_12 = payload_12;
     event->active = 1;
-    event->reserved_one = 1;
+    event->priority = 1;
     ++session->pending_event_count;
 
     if (action_type == 5 || action_type == 13) {
@@ -1026,6 +1026,26 @@ int game_session_pending_event_add(GameSession *session, int16_t player_id,
         }
     }
     return (int)slot;
+}
+
+size_t game_session_collect_task_slots(const GameSession *session,
+                                       int16_t player_id,
+                                       uint8_t *slot_indices,
+                                       size_t capacity)
+{
+    size_t count = 0;
+    unsigned int slot;
+    if (session == NULL) return 0;
+    for (slot = 0; slot < GAME_SESSION_MAX_PENDING_EVENTS &&
+         count < GAME_SESSION_MAX_TASKS; ++slot) {
+        const GamePendingEvent *event = &session->pending_events[slot];
+        if (event->active == 0 || event->player_id != player_id ||
+            event->action_type == 0xb) continue;
+        if (slot_indices != NULL && count < capacity)
+            slot_indices[count] = (uint8_t)slot;
+        ++count;
+    }
+    return count;
 }
 
 int game_session_queue_inventory_action(GameSession *session,
