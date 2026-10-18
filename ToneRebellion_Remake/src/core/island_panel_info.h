@@ -23,6 +23,17 @@ typedef struct IslandHallResourceRow {
     int16_t amount_y;
 } IslandHallResourceRow;
 
+typedef struct IslandTaskRow {
+    const char *label_key;
+    int8_t task_icon_frame;
+} IslandTaskRow;
+
+typedef struct IslandTaskRowPosition {
+    int16_t icon_x;
+    int16_t label_x;
+    int16_t y;
+} IslandTaskRowPosition;
+
 typedef enum IslandLocationActionControl {
     ISLAND_LOCATION_ACTION_NONE = 0,
     ISLAND_LOCATION_ACTION_MOVE = 1,
@@ -91,6 +102,28 @@ int island_panel_info_hall_resource_row(unsigned int resource,
 int island_panel_info_empty_task_label_position(const WindowTemplate *panel,
                                                int text_width,
                                                int *x, int *y);
+
+/* FUN_004459e6 row branches with explicit gamey.txt labels and taskicon frames. */
+int island_panel_info_task_row(int16_t action_type, int16_t item_id,
+                               IslandTaskRow *row);
+/* FUN_004459e6 centers visible 13px rows vertically and draws the icon at x=25,
+   label at x=45; returned y is the pane-local row origin. */
+int island_panel_info_task_row_position(const WindowTemplate *panel,
+                                       unsigned int visible_rows,
+                                       unsigned int visible_index,
+                                       IslandTaskRowPosition *position);
+/* FUN_0044590d's 13px row lookup, including its negative-index clamp and
+   source-slot scroll offset. Returns -1 when the projected index is absent. */
+int island_panel_info_task_index_at_y(const WindowTemplate *panel,
+                                      int32_t y,
+                                      unsigned int visible_rows,
+                                      int scroll_offset,
+                                      size_t task_count);
+/* FUN_004469d6 priority and transfer-detail keys. category_key may be NULL. */
+const char *island_panel_info_task_priority_key(int16_t priority);
+int island_panel_info_task_transfer_keys(int16_t action_type, int16_t item_id,
+                                         const char **title_key,
+                                         const char **category_key);
 
 /* Reads one key-delimited text entry, trimming horizontal whitespace on keys. */
 int island_panel_info_extract_entry(const unsigned char *bytes, size_t length,

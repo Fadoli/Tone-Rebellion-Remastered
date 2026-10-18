@@ -1,5 +1,6 @@
 #include "island_panel_info.h"
 
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -183,6 +184,99 @@ int island_panel_info_empty_task_label_position(const WindowTemplate *panel,
        it at local y=0x32. */
     *x = panel->pane.left + (width - text_width) / 2;
     *y = panel->pane.top + 0x32;
+    return 1;
+}
+
+int island_panel_info_task_row(int16_t action_type, int16_t item_id,
+                               IslandTaskRow *row)
+{
+    IslandTaskRow value;
+    if (row == NULL) return 0;
+    value.label_key = NULL;
+    value.task_icon_frame = -1;
+    if (action_type == 5) {
+        value.label_key = "CONSTR";
+        value.task_icon_frame = 0;
+    } else if (action_type == 0x12) {
+        value.label_key = "REPAIR";
+        value.task_icon_frame = 1;
+    } else if (action_type == 4 && item_id >= 5 && item_id < 0x22) {
+        value.label_key = "DARTIFACT";
+        value.task_icon_frame = 4;
+    } else if (action_type == 0xd) {
+        value.label_key = "OARTIFACT";
+        value.task_icon_frame = 4;
+    } else {
+        return 0;
+    }
+    *row = value;
+    return 1;
+}
+
+int island_panel_info_task_row_position(const WindowTemplate *panel,
+                                       unsigned int visible_rows,
+                                       unsigned int visible_index,
+                                       IslandTaskRowPosition *position)
+{
+    int height;
+    int row_y;
+    if (panel == NULL || position == NULL || visible_rows == 0 ||
+        visible_index >= visible_rows || visible_rows > INT_MAX / 13) return 0;
+    height = panel->pane.bottom - panel->pane.top;
+    if (height <= 0) return 0;
+    row_y = (height - (int)visible_rows * 13) / 2 + (int)visible_index * 13;
+    if (row_y < INT16_MIN || row_y > INT16_MAX) return 0;
+    position->icon_x = 25;
+    position->label_x = 45;
+    position->y = (int16_t)row_y;
+    return 1;
+}
+
+int island_panel_info_task_index_at_y(const WindowTemplate *panel,
+                                      int32_t y,
+                                      unsigned int visible_rows,
+                                      int scroll_offset,
+                                      size_t task_count)
+{
+    int height;
+    int row_origin;
+    int64_t row_index;
+    int64_t row_offset;
+    if (panel == NULL || visible_rows == 0 || visible_rows > INT_MAX / 13 ||
+        task_count > INT_MAX) return -1;
+    height = panel->pane.bottom - panel->pane.top;
+    if (height <= 0) return -1;
+    row_origin = (height - (int)visible_rows * 13) / 2;
+    row_index = ((int64_t)y - panel->pane.top - row_origin) / 13;
+    if (row_index < 0) row_index = 0;
+    row_offset = scroll_offset < 0 ? 0 : scroll_offset;
+    row_index += row_offset;
+    return row_index < (int64_t)task_count ? (int)row_index : -1;
+}
+
+const char *island_panel_info_task_priority_key(int16_t priority)
+{
+    if (priority == 2) return "THIGH";
+    if (priority == 3) return "TEXCL";
+    return "TNORM";
+}
+
+int island_panel_info_task_transfer_keys(int16_t action_type, int16_t item_id,
+                                         const char **title_key,
+                                         const char **category_key)
+{
+    const char *title;
+    const char *category = NULL;
+    if (action_type == 4) title = "DELIVER";
+    else if (action_type == 0xd) title = "RETRIEVE";
+    else return 0;
+
+    if (item_id == 1) category = "STONE";
+    else if (item_id == 2) category = "CTONE";
+    else if (item_id == 3) category = "MTONE";
+    else if (item_id >= 5 && item_id < 0x22) category = "ARTIFACT";
+    if (title_key != NULL) *title_key = title;
+    if (category_key != NULL) *category_key = category;
     return 1;
 }
 

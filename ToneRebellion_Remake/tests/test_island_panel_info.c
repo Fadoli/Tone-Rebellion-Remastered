@@ -16,6 +16,10 @@ int main(int argc, char **argv)
     int task_label_x;
     int task_label_y;
     IslandHallResourceRow resource_row;
+    IslandTaskRow task_row;
+    IslandTaskRowPosition task_position;
+    const char *task_title_key;
+    const char *task_category_key;
     WindowTemplate info_panel = {0};
     IslandPanelSelection panel_selection = {7, -1};
     int panel_mode = WINDOW_ISLAND_PANEL_INVENTORY;
@@ -78,6 +82,57 @@ int main(int argc, char **argv)
     assert(island_panel_info_roster_position(5, 1, &roster_x, &roster_y));
     assert(roster_x == 170 && roster_y == 55);
     assert(!island_panel_info_roster_position(6, 0, &roster_x, &roster_y));
+    assert(island_panel_info_task_row(5, 0, &task_row));
+    assert(strcmp(task_row.label_key, "CONSTR") == 0 &&
+           task_row.task_icon_frame == 0);
+    assert(island_panel_info_task_row(0x12, 0, &task_row));
+    assert(strcmp(task_row.label_key, "REPAIR") == 0 &&
+           task_row.task_icon_frame == 1);
+    assert(island_panel_info_task_row(4, 5, &task_row));
+    assert(strcmp(task_row.label_key, "DARTIFACT") == 0 &&
+           task_row.task_icon_frame == 4);
+    assert(island_panel_info_task_row(4, 33, &task_row));
+    assert(!island_panel_info_task_row(4, 34, &task_row));
+    assert(island_panel_info_task_row(0xd, 0, &task_row));
+    assert(strcmp(task_row.label_key, "OARTIFACT") == 0 &&
+           task_row.task_icon_frame == 4);
+    assert(!island_panel_info_task_row(0xb, 0, &task_row));
+    info_panel.pane.top = 368;
+    info_panel.pane.bottom = 471;
+    assert(island_panel_info_task_row_position(&info_panel, 7, 0,
+                                               &task_position));
+    assert(task_position.icon_x == 25 && task_position.label_x == 45 &&
+           task_position.y == 6);
+    assert(island_panel_info_task_row_position(&info_panel, 7, 6,
+                                               &task_position));
+    assert(task_position.y == 84);
+    assert(!island_panel_info_task_row_position(&info_panel, 7, 7,
+                                                &task_position));
+    assert(!island_panel_info_task_row_position(&info_panel, 0, 0,
+                                                &task_position));
+    assert(island_panel_info_task_index_at_y(&info_panel, 374, 7, 0, 8) == 0);
+    assert(island_panel_info_task_index_at_y(&info_panel, 387, 7, 2, 8) == 3);
+    assert(island_panel_info_task_index_at_y(&info_panel, 470, 7, 0, 8) == 7);
+    assert(island_panel_info_task_index_at_y(&info_panel, 470, 7, 0, 7) == -1);
+    assert(island_panel_info_task_index_at_y(&info_panel, 374, 7, 0, 0) == -1);
+    assert(island_panel_info_task_index_at_y(&info_panel, 374, 0, 0, 8) == -1);
+    assert(strcmp(island_panel_info_task_priority_key(1), "TNORM") == 0);
+    assert(strcmp(island_panel_info_task_priority_key(2), "THIGH") == 0);
+    assert(strcmp(island_panel_info_task_priority_key(3), "TEXCL") == 0);
+    assert(island_panel_info_task_transfer_keys(4, 5, &task_title_key,
+                                                &task_category_key));
+    assert(strcmp(task_title_key, "DELIVER") == 0 &&
+           strcmp(task_category_key, "ARTIFACT") == 0);
+    assert(island_panel_info_task_transfer_keys(0xd, 2, &task_title_key,
+                                                &task_category_key));
+    assert(strcmp(task_title_key, "RETRIEVE") == 0 &&
+           strcmp(task_category_key, "CTONE") == 0);
+    assert(island_panel_info_task_transfer_keys(4, 4, &task_title_key,
+                                                &task_category_key));
+    assert(strcmp(task_title_key, "DELIVER") == 0 &&
+           task_category_key == NULL);
+    assert(!island_panel_info_task_transfer_keys(5, 5, &task_title_key,
+                                                 &task_category_key));
     assert(island_panel_info_roster_hit_test(192, 368, 422, 389, 0, 0x01) == 0);
     assert(island_panel_info_roster_hit_test(192, 368, 436, 403, 0, 0x01) == 0);
     assert(island_panel_info_roster_hit_test(192, 368, 437, 403, 0, 0x01) == -1);
@@ -183,6 +238,10 @@ int main(int argc, char **argv)
         unsigned char *bytes;
         long file_length;
         unsigned int cryptic_id;
+        static const char *const task_keys[] = {
+            "CONSTR", "REPAIR", "DARTIFACT", "OARTIFACT"
+        };
+        size_t task_key_index;
         assert(file != NULL);
         assert(fseek(file, 0, SEEK_END) == 0);
         file_length = ftell(file);
@@ -200,6 +259,13 @@ int main(int argc, char **argv)
                                                "NOTASKS", description,
                                                sizeof(description)));
         assert(description[0] != '\0');
+        for (task_key_index = 0;
+             task_key_index < sizeof(task_keys) / sizeof(task_keys[0]);
+             ++task_key_index) {
+            assert(island_panel_info_extract_entry(bytes, (size_t)file_length,
+                task_keys[task_key_index], description, sizeof(description)));
+            assert(description[0] != '\0');
+        }
         for (cryptic_id = 0; cryptic_id < ISLAND_PANEL_INFO_CRYPTIC_COUNT;
              ++cryptic_id) {
             assert(island_panel_info_cryptic_key(cryptic_id, key, sizeof(key)));

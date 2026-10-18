@@ -5,7 +5,7 @@ Porter uniquement les comportements établis par le binaire et les données loca
 ## À faire
 
 - [ ] Tracer le consommateur de l'ordre 9 issu du type 34, son événement 7 et les montants de coût absents de `DAT_005eac08`; `0x4c` est un chemin distinct.
-- [ ] Relier les producteurs d’événements à Tasks et tracer leur libération; `FUN_004637fc` initialise les 64 indicateurs actifs, `FUN_004662b7` alloue les slots et `FUN_00466533` en libère.
+- [ ] Relier les producteurs d’événements Tasks et tracer leur libération; `FUN_004637fc` initialise les 64 indicateurs actifs, `FUN_004662b7` alloue les slots et `FUN_00466533` en libère.
 - [ ] Identifier le callback et la garde de classe des ordres directs avant d'exposer les commandes soldat/mage.
 - [ ] Finir les panneaux d'unités/bâtiments : l'écriture de `+0x22` est établie pour les floaters, mais pas les clés stats du Hall/site; tracer chaque action avant d'ajouter des boutons. Le roster actuel ne couvre que les quatre ouvriers initiaux.
 - [ ] Mapper les champs runtime nécessaires aux badges état/charge; établir le sens visuel ou gameplay du mot d'île basculé par `PANIC`. L'événement et son écriture XOR sont identifiés, mais pas l'effet du mot.
@@ -28,14 +28,14 @@ Porter uniquement les comportements établis par le binaire et les données loca
 - [x] Commandes de barre d'île, badges santé/royaume et descriptions de survol actuellement portées.
 - [x] Sons de menu et sélection de musique du royaume.
 - [x] Icônes des quatre joueurs dans la bannière Diplomatie à partir des ouvriers initiaux et des ancres source; animation et autres états en attente.
-- [x] Panneaux Tasks / effets : projection des slots actifs par joueur (limite 32, type `0xb` exclu), cadres `SCROLL.SHP`, `NOTASKS`; clics Tasks consommés et pas borné testé. Les lignes actives restent à rendre. `InvCycle` utilise aussi son frame de survol.
+- [x] Tasks : lignes et défilement portés pour actions 5, 0x12, 4 (items 5–33) et 0xd; cadres TASKICON et libellés depuis `gamey.txt`. Types non mappés, sélection et détails restent en attente. Effets : cadres `SCROLL.SHP`; clics Tasks consommés et pas de défilement borné testé. `InvCycle` utilise aussi son frame de survol.
 - [x] Clic d'un glyphe possédé : mémorise l'index et arme le curseur source du mode `0x11`; le clic carte et son effet restent en attente des gardes/consommateur.
 - [x] Inventory : la fiche `IWTextInfo` suit l'ID sélectionné après la fin du survol; couvert par `test_island_panel_info`.
 - [x] `TOGREALM` inverse ses trois flags; royaume (`FLTINFO` 22–25) et santé (`0x15−maxHP`) sont rendus pour les ouvriers initiaux. Les autres badges attendent leurs champs runtime.
 - [x] `PANIC` émet l'événement local type 3/sous-type 0 et le dispatch bascule le bit 0 du mot d'île par joueur; la sémantique reste inconnue.
 - [x] Texte New Game : hauteur source 13 px sans réduction verticale; largeur ramenée à 11/13 et interligne `+1` comme compromis de traduction (la source avance de `+3`); huit paragraphes testés dans la zone utile.
-- [x] Vérification Release courante : CTest 19/19; exécutable 274517 octets, SHA-256 `D482673642DB4DF896516B8E3CAE6D24BE73FF17D91943B701FB06E67638D0AB`.
-- [ ] Alimenter et rendre les records Tasks actifs avant d’activer le défilement visible; producteur et état initial non identifiés.
+- [x] Vérification Release courante : CTest 19/19; exécutable 276296 octets, SHA-256 `643C8A3AB87B3A6520B685E26A4B855011F064B4C21A64335A253CEEABD5633B`.
+- [ ] Ajouter la sélection/détail des lignes Tasks et mapper les autres actions; relier les producteurs runtime et leur libération avant d’élargir l’affichage.
 
 ## Références
 

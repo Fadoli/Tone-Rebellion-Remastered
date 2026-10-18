@@ -88,6 +88,7 @@ static SpriteSheet g_bridge_trigger_art;
 static SpriteSheet g_temp_hole_art;
 static SpriteSheet g_build_cycle_art;
 static SpriteSheet g_task_scroll_art;
+static SpriteSheet g_task_icon_art;
 static SpriteSheet g_bildtone_art;
 static SpriteSheet g_tone_crys_art;
 static SpriteSheet g_magctone_art;
@@ -123,6 +124,10 @@ static char g_newgame_text[8][256];
 static char g_empty_glyph_text[256];
 static char g_empty_inventory_text[256];
 static char g_empty_task_text[256];
+static char g_task_label_text[4][256];
+static char g_task_priority_text[3][256];
+static char g_task_transfer_text[2][256];
+static char g_task_category_text[4][256];
 static char g_hall_population_label[64];
 static char g_inventory_info_text[768];
 static char g_glyph_info_text[768];
@@ -157,6 +162,7 @@ static int g_hovered_island_button = -1;
 static int g_hovered_hall_command = -1;
 static int g_island_panel_mode = WINDOW_ISLAND_PANEL_GENERAL;
 static int g_task_scroll_offset;
+static int g_selected_task_slot = -1;
 static size_t g_inventory_page = 0;
 static int g_hovered_inventory_item = -1;
 static int g_selected_inventory_item = -1;
@@ -691,6 +697,7 @@ static int load_island_surface(int island_id, int map_island_index,
     SpriteSheet temp_hole_candidate = {0};
     SpriteSheet build_cycle_candidate = {0};
     SpriteSheet task_scroll_candidate = {0};
+    SpriteSheet task_icon_candidate = {0};
     SpriteSheet bildtone_candidate = {0};
     SpriteSheet tone_crys_candidate = {0};
     SpriteSheet magctone_candidate = {0};
@@ -784,6 +791,8 @@ static int load_island_surface(int island_id, int map_island_index,
                            error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\scroll.shp", palette, &task_scroll_candidate,
                            error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\taskicon.shp", palette,
+                           &task_icon_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\bildtone.shp", palette, &bildtone_candidate,
                            error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\tonecrys.shp", palette,
@@ -947,6 +956,7 @@ static int load_island_surface(int island_id, int map_island_index,
     }
     if (temp_hole_candidate.frame_count < 8 || build_cycle_candidate.frame_count < 2 ||
         task_scroll_candidate.frame_count < 4 ||
+        task_icon_candidate.frame_count < 5 ||
         hall_stock_candidate.frame_count < 6 || main_buttons_candidate.frame_count < 8 ||
         hall_command_candidate.frame_count < 10 ||
         floater_info_candidate.frame_count < 26 ||
@@ -1006,6 +1016,7 @@ static int load_island_surface(int island_id, int map_island_index,
     free_sprite_sheet(&g_temp_hole_art);
     free_sprite_sheet(&g_build_cycle_art);
     free_sprite_sheet(&g_task_scroll_art);
+    free_sprite_sheet(&g_task_icon_art);
     free_sprite_sheet(&g_bildtone_art);
     free_sprite_sheet(&g_tone_crys_art);
     free_sprite_sheet(&g_magctone_art);
@@ -1069,6 +1080,8 @@ static int load_island_surface(int island_id, int map_island_index,
     memset(&build_cycle_candidate, 0, sizeof(build_cycle_candidate));
     g_task_scroll_art = task_scroll_candidate;
     memset(&task_scroll_candidate, 0, sizeof(task_scroll_candidate));
+    g_task_icon_art = task_icon_candidate;
+    memset(&task_icon_candidate, 0, sizeof(task_icon_candidate));
     g_bildtone_art = bildtone_candidate;
     memset(&bildtone_candidate, 0, sizeof(bildtone_candidate));
     g_tone_crys_art = tone_crys_candidate;
@@ -1096,6 +1109,7 @@ static int load_island_surface(int island_id, int map_island_index,
     g_hovered_location = -1;
     g_island_panel_mode = WINDOW_ISLAND_PANEL_GENERAL;
     g_task_scroll_offset = 0;
+    g_selected_task_slot = -1;
     g_hovered_inventory_item = -1;
     g_hovered_hall_command = -1;
     g_iw_construct_open = 0;
@@ -1118,6 +1132,7 @@ done:
     free_sprite_sheet(&temp_hole_candidate);
     free_sprite_sheet(&build_cycle_candidate);
     free_sprite_sheet(&task_scroll_candidate);
+    free_sprite_sheet(&task_icon_candidate);
     free_sprite_sheet(&bildtone_candidate);
     free_sprite_sheet(&tone_crys_candidate);
     free_sprite_sheet(&magctone_candidate);
@@ -1641,6 +1656,61 @@ static int load_newgame_captions(char *error, size_t error_capacity)
         (void)snprintf(error, error_capacity,
                        "gamey.txt key NOTASKS is missing or empty");
         goto done;
+    }
+    {
+        static const char *const task_keys[4] = {
+            "CONSTR", "REPAIR", "DARTIFACT", "OARTIFACT"
+        };
+        for (i = 0; i < 4; ++i) {
+            if (!extract_help_entry(bytes, member->length, task_keys[i],
+                                    g_task_label_text[i],
+                                    sizeof(g_task_label_text[i]))) {
+                (void)snprintf(error, error_capacity,
+                               "gamey.txt key %s is missing or empty", task_keys[i]);
+                goto done;
+            }
+        }
+    }
+    {
+        static const char *const priority_keys[3] = {
+            "TNORM", "THIGH", "TEXCL"
+        };
+        static const char *const transfer_keys[2] = {
+            "DELIVER", "RETRIEVE"
+        };
+        static const char *const category_keys[4] = {
+            "STONE", "CTONE", "MTONE", "ARTIFACT"
+        };
+        for (i = 0; i < 3; ++i) {
+            if (!extract_help_entry(bytes, member->length, priority_keys[i],
+                                    g_task_priority_text[i],
+                                    sizeof(g_task_priority_text[i]))) {
+                (void)snprintf(error, error_capacity,
+                               "gamey.txt key %s is missing or empty",
+                               priority_keys[i]);
+                goto done;
+            }
+        }
+        for (i = 0; i < 2; ++i) {
+            if (!extract_help_entry(bytes, member->length, transfer_keys[i],
+                                    g_task_transfer_text[i],
+                                    sizeof(g_task_transfer_text[i]))) {
+                (void)snprintf(error, error_capacity,
+                               "gamey.txt key %s is missing or empty",
+                               transfer_keys[i]);
+                goto done;
+            }
+        }
+        for (i = 0; i < 4; ++i) {
+            if (!extract_help_entry(bytes, member->length, category_keys[i],
+                                    g_task_category_text[i],
+                                    sizeof(g_task_category_text[i]))) {
+                (void)snprintf(error, error_capacity,
+                               "gamey.txt key %s is missing or empty",
+                               category_keys[i]);
+                goto done;
+            }
+        }
     }
     if (!extract_help_entry(bytes, member->length, "POPSTR",
                             g_hall_population_label,
@@ -3067,6 +3137,16 @@ static void draw_diplomacy_panel(HDC dc, const WindowTemplate *panel,
     }
 }
 
+static const char *task_label_text(const char *key)
+{
+    if (key == NULL) return NULL;
+    if (strcmp(key, "CONSTR") == 0) return g_task_label_text[0];
+    if (strcmp(key, "REPAIR") == 0) return g_task_label_text[1];
+    if (strcmp(key, "DARTIFACT") == 0) return g_task_label_text[2];
+    if (strcmp(key, "OARTIFACT") == 0) return g_task_label_text[3];
+    return NULL;
+}
+
 static void draw_hall_panel(HDC dc, int hall_player)
 {
     const WindowTemplate *panel = NULL;
@@ -3136,17 +3216,59 @@ static void draw_hall_panel(HDC dc, int hall_player)
         if (panel_state == WINDOW_ISLAND_PANEL_TASKS && g_empty_task_text[0] != '\0') {
             const WindowTemplate *task_list_panel = window_catalog_find(
                 &g_window_catalog, "IWTasks", 3);
-            int label_width = measure_bitmap_text(NULL, g_empty_task_text,
-                                                  strlen(g_empty_task_text));
-            int label_x;
-            int label_y;
-            /* The remake has no task records yet. The source shows NOTASKS
-               when its task-list pointer or first entry is null. */
-            if (task_list_panel != NULL &&
-                island_panel_info_empty_task_label_position(task_list_panel,
-                    label_width, &label_x, &label_y)) {
-                draw_bitmap_label(dc, g_empty_task_text, label_x, label_y,
-                                  RGB(185, 205, 220));
+            uint8_t task_slots[GAME_SESSION_MAX_TASKS];
+            size_t task_count = g_game_session_valid && hall_player >= 0
+                ? game_session_collect_task_slots(&g_game_session,
+                    (int16_t)hall_player, task_slots,
+                    sizeof(task_slots) / sizeof(task_slots[0])) : 0;
+            int visible_rows = task_list_panel != NULL
+                ? (task_list_panel->pane.bottom - task_list_panel->pane.top) / 13
+                : 0;
+            if (task_list_panel != NULL && task_count == 0) {
+                int label_width = measure_bitmap_text(NULL, g_empty_task_text,
+                                                      strlen(g_empty_task_text));
+                int label_x;
+                int label_y;
+                if (island_panel_info_empty_task_label_position(task_list_panel,
+                        label_width, &label_x, &label_y)) {
+                    draw_bitmap_label(dc, g_empty_task_text, label_x, label_y,
+                                      RGB(185, 205, 220));
+                }
+            } else if (task_list_panel != NULL && task_count != 0 &&
+                       visible_rows > 0) {
+                size_t visible_index;
+                int offset = g_task_scroll_offset;
+                if (offset < 0) offset = 0;
+                if ((size_t)offset > task_count) offset = (int)task_count;
+                for (visible_index = 0;
+                     visible_index < (size_t)visible_rows &&
+                     (size_t)offset + visible_index < task_count;
+                     ++visible_index) {
+                    const GamePendingEvent *event = &g_game_session.pending_events[
+                        task_slots[(size_t)offset + visible_index]];
+                    IslandTaskRow row;
+                    IslandTaskRowPosition position;
+                    const char *label;
+                    if (!island_panel_info_task_row(event->action_type,
+                                                    event->payload_12, &row) ||
+                        !island_panel_info_task_row_position(task_list_panel,
+                            (unsigned int)visible_rows,
+                            (unsigned int)visible_index, &position)) continue;
+                    label = task_label_text(row.label_key);
+                    if (label == NULL || label[0] == '\0') continue;
+                    if (row.task_icon_frame >= 0 &&
+                        g_task_icon_art.frame_count >
+                            (uint32_t)row.task_icon_frame) {
+                        draw_sprite(dc, &g_task_icon_art,
+                            (uint32_t)row.task_icon_frame,
+                            task_list_panel->pane.left + position.icon_x,
+                            task_list_panel->pane.top + position.y);
+                    }
+                    draw_bitmap_label(dc, label,
+                        task_list_panel->pane.left + position.label_x,
+                        task_list_panel->pane.top + position.y,
+                        RGB(185, 205, 220));
+                }
             }
         }
         return;
@@ -4594,14 +4716,20 @@ static void handle_click(HWND window, int x, int y)
             if (scroll_control != NULL) {
                 const WindowTemplate *task_panel = window_catalog_find(
                     &g_window_catalog, "IWTasks", 3);
+                uint8_t task_slots[GAME_SESSION_MAX_TASKS];
+                int hall_player = selected_hall_player();
+                size_t task_count = g_game_session_valid && hall_player >= 0
+                    ? game_session_collect_task_slots(&g_game_session,
+                        (int16_t)hall_player, task_slots,
+                        sizeof(task_slots) / sizeof(task_slots[0])) : 0;
                 int visible_rows = task_panel != NULL
                     ? (task_panel->pane.bottom - task_panel->pane.top) / 13 : 0;
                 int direction = window_catalog_scroll_direction(
                     scroll_control->name, WINDOW_ISLAND_PANEL_TASKS);
-                /* The source consumes 6000/6001 even at either bound. This
-                   remake has no task records yet, so both arrows stay at 0. */
+                /* The source consumes 6000/6001 even at either bound. */
                 g_task_scroll_offset = window_catalog_scroll_step(
-                    g_task_scroll_offset, 0, visible_rows, direction);
+                    g_task_scroll_offset, (int)task_count, visible_rows,
+                    direction);
                 InvalidateRect(window, NULL, FALSE);
                 return;
             }
@@ -5616,6 +5744,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_temp_hole_art);
     free_sprite_sheet(&g_build_cycle_art);
     free_sprite_sheet(&g_task_scroll_art);
+    free_sprite_sheet(&g_task_icon_art);
     free_sprite_sheet(&g_bildtone_art);
     free_sprite_sheet(&g_tone_crys_art);
     free_sprite_sheet(&g_magctone_art);
