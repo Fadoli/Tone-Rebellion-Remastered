@@ -3377,9 +3377,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
                     {
                         const char *title_key = NULL;
                         const char *category_key = NULL;
-                        if (hall_resource_task_index(hall_player,
-                                g_selected_task_slot) < 0 &&
-                            island_panel_info_task_transfer_keys(
+                        if (island_panel_info_task_transfer_keys(
                                 selected_event->action_type,
                                 selected_event->payload_12,
                                 &title_key, &category_key)) {
@@ -3402,6 +3400,28 @@ static void draw_hall_panel(HDC dc, int hall_player)
                                     task_info_panel->pane.left + 10,
                                     task_info_panel->pane.top + 0x1e,
                                     RGB(185, 205, 220));
+                            }
+                            if (selected_event->payload_12 >= 1 &&
+                                selected_event->payload_12 <= 3) {
+                                static const SpriteSheet *const resource_art[] = {
+                                    &g_bildtone_art, &g_tone_crys_art,
+                                    &g_magctone_art
+                                };
+                                const SpriteSheet *sheet = resource_art[
+                                    (unsigned int)selected_event->payload_12 - 1U];
+                                if (sheet->frame_count > 4U) {
+                                    const SpriteFrame *icon = &sheet->frames[4];
+                                    int icon_x;
+                                    int icon_y;
+                                    if (island_panel_info_task_icon_position(
+                                            task_info_panel, icon->x_offset,
+                                            icon->y_offset, icon->hit_left,
+                                            icon->hit_top, icon->hit_right,
+                                            icon->hit_bottom, 10,
+                                            &icon_x, &icon_y)) {
+                                        draw_sprite(dc, sheet, 4, icon_x, icon_y);
+                                    }
+                                }
                             }
                         }
                     }

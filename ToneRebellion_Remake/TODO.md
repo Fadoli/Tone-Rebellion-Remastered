@@ -36,8 +36,8 @@ Porter uniquement les comportements établis par le binaire et les données loca
 - [x] `TOGREALM` inverse ses trois flags; royaume (`FLTINFO` 22–25) et santé (`0x15−maxHP`) sont rendus pour les ouvriers initiaux. Les autres badges attendent leurs champs runtime.
 - [x] `PANIC` émet l'événement local type 3/sous-type 0 et le dispatch bascule le bit 0 du mot d'île par joueur; la sémantique reste inconnue.
 - [x] Texte New Game : hauteur source 13 px sans réduction verticale; largeur ramenée à 11/13 et interligne `+1` comme compromis de traduction (la source avance de `+3`); huit paragraphes testés dans la zone utile.
-- [x] Vérification Release courante : CTest 19/19; manifeste `windows.txt` 100 descripteurs; COB 210 spritesheets/4821 images; exécutable 288658 octets, SHA-256 `7809C0ED19F81302294094A2AFCE77F3053A30FA85DCF028F310FEA97E508D75`.
-- [ ] Compléter `IWTaskInfo` (icônes, quantité/jauge et détails action 5/0x12); porter les liens de flotteurs et autres tables annulées; mapper les autres actions, leurs producteurs runtime et leur libération.
+- [x] Vérification Release courante : CTest 19/19; `windows.txt` 100 descripteurs; COB 210 spritesheets/4821 images; exécutable 297238 octets, SHA-256 `E9A8C7A35F2E6A39531A557DA5D95172676F28E383A0993AFF1885524F27BDE4`.
+- [ ] Compléter `IWTaskInfo` (quantité/jauge et détails action 5/0x12; aperçu Hall incomplet); porter les liens de flotteurs et autres tables annulées; mapper les autres actions, leurs producteurs runtime et leur libération.
 
 ## Références
 

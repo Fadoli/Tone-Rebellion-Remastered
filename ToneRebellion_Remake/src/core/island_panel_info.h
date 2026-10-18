@@ -132,6 +132,14 @@ const char *island_panel_info_task_priority_key(int16_t priority);
 int island_panel_info_task_transfer_keys(int16_t action_type, int16_t item_id,
                                          const char **title_key,
                                          const char **category_key);
+/* FUN_004469d6/FUN_004119ba centers the transfer icon's opaque bounds in
+   IWTaskInfo; the source adds a 10px x offset for resource IDs 1..3. */
+int island_panel_info_task_icon_position(const WindowTemplate *panel,
+                                         int frame_x_offset,
+                                         int frame_y_offset,
+                                         int opaque_left, int opaque_top,
+                                         int opaque_right, int opaque_bottom,
+                                         int extra_x, int *draw_x, int *draw_y);
 
 /* Reads one key-delimited text entry, trimming horizontal whitespace on keys. */
 int island_panel_info_extract_entry(const unsigned char *bytes, size_t length,

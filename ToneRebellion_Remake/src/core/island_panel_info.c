@@ -295,6 +295,33 @@ int island_panel_info_task_transfer_keys(int16_t action_type, int16_t item_id,
     return 1;
 }
 
+int island_panel_info_task_icon_position(const WindowTemplate *panel,
+                                         int frame_x_offset,
+                                         int frame_y_offset,
+                                         int opaque_left, int opaque_top,
+                                         int opaque_right, int opaque_bottom,
+                                         int extra_x, int *draw_x, int *draw_y)
+{
+    int width;
+    int height;
+    int opaque_width;
+    int opaque_height;
+    if (panel == NULL || draw_x == NULL || draw_y == NULL ||
+        opaque_right < opaque_left || opaque_bottom < opaque_top) return 0;
+    width = panel->pane.right - panel->pane.left;
+    height = panel->pane.bottom - panel->pane.top;
+    if (width <= 0 || height <= 0) return 0;
+    /* FUN_004119ba centers endpoint differences (without the +1 used by
+       the Inventory grid's distinct FUN_0043d6a3 layout). */
+    opaque_width = opaque_right - opaque_left;
+    opaque_height = opaque_bottom - opaque_top;
+    *draw_x = panel->pane.left + (width - opaque_width) / 2 -
+        opaque_left - frame_x_offset + extra_x;
+    *draw_y = panel->pane.top + (height - opaque_height) / 2 -
+        opaque_top - frame_y_offset;
+    return 1;
+}
+
 int island_panel_info_extract_entry(const unsigned char *bytes, size_t length,
                                     const char *key,
                                     char *output, size_t output_capacity)

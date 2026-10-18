@@ -15,6 +15,8 @@ int main(int argc, char **argv)
     int roster_y;
     int task_label_x;
     int task_label_y;
+    int task_icon_x;
+    int task_icon_y;
     IslandHallResourceRow resource_row;
     IslandTaskRow task_row;
     IslandTaskRowPosition task_position;
@@ -132,6 +134,27 @@ int main(int argc, char **argv)
                                                 &task_category_key));
     assert(strcmp(task_title_key, "DELIVER") == 0 &&
            strcmp(task_category_key, "ARTIFACT") == 0);
+    assert(island_panel_info_task_transfer_keys(4, 1, &task_title_key,
+                                                &task_category_key));
+    assert(strcmp(task_title_key, "DELIVER") == 0 &&
+           strcmp(task_category_key, "STONE") == 0);
+    assert(island_panel_info_task_transfer_keys(4, 2, &task_title_key,
+                                                &task_category_key));
+    assert(strcmp(task_title_key, "DELIVER") == 0 &&
+           strcmp(task_category_key, "CTONE") == 0);
+    assert(island_panel_info_task_transfer_keys(4, 3, &task_title_key,
+                                                &task_category_key));
+    assert(strcmp(task_title_key, "DELIVER") == 0 &&
+           strcmp(task_category_key, "MTONE") == 0);
+    info_panel.pane.left = 192;
+    info_panel.pane.top = 368;
+    info_panel.pane.right = 447;
+    info_panel.pane.bottom = 471;
+    assert(island_panel_info_task_icon_position(&info_panel, -2, 1,
+        4, 3, 20, 15, 10, &task_icon_x, &task_icon_y));
+    assert(task_icon_x == 319 && task_icon_y == 409);
+    assert(!island_panel_info_task_icon_position(NULL, 0, 0,
+        0, 0, 1, 1, 10, &task_icon_x, &task_icon_y));
     assert(island_panel_info_task_transfer_keys(0xd, 2, &task_title_key,
                                                 &task_category_key));
     assert(strcmp(task_title_key, "RETRIEVE") == 0 &&
