@@ -1,18 +1,18 @@
 # Guide fonctionnel Tone Rebellion
 
-Index des observations utiles pour le remake. Les notes distinguent les faits Ghidra/donn�es, les interpr�tations et les inconnues; les Evidence IDs restent pr�s des faits concern�s.
+Index des notes de comportement. Elles separent les observations Ghidra/donnees des interpretations et inconnues; les pseudocodes detailles restent dans functions/.
 
 ## Notes par domaine
 
-- [Application, menus et donn�es](behavior/application-and-menus.md)
-- [D�marrage et placement initial](behavior/world-start.md)
-- [Construction sur une �le](behavior/island-construction.md)
-- [Ressources, Hall et t�ches](behavior/island-resources-and-tasks.md)
-- [Acc�s aux �les depuis la carte](behavior/world-map.md)
+- [Application, menus et donnees](behavior/application-and-menus.md)
+- [Demarrage et placement initial](behavior/world-start.md)
+- [Construction sur une ile](behavior/island-construction.md)
+- [Ressources, Hall et taches](behavior/island-resources-and-tasks.md)
+- [Acces aux iles depuis la carte](behavior/world-map.md)
 - [Inventory, glyphes, Trade et Diplomatie](behavior/island-panels.md)
 
-## Sources d�taill�es
+## Sources detaillees
 
-- [Pseudocodes Ghidra pagin�s](functions/) : archive de r�f�rence; ouvrir seulement les fonctions concern�es.
-- [Index des proc�dures](index.jsonl) et [limitations/inconnues](unknowns.md).
-- [Carte des flux](behavior_map.md) et [catalogue des donn�es](data_catalog.md).
+- [Pseudocodes Ghidra pagines](functions/) : archive de reference; ouvrir seulement les fonctions concernees.
+- [Index des procedures](index.jsonl) et [limitations/inconnues](unknowns.md).
+- [Carte des flux](behavior_map.md) et [catalogue des donnees](data_catalog.md).

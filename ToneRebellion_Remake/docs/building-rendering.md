@@ -1,4 +1,4 @@
-# Rendu des b�timents
+# Building rendering
 
 # Runtime building-item rendering
 
@@ -15,6 +15,6 @@ Island rendering loads the original `pad.txt`/`bldinf.txt` metadata from `TONE00
 
 World-map rendering and entry now use the original island-access rule: Ghidra's `FUN_00471e66` selects the `SMISLE` frame group `+15` for inaccessible, `+0` for accessible and `+30` for accessible-and-selected islands; `FUN_004711e2` draws a selected island name only when `FUN_0047117d` permits access. The remake uses the selected single-player tribe's access bit for these decisions and entry. Tests cover the frame-group choice. Multiplayer active-mask initialization and island-discovery updates remain unimplemented. Evidence and limitations are documented in the parent [`FUNCTION_GUIDE.md`](../../FUNCTION_GUIDE.md).
 
-The Trade panel now renders the source-described 3�3 offer table with row art from BILDTONE/TONECRYS/MAGCTONE. Left and right cell clicks change each displayed offer by 10 within 0..1000; TradeZERO clears the table and TradeDOIT stores one type-0xb outbound request per nonzero recipient. These requests do not alter resource stocks because multiplayer transport and receipt are not implemented. Evidence and limits are recorded in FUNCTION_GUIDE.md; regression tests are in test_game_trade.
+The Trade panel now renders the source-described 3×3 offer table with row art from BILDTONE/TONECRYS/MAGCTONE. Left and right cell clicks change each displayed offer by 10 within 0..1000; TradeZERO clears the table and TradeDOIT stores one type-0xb outbound request per nonzero recipient. These requests do not alter resource stocks because multiplayer transport and receipt are not implemented. Evidence and limits are recorded in FUNCTION_GUIDE.md; regression tests are in test_game_trade.
 
 The Diplomacy panel now uses the original DIPLOMA frames, source-derived hover zones, recipient order, captions from `newtext.txt`, and local policy/recipient toggle state. Outbound subtype-10 requests are retained in `GameSession`; multiplayer transport and `FUN_00428191` player banners remain unimplemented. See FUNCTION_GUIDE.md and `test_game_diplomacy` for the evidence and covered cases.

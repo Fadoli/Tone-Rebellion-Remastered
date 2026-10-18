@@ -1,10 +1,10 @@
-# Notes de rendu � index
+# Graphics reconstruction - index
 
-Les d�tails par �cran sont s�par�s pour faciliter les recherches cibl�es. Les observations source, les choix de port et les limites restent indiqu�s dans chaque note.
+The rendering notes are split by screen. Each page retains source observations, port choices, and open limits.
 
-- [Menus et rendu de d�marrage](docs/graphics/menu-rendering.md)
-- [Interactions New Game](docs/graphics/new-game-interaction.md)
-- [Interface et rendu insulaire](docs/graphics/island-rendering.md)
-- [Panneaux Trade et Diplomatie](docs/graphics/multiplayer-panels.md)
+- [Menus and startup rendering](docs/graphics/menu-rendering.md)
+- [New Game interactions](docs/graphics/new-game-interaction.md)
+- [Island interface and rendering](docs/graphics/island-rendering.md)
+- [Trade and Diplomacy panels](docs/graphics/multiplayer-panels.md)
 
-Pour les comportements d�origine, voir le [guide fonctionnel](../FUNCTION_GUIDE.md) et ses [notes par domaine](../behavior/).
+For original behavior, see the [functional guide](../FUNCTION_GUIDE.md) and [domain notes](../behavior/).
