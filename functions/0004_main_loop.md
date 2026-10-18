@@ -8,6 +8,8 @@
 
 ## Observations Ghidra
 
+La configuration appelle `FUN_0046cbe0(3, thunk_FUN_0042fa0f)`; cela inscrit ce callback au slot 3, sans prouver qu'il soit actif pendant le clic de `FUN_0044003d`. L'initialisation choisit d'abord l'état 0 ou 8 (`ev_1a06455495cb08c19a3e95bb1bd8abb4f5f2df731cdd09e809cc8c2a78f504f9`).
+
 Appels directs observés :
 - `0x40119f` — `thunk_FUN_0046c371` (thunk)
 - `0x401267` — `thunk_FUN_0045a306` (thunk)

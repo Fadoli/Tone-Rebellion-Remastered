@@ -3,6 +3,7 @@
 
 #include "game_start.h"
 #include "game_diplomacy.h"
+#include "floater_catalog.h"
 #include "world_map.h"
 
 #include <stddef.h>
@@ -11,6 +12,8 @@
 enum { GAME_SESSION_MAX_FLOATERS = GAME_START_PLAYER_COUNT * GAME_START_FLOATERS_PER_PLAYER };
 enum { GAME_SESSION_MAX_PENDING_EVENTS = 64, GAME_SESSION_MAX_TASKS = 32 };
 enum { GAME_SESSION_MAX_GLYPH_ACTIONS = 64 };
+enum { GAME_SESSION_MAX_ONOFF_ACTIONS = 64 };
+enum { GAME_SESSION_MAX_BUILD_SELECTIONS = 64 };
 enum { GAME_TRADE_TARGET_COUNT = GAME_START_PLAYER_COUNT - 1,
        GAME_SESSION_MAX_TRADE_REQUESTS = GAME_START_PLAYER_COUNT * GAME_TRADE_TARGET_COUNT };
 enum { GAME_SESSION_MAX_DIPLOMACY_REQUESTS =
@@ -49,9 +52,9 @@ typedef struct GamePlayerEconomy {
     uint16_t trade_offer[GAME_RESOURCE_TYPE_COUNT][GAME_TRADE_TARGET_COUNT];
 } GamePlayerEconomy;
 
-/* FUN_0042fa0f's TradeDOIT path emits category-3/type-0xb packets. This
-   outbox records those messages for a future multiplayer transport; it does
-   not apply the transfer locally. */
+/* FUN_0042fa0f's TradeDOIT path emits category-3/type-0xb requests. The
+   remake queues them and applies resolvable Hall-to-Hall transfers locally
+   during its island tick; network transport remains outside this model. */
 typedef struct GameTradeRequest {
     uint8_t source_player;
     uint8_t target_player;
@@ -75,6 +78,34 @@ typedef struct GameGlyphActionRequest {
     uint16_t location_index;
     uint8_t glyph_index;
 } GameGlyphActionRequest;
+
+/* FUN_0042fa0f's BC_OnOff command reaches FUN_00465793 as type-1/subtype-0.
+   Keep its target as a request; the activation threshold is not initialized
+   in the current remake model, so queueing does not change the location bit. */
+typedef struct GameOnOffActionRequest {
+    uint8_t player_slot;
+    uint8_t island_index;
+    uint16_t location_index;
+} GameOnOffActionRequest;
+
+/* FUN_0042fa0f(0x34) sends this 16-byte category-0/type-5 packet. The local
+   tick dispatcher stores its fields in a 64-slot task record; placement is
+   still unresolved, so this request does not mutate the site. */
+typedef struct GameBuildSelectionRequest {
+    uint16_t category;
+    uint16_t player_slot;
+    uint16_t action_type;
+    uint16_t island_index_a;
+    uint16_t reserved_zero;
+    uint16_t island_index_b;
+    uint16_t location_index;
+    uint16_t item_id;
+} GameBuildSelectionRequest;
+
+/* The source type-3/subtype-4 dispatcher invokes an item receiver before it
+   debits DAT_006191fc. The receiver effect is still caller-owned. */
+typedef int (*GameInventoryResultApply)(void *context, uint8_t player_slot,
+                                        uint8_t item_id);
 
 /* FUN_004662b7 reserves one of 64 world-action records (stride 0x14).
    Priority is initialized to 1 there and read as such by FUN_004469d6. */
@@ -119,6 +150,8 @@ typedef struct GameRuntimeLocation {
     int32_t bridge_neighbor_island;
     uint16_t x;
     uint16_t y;
+    /* Runtime +0x1c bitword. Bit 0x400 is changed by FUN_00453bf6;
+       FUN_0045eaa7 separately checks bit 0x001 for Hall stock requests. */
     uint32_t source_flags;
     /* FUN_0041ff2e reads the selected record's word at +0x0a and displays
        its low nibble plus one as LEVEL. */
@@ -128,13 +161,11 @@ typedef struct GameRuntimeLocation {
        +0x2c. Ghidra reads them as short fields; exact signedness/caps remain
        unconfirmed. */
     uint16_t resource_stock[GAME_RESOURCE_TYPE_COUNT];
-    /* Raw Hall fields read by FUN_0045eaa7. The active-bit writer is still
-       unknown, so these begin at the zeroed runtime value. */
+    /* Raw Hall threshold read by FUN_0045eaa7. */
     int16_t source_capacity_4a;
     /* FUN_004528ca initializes runtime +0x34 from FUN_00450978; repair task
        rows later read this mutable short from their target location. */
     int16_t source_value_34;
-    uint32_t source_flags_1c;
     /* Producer items 0x25..0x27 use source +0x0c to start PROD after the
        running object's cadence reaches 20; separate from BASE +0x4a. */
     uint16_t producer_cadence;
@@ -168,10 +199,13 @@ typedef struct GameRuntimeIsland {
 typedef struct GameFloaterStart {
     uint8_t island_index;
     uint8_t type_index;
+    /* FUN_00466fe4 stores the subtype in the second floater dword. The four
+       initial units created for each category by FUN_0046466f use subtype 0. */
+    uint8_t source_subtype;
     uint8_t owner_slot;
-    /* Initial class-0 worker fields observed in FUN_00466fe4 and the four
-       *work rows in floater.txt. Current HP is mutable; XP is not exposed by
-       IWLocInfo's worker branch and is deliberately not modeled here. */
+    /* Initial stats come from the four local *work rows. Current HP is
+       mutable; XP is not exposed by IWLocInfo's worker branch and is not
+       modeled here. */
     uint8_t current_hit_points;
     uint8_t max_hit_points;
     uint8_t attack_strength;
@@ -207,6 +241,10 @@ typedef struct GameSession {
     GameDiplomacyRequest diplomacy_requests[GAME_SESSION_MAX_DIPLOMACY_REQUESTS];
     uint8_t glyph_action_count;
     GameGlyphActionRequest glyph_actions[GAME_SESSION_MAX_GLYPH_ACTIONS];
+    uint8_t onoff_action_count;
+    GameOnOffActionRequest onoff_actions[GAME_SESSION_MAX_ONOFF_ACTIONS];
+    uint16_t build_selection_count;
+    GameBuildSelectionRequest build_selections[GAME_SESSION_MAX_BUILD_SELECTIONS];
     uint16_t class0_assignments;
     /* FUN_004718eb reads one active flag per WORLDPOS bridge pair. */
     uint32_t active_bridge_mask;
@@ -232,6 +270,7 @@ typedef struct GameSession {
 int game_session_initialize(const WorldDefinition *world,
                             const IslandData *islands_by_world_index,
                             const PadCatalog *pad_catalog,
+                            const FloaterCatalog *floater_catalog,
                             const GameSessionConfig *config,
                             GameSession *out,
                             char *error, size_t error_capacity);
@@ -242,6 +281,13 @@ int game_session_repair_task_values(const GameSession *session,
                                     const PadCatalog *pad_catalog,
                                     const GamePendingEvent *event,
                                     int16_t *current, int16_t *maximum);
+/* Reads the same runtime +0x34 / FUN_00450978 values for a location, without
+   requiring a queued REPAIR event. */
+int game_session_repair_location_values(const GameSession *session,
+                                        const PadCatalog *pad_catalog,
+                                        uint8_t island_index,
+                                        uint16_t location_index,
+                                        int16_t *current, int16_t *maximum);
 /* Construction rows read target +0x28 and pad record +0x04 via
    FUN_004641de(player,payload+0x12). */
 int game_session_construction_task_values(const GameSession *session,
@@ -301,10 +347,18 @@ int game_session_floater_at(const GameSession *session,
                             uint8_t island_index,
                             uint16_t x,
                             uint16_t y);
-/* FUN_0046562b(player,-1) counts all active player-owned floater records.
-   This session contains only the modeled active floaters. */
+/* Counts modeled floaters by remake owner_slot. The source Hall metric uses
+   the floater type/subtype pair instead; see game_session_workstr_summary. */
 unsigned int game_session_count_player_floaters(const GameSession *session,
                                                 uint8_t player_slot);
+/* FUN_00440567 displays WORKSTR from FUN_0046562b(category, 0) and
+   FUN_0046562b(category, -1). `count` is subtype 0 and `total` is all modeled
+   subtypes; percentage is meaningful only when total is nonzero. */
+int game_session_workstr_summary(const GameSession *session,
+                                 uint8_t type_index,
+                                 unsigned int *count,
+                                 unsigned int *total,
+                                 unsigned int *percentage);
 /* FUN_0041ff2e masks the source level word with 0x000f; IWLocInfo displays
    that value plus one. Returns 0 for a null record. */
 uint8_t game_session_location_display_level(const GameRuntimeLocation *location);
@@ -353,6 +407,13 @@ int game_session_adjust_trade_offer(GameSession *session, uint8_t player_slot,
 int game_session_clear_trade_offers(GameSession *session, uint8_t player_slot);
 int game_session_commit_trade_offers(GameSession *session, uint8_t player_slot);
 int game_session_pop_trade_request(GameSession *session, GameTradeRequest *out);
+/* FUN_00465793 subtype 0xb: apply each nonnegative amount up to the source
+   Hall's signed-short stock, moving it to the target Hall. */
+int game_session_apply_trade_request(GameSession *session,
+                                     const GameTradeRequest *request);
+/* Consume queued local type-0xb requests in order. A request whose source or
+   target Hall is unavailable remains queued for a later tick. */
+int game_session_dispatch_trade_requests(GameSession *session);
 /* FUN_0043e4f0 / FUN_00465793: enqueue one subtype-10 toggle and update the
    corresponding local flag as if the queued event had been dispatched. */
 int game_session_toggle_diplomacy(GameSession *session, uint8_t source_player,
@@ -367,6 +428,12 @@ int game_session_inventory_credit(GameSession *session, uint8_t player_slot,
                                   uint8_t item_id, uint32_t amount);
 int game_session_inventory_debit(GameSession *session, uint8_t player_slot,
                                   uint8_t item_id, uint32_t amount);
+/* FUN_00465793 category-3/subtype-4: only attempt an item result when its
+   inventory count is positive, and debit one after the receiver succeeds.
+   `apply` models FUN_004503bd and must not modify inventory_count itself. */
+int game_session_dispatch_inventory_result(
+    GameSession *session, uint8_t player_slot, uint8_t item_id,
+    GameInventoryResultApply apply, void *context);
 /* Models the record reservation and duplicate rule in FUN_004662b7. Returns
    the reserved slot, or -1 when full/duplicate/invalid. Only action types 5
    and 13 are deduplicated by the source table. */
@@ -406,6 +473,26 @@ int game_session_queue_glyph_action(GameSession *session,
                                     uint8_t glyph_index);
 int game_session_pop_glyph_action(GameSession *session,
                                   GameGlyphActionRequest *out);
+/* BC_OnOff's established message route. This captures the command only; the
+   source's per-player activation threshold and final bit change are unmodeled. */
+int game_session_queue_onoff_action(GameSession *session,
+                                    uint8_t player_slot,
+                                    uint8_t island_index,
+                                    uint16_t location_index);
+int game_session_pop_onoff_action(GameSession *session,
+                                  GameOnOffActionRequest *out);
+/* FUN_0042fa0f(0x34): retain the observed category-0/type-5 selection packet
+   for the active island location. The final synchronized consumer is unknown. */
+int game_session_queue_build_selection(GameSession *session,
+                                       uint8_t player_slot,
+                                       uint8_t island_index,
+                                       uint16_t location_index,
+                                       uint16_t item_id);
+int game_session_pop_build_selection(GameSession *session,
+                                     GameBuildSelectionRequest *out);
+/* FUN_00466221 drains the local event queue; category 0 routes through
+   FUN_00465793 to FUN_004662b7, which stores type-5 requests as task slots. */
+unsigned int game_session_dispatch_build_selections(GameSession *session);
 /* PANIC message 0x3b queues type 3/subtype 0. Parity coalescing retains the
    same state after FUN_00466221 drains the local action queue. */
 int game_session_queue_island_event3_subtype0(GameSession *session,

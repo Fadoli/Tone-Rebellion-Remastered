@@ -1,4 +1,5 @@
 #include "game_session.h"
+#include "iw_construct.h"
 #include "building_render.h"
 #include "island_render_rules.h"
 #include "pad_catalog.h"
@@ -9,6 +10,8 @@
 
 _Static_assert(sizeof(GamePendingEvent) == 0x14,
                "pending event must match FUN_004662b7's 0x14-byte record");
+_Static_assert(sizeof(GameBuildSelectionRequest) == 0x10,
+               "build selection must preserve FUN_0042fa0f's 16-byte packet");
 
 static void set_location(IslandData *island, unsigned int index,
                          uint8_t renderer_class, uint16_t x, uint16_t y,
@@ -33,6 +36,18 @@ static void make_pad_catalog(PadCatalog *catalog)
         catalog->items[item].item_id = (uint16_t)item;
         catalog->items[item].movement_cost[0] = 15;
         catalog->items[item].hit_points = 15;
+    }
+}
+
+static void make_floater_catalog(FloaterCatalog *catalog)
+{
+    unsigned int tribe;
+    memset(catalog, 0, sizeof(*catalog));
+    for (tribe = 0; tribe < GAME_START_PLAYER_COUNT; ++tribe) {
+        FloaterStats *work = &catalog->rows[tribe * 9U];
+        work->hit_points = (int16_t)(2U + tribe);
+        work->attack_strength = (int16_t)tribe;
+        work->movement_speed = (int16_t)(3U + tribe);
     }
 }
 
@@ -73,19 +88,22 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
     GameSessionConfig config;
     GameSession session;
     PadCatalog catalog;
+    FloaterCatalog floater_catalog;
     char error[160];
     unsigned int player;
     unsigned int island_index;
 
     make_world(&world, islands);
     make_pad_catalog(&catalog);
+    make_floater_catalog(&floater_catalog);
     memset(&config, 0, sizeof(config));
     config.world_index = 1;
     config.difficulty = 2;
     config.selected_tribe = 3;
     config.home_island_index = 0;
     config.random_seed = 1;
-    if (!game_session_initialize(&world, islands, &catalog, &config, &session,
+    if (!game_session_initialize(&world, islands, &catalog, &floater_catalog,
+                                 &config, &session,
                                  error, sizeof(error))) {
         (void)fprintf(stderr, "session initialization failed: %s\n", error);
         assert(0);
@@ -120,22 +138,33 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
                GAME_START_INITIAL_PAD_ITEM_ID + (int32_t)player * 16);
         assert(pad->owner_id == (int32_t)player);
         assert(pad->source_flags == 0x410);
+        assert((pad->source_flags & 0x001U) == 0);
+        assert((pad->source_flags & 0x400U) != 0);
         assert(pad->chug_progress == 0 && pad->glyph_progress == 0);
         assert(pad->animation_rate == 1);
         assert(floater->island_index == start->island_index);
         assert(floater->type_index == player);
+        assert(floater->source_subtype == 0);
         assert(floater->x == start->marker_x);
         assert(floater->y == start->marker_y);
-        assert(floater->movement_speed == 3); /* four initial *work rows in floater.txt */
+        assert(floater->movement_speed == 3U + player);
         assert(game_session_count_player_floaters(&session, (uint8_t)player) == 4);
+        {
+            unsigned int work_count;
+            unsigned int total_count;
+            unsigned int percentage;
+            assert(game_session_workstr_summary(&session, (uint8_t)player,
+                &work_count, &total_count, &percentage));
+            assert(work_count == 4 && total_count == 4 && percentage == 100);
+        }
         {
             unsigned int unit;
             for (unit = 0; unit < start->floater_count; ++unit) {
                 const GameFloaterStart *worker = &session.floaters[
                     player * GAME_START_FLOATERS_PER_PLAYER + unit];
-                assert(worker->current_hit_points == 3);
-                assert(worker->max_hit_points == 3);
-                assert(worker->attack_strength == 0);
+                assert(worker->current_hit_points == 2U + player);
+                assert(worker->max_hit_points == 2U + player);
+                assert(worker->attack_strength == player);
             }
         }
         assert(session.economy[player].hall_island_index == start->island_index);
@@ -179,6 +208,15 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
         assert(game_session_repair_task_values(&session, &catalog, &repair,
                                                &current, &maximum));
         assert(current == 7 && maximum == 25);
+        assert(game_session_repair_location_values(
+            &session, &catalog, (uint8_t)economy->hall_island_index,
+            economy->hall_location_index, &current, &maximum));
+        assert(current == 7 && maximum == 25);
+        assert(!game_session_repair_location_values(
+            &session, &catalog, UINT8_MAX, 0, &current, &maximum));
+        assert(!game_session_repair_location_values(
+            &session, &catalog, (uint8_t)economy->hall_island_index,
+            UINT16_MAX, &current, &maximum));
         repair.payload_0a = INT16_MAX;
         assert(!game_session_repair_task_values(&session, &catalog, &repair,
                                                 &current, &maximum));
@@ -411,11 +449,15 @@ static void test_hall_stock_mode_creates_and_releases_linked_resource_tasks(void
     economy->hall_island_index = 0;
     economy->hall_location_index = 0;
     hall = &session.islands[0].locations[0];
-    hall->source_flags_1c = 1;
+    hall->source_flags = 0x410;
     economy->stock_mode[GAME_RESOURCE_BUILD_TONE] = 2;
     hall->resource_stock[GAME_RESOURCE_BUILD_TONE] = 149;
 
     /* FUN_0045eaa7 uses strict stock < (short(+0x4a) * 50 + 150). */
+    /* The constructor's 0x400 state bit is not the separate 0x001 request
+       gate; both are bits in the same source +0x1c word. */
+    assert(game_session_update_resource_requests(&session) == 0);
+    hall->source_flags |= 1U;
     assert(game_session_update_resource_requests(&session) == 1);
     assert(session.pending_event_count == 1);
     slot = economy->resource_task_slot[GAME_RESOURCE_BUILD_TONE];
@@ -447,7 +489,7 @@ static void test_hall_stock_mode_creates_and_releases_linked_resource_tasks(void
 
     economy->stock_mode[GAME_RESOURCE_CRYSTAL_TONE] = 2;
     hall->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 0;
-    hall->source_flags_1c = 0;
+    hall->source_flags = 0x410;
     assert(game_session_update_resource_requests(&session) == 0);
     assert(economy->resource_task_slot[GAME_RESOURCE_CRYSTAL_TONE] == -1);
 }
@@ -468,6 +510,60 @@ static void test_inventory_counts_cover_source_item_id_range(void)
     assert(!game_session_inventory_credit(&session, 1, 4, 1));
     assert(!game_session_inventory_debit(&session, 1, 34, 1));
     assert(!game_session_inventory_credit(&session, GAME_START_PLAYER_COUNT, 5, 1));
+}
+
+typedef struct InventoryResultProbe {
+    uint8_t expected_player;
+    uint8_t expected_item;
+    int result;
+    unsigned int calls;
+} InventoryResultProbe;
+
+static int apply_inventory_result_probe(void *context, uint8_t player_slot,
+                                        uint8_t item_id)
+{
+    InventoryResultProbe *probe = (InventoryResultProbe *)context;
+    assert(probe != NULL);
+    assert(player_slot == probe->expected_player);
+    assert(item_id == probe->expected_item);
+    ++probe->calls;
+    return probe->result;
+}
+
+static void test_inventory_result_debits_only_after_receiver_success(void)
+{
+    GameSession session = {0};
+    InventoryResultProbe probe = {2, 17, 1, 0};
+
+    assert(game_session_inventory_credit(&session, probe.expected_player,
+                                         probe.expected_item, 1));
+    assert(game_session_dispatch_inventory_result(
+        &session, probe.expected_player, probe.expected_item,
+        apply_inventory_result_probe, &probe));
+    assert(probe.calls == 1);
+    assert(session.economy[probe.expected_player].inventory_count[12] == 0);
+
+    assert(game_session_inventory_credit(&session, probe.expected_player,
+                                         probe.expected_item, 1));
+    probe.result = 0;
+    assert(!game_session_dispatch_inventory_result(
+        &session, probe.expected_player, probe.expected_item,
+        apply_inventory_result_probe, &probe));
+    assert(probe.calls == 2);
+    assert(session.economy[probe.expected_player].inventory_count[12] == 1);
+
+    assert(game_session_inventory_debit(&session, probe.expected_player,
+                                        probe.expected_item, 1));
+    assert(!game_session_dispatch_inventory_result(
+        &session, probe.expected_player, probe.expected_item,
+        apply_inventory_result_probe, &probe));
+    assert(probe.calls == 2);
+    assert(!game_session_dispatch_inventory_result(
+        &session, probe.expected_player, 34,
+        apply_inventory_result_probe, &probe));
+    assert(!game_session_dispatch_inventory_result(
+        &session, probe.expected_player, probe.expected_item, NULL, &probe));
+    assert(probe.calls == 2);
 }
 
 static void test_location_resource_consumption_matches_source_guards(void)
@@ -907,6 +1003,152 @@ static void test_glyph_ownership_mask_is_player_local_and_idempotent(void)
     assert(!game_session_acquire_glyph(NULL, 0, 0));
 }
 
+static void test_onoff_action_queues_target_without_changing_location_flags(void)
+{
+    GameSession session = {0};
+    GameOnOffActionRequest request;
+    unsigned int index;
+
+    session.island_count = 1;
+    session.islands[0].location_count = 2;
+    session.islands[0].locations[1].source_flags = 0x410;
+    /* FUN_0042fa0f's BC_OnOff message route reaches the type-1/subtype-0
+       receiver. Capture the target, but do not guess the unknown flow gate. */
+    assert(game_session_queue_onoff_action(&session, 2, 0, 1));
+    assert(session.onoff_action_count == 1);
+    assert(session.onoff_actions[0].player_slot == 2);
+    assert(session.onoff_actions[0].island_index == 0);
+    assert(session.onoff_actions[0].location_index == 1);
+    assert(session.islands[0].locations[1].source_flags == 0x410);
+    assert(game_session_pop_onoff_action(&session, &request));
+    assert(request.player_slot == 2 && request.island_index == 0 &&
+           request.location_index == 1);
+    assert(!game_session_pop_onoff_action(&session, &request));
+
+    assert(!game_session_queue_onoff_action(NULL, 0, 0, 0));
+    assert(!game_session_queue_onoff_action(&session,
+        GAME_START_PLAYER_COUNT, 0, 0));
+    assert(!game_session_queue_onoff_action(&session, 0, 1, 0));
+    assert(!game_session_queue_onoff_action(&session, 0, 0, 2));
+    for (index = 0; index < GAME_SESSION_MAX_ONOFF_ACTIONS; ++index) {
+        assert(game_session_queue_onoff_action(&session, 0, 0, 0));
+    }
+    assert(session.onoff_action_count == GAME_SESSION_MAX_ONOFF_ACTIONS);
+    assert(!game_session_queue_onoff_action(&session, 0, 0, 0));
+}
+
+static void test_build_selection_queues_source_packet_without_placing_item(void)
+{
+    GameSession session = {0};
+    GameBuildSelectionRequest request;
+    GameRuntimeLocation *site;
+    uint8_t task_slots[GAME_SESSION_MAX_TASKS];
+    unsigned int index;
+
+    session.island_count = 1;
+    session.islands[0].location_count = 2;
+    site = &session.islands[0].locations[1];
+    site->record_value_10 = 0;
+    site->owner_id = -1;
+
+    /* FUN_0042fa0f(0x34) queues category 0/type 5 for the already-selected
+       location. The local tick allocates a task slot, but its placement
+       consumer remains unresolved and must not be replaced with local pose. */
+    assert(game_session_queue_build_selection(&session, 2, 0, 1, 44));
+    assert(session.build_selection_count == 1);
+    assert(session.build_selections[0].category == 0);
+    assert(session.build_selections[0].player_slot == 2);
+    assert(session.build_selections[0].action_type == 5);
+    assert(session.build_selections[0].island_index_a == 0);
+    assert(session.build_selections[0].reserved_zero == 0);
+    assert(session.build_selections[0].island_index_b == 0);
+    assert(session.build_selections[0].location_index == 1);
+    assert(session.build_selections[0].item_id == 44);
+    assert(site->record_value_10 == 0 && site->owner_id == -1);
+    assert(game_session_dispatch_build_selections(&session) == 1);
+    assert(session.build_selection_count == 0);
+    assert(session.pending_event_count == 1);
+    assert(session.pending_events[0].active == 1);
+    assert(session.pending_events[0].player_id == 2);
+    assert(session.pending_events[0].priority == 1);
+    assert(session.pending_events[0].payload_0a == 0);
+    assert(session.pending_events[0].payload_0c == 0);
+    assert(session.pending_events[0].payload_0e == 1);
+    assert(session.pending_events[0].action_type == 5);
+    assert(session.pending_events[0].payload_12 == 44);
+    assert(game_session_collect_task_slots(&session, 2, task_slots,
+                                           GAME_SESSION_MAX_TASKS) == 1);
+    assert(task_slots[0] == 0);
+    assert(site->record_value_10 == 0 && site->owner_id == -1);
+
+    /* Source duplicate matching ignores player and island fields, and keys
+       the type-5 slot by payload_0c, payload_0e, and payload_12. */
+    assert(game_session_queue_build_selection(&session, 3, 0, 1, 44));
+    assert(game_session_dispatch_build_selections(&session) == 0);
+    assert(session.build_selection_count == 0);
+    assert(session.pending_event_count == 1);
+    assert(session.pending_events[1].active == 0);
+
+    assert(game_session_queue_build_selection(&session, 2, 0, 1, 45));
+    assert(game_session_pop_build_selection(&session, &request));
+    assert(request.category == 0 && request.player_slot == 2 &&
+           request.action_type == 5 && request.island_index_a == 0 &&
+           request.reserved_zero == 0 && request.island_index_b == 0 &&
+           request.location_index == 1 && request.item_id == 45);
+    assert(!game_session_pop_build_selection(&session, &request));
+
+    assert(!game_session_queue_build_selection(NULL, 0, 0, 0, 44));
+    assert(!game_session_queue_build_selection(&session,
+        GAME_START_PLAYER_COUNT, 0, 0, 44));
+    assert(!game_session_queue_build_selection(&session, 0, 1, 0, 44));
+    assert(!game_session_queue_build_selection(&session, 0, 0, 2, 44));
+
+    for (index = 0; index < GAME_SESSION_MAX_BUILD_SELECTIONS; ++index) {
+        assert(game_session_queue_build_selection(&session, 0, 0, 0, 44));
+    }
+    assert(session.build_selection_count == GAME_SESSION_MAX_BUILD_SELECTIONS);
+    assert(!game_session_queue_build_selection(&session, 0, 0, 0, 44));
+    assert(game_session_dispatch_build_selections(NULL) == 0);
+}
+
+static void test_construct_click_item_becomes_queued_build_packet(void)
+{
+    const WindowPane pane = {192, 368, 447, 471};
+    const int32_t item_ids[] = {71};
+    GameSession session = {0};
+    IwConstructState state;
+    IwConstructTransition transition;
+
+    session.island_count = 1;
+    session.islands[0].location_count = 1;
+    session.islands[0].locations[0].owner_id = -1;
+    iw_construct_init(&state, 1);
+    iw_construct_mouse_move(&state, &pane, 192, 394, item_ids, 1, &transition);
+    assert(transition.changed && transition.message_count == 1);
+    assert(transition.messages[0].code == IW_CONSTRUCT_MSG_SELECT_HOVER);
+    assert(transition.messages[0].value == 71);
+
+    iw_construct_mouse_click(&state, 2, &transition);
+    assert(transition.message_count == 2);
+    assert(transition.messages[0].code == IW_CONSTRUCT_MSG_SELECT_BUILD);
+    assert(transition.messages[0].value == 39);
+    assert(transition.messages[1].code == IW_CONSTRUCT_MSG_CLEAR_BUILD);
+    assert(game_session_queue_build_selection(
+        &session, 2, 0, 0, (uint16_t)transition.messages[0].value));
+    assert(session.build_selection_count == 1);
+    assert(game_session_dispatch_build_selections(&session) == 1);
+    assert(session.build_selection_count == 0);
+    assert(session.pending_event_count == 1);
+    assert(session.pending_events[0].player_id == 2);
+    assert(session.pending_events[0].action_type == 5);
+    assert(session.pending_events[0].payload_0a == 0);
+    assert(session.pending_events[0].payload_0c == 0);
+    assert(session.pending_events[0].payload_0e == 0);
+    assert(session.pending_events[0].payload_12 == 39);
+    assert(session.islands[0].locations[0].record_value_10 == 0);
+    assert(session.islands[0].locations[0].owner_id == -1);
+}
+
 static void test_item_animation_uses_source_flags_and_per_object_counters(void)
 {
     GameSession session;
@@ -1158,16 +1400,19 @@ static void test_initialization_is_transactional_on_bad_world(void)
     GameSession session;
     GameSession before;
     PadCatalog catalog;
+    FloaterCatalog floater_catalog;
     char error[160];
 
     make_world(&world, islands);
     make_pad_catalog(&catalog);
+    make_floater_catalog(&floater_catalog);
     world.island_count = 3;
     memset(&config, 0, sizeof(config));
     config.home_island_index = 0;
     memset(&session, 0xa5, sizeof(session));
     before = session;
-    assert(!game_session_initialize(&world, islands, &catalog, &config, &session,
+    assert(!game_session_initialize(&world, islands, &catalog, &floater_catalog,
+                                    &config, &session,
                                     error, sizeof(error)));
     assert(strstr(error, "cannot support the four start slots") != NULL);
     assert(memcmp(&session, &before, sizeof(session)) == 0);
@@ -1322,6 +1567,38 @@ static void test_floater_selection_uses_original_hit_radius_and_island(void)
     assert(game_session_floater_at(NULL, 0, 100, 100) == -1);
 }
 
+static void test_workstr_counts_subtype_zero_and_truncates_percentage(void)
+{
+    GameSession session;
+    unsigned int count = 99;
+    unsigned int total = 99;
+    unsigned int percentage = 99;
+
+    memset(&session, 0, sizeof(session));
+    session.floater_count = 4;
+    session.floaters[0].type_index = 1;
+    session.floaters[0].source_subtype = 0;
+    session.floaters[1].type_index = 1;
+    session.floaters[1].source_subtype = 1;
+    session.floaters[2].type_index = 1;
+    session.floaters[2].source_subtype = 2;
+    session.floaters[3].type_index = 2;
+    session.floaters[3].source_subtype = 0;
+
+    assert(game_session_workstr_summary(&session, 1,
+        &count, &total, &percentage));
+    assert(count == 1 && total == 3 && percentage == 33);
+    assert(game_session_workstr_summary(&session, 3,
+        &count, &total, &percentage));
+    assert(count == 0 && total == 0 && percentage == 0);
+    assert(!game_session_workstr_summary(NULL, 1,
+        &count, &total, &percentage));
+    assert(!game_session_workstr_summary(&session, GAME_START_PLAYER_COUNT,
+        &count, &total, &percentage));
+    assert(!game_session_workstr_summary(&session, 1,
+        NULL, &total, &percentage));
+}
+
 static void test_location_panel_level_uses_original_low_nibble_plus_one(void)
 {
     GameRuntimeLocation location;
@@ -1340,6 +1617,7 @@ int main(void)
     test_hall_resource_modes_cycle_through_original_three_states();
     test_hall_stock_mode_creates_and_releases_linked_resource_tasks();
     test_inventory_counts_cover_source_item_id_range();
+    test_inventory_result_debits_only_after_receiver_success();
     test_location_resource_consumption_matches_source_guards();
     test_location_move_costs_use_pad_tuple_and_runtime_multiplier();
     test_pending_event_table_matches_source_slots_and_deduplication();
@@ -1349,6 +1627,9 @@ int main(void)
     test_source_event3_subtype0_queues_and_toggles_only_player_bit();
     test_glyph_map_click_queues_packet_without_world_effect();
     test_glyph_ownership_mask_is_player_local_and_idempotent();
+    test_onoff_action_queues_target_without_changing_location_flags();
+    test_build_selection_queues_source_packet_without_placing_item();
+    test_construct_click_item_becomes_queued_build_packet();
     test_item_animation_uses_source_flags_and_per_object_counters();
     test_tone_pool_uses_two_source_counter_sequences();
     test_active_cons_and_prod_counters_finish_at_source_limits();
@@ -1357,6 +1638,7 @@ int main(void)
     test_building_placement_matches_source_runtime_initialization();
     test_floater_move_state_advances_only_simulation_assigned_destinations();
     test_floater_selection_uses_original_hit_radius_and_island();
+    test_workstr_counts_subtype_zero_and_truncates_percentage();
     test_location_panel_level_uses_original_low_nibble_plus_one();
     (void)puts("game session unit tests passed");
     return 0;

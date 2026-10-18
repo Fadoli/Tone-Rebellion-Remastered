@@ -31,6 +31,15 @@ static unsigned int distance_chebyshev(const IslandLocation *a,
     return dx > dy ? dx : dy;
 }
 
+static int is_construction_site(const IslandLocation *location)
+{
+    if (location == NULL) return 0;
+    return location->kind == ISLAND_LOCATION_PAD ||
+           location->kind == ISLAND_LOCATION_PAD_SMALL ||
+           location->kind == ISLAND_LOCATION_PAD_MEDIUM ||
+           location->kind == ISLAND_LOCATION_PAD_LARGE;
+}
+
 static int find_marker(const IslandData *island, unsigned int player,
                        uint32_t mode, uint16_t *marker_index)
 {
@@ -247,6 +256,8 @@ int game_start_assign_locations(const IslandData *islands, size_t island_count,
         unsigned int index;
         unsigned int nearest_distance = 9999U;
         unsigned int nearest_index = ISLAND_DATA_MAX_LOCATIONS;
+        unsigned int nearest_pad_distance = 9999U;
+        unsigned int nearest_pad_index = ISLAND_DATA_MAX_LOCATIONS;
         uint16_t marker_index;
         GamePlayerStart *start = &result.players[player];
 
@@ -276,10 +287,19 @@ int game_start_assign_locations(const IslandData *islands, size_t island_count,
                 nearest_distance = distance;
                 nearest_index = index;
             }
+            if (is_construction_site(candidate) && distance < nearest_pad_distance) {
+                nearest_pad_distance = distance;
+                nearest_pad_index = index;
+            }
         }
         if (nearest_index == ISLAND_DATA_MAX_LOCATIONS) {
             set_error(error, error_capacity, "no eligible class-0 location is available", player);
             return 0;
+        }
+        /* Class 0 also contains non-build records such as `levshld`. Prefer a
+           typed construction pad for the starting Hall when one is available. */
+        if (nearest_pad_index != ISLAND_DATA_MAX_LOCATIONS) {
+            nearest_index = nearest_pad_index;
         }
 
         start->island_index = (uint8_t)selected_island;

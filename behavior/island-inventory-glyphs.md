@@ -1,0 +1,14 @@
+# Inventory et glyphes
+
+## Inventory
+
+- **Observé :** `FUN_0043d45c` envoie l’ID survolé (`-1` hors grille) à `IWTextInfo`; `FUN_00439673` résout `BRIDGE%02d` (ID 5) ou `PLOT%02d` (6–33). `FUN_0043d59b` rafraîchit les compteurs sans toucher la page `+0xec`; `FUN_0043d6a3` utilise la page brute, donc une page devenue hors plage reste vide. `InvCycle` revient alors à zéro. Le clic d’un item visible émet `0x42`; un clic carte émet une requête catégorie 0/type 4. Preuves : `ev_9fc07a22727b951aa803d665ceb9d49be1f2cf511265359011b5b1a9c21be232`, `ev_45fa9501196d329d11ea55b4b6cd052663e870a194f980cb444488b0704663af`, `ev_b54bbd72eab69e7ed428a76f96a43019b3f9d5d401ea65b04fcd1d0f6285d9aa`, `ev_b6f830a22cb40d4fddda3ad559c0a6aaecf6caae982f1a6027434aa2a0f0d62e`, `ev_44c84c02349f96e801edd8d158e98219890eac2e7f94382728cb39bb6a58e816`, `ev_1f4c9fb7164cf7098c41401790393896464ff57491fc99b2d87cefa2ada748d0`.
+- **Port :** textes locaux de `plotobj.txt`, survol, sélection, curseur et requête sont modélisés et testés (`test_game_inventory`, `test_island_panel_info`, `test_game_session`). Le rendu et le hit-test conservent la page brute; un test couvre une baisse du compteur et le retour par `InvCycle`. Le compteur IDs 5–33 ne baisse qu’après résultat accepté. `FUN_004503bd` et `FUN_00452eac` ne suffisent pas à établir l’effet monde ni le débit différé; callback de résultat encore absent.
+
+## Glyphes
+
+- **Observé :** `IWGlyphs` consomme les clics vides; seul un index valide émet `0x43` et arme le mode `0x11`. Le clic carte émet la requête catégorie 3/type 3; le consommateur cherche un acteur actif du joueur avec `+4=8`. `FUN_00462a87` vérifie le masque, l’absence d’un type 8, puis la garde `DAT_004befe0` ou un tirage LCG borné par le nombre de glyphes acquis. Le flag est posé sous une garde au démarrage puis remis à zéro lors d’un chemin de retrait; son sens reste inconnu. `+0x42` stocke des coordonnées compactées, pas le glyphe.
+- **Port :** inventaire/masque, survol, curseur et mise en file du clic carte sont couverts. Aucun acteur `+4=8`, ordre `0x13` ou effet monde n’est simulé.
+- **Preuves :** `ev_8ca64092de3b786050ffad150abf2dd04b82ef777d65f1cab09f8f07936c5419`, `ev_b65156eb13978511b7f06cdb3fee86e7c2c4a37bf3cac67ad0f0badb2f999a68`, `ev_a8230350584e54954217dfeda123b6cf8d9dc6ca7211fff2385661c22cdab6ba`, `ev_352feb8e600eceb96c53f7813bd012e104389976cd0dc42358a78b6a0fcddd24`, `ev_dc8178f27dfbe5ae5eb96c11000ab02fb34bf426d8d5bfa2b5e0e778095f46d4`, `ev_b6c592d2020a3b072f7d397ada43d048a75789229d848e76ffadec2a536491cf`, `ev_78147898fdd67751ac4b9dc7f61c638b16c2a36dd616080db86817b146a0965a`, `ev_50b787cc3ab559f485e8b24562694aeeedfcc5940b0eab8001073461b3f42942`.
+
+Les notes détaillées historiques sont dans [island-panels.md](island-panels.md); pseudocode ciblé : [batch 0013](../functions/0013_batch_0009.md) et [batch 0014](../functions/0018_batch_0014.md).

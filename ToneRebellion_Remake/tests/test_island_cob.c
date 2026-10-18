@@ -131,6 +131,7 @@ static unsigned int island_ui_frame_requirement(const char *name)
 {
     if (ascii_case_equal(name, "data\\thall0.shp")) return 10;
     if (ascii_case_equal(name, "data\\thbutt.shp")) return 6;
+    if (ascii_case_equal(name, "data\\repair.shp")) return 12;
     if (ascii_case_equal(name, "data\\temphol0.shp")) return 8;
     if (ascii_case_equal(name, "data\\scarrow0.shp")) return 2;
     if (ascii_case_equal(name, "data\\glinv.shp")) return 29;
@@ -363,7 +364,7 @@ int main(int argc, char **argv)
     }
 
     if (shapes_found == 0 || halls_found != 4 || island_template_sheets_found != 4 ||
-        island_ui_sheets_found != 15 ||
+        island_ui_sheets_found != 16 ||
         health_badge_frames_found != 1 ||
         realm_badge_frames_found != 4 ||
         newgame_footer_frames_found != 1 ||

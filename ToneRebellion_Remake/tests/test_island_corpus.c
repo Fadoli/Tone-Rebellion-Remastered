@@ -4,6 +4,7 @@
 #include "pad_catalog.h"
 #include "world_map.h"
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -110,9 +111,13 @@ int main(int argc, char **argv)
         GameSessionConfig config;
         GameSession session;
         PadCatalog pad_catalog;
+        FloaterCatalog floater_catalog;
         char pad_path[1024];
+        char floater_path[1024];
         unsigned char *pad_bytes;
         size_t pad_length;
+        unsigned char *floater_bytes;
+        size_t floater_length;
 
         if (written < 0 || (size_t)written >= sizeof(path) ||
             !world_map_load_file(path, &map, error, sizeof(error))) {
@@ -134,6 +139,17 @@ int main(int argc, char **argv)
             return 1;
         }
         free(pad_bytes);
+        written = snprintf(floater_path, sizeof(floater_path), "%s/floater.txt", argv[1]);
+        floater_bytes = written < 0 || (size_t)written >= sizeof(floater_path)
+            ? NULL : read_file(floater_path, &floater_length);
+        if (floater_bytes == NULL ||
+            !floater_catalog_load(floater_bytes, floater_length, &floater_catalog,
+                                  error, sizeof(error))) {
+            (void)fprintf(stderr, "could not load local floater.txt: %s\n", error);
+            free(floater_bytes);
+            return 1;
+        }
+        free(floater_bytes);
         for (world_index = 0;
              world_index < map.worlds[0].island_count;
              ++world_index) {
@@ -151,10 +167,24 @@ int main(int argc, char **argv)
         config.home_island_index = 0; /* explicit fixture value; binary global is unresolved */
         config.random_seed = 1;
         if (!game_session_initialize(&map.worlds[0], world_islands,
-                                     &pad_catalog, &config,
+                                     &pad_catalog, &floater_catalog, &config,
                                      &session, error, sizeof(error))) {
             (void)fprintf(stderr, "game session from local corpus failed: %s\n", error);
             return 1;
+        }
+        {
+            unsigned int floater_index;
+            for (floater_index = 0; floater_index < session.floater_count;
+                 ++floater_index) {
+                const GameFloaterStart *floater = &session.floaters[floater_index];
+                const FloaterStats *stats = floater_catalog_find(
+                    &floater_catalog, floater->type_index, floater->source_subtype);
+                assert(stats != NULL);
+                assert(floater->current_hit_points == stats->hit_points);
+                assert(floater->max_hit_points == stats->hit_points);
+                assert(floater->attack_strength == stats->attack_strength);
+                assert(floater->movement_speed == stats->movement_speed);
+            }
         }
         (void)printf("initialized world 0 from its %u local ISLANDnn records (%u bridge sites, %u class-0 assignments)\n",
                      session.island_count, map.worlds[0].bridge_count,

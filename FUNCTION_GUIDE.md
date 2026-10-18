@@ -9,7 +9,9 @@ Index des notes de comportement. Elles separent les observations Ghidra/donnees 
 - [Construction sur une ile](behavior/island-construction.md)
 - [Ressources, Hall et taches](behavior/island-resources-and-tasks.md)
 - [Acces aux iles depuis la carte](behavior/world-map.md)
-- [Inventory, glyphes, Trade et Diplomatie](behavior/island-panels.md)
+- [Index des panneaux](behavior/island-panels.md) · [Inventory et glyphes](behavior/island-inventory-glyphs.md) · [Trade, diplomatie et événements](behavior/island-trade-diplomacy.md)
+- [Contrôle Repair de l'île](behavior/island-repair-control.md)
+- [Contrôle On/Off de l'île](behavior/island-onoff-control.md)
 - [Enemy AI and autonomous unit behavior](behavior/enemy-ai.md)
 
 ## Sources detaillees

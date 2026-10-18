@@ -43,6 +43,27 @@ static void test_ten_item_pages_and_wrap(void)
     assert(game_inventory_next_page(8, 29) == 0);
 }
 
+static void test_shrunk_inventory_keeps_source_page_until_cycle(void)
+{
+    GameInventoryEntry entries[GAME_INVENTORY_ITEM_COUNT];
+    GameInventoryEntry page[GAME_INVENTORY_PAGE_SIZE];
+    size_t index;
+
+    for (index = 0; index < GAME_INVENTORY_ITEM_COUNT; ++index) {
+        entries[index].item_id = (uint8_t)(GAME_INVENTORY_ITEM_FIRST_ID + index);
+        entries[index].count = 1;
+    }
+
+    /* Source FUN_0043d59b refreshes the item count without resetting +0xec;
+       FUN_0043d6a3 therefore draws no entries until InvCycle wraps to zero. */
+    assert(game_inventory_page(entries, 9, 1, page) == 0);
+    assert(game_inventory_hit_test(entries, 9, 1, 110, 130,
+                                   100, 100, 600, 324) == -1);
+    assert(game_inventory_next_page(1, 9) == 0);
+    assert(game_inventory_page(entries, 9, 0, page) == 9);
+    assert(page[0].item_id == GAME_INVENTORY_ITEM_FIRST_ID);
+}
+
 static void test_empty_and_null_inputs(void)
 {
     uint16_t counts[GAME_INVENTORY_ITEM_COUNT] = {0};
@@ -120,6 +141,7 @@ int main(void)
 {
     test_collects_owned_items_in_source_order();
     test_ten_item_pages_and_wrap();
+    test_shrunk_inventory_keeps_source_page_until_cycle();
     test_empty_and_null_inputs();
     test_source_inventory_cell_hit_test();
     test_icons_are_centered_by_opaque_bounds();

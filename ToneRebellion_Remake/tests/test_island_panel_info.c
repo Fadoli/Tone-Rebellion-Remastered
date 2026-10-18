@@ -45,6 +45,16 @@ int main(int argc, char **argv)
     assert(island_panel_info_default_key(WINDOW_ISLAND_PANEL_DIPLOMACY) == NULL);
     assert(island_panel_info_default_key(WINDOW_ISLAND_PANEL_TRADE) == NULL);
     assert(island_panel_info_default_key(WINDOW_ISLAND_PANEL_GENERAL) == NULL);
+    assert(island_panel_player_for_mode(WINDOW_ISLAND_PANEL_TASKS, 2, -1) == 2);
+    assert(island_panel_player_for_mode(WINDOW_ISLAND_PANEL_TASKS, 4, -1) == -1);
+    assert(island_panel_player_for_mode(WINDOW_ISLAND_PANEL_GLYPHS, 2, -1) == -1);
+    assert(island_panel_player_for_mode(WINDOW_ISLAND_PANEL_GLYPHS, 2, 2) == 2);
+    assert(island_panel_repair_button_visible(0x25, 0, 0, 9, 10));
+    assert(island_panel_repair_button_visible(0x35, 1, 1, 9, 10));
+    assert(!island_panel_repair_button_visible(0x25, 0, 0, 10, 10));
+    assert(!island_panel_repair_button_visible(0x25, 1, 0, 9, 10));
+    assert(!island_panel_repair_button_visible(0x24, 0, 0, 9, 10));
+    assert(!island_panel_repair_button_visible(0x35, 1, 1, 10, 10));
     assert(island_panel_info_cryptic_key(0, key, sizeof(key)));
     assert(strcmp(key, "CRYPTIC0") == 0);
     assert(island_panel_info_cryptic_key(1, key, sizeof(key)));

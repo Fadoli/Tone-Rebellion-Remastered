@@ -22,6 +22,13 @@
 | `search_strings` | `ev_ca6209d841056d1b69884f43a204d17713c19c2756570da82baaec770609aa1f` | `FA_*`, 22 libellés | Les chaînes et adresses forment une table contiguë avec un pas de 0x10 octets, IDs 0–21. |
 | `procedure_pseudo_code` | `ev_fd05027dd8dfa2720031c58c1dfbd4ddc7a335d8b87ce01675e83b1b460a7991` | `FUN_00466fe4`, `0x466fe4` | L’allocateur limite la catégorie 4 aux sous-types 9–17 et les autres catégories à 0–8. |
 | `procedure_pseudo_code` | `ev_d6c275efa826bd914507bd53c4c3f4d979737f6bb54430df661e8609724bd78d` | `FUN_0041d70d`, `0x41d70d` | Charge exactement 18 noms `xSpores`, indexés par paires de sous-type pour l’affichage. |
+| `procedure_pseudo_code` | `ev_2d5d4353c4c551b2a2466b6ea1e94e34b62fe0ef86797db366eca77c4a38fb4f` | `FUN_00420a55`, `0x420a55` | Filtre mode 2 et sélection d'emplacements sur l'île courante. |
+| `procedure_pseudo_code` | `ev_2f27ef00567b68d5a8d3ffd44f86f6a060dead0acebb0b98c93fd7e2b36b128b` | `FUN_0041e28e`, `0x41e28e` | Choix aléatoire pondéré par les scores parmi les candidats. |
+| `procedure_pseudo_code` | `ev_8abb08fe878eeb4b95b90b95aa69f3315b673dc32d5016dbd3cf3274f4ac8493` | `FUN_00420635`, `0x420635` | Score de cible basé sur le helper de distance. |
+| `procedure_pseudo_code` | `ev_ff0149927c5527e42ad97c0ccb0ecff046537edadb26eb9fecf60e1403b49d28` | `FUN_0041e569`, `0x41e569` | Cadence de reevaluation et conversion de l'emplacement cible par le Spore. |
+| `procedure_pseudo_code` | `ev_6745ea13e551cd4bc25dc59c623fb7adf0a818c613fdb948c7f4b034a74cac52` | `FUN_004204bc`, `0x4204bc` | Application de dégâts, flag de mort et attribution de la source éventuelle. |
+| `procedure_pseudo_code` | `ev_f6fad36a24d0df23600189218f8f97cf25c8ae1078856cf1f0526c0fd092aedd` | `FUN_00460460`, `0x460460` | Comptes par île pour les sites de type 4; écritures de temporisateur dans les records d'emplacement (`+0x45a`). |
+| `procedure_pseudo_code` | `ev_51318b865289347ea016897f2f58125ee6479e16683f3d13844fb280a52d10df` | `FUN_00460989`, `0x460989` | Consomme les comptes/compteurs insulaires et pose le flag `0x80` sur certains floaters Leviathan non-Spore. |
 | `analyze_function` | `ev_0a3a5baa3dd85e9e4d8e576461b4c0ac5dde6dd1cb0ba6135191f046f1f98a93` | `FUN_00422d27`, `0x422d27` | Mouvement vers une destination et condition d'arrivée sur les deux axes. |
 | `analyze_function` | `ev_4447fdd9631929efaeb1d177248260afbbd55aec3775ce0996e1f9b427cb4e7f` | `FUN_0041d8e1` | Pseudocode, appels et chaînes associés. |
 | `analyze_function` | `ev_b6c592d2020a3b072f7d397ada43d048a75789229d848e76ffadec2a536491cf` | `FUN_0041c1d6` | Pseudocode, appels et chaînes associés. |
@@ -29,6 +36,19 @@
 | `analyze_function` | `ev_5e71afc99fd4ab5273b4c07b5dc6e556212856d3462a715fb6a2569b19ce1407` | `FUN_0040bf98` | Réponse dossier dépassait le budget MCP ; pseudocode complet récupéré via `inspect_analysis_view`, Evidence de projection `ev_b27af7c4aa7fe81484bab129b8d52fbeac54c332a8df1d60fb47c7d01c7eb5ab`, 19 350 unités UTF-16. |
 | `analyze_function` | `ev_6c3ec9c58f2e2ec6ef837d8737ba3dfece6d35c11a918338523e688a6746c25a` | `FUN_0041e569` | Pseudocode complet obtenu par pagination de la projection conservée, 20 237 unités UTF-16. |
 | `analyze_function` | `ev_6ac7cc6650dc8a0e9b412c055606948d1c6dbbdd3e6c6df0a7fcc1551764419e` | `FUN_0042fa0f` | Réponse paginée du registre Evidence ; pseudocode complet (31 897 unités UTF-16). |
+| `procedure_pseudo_code` | `ev_dfa9260d630c5590f535d54281a0b8f2c2767e3ca99d4a00ffdd596b3104b7eb` | `FUN_0044003d`, `0x44003d` | Émission de `0x32` selon le slot sélectionné et `+0x18`. |
+| `procedure_pseudo_code` | `ev_196d5ce18818030f061f610add4e421b67b51a08a81cfe4b30f91fd722d4a4dc` | `FUN_0042970c`, `0x42970c` | Routage selon mode 0/1/2 du dispatch. |
+| `procedure_pseudo_code` | `ev_1a06455495cb08c19a3e95bb1bd8abb4f5f2df731cdd09e809cc8c2a78f504f9` | `FUN_0041c46f`, `0x41c46f` | Inscription du callback au slot 3; état initial choisi 0 ou 8. |
+| `procedure_pseudo_code` | `ev_a8230350584e54954217dfeda123b6cf8d9dc6ca7211fff2385661c22cdab6ba` | `FUN_0042fa0f`, `0x42fa0f` | Traitement partagé du message `0x32` après le switch. |
+| `procedure_pseudo_code` | `ev_94eb91d39af9704767219d6df99b523c4408544d37cebde8472793c068780572` | `FUN_0046c402`, `0x46c402` | Appel indirect du callback au slot actif. |
+| `procedure_pseudo_code` | `ev_e485a0839f32ca445383d2eab74cff5f5c3744ea6dbfc9bfc1b3c00a0edaa26a` | `FUN_0046c640`, `0x46c640` | Écriture de l'index actif du dispatch. |
+| `procedure_pseudo_code` | `ev_adba0f04ecf4c24995e49e0f36cf9efcfa8397a704bdfbe072742e0e43adab60` | `FUN_0046cbe0`, `0x46cbe0` | Inscription d'un callback dans la table à pas `0x130`. |
+| `procedure_pseudo_code` | `ev_313d0ccc3d43b5ed7e5d13b4b18d8ceca9606e76b6650bf123b770a1b8afe5f1` | `FUN_0046c1b4`, `0x46c1b4` | Dispatch du chemin secondaire du mode 1. |
+| `procedure_pseudo_code` | `ev_9b2f8d28b701a828ee0fa8c8a2a7b9ed1ac5edc678f92d8c58589e8d2a034487` | `FUN_0046c3bc`, `0x46c3bc` | Passage du mode 2 par la file locale. |
+| `procedure_pseudo_code` | `ev_ed92b375145a0b030776f82d115ccc237230777746be74169b6aac305580d646` | `FUN_0046c371`, `0x46c371` | Dispatch indirect du callback/handler. |
+| `procedure_pseudo_code` | `ev_45c01a5996eb93f262ba6c323b4204385b379cf618c015fe98b5915f6ba131f4` | `FUN_0044003d`, `0x44003d` | Références entrantes : seul entrant code résolu est une thunk; appelant fonctionnel non établi. |
+| `procedure_pseudo_code` | `ev_402be0529a7ef91e812f2d71112211850a8109145326f5a6fb277d1fc8fe21ca` | `FUN_00469cce`, `0x469cce` | Initialisation de l'index actif à -1. |
+| `procedure_pseudo_code` | `ev_21bbfcb1cfb92364a864a26226f542128edeaed0b08030bf8e4652aab1e6e24f` | `FUN_0046b752`, `0x46b752` | Une entrée de file peut modifier l'état actif via `FUN_0046c640`; lien au clic inconnu. |
 | `analyze_function` | `ev_0d862ab7ac54cca2b239537d84431bd5a758100fdc0d68f7cc958f8f31cdbdf6` | `FUN_004337d9` | Réponse paginée du registre Evidence ; pseudocode complet (23 161 unités UTF-16). |
 | `analyze_function` | `ev_2c01d69c5cc4626ed22aa4e310f991bfd5bbd1180eefe950c3ecf47a1b8658eb` | `FUN_00450a71` | Réponse paginée du registre Evidence ; pseudocode complet (28 097 unités UTF-16). |
 | `analyze_function` | `ev_fbdcb9f3b27de341d258e85d68d67d6f9dbe6fb0971f77f99f80d7c8484fa98c` | `FUN_0046cd22` | Réponse paginée du registre Evidence ; pseudocode complet (24 375 unités UTF-16). |
@@ -75,6 +95,11 @@
 | `analyze_function` | `ev_78147898fdd67751ac4b9dc7f61c638b16c2a36dd616080db86817b146a0965a` | `FUN_0040ff5b`, `0x40ff5b` | Chargement des archives COB : compteur, table de noms de 50 octets, table d’offsets de 4 octets et plafonds de capacité. |
 | `analyze_function` | `ev_dbed377a96c46e7249eb471314289a7bc5e14e413dae2d53c986f75f10265626` | `FUN_00474b00`, `0x474b00` | Helper appelé pour ouvrir/lire le fichier de configuration COB. |
 | `analyze_function` | `ev_87da4088d973d81a945f8e3e9d68ea79ba722b3a0ebeefcfa1504b0232847a05` | `FUN_00474190`, `0x474190` | Helper de lecture fichier du runtime, noté pour le contexte du chargement ; aucune sémantique COB spécifique ne lui est attribuée. |
+| `analyze_function` | `ev_15c8370778d014104c360b1fc45e6174add31e7ce2b771b4a2f6eba9473c9fc0` | `FUN_00440567` | Formule d'affichage `WORKSTR` et lecture `DAT_006191f8`. |
+| `analyze_function` | `ev_73b7a5d00a820cccc744dfd2168d1f0704c9ce37dda703814c69df8fc9be7ca5` | `FUN_0046562b` | Comptage par premier dword de catégorie/type et filtre sur le second dword. |
+| `inspect_native_instruction` | `ev_20c6e74d9bf368220195a9f1340f0eb4feaa54a95c1d25b61a49ebad099863ab` | `FUN_00440567` | Calcule `count(+4==0) * 100.0 / count(tous)` puis convertit vers l'entier affiché. |
+| `xrefs` / `read_bytes` | `ev_35dd32f9b0d9fd7b10dddf106f9517fe0eb352d969838552bc284f20e0c80c71`, `ev_785c735c398b2b79aed64f722b3b9dc00fbd787d8f894a5c1679744c01aad41c` | `DAT_006191f8` | Xrefs examinés en lecture; cinq slots échantillonnés nuls sur disque. |
+| `analyze_function` | `ev_0ca802ac15043c61c073f6d68546619fc924a4ba10fd4d9f04e203668dc62ed7` | `FUN_00466fe4` | L'allocateur écrit les deux premiers dwords depuis ses paramètres type/sous-type; bornes de catégories et sous-types. |
 
 ## Sources locales de données du jeu
 

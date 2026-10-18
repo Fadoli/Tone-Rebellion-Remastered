@@ -1,4 +1,5 @@
 #include "island_panel_info.h"
+#include "game_start.h"
 
 #include <limits.h>
 #include <stdio.h>
@@ -9,6 +10,31 @@ void island_panel_select_floater(IslandPanelSelection *selection,
 {
     if (selection == NULL) return;
     selection->floater_index = floater_index;
+}
+
+int island_panel_player_for_mode(int panel_mode, int active_player,
+                                 int selected_hall_player)
+{
+    if (panel_mode == WINDOW_ISLAND_PANEL_TASKS) {
+        return active_player >= 0 && active_player < GAME_START_PLAYER_COUNT
+            ? active_player : -1;
+    }
+    return selected_hall_player;
+}
+
+int island_panel_repair_button_visible(int item_id, int owner_id,
+                                       int current_player_id,
+                                       int current_hit_points,
+                                       int maximum_hit_points)
+{
+    int player_item_id;
+    if (current_player_id < 0 || current_player_id >= GAME_START_PLAYER_COUNT ||
+        owner_id != current_player_id || current_hit_points < 0 ||
+        maximum_hit_points <= 0 || current_hit_points >= maximum_hit_points) {
+        return 0;
+    }
+    player_item_id = item_id - owner_id * 16;
+    return player_item_id >= 0x25 && player_item_id <= 0x34;
 }
 
 void island_panel_finish_inventory_target(int *panel_mode,

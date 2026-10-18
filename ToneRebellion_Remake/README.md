@@ -19,5 +19,6 @@ Windows executable: `ToneRebellion_Remake.exe` beside this file. See [build and 
 - [Building rendering](docs/building-rendering.md)
 - [Graphics notes by screen](GRAPHICS_RECONSTRUCTION.md)
 - [Open tasks](TODO.md)
+- [Ported features and limits](docs/implemented.md)
 - [Movement traces](MOVEMENT_REVERSE_ENGINEERING.md)
 - [Original behavior and evidence](../FUNCTION_GUIDE.md)

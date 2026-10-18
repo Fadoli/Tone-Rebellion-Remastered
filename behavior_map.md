@@ -43,6 +43,7 @@ Le démarrage paraît charger des tables textuelles de localisation/données, de
 - `FUN_0042ef17` récupère ces messages, arrête son traitement sur `WM_QUIT` (`0x12`), traite séparément certains messages clavier et ajoute d’autres entrées à une file interne.
 - `FUN_0042eba0` maintient une file bornée à huit entrées. Son code distingue notamment `WM_MOUSEMOVE` (`0x200`), les touches enfoncées/relâchées (`0x100`/`0x101`) et les boutons gauche/droit (`0x201`, `0x202`, `0x204`, `0x205`), avec coordonnées/modificateurs issus des paramètres de messages.
 - `FUN_0042ee48` retire les événements de cette file ; `FUN_00469f56` les consomme et met à jour l’état de fenêtres/focus. Des appels indirects via des tables ou pointeurs de fonctions sont présents.
+- Pour le contrôle `IWMove`, `FUN_0044003d` peut émettre `0x32`; `FUN_0042970c` choisit ensuite selon le mode entre callback, file de requêtes et file locale. `FUN_0041c46f` inscrit `FUN_0042fa0f` au slot 3, mais ni le mode 0 ni le slot 3 actif au clic ne sont démontrés. La route vers ce callback reste donc conditionnelle (`ev_dfa9260d630c5590f535d54281a0b8f2c2767e3ca99d4a00ffdd596b3104b7eb`, `ev_196d5ce18818030f061f610add4e421b67b51a08a81cfe4b30f91fd722d4a4dc`, `ev_1a06455495cb08c19a3e95bb1bd8abb4f5f2df731cdd09e809cc8c2a78f504f9`). Voir [contrôles de déplacement](behavior/island-units-and-movement.md).
 
 ### Interprétation
 

@@ -83,11 +83,99 @@ static void test_full_outbox_preserves_offer_table(void)
     assert(session.economy[0].trade_offer[0][0] == 10);
 }
 
+static void test_dispatch_clamps_and_transfers_hall_stocks(void)
+{
+    GameSession session;
+    GameTradeRequest request = {0};
+    GameRuntimeLocation *source;
+    GameRuntimeLocation *target;
+
+    memset(&session, 0, sizeof(session));
+    session.island_count = 1;
+    session.islands[0].location_count = 2;
+    session.economy[1].hall_location_index = 0;
+    session.economy[2].hall_location_index = 1;
+    source = &session.islands[0].locations[0];
+    target = &session.islands[0].locations[1];
+    source->resource_stock[0] = 15;
+    source->resource_stock[1] = 7;
+    source->resource_stock[2] = 0;
+    target->resource_stock[0] = 3;
+    request.source_player = 1;
+    request.target_player = 2;
+    request.amount[0] = 20;
+    request.amount[1] = 5;
+    request.amount[2] = 9;
+
+    assert(game_session_apply_trade_request(&session, &request));
+    assert(source->resource_stock[0] == 0 && target->resource_stock[0] == 18);
+    assert(source->resource_stock[1] == 2 && target->resource_stock[1] == 5);
+    assert(source->resource_stock[2] == 0 && target->resource_stock[2] == 0);
+
+    request.amount[0] = UINT16_MAX; /* Signed-short negative: zero transfer. */
+    request.amount[1] = 0;
+    request.amount[2] = 0;
+    source->resource_stock[0] = 10;
+    target->resource_stock[0] = 4;
+    assert(game_session_apply_trade_request(&session, &request));
+    assert(source->resource_stock[0] == 10 && target->resource_stock[0] == 4);
+
+    request.source_player = GAME_START_PLAYER_COUNT;
+    assert(!game_session_apply_trade_request(&session, &request));
+    request.source_player = 1;
+    session.economy[2].hall_location_index = 2;
+    assert(!game_session_apply_trade_request(&session, &request));
+    assert(!game_session_apply_trade_request(NULL, &request));
+    assert(!game_session_apply_trade_request(&session, NULL));
+}
+
+static void test_queued_transfers_dispatch_on_local_tick(void)
+{
+    GameSession session;
+    GameRuntimeLocation *source;
+    GameRuntimeLocation *target;
+
+    memset(&session, 0, sizeof(session));
+    session.island_count = 1;
+    session.islands[0].location_count = 2;
+    session.economy[1].hall_location_index = 0;
+    session.economy[2].hall_location_index = 1;
+    source = &session.islands[0].locations[0];
+    target = &session.islands[0].locations[1];
+    source->resource_stock[0] = 12;
+    source->resource_stock[1] = 6;
+    session.economy[1].trade_offer[0][1] = 20;
+    session.economy[1].trade_offer[1][1] = 4;
+
+    assert(game_session_commit_trade_offers(&session, 1) == 1);
+    assert(source->resource_stock[0] == 12 && target->resource_stock[0] == 0);
+    assert(session.trade_request_count == 1);
+    assert(game_session_dispatch_trade_requests(&session) == 1);
+    assert(source->resource_stock[0] == 0 && target->resource_stock[0] == 12);
+    assert(source->resource_stock[1] == 2 && target->resource_stock[1] == 4);
+    assert(session.trade_request_count == 0);
+    assert(game_session_dispatch_trade_requests(&session) == 0);
+    assert(game_session_dispatch_trade_requests(NULL) == -1);
+
+    /* A missing receiver context leaves the oldest request pending. */
+    session.trade_requests[0].source_player = 1;
+    session.trade_requests[0].target_player = 2;
+    session.trade_request_count = 1;
+    session.economy[2].hall_location_index = 2;
+    assert(game_session_dispatch_trade_requests(&session) == 0);
+    assert(session.trade_request_count == 1);
+    session.economy[2].hall_location_index = 1;
+    assert(game_session_dispatch_trade_requests(&session) == 1);
+    assert(session.trade_request_count == 0);
+}
+
 int main(void)
 {
     test_source_cell_geometry();
     test_click_steps_and_clamps_are_player_local();
     test_commit_emits_nonempty_targets_in_source_order();
     test_full_outbox_preserves_offer_table();
+    test_dispatch_clamps_and_transfers_hall_stocks();
+    test_queued_transfers_dispatch_on_local_tick();
     return 0;
 }

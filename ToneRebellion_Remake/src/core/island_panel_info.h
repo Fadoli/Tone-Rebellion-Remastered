@@ -44,6 +44,18 @@ typedef enum IslandLocationActionControl {
     ISLAND_LOCATION_ACTION_HALL_MOVE = 2
 } IslandLocationActionControl;
 
+/* TASKS belongs to the active player even when their Hall is not selected;
+   the other Hall-only panels continue to require the selected Hall context. */
+int island_panel_player_for_mode(int panel_mode, int active_player,
+                                 int selected_hall_player);
+
+/* The source repair route accepts owned item IDs 0x25..0x34 and checks
+   current +0x34 against FUN_00450978's maximum before routing. */
+int island_panel_repair_button_visible(int item_id, int owner_id,
+                                       int current_player_id,
+                                       int current_hit_points,
+                                       int maximum_hit_points);
+
 typedef struct IslandPanelSelection {
     int32_t location_index;
     int32_t floater_index;

@@ -16,6 +16,22 @@ static void set_error(char *error, size_t capacity, const char *message)
     error[capacity - 1] = '\0';
 }
 
+static int is_construction_location(const IslandLocation *location)
+{
+    uint8_t site_size;
+    return iw_construct_site_size(location, &site_size);
+}
+
+static int island_has_typed_construction_sites(const IslandData *source)
+{
+    unsigned int index;
+    for (index = 0; index < source->location_count; ++index) {
+        if (source->locations[index].renderer_class == 0 &&
+            is_construction_location(&source->locations[index])) return 1;
+    }
+    return 0;
+}
+
 static int choose_empty_class0(const IslandData *source,
                                GameRuntimeIsland *runtime,
                                ToneRng *rng,
@@ -24,10 +40,12 @@ static int choose_empty_class0(const IslandData *source,
     unsigned int available = 0;
     unsigned int choice;
     unsigned int index;
+    int prefer_typed_sites = island_has_typed_construction_sites(source);
     int selected;
 
     for (index = 0; index < source->location_count; ++index) {
         if (source->locations[index].renderer_class == 0 &&
+            (!prefer_typed_sites || is_construction_location(&source->locations[index])) &&
             runtime->locations[index].owner_id == -1 &&
             runtime->locations[index].record_value_10 == 0) {
             ++available;
@@ -39,6 +57,7 @@ static int choose_empty_class0(const IslandData *source,
     choice = (unsigned int)selected;
     for (index = 0; index < source->location_count; ++index) {
         if (source->locations[index].renderer_class != 0 ||
+            (prefer_typed_sites && !is_construction_location(&source->locations[index])) ||
             runtime->locations[index].owner_id != -1 ||
             runtime->locations[index].record_value_10 != 0) continue;
         if (choice == 0) {
@@ -191,9 +210,13 @@ static int assign_class0_links(const WorldDefinition *world,
         unsigned int island_index;
         for (island_index = 0; island_index + 1U < world->island_count; ++island_index) {
             unsigned int location_index;
+            int prefer_typed_sites = island_has_typed_construction_sites(
+                &sources[island_index]);
             for (location_index = 0; location_index < sources[island_index].location_count;
                  ++location_index) {
                 if (sources[island_index].locations[location_index].renderer_class == 0 &&
+                    (!prefer_typed_sites || is_construction_location(
+                        &sources[island_index].locations[location_index])) &&
                     session->islands[island_index].locations[location_index].owner_id == -1 &&
                     session->islands[island_index].locations[location_index].record_value_10 == 0) {
                     ++total_free;
@@ -276,6 +299,7 @@ static int source_value_34_max(const PadCatalog *catalog,
 int game_session_initialize(const WorldDefinition *world,
                             const IslandData *islands_by_world_index,
                             const PadCatalog *pad_catalog,
+                            const FloaterCatalog *floater_catalog,
                             const GameSessionConfig *config,
                             GameSession *out,
                             char *error, size_t error_capacity)
@@ -290,9 +314,10 @@ int game_session_initialize(const WorldDefinition *world,
 
     if (error != NULL && error_capacity != 0) error[0] = '\0';
     if (world == NULL || islands_by_world_index == NULL || pad_catalog == NULL ||
+        floater_catalog == NULL ||
         config == NULL || out == NULL) {
         set_error(error, error_capacity,
-                  "world, island records, pad catalog, config and output are required");
+                  "world, island records, pad/floater catalogs, config and output are required");
         return 0;
     }
     if (world->island_count < GAME_START_PLAYER_COUNT ||
@@ -403,28 +428,38 @@ int game_session_initialize(const WorldDefinition *world,
             .locations[location_index].y;
         for (unit = 0; unit < start->floater_count; ++unit) {
             GameFloaterStart *floater;
+            const FloaterStats *stats = floater_catalog_find(
+                floater_catalog, start->floater_type_index, 0);
             if (floater_cursor >= GAME_SESSION_MAX_FLOATERS) {
                 set_error(error, error_capacity, "initial floater count exceeds session capacity");
+                return 0;
+            }
+            if (stats == NULL || stats->hit_points < 0 ||
+                stats->hit_points > (int16_t)UINT8_MAX ||
+                stats->attack_strength < 0 ||
+                stats->attack_strength > (int16_t)UINT8_MAX ||
+                stats->movement_speed < 0) {
+                set_error(error, error_capacity,
+                          "initial floater stats are missing or out of range");
                 return 0;
             }
             floater = &next.floaters[floater_cursor++];
             floater->island_index = start->island_index;
             floater->type_index = start->floater_type_index;
+            floater->source_subtype = 0;
             floater->owner_slot = (uint8_t)island_index;
-            /* FUN_00466fe4 initializes current hits to FUN_00420f28's max.
-               Each tribe's class-0 *work row in floater.txt is 3 HP and
-               0 attack strength. */
-            floater->current_hit_points = 3;
-            floater->max_hit_points = 3;
-            floater->attack_strength = 0;
+            /* FUN_00466fe4 initializes current hits to the loaded max HP.
+               The type/subtype lookup uses the *work row in floater.txt. */
+            floater->current_hit_points = (uint8_t)stats->hit_points;
+            floater->max_hit_points = (uint8_t)stats->hit_points;
+            floater->attack_strength = (uint8_t)stats->attack_strength;
             floater->x = start->marker_x;
             floater->y = start->marker_y;
             floater->destination_x = start->marker_x;
             floater->destination_y = start->marker_y;
-            /* FUN_0046466f creates each initial unit with class 0. The
-               corresponding *work entries in floater.txt have speed 3;
-               FUN_00422d27 reads that stat through FUN_00464242 (+0x0c). */
-            floater->movement_speed = 3;
+            /* FUN_0046466f creates each initial unit with subtype 0;
+               FUN_00422d27 reads speed through FUN_00464242 (+0x0c). */
+            floater->movement_speed = (uint16_t)stats->movement_speed;
         }
     }
     next.floater_count = (uint8_t)floater_cursor;
@@ -501,16 +536,30 @@ int game_session_repair_task_values(const GameSession *session,
                                     const GamePendingEvent *event,
                                     int16_t *current, int16_t *maximum)
 {
-    const GameRuntimeLocation *location;
-    int16_t computed_maximum;
-
     if (session == NULL || pad_catalog == NULL || event == NULL ||
         current == NULL || maximum == NULL || event->active == 0 ||
         event->action_type != 0x12 || event->payload_0a < 0 ||
         event->payload_0e < 0 || event->payload_0a >= session->island_count) return 0;
-    if ((uint16_t)event->payload_0e >=
-        session->islands[event->payload_0a].location_count) return 0;
-    location = &session->islands[event->payload_0a].locations[event->payload_0e];
+    return game_session_repair_location_values(session, pad_catalog,
+        (uint8_t)event->payload_0a, (uint16_t)event->payload_0e,
+        current, maximum);
+}
+
+int game_session_repair_location_values(const GameSession *session,
+                                        const PadCatalog *pad_catalog,
+                                        uint8_t island_index,
+                                        uint16_t location_index,
+                                        int16_t *current, int16_t *maximum)
+{
+    const GameRuntimeIsland *island;
+    const GameRuntimeLocation *location;
+    int16_t computed_maximum;
+
+    if (session == NULL || pad_catalog == NULL || current == NULL ||
+        maximum == NULL || island_index >= session->island_count) return 0;
+    island = &session->islands[island_index];
+    if (location_index >= island->location_count) return 0;
+    location = &island->locations[location_index];
     if (!source_value_34_max(pad_catalog, location, &computed_maximum) ||
         location->source_value_34 == -1 || computed_maximum <= 0) return 0;
     *current = location->source_value_34;
@@ -874,6 +923,41 @@ unsigned int game_session_count_player_floaters(const GameSession *session,
     return count;
 }
 
+int game_session_workstr_summary(const GameSession *session,
+                                 uint8_t type_index,
+                                 unsigned int *count,
+                                 unsigned int *total,
+                                 unsigned int *percentage)
+{
+    unsigned int subtype_zero = 0;
+    unsigned int type_total = 0;
+    unsigned int limit;
+    unsigned int i;
+
+    if (count != NULL) *count = 0;
+    if (total != NULL) *total = 0;
+    if (percentage != NULL) *percentage = 0;
+    if (session == NULL || type_index >= GAME_START_PLAYER_COUNT ||
+        count == NULL || total == NULL || percentage == NULL) return 0;
+
+    limit = session->floater_count;
+    if (limit > GAME_SESSION_MAX_FLOATERS) limit = GAME_SESSION_MAX_FLOATERS;
+    for (i = 0; i < limit; ++i) {
+        const GameFloaterStart *floater = &session->floaters[i];
+        if (floater->type_index != type_index) continue;
+        ++type_total;
+        if (floater->source_subtype == 0) ++subtype_zero;
+    }
+    *count = subtype_zero;
+    *total = type_total;
+    if (type_total > 0) {
+        /* Source performs this ratio in floating point and converts the
+           nonnegative result to int; integer division has same truncation. */
+        *percentage = (subtype_zero * 100U) / type_total;
+    }
+    return 1;
+}
+
 uint8_t game_session_location_display_level(const GameRuntimeLocation *location)
 {
     if (location == NULL) return 0;
@@ -1042,7 +1126,7 @@ unsigned int game_session_update_resource_requests(GameSession *session)
         for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
             const int16_t linked_slot = economy->resource_task_slot[resource];
             const int request_active = economy->stock_mode[resource] == 2 &&
-                (hall->source_flags_1c & 1U) != 0 &&
+                (hall->source_flags & 1U) != 0 &&
                 hall->resource_stock[resource] <
                     hall->source_capacity_4a * 50 + 150;
             if (request_active && linked_slot == -1) {
@@ -1157,6 +1241,58 @@ int game_session_pop_trade_request(GameSession *session, GameTradeRequest *out)
     return 1;
 }
 
+int game_session_apply_trade_request(GameSession *session,
+                                     const GameTradeRequest *request)
+{
+    GameRuntimeLocation *source;
+    GameRuntimeLocation *target;
+    unsigned int resource;
+
+    if (session == NULL || request == NULL ||
+        request->source_player >= GAME_START_PLAYER_COUNT ||
+        request->target_player >= GAME_START_PLAYER_COUNT) return 0;
+    source = player_hall(session, request->source_player);
+    target = player_hall(session, request->target_player);
+    if (source == NULL || target == NULL) return 0;
+
+    for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
+        int32_t amount = (int16_t)request->amount[resource];
+        int32_t stock = (int16_t)source->resource_stock[resource];
+        uint16_t transfer;
+
+        if (amount < 0) amount = 0;
+        if (stock < 0) stock = 0;
+        if (amount > stock) amount = stock;
+        transfer = (uint16_t)amount;
+        source->resource_stock[resource] =
+            (uint16_t)(source->resource_stock[resource] - transfer);
+        target->resource_stock[resource] =
+            (uint16_t)(target->resource_stock[resource] + transfer);
+    }
+    return 1;
+}
+
+int game_session_dispatch_trade_requests(GameSession *session)
+{
+    int dispatched = 0;
+
+    if (session == NULL ||
+        session->trade_request_count > GAME_SESSION_MAX_TRADE_REQUESTS) {
+        return -1;
+    }
+    while (session->trade_request_count != 0) {
+        GameTradeRequest *request = &session->trade_requests[0];
+        if (!game_session_apply_trade_request(session, request)) break;
+        /* Apply first so a request with a missing Hall is not lost. */
+        {
+            GameTradeRequest consumed;
+            if (!game_session_pop_trade_request(session, &consumed)) break;
+        }
+        ++dispatched;
+    }
+    return dispatched;
+}
+
 int game_session_toggle_diplomacy(GameSession *session, uint8_t source_player,
                                   uint8_t target_player,
                                   GameDiplomacyAction action)
@@ -1228,6 +1364,17 @@ int game_session_inventory_debit(GameSession *session, uint8_t player_slot,
     uint16_t *count = player_inventory_count(session, player_slot, item_id);
     if (count == NULL || amount > *count) return 0;
     *count = (uint16_t)(*count - amount);
+    return 1;
+}
+
+int game_session_dispatch_inventory_result(
+    GameSession *session, uint8_t player_slot, uint8_t item_id,
+    GameInventoryResultApply apply, void *context)
+{
+    uint16_t *count = player_inventory_count(session, player_slot, item_id);
+    if (count == NULL || *count == 0 || apply == NULL) return 0;
+    if (!apply(context, player_slot, item_id)) return 0;
+    --*count;
     return 1;
 }
 
@@ -1428,6 +1575,110 @@ int game_session_pop_glyph_action(GameSession *session,
     memset(&session->glyph_actions[session->glyph_action_count], 0,
            sizeof(session->glyph_actions[session->glyph_action_count]));
     return 1;
+}
+
+int game_session_queue_onoff_action(GameSession *session,
+                                    uint8_t player_slot,
+                                    uint8_t island_index,
+                                    uint16_t location_index)
+{
+    GameOnOffActionRequest *request;
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count ||
+        session->onoff_action_count >= GAME_SESSION_MAX_ONOFF_ACTIONS) {
+        return 0;
+    }
+    request = &session->onoff_actions[session->onoff_action_count++];
+    request->player_slot = player_slot;
+    request->island_index = island_index;
+    request->location_index = location_index;
+    return 1;
+}
+
+int game_session_pop_onoff_action(GameSession *session,
+                                  GameOnOffActionRequest *out)
+{
+    if (session == NULL || out == NULL || session->onoff_action_count == 0) {
+        return 0;
+    }
+    *out = session->onoff_actions[0];
+    --session->onoff_action_count;
+    if (session->onoff_action_count != 0) {
+        memmove(&session->onoff_actions[0], &session->onoff_actions[1],
+                (size_t)session->onoff_action_count * sizeof(session->onoff_actions[0]));
+    }
+    memset(&session->onoff_actions[session->onoff_action_count], 0,
+           sizeof(session->onoff_actions[session->onoff_action_count]));
+    return 1;
+}
+
+int game_session_queue_build_selection(GameSession *session,
+                                      uint8_t player_slot,
+                                      uint8_t island_index,
+                                      uint16_t location_index,
+                                      uint16_t item_id)
+{
+    GameBuildSelectionRequest *request;
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count ||
+        session->build_selection_count >= GAME_SESSION_MAX_BUILD_SELECTIONS) {
+        return 0;
+    }
+    request = &session->build_selections[session->build_selection_count++];
+    request->category = 0;
+    request->player_slot = player_slot;
+    request->action_type = 5;
+    request->island_index_a = island_index;
+    request->reserved_zero = 0;
+    request->island_index_b = island_index;
+    request->location_index = location_index;
+    request->item_id = item_id;
+    return 1;
+}
+
+int game_session_pop_build_selection(GameSession *session,
+                                     GameBuildSelectionRequest *out)
+{
+    if (session == NULL || out == NULL || session->build_selection_count == 0) {
+        return 0;
+    }
+    *out = session->build_selections[0];
+    --session->build_selection_count;
+    if (session->build_selection_count != 0) {
+        memmove(&session->build_selections[0], &session->build_selections[1],
+                (size_t)session->build_selection_count *
+                sizeof(session->build_selections[0]));
+    }
+    memset(&session->build_selections[session->build_selection_count], 0,
+           sizeof(session->build_selections[0]));
+    return 1;
+}
+
+unsigned int game_session_dispatch_build_selections(GameSession *session)
+{
+    GameBuildSelectionRequest request;
+    unsigned int added = 0;
+
+    if (session == NULL) return 0;
+    while (game_session_pop_build_selection(session, &request)) {
+        int slot;
+        if (request.category != 0 || request.action_type != 5) continue;
+
+        /* FUN_004662b7 copies packet byte offsets +2/+4/+8/+10/+12/+14
+           into the task record, sets priority 1, and deduplicates type 5
+           records by payload_0c, payload_0e, and payload_12. */
+        slot = game_session_pending_event_add(
+            session, (int16_t)request.player_slot,
+            (int16_t)request.island_index_b,
+            (int16_t)request.action_type,
+            (int16_t)request.reserved_zero,
+            (int16_t)request.location_index,
+            (int16_t)request.item_id);
+        if (slot >= 0) ++added;
+    }
+    return added;
 }
 
 int game_session_queue_island_event3_subtype0(GameSession *session,

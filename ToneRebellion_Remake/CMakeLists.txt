@@ -13,6 +13,7 @@ add_library(tone_core STATIC
     src/core/curved_text_layout.c
     src/core/iw_construct.c
     src/core/pad_catalog.c
+    src/core/floater_catalog.c
     src/core/building_render.c
     src/core/window_catalog.c
     src/core/world_map.c
@@ -84,6 +85,12 @@ if(BUILD_TESTING)
     target_compile_features(test_pad_catalog PRIVATE c_std_11)
     enable_test_assertions(test_pad_catalog)
     add_test(NAME pad_catalog_unit COMMAND test_pad_catalog)
+
+    add_executable(test_floater_catalog tests/test_floater_catalog.c)
+    target_link_libraries(test_floater_catalog PRIVATE tone_core)
+    target_compile_features(test_floater_catalog PRIVATE c_std_11)
+    enable_test_assertions(test_floater_catalog)
+    add_test(NAME floater_catalog_unit COMMAND test_floater_catalog)
 
     add_executable(test_building_render tests/test_building_render.c)
     target_link_libraries(test_building_render PRIVATE tone_core)

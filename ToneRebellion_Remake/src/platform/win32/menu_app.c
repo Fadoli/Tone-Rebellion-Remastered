@@ -95,6 +95,8 @@ static SpriteSheet g_bildtone_art;
 static SpriteSheet g_tone_crys_art;
 static SpriteSheet g_magctone_art;
 static SpriteSheet g_hall_stock_art;
+static SpriteSheet g_repair_button_art;
+static SpriteSheet g_building_command_art;
 static SpriteSheet g_inventory_item_art;
 static SpriteSheet g_diplomacy_art;
 static SpriteSheet g_building_art[PAD_CATALOG_MAX_ITEMS];
@@ -133,6 +135,7 @@ static char g_task_priority_text[3][256];
 static char g_task_transfer_text[2][256];
 static char g_task_category_text[4][256];
 static char g_hall_population_label[64];
+static char g_hall_work_label[64];
 static char g_inventory_info_text[768];
 static char g_glyph_info_text[768];
 static char g_cryptic_text[ISLAND_PANEL_INFO_CRYPTIC_COUNT][768];
@@ -151,6 +154,7 @@ static int g_game_session_valid;
 static int g_game_session_world_index = -1;
 static WindowCatalog g_window_catalog;
 static PadCatalog g_pad_catalog;
+static FloaterCatalog g_floater_catalog;
 static BuildingRenderCatalog g_building_render_catalog;
 static uint16_t g_island_draw_order[ISLAND_DATA_MAX_LOCATIONS];
 static IslandHaze g_island_haze;
@@ -161,6 +165,8 @@ static int g_island_scroll_x;
 static int g_hovered_location = -1;
 static IslandLocationActionControl g_hovered_location_action =
     ISLAND_LOCATION_ACTION_NONE;
+static int g_hovered_repair_control;
+static int g_hovered_onoff_control;
 static int g_hovered_hall_stock = -1;
 static int g_hovered_island_button = -1;
 static int g_hovered_hall_command = -1;
@@ -175,7 +181,12 @@ static int g_hovered_glyph = -1;
 static int g_selected_glyph = -1;
 static int g_glyph_info_default = 1;
 static HMODULE g_original_cursor_module;
-static HCURSOR g_glyph_interaction_cursor;
+#define GAME_CURSOR_SLOT_COUNT 17
+static HCURSOR g_interaction_cursors[GAME_CURSOR_SLOT_COUNT];
+static const WORD g_cursor_resource_ids[GAME_CURSOR_SLOT_COUNT] = {
+    0x84, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7a, 0x7b, 0x7c,
+    0x7d, 0x7e, 0x7f, 0x74, 0x80, 0x81, 0x82, 0x83
+};
 static GameDiplomacyHit g_diplomacy_hover;
 static int g_diplomacy_hover_valid;
 static uint8_t g_floater_overlay_flags;
@@ -186,13 +197,27 @@ static IwConstructInfoState g_iw_construct_info;
 static int32_t g_iw_construct_items[IW_CONSTRUCT_BUILD_CANDIDATE_COUNT];
 static size_t g_iw_construct_item_count;
 static int g_iw_construct_open;
-static int32_t g_pending_build_item_id = -1;
 static int g_resume_available;
 static unsigned char g_load_slot_valid[8];
 static int g_hovered_help = -1;
 static int g_hovered_newgame_text = -1;
 static int g_hovered_island = -1;
 static int g_mouse_inside;
+
+static void update_interaction_cursor(void)
+{
+    int slot = 0;
+    if (g_menu.screen == SCREEN_ISLAND &&
+        game_glyph_inventory_cursor_slot(g_selected_glyph,
+                                         g_selected_inventory_item) == 0x0b) {
+        slot = 0x0b;
+    }
+    if (g_interaction_cursors[slot] != NULL) {
+        SetCursor(g_interaction_cursors[slot]);
+        return;
+    }
+    SetCursor(LoadCursorA(NULL, IDC_ARROW));
+}
 static int g_mouse_x;
 static int g_mouse_y;
 
@@ -710,6 +735,8 @@ static int load_island_surface(int island_id, int map_island_index,
     SpriteSheet tone_crys_candidate = {0};
     SpriteSheet magctone_candidate = {0};
     SpriteSheet hall_stock_candidate = {0};
+    SpriteSheet repair_button_candidate = {0};
+    SpriteSheet building_command_candidate = {0};
     SpriteSheet inventory_item_candidate = {0};
     SpriteSheet diplomacy_candidate = {0};
     SpriteSheet floater_info_candidate = {0};
@@ -811,6 +838,10 @@ static int load_island_surface(int island_id, int map_island_index,
                            &magctone_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\thbutt.shp", palette, &hall_stock_candidate,
                            error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\repair.shp", palette,
+                           &repair_button_candidate, error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\trainbut.shp", palette,
+                           &building_command_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\alltrigs.shp", palette,
                            &inventory_item_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\diploma.shp", palette,
@@ -969,6 +1000,8 @@ static int load_island_surface(int island_id, int map_island_index,
         task_icon_candidate.frame_count < 8 ||
         task_priority_candidate.frame_count < 8 ||
         hall_stock_candidate.frame_count < 6 || main_buttons_candidate.frame_count < 8 ||
+        repair_button_candidate.frame_count <= 11 ||
+        building_command_candidate.frame_count <= 21 ||
         hall_command_candidate.frame_count < 10 ||
         floater_info_candidate.frame_count < 26 ||
         glyph_inventory_candidate.frame_count < 1U + GAME_GLYPH_COUNT * 2U ||
@@ -1033,6 +1066,8 @@ static int load_island_surface(int island_id, int map_island_index,
     free_sprite_sheet(&g_tone_crys_art);
     free_sprite_sheet(&g_magctone_art);
     free_sprite_sheet(&g_hall_stock_art);
+    free_sprite_sheet(&g_repair_button_art);
+    free_sprite_sheet(&g_building_command_art);
     free_sprite_sheet(&g_inventory_item_art);
     free_sprite_sheet(&g_diplomacy_art);
     for (hall_index = 0; hall_index < 4; ++hall_index) {
@@ -1104,6 +1139,10 @@ static int load_island_surface(int island_id, int map_island_index,
     memset(&magctone_candidate, 0, sizeof(magctone_candidate));
     g_hall_stock_art = hall_stock_candidate;
     memset(&hall_stock_candidate, 0, sizeof(hall_stock_candidate));
+    g_repair_button_art = repair_button_candidate;
+    memset(&repair_button_candidate, 0, sizeof(repair_button_candidate));
+    g_building_command_art = building_command_candidate;
+    memset(&building_command_candidate, 0, sizeof(building_command_candidate));
     g_inventory_item_art = inventory_item_candidate;
     memset(&inventory_item_candidate, 0, sizeof(inventory_item_candidate));
     g_diplomacy_art = diplomacy_candidate;
@@ -1152,6 +1191,8 @@ done:
     free_sprite_sheet(&tone_crys_candidate);
     free_sprite_sheet(&magctone_candidate);
     free_sprite_sheet(&hall_stock_candidate);
+    free_sprite_sheet(&repair_button_candidate);
+    free_sprite_sheet(&building_command_candidate);
     free_sprite_sheet(&inventory_item_candidate);
     free_sprite_sheet(&diplomacy_candidate);
     for (item_id = 0; item_id < PAD_CATALOG_MAX_ITEMS; ++item_id) {
@@ -1745,6 +1786,13 @@ static int load_newgame_captions(char *error, size_t error_capacity)
                             sizeof(g_hall_population_label))) {
         (void)snprintf(error, error_capacity,
                        "gamey.txt key POPSTR is missing or empty");
+        goto done;
+    }
+    if (!extract_help_entry(bytes, member->length, "WORKSTR",
+                            g_hall_work_label,
+                            sizeof(g_hall_work_label))) {
+        (void)snprintf(error, error_capacity,
+                       "gamey.txt key WORKSTR is missing or empty");
         goto done;
     }
     for (i = 0; i < ISLAND_PANEL_INFO_CRYPTIC_COUNT; ++i) {
@@ -2601,9 +2649,33 @@ static IslandLocationActionControl selected_location_action(void)
         location->record_value_10, location->owner_id, g_menu.selected_tribe);
 }
 
+static int selected_repair_button_visible(void)
+{
+    const GameRuntimeIsland *island;
+    int16_t current_hit_points;
+    int16_t maximum_hit_points;
+    if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
+        g_menu.selected_map_island < 0 ||
+        g_menu.selected_map_island >= g_game_session.island_count ||
+        g_selected_location < 0) return 0;
+    island = &g_game_session.islands[g_menu.selected_map_island];
+    if (g_selected_location >= island->location_count) return 0;
+    if (!game_session_repair_location_values(&g_game_session, &g_pad_catalog,
+            (uint8_t)g_menu.selected_map_island,
+            (uint16_t)g_selected_location,
+            &current_hit_points, &maximum_hit_points)) return 0;
+    return island_panel_repair_button_visible(
+        island->locations[g_selected_location].record_value_10,
+        island->locations[g_selected_location].owner_id,
+        g_game_session.config.selected_tribe,
+        current_hit_points, maximum_hit_points);
+}
+
 static int update_location_action_hover(int x, int y)
 {
     const char *const move_names[] = {"IWMove", "IWHallMove"};
+    static const char *const repair_names[] = {"BC_Repair"};
+    static const char *const onoff_names[] = {"BC_OnOff"};
     IslandLocationActionControl action = selected_location_action();
     const char *name = action == ISLAND_LOCATION_ACTION_HALL_MOVE
         ? "IWHallMove" : action == ISLAND_LOCATION_ACTION_MOVE
@@ -2612,10 +2684,40 @@ static int update_location_action_hover(int x, int y)
         ? window_catalog_hit_test_names(&g_window_catalog, 3, x, y,
                                         move_names, 2)
         : NULL;
+    const GameRuntimeIsland *island = NULL;
+    const WindowTemplate *repair_control = NULL;
+    const WindowTemplate *onoff_control = NULL;
+    int repair_hovered = 0;
+    int onoff_hovered = 0;
+    if (g_game_session_valid && g_menu.screen == SCREEN_ISLAND &&
+        g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL &&
+        g_menu.selected_map_island >= 0 &&
+        g_menu.selected_map_island < g_game_session.island_count &&
+        g_selected_location >= 0) {
+        island = &g_game_session.islands[g_menu.selected_map_island];
+        if (g_selected_location < island->location_count) {
+            if (selected_repair_button_visible()) {
+                repair_control = window_catalog_hit_test_names(&g_window_catalog,
+                    3, x, y, repair_names,
+                    sizeof(repair_names) / sizeof(repair_names[0]));
+            }
+            onoff_control = window_catalog_hit_test_names(&g_window_catalog,
+                3, x, y, onoff_names,
+                sizeof(onoff_names) / sizeof(onoff_names[0]));
+        }
+    }
+    repair_hovered = repair_control != NULL &&
+        strcmp(repair_control->name, "BC_Repair") == 0;
+    onoff_hovered = onoff_control != NULL &&
+        strcmp(onoff_control->name, "BC_OnOff") == 0;
     IslandLocationActionControl hovered = ISLAND_LOCATION_ACTION_NONE;
     if (control != NULL && strcmp(control->name, name) == 0) hovered = action;
-    if (hovered == g_hovered_location_action) return 0;
+    if (hovered == g_hovered_location_action &&
+        repair_hovered == g_hovered_repair_control &&
+        onoff_hovered == g_hovered_onoff_control) return 0;
     g_hovered_location_action = hovered;
+    g_hovered_repair_control = repair_hovered;
+    g_hovered_onoff_control = onoff_hovered;
     return 1;
 }
 
@@ -2950,56 +3052,37 @@ static int select_iw_construct_item(void)
 {
     IwConstructTransition transition;
     unsigned int i;
-    int selected = 0;
+    int handled = 0;
 
     iw_construct_mouse_click(&g_iw_construct, g_game_session.config.selected_tribe,
                              &transition);
     for (i = 0; i < transition.message_count; ++i) {
         const IwConstructMessage *message = &transition.messages[i];
         if (message->code == IW_CONSTRUCT_MSG_SELECT_BUILD) {
-            g_pending_build_item_id = message->value;
-            selected = 1;
-        } else if (message->code == IW_CONSTRUCT_MSG_CLEAR_BUILD && selected) {
+            if (g_game_session_valid && message->value >= 0 &&
+                message->value <= UINT16_MAX &&
+                g_game_session.config.selected_tribe < GAME_START_PLAYER_COUNT &&
+                g_menu.selected_map_island >= 0 &&
+                g_menu.selected_map_island < g_game_session.island_count &&
+                g_selected_location >= 0 &&
+                g_selected_location <= UINT16_MAX &&
+                g_selected_location < g_island_surface_data.location_count) {
+                /* FUN_0042fa0f turns this selection message into the observed
+                   category-0/type-5 request. Its consumer is unknown, so the
+                   UI queues the packet and does not place the item here. */
+                handled = 1;
+                (void)game_session_queue_build_selection(
+                    &g_game_session, g_game_session.config.selected_tribe,
+                    (uint8_t)g_menu.selected_map_island,
+                    (uint16_t)g_selected_location,
+                    (uint16_t)message->value);
+            }
+        } else if (message->code == IW_CONSTRUCT_MSG_CLEAR_BUILD) {
             g_iw_construct_open = 0;
             (void)iw_construct_info_handle_message(&g_iw_construct_info, 1, 0);
         }
     }
-    return selected;
-}
-
-static int place_pending_building(HWND window, int location_index)
-{
-    char error[128];
-    int placed;
-
-    if (g_pending_build_item_id < 0 || location_index < 0 ||
-        location_index >= g_island_surface_data.location_count ||
-        g_menu.selected_map_island < 0) return 0;
-    placed = game_session_place_building(
-        &g_game_session, &g_pad_catalog,
-        (uint8_t)g_game_session.config.selected_tribe,
-        (uint8_t)g_menu.selected_map_island, (uint16_t)location_index,
-        &g_island_surface_data.locations[location_index],
-        (uint16_t)g_pending_build_item_id, error, sizeof(error));
-    if (!placed) {
-        MessageBoxA(window, error, "Tone Rebellion remake - placement error",
-                    MB_OK | MB_ICONINFORMATION);
-        return 0;
-    }
-    /* FUN_004527ee emits event 2 only after its site validation succeeds;
-       the current prototype treats this accepted click as action completion. */
-    {
-        const GameRuntimeLocation *placed =
-            &g_game_session.islands[g_menu.selected_map_island].locations[location_index];
-        const unsigned char *build_sound = placed->owner_id == 4
-            ? g_levbuild_sound : g_fltbuild_sound;
-        if (build_sound != NULL) {
-            (void)PlaySoundA((LPCSTR)build_sound, NULL,
-                         SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
-        }
-    }
-    g_pending_build_item_id = -1;
-    return 1;
+    return handled;
 }
 
 static void draw_hall_info_panel(HDC dc, int panel_state)
@@ -3359,6 +3442,9 @@ static void draw_hall_panel(HDC dc, int hall_player)
     const WindowTemplate *panel = NULL;
     const char *empty_message = NULL;
     int panel_state = g_island_panel_mode;
+    hall_player = island_panel_player_for_mode(panel_state,
+        g_game_session_valid ? (int)g_game_session.config.selected_tribe : -1,
+        hall_player);
     if (panel_state == WINDOW_ISLAND_PANEL_TASKS ||
         panel_state == WINDOW_ISLAND_PANEL_EFFECT_DEBUG) {
         const char *const task_window_names[] = {
@@ -3792,7 +3878,6 @@ static void draw_hall_panel(HDC dc, int hall_player)
             &g_game_session.economy[(unsigned int)hall_player];
         size_t entry_count = game_inventory_collect(economy->inventory_count,
             entries, GAME_INVENTORY_ITEM_COUNT);
-        size_t page_count = game_inventory_page_count(entry_count);
         size_t visible_count;
         size_t slot;
         const WindowTemplate *cycle = window_catalog_find(
@@ -3813,7 +3898,10 @@ static void draw_hall_panel(HDC dc, int hall_player)
             draw_bitmap_label(dc, g_empty_inventory_text, x, y,
                               RGB(185, 205, 220));
         } else {
-            size_t current_page = page_count == 0 ? 0 : g_inventory_page % page_count;
+            /* FUN_0043d6a3 uses the stored page index directly. If the item
+               count shrinks, the source leaves an out-of-range page empty
+               until InvCycle wraps it back to zero. */
+            size_t current_page = g_inventory_page;
             int pane_width = panel->pane.right - panel->pane.left;
             int pane_height = panel->pane.bottom - panel->pane.top;
             int column_width = pane_width / 5;
@@ -4158,6 +4246,67 @@ static int draw_runtime_item(HDC dc, const GameRuntimeLocation *runtime_location
     return draw_runtime_item_scaled(dc, runtime_location, x, y, 0x10000U);
 }
 
+/* Use the inventory sprite only when an item has no drawable building SHP.
+   Drawing it over the building creates a second, mismatched image. */
+static int draw_ground_item_icon(HDC dc,
+                                 const GameRuntimeLocation *runtime_location,
+                                 int x, int y)
+{
+    const SpriteFrame *frame;
+    int32_t item_id;
+    uint32_t frame_index;
+
+    if (runtime_location == NULL) return 0;
+    item_id = runtime_location->record_value_10;
+    if (item_id < GAME_INVENTORY_ITEM_FIRST_ID ||
+        item_id >= GAME_INVENTORY_ITEM_FIRST_ID + GAME_INVENTORY_ITEM_COUNT) return 0;
+    frame_index = (uint32_t)(item_id - GAME_INVENTORY_ITEM_FIRST_ID);
+    if (frame_index >= g_inventory_item_art.frame_count) return 0;
+    frame = &g_inventory_item_art.frames[frame_index];
+    if (frame->bitmap == NULL) return 0;
+    draw_sprite(dc, &g_inventory_item_art, frame_index, x, y);
+    return 1;
+}
+
+/* Occupied runtime records without a drawable SHP need a neutral marker when
+   no inventory icon exists (the normal icon path handles IDs 5..33). */
+static void draw_ground_item_fallback(HDC dc,
+                                      const GameRuntimeLocation *runtime_location,
+                                      int x, int y)
+{
+    int32_t item_id;
+    if (runtime_location == NULL) return;
+    item_id = runtime_location->record_value_10;
+    if (item_id >= GAME_INVENTORY_ITEM_FIRST_ID &&
+        item_id < GAME_INVENTORY_ITEM_FIRST_ID + GAME_INVENTORY_ITEM_COUNT &&
+        (uint32_t)(item_id - GAME_INVENTORY_ITEM_FIRST_ID) <
+            g_inventory_item_art.frame_count &&
+        g_inventory_item_art.frames[item_id - GAME_INVENTORY_ITEM_FIRST_ID].bitmap != NULL)
+        return;
+
+    /* PIT_Object has no SHP or subtype in the data currently modeled. */
+    {
+        HPEN outline = CreatePen(PS_SOLID, 1, RGB(96, 62, 24));
+        HBRUSH fill = CreateSolidBrush(RGB(244, 197, 77));
+        HGDIOBJ previous_pen;
+        HGDIOBJ previous_brush;
+        if (outline == NULL || fill == NULL) {
+            if (outline != NULL) DeleteObject(outline);
+            if (fill != NULL) DeleteObject(fill);
+            return;
+        }
+        previous_pen = SelectObject(dc, outline);
+        previous_brush = SelectObject(dc, fill);
+        Ellipse(dc, x - 6, y - 12, x + 7, y + 1);
+        MoveToEx(dc, x, y - 11, NULL);
+        LineTo(dc, x, y);
+        SelectObject(dc, previous_brush);
+        SelectObject(dc, previous_pen);
+        DeleteObject(fill);
+        DeleteObject(outline);
+    }
+}
+
 /* FUN_0040d3e1 builds a temporary default item and calls FUN_0040bf98 with
    animation disabled and the requested scale. This shows every declared
    static/idle layer, rather than drawing the asset's frame zero in isolation. */
@@ -4297,14 +4446,28 @@ static void draw_hall_stock_summary(HDC dc, int hall_player,
     }
     {
         char population[96];
-        unsigned int count = game_session_count_player_floaters(
-            &g_game_session, (uint8_t)hall_player);
-        (void)snprintf(population, sizeof(population), "%s %u",
-                       g_hall_population_label, count);
-        draw_bitmap_label(dc, population,
-                          info->pane.left + 0xb6,
-                          info->pane.top + 0x29,
-                          RGB(230, 238, 255));
+        char work_summary[96];
+        unsigned int count;
+        unsigned int total;
+        unsigned int percentage;
+        if (game_session_workstr_summary(&g_game_session,
+                (uint8_t)hall_player, &count, &total, &percentage)) {
+            (void)snprintf(population, sizeof(population), "%s %u",
+                           g_hall_population_label, total);
+            draw_bitmap_label(dc, population,
+                              info->pane.left + 0xb6,
+                              info->pane.top + 0x29,
+                              RGB(230, 238, 255));
+            if (total > 0) {
+                (void)snprintf(work_summary, sizeof(work_summary),
+                               "%s %u (%u%%)",
+                               g_hall_work_label, count, percentage);
+                draw_bitmap_label(dc, work_summary,
+                                  info->pane.left + 0xb6,
+                                  info->pane.top + 0x33,
+                                  RGB(230, 238, 255));
+            }
+        }
     }
     RestoreDC(dc, saved_dc);
 }
@@ -4425,8 +4588,25 @@ static void render_island_view(HDC dc)
            item occupies the construction site, so its sprite replaces PAD.SHP.
            Keep the animated ring only when no drawable item occupies the site. */
         {
-            int occupied = runtime_location != NULL && runtime_location->record_value_10 > 0;
-            int has_runtime_item = draw_runtime_item(dc, runtime_location, x, y);
+            int is_construction_site = location->kind == ISLAND_LOCATION_PAD ||
+                island_pad_group(location) >= 0;
+            int32_t runtime_item_id = runtime_location != NULL
+                ? runtime_location->record_value_10 : 0;
+            int is_leviathan_building_on_tone =
+                location->kind == ISLAND_LOCATION_TONE &&
+                runtime_item_id > 0 &&
+                runtime_item_id < g_pad_catalog.item_count &&
+                g_pad_catalog.items[runtime_item_id].tribe == PAD_TRIBE_LEVIATHAN;
+            int is_item_render_site = is_construction_site ||
+                is_leviathan_building_on_tone;
+            int occupied = is_item_render_site && runtime_location != NULL &&
+                runtime_location->record_value_10 > 0;
+            int has_runtime_item = is_item_render_site
+                ? draw_runtime_item(dc, runtime_location, x, y) : 0;
+            if (occupied && !has_runtime_item &&
+                !draw_ground_item_icon(dc, runtime_location, x, y)) {
+                draw_ground_item_fallback(dc, runtime_location, x, y);
+            }
             if (has_runtime_item || occupied) drew_location = 1;
             else if (island_site_should_draw_pad(pad_group, occupied) &&
                      g_pad_art.frame_count == 27) {
@@ -4869,6 +5049,7 @@ static void draw_location_action_panel(HDC dc)
     const WindowTemplate *panel;
     const WindowTemplate *button;
     const WindowTemplate *text_panel;
+    const WindowTemplate *repair_button;
     IslandLocationActionControl action;
     const char *button_name;
 
@@ -4886,6 +5067,47 @@ static void draw_location_action_panel(HDC dc)
     }
 
     action = selected_location_action();
+    if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL) {
+        const WindowTemplate *onoff_button = window_catalog_find(
+            &g_window_catalog, "BC_OnOff", 3);
+        repair_button = window_catalog_find(&g_window_catalog, "BC_Repair", 3);
+        if (onoff_button != NULL && onoff_button->shape_frame >= 0) {
+            int hover_frame = window_catalog_control_overlay_frame(
+                onoff_button, g_hovered_onoff_control);
+            if ((uint32_t)onoff_button->shape_frame <
+                    g_building_command_art.frame_count) {
+                /* windows.txt maps BC_OnOff to BLDCMD frames 19/21. */
+                draw_sprite(dc, &g_building_command_art,
+                            (uint32_t)onoff_button->shape_frame,
+                            onoff_button->pane.left, onoff_button->pane.top);
+            }
+            if (g_hovered_onoff_control && hover_frame >= 0 &&
+                hover_frame != onoff_button->shape_frame &&
+                (uint32_t)hover_frame < g_building_command_art.frame_count) {
+                draw_sprite(dc, &g_building_command_art, (uint32_t)hover_frame,
+                            onoff_button->pane.left, onoff_button->pane.top);
+            }
+        }
+        if (selected_repair_button_visible() && repair_button != NULL &&
+            repair_button->shape_frame >= 0) {
+            int hover_frame = window_catalog_control_overlay_frame(
+                repair_button, g_hovered_repair_control);
+            if ((uint32_t)repair_button->shape_frame <
+                    g_repair_button_art.frame_count) {
+                /* windows.txt and shapes.txt bind BC_Repair to REPAIR.SHP;
+                   its descriptor supplies the normal and highlight frames. */
+                draw_sprite(dc, &g_repair_button_art,
+                            (uint32_t)repair_button->shape_frame,
+                            repair_button->pane.left, repair_button->pane.top);
+            }
+            if (g_hovered_repair_control && hover_frame >= 0 &&
+                hover_frame != repair_button->shape_frame &&
+                (uint32_t)hover_frame < g_repair_button_art.frame_count) {
+                draw_sprite(dc, &g_repair_button_art, (uint32_t)hover_frame,
+                            repair_button->pane.left, repair_button->pane.top);
+            }
+        }
+    }
     button_name = action == ISLAND_LOCATION_ACTION_HALL_MOVE
         ? "IWHallMove" : action == ISLAND_LOCATION_ACTION_MOVE
         ? "IWMove" : NULL;
@@ -5180,10 +5402,7 @@ static void handle_click(HWND window, int x, int y)
                 int clicked_item = inventory_item_at(x, y);
                 g_selected_inventory_item = game_inventory_click_selection(
                     g_selected_inventory_item, clicked_item);
-                if (clicked_item >= GAME_INVENTORY_ITEM_FIRST_ID &&
-                    g_glyph_interaction_cursor != NULL) {
-                    SetCursor(g_glyph_interaction_cursor);
-                }
+                update_interaction_cursor();
                 InvalidateRect(window, NULL, FALSE);
                 return;
             }
@@ -5226,7 +5445,11 @@ static void handle_click(HWND window, int x, int y)
                 const WindowTemplate *task_panel = window_catalog_find(
                     &g_window_catalog, "IWTasks", 3);
                 uint8_t task_slots[GAME_SESSION_MAX_TASKS];
-                int hall_player = selected_hall_player();
+                int hall_player = island_panel_player_for_mode(
+                    WINDOW_ISLAND_PANEL_TASKS,
+                    g_game_session_valid
+                        ? (int)g_game_session.config.selected_tribe : -1,
+                    selected_hall_player());
                 size_t task_count = g_game_session_valid && hall_player >= 0
                     ? game_session_collect_task_slots(&g_game_session,
                         (int16_t)hall_player, task_slots,
@@ -5251,7 +5474,11 @@ static void handle_click(HWND window, int x, int y)
                     y > task_panel->pane.top &&
                     y < task_panel->pane.bottom) {
                     uint8_t task_slots[GAME_SESSION_MAX_TASKS];
-                    int hall_player = selected_hall_player();
+                    int hall_player = island_panel_player_for_mode(
+                        WINDOW_ISLAND_PANEL_TASKS,
+                        g_game_session_valid
+                            ? (int)g_game_session.config.selected_tribe : -1,
+                        selected_hall_player());
                     size_t task_count = g_game_session_valid && hall_player >= 0
                         ? game_session_collect_task_slots(&g_game_session,
                             (int16_t)hall_player, task_slots,
@@ -5276,18 +5503,46 @@ static void handle_click(HWND window, int x, int y)
                 x <= glyph_panel->pane.right && y >= glyph_panel->pane.top &&
                 y <= glyph_panel->pane.bottom) {
                 (void)update_glyph_hover(x, y);
-                if (game_glyph_inventory_click_selection(&g_selected_glyph,
-                        g_hovered_glyph, 1) && g_hovered_glyph >= 0) {
-                    /* IWGlyphs sends message 0x43 with its owned, hovered ID.
-                       The source then arms interaction mode 0x11. The later
-                       map-command guards/effect are not modelled here. */
-                    if (g_glyph_interaction_cursor != NULL) {
-                        SetCursor(g_glyph_interaction_cursor);
-                    }
-                }
+                (void)game_glyph_inventory_click_selection(&g_selected_glyph,
+                    g_hovered_glyph, 1);
+                /* IWGlyphs sends message 0x43 with its owned, hovered ID.
+                   The source then arms interaction mode 0x11. The later
+                   map-command guards/effect are not modelled here. */
+                update_interaction_cursor();
                 /* FUN_0043dcae consumes an in-pane click even when
                    FUN_0043dd9d has no hovered ID to send. */
                 InvalidateRect(window, NULL, FALSE);
+                return;
+            }
+        }
+        if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL &&
+            g_game_session_valid && g_menu.selected_map_island >= 0 &&
+            g_menu.selected_map_island < g_game_session.island_count &&
+            g_selected_location >= 0 &&
+            g_selected_location < g_game_session.islands[
+                g_menu.selected_map_island].location_count) {
+            static const char *const onoff_names[] = {"BC_OnOff"};
+            const WindowTemplate *onoff_control =
+                window_catalog_hit_test_names(&g_window_catalog, 3, x, y,
+                    onoff_names, sizeof(onoff_names) / sizeof(onoff_names[0]));
+            if (onoff_control != NULL) {
+                /* Message 101/index 0 reaches type-1/subtype-0. Preserve the
+                   request, but leave its unknown flow guard/effect untouched. */
+                (void)game_session_queue_onoff_action(&g_game_session,
+                    (uint8_t)g_menu.selected_tribe,
+                    (uint8_t)g_menu.selected_map_island,
+                    (uint16_t)g_selected_location);
+                InvalidateRect(window, NULL, FALSE);
+                return;
+            }
+            static const char *const repair_names[] = {"BC_Repair"};
+            const WindowTemplate *repair_control = selected_repair_button_visible()
+                ? window_catalog_hit_test_names(&g_window_catalog, 3, x, y,
+                    repair_names,
+                    sizeof(repair_names) / sizeof(repair_names[0])) : NULL;
+            if (repair_control != NULL) {
+                /* BC_Repair sends message 101 to MASTER, but its downstream
+                   repair effect is unresolved. Consume the button hit. */
                 return;
             }
         }
@@ -5390,8 +5645,8 @@ static void handle_click(HWND window, int x, int y)
                 } else {
                     /* FUN_0042fa0f(4011) queues type-0xb messages for each
                        recipient with a nonzero row, then clears the table.
-                       The outbox is retained; multiplayer transport is not
-                       present in this remake. */
+                       The local tick applies those transfers through the
+                       observed FUN_00465793 receiver path. */
                     (void)game_session_commit_trade_offers(
                         &g_game_session, (uint8_t)hall_player);
                 }
@@ -5503,6 +5758,7 @@ static void handle_click(HWND window, int x, int y)
                                 (uint8_t)g_selected_glyph);
                             g_selected_glyph = -1;
                             g_glyph_info_default = 1;
+                            update_interaction_cursor();
                         } else if (g_selected_inventory_item >=
                                 GAME_INVENTORY_ITEM_FIRST_ID &&
                             g_selected_inventory_item <
@@ -5522,10 +5778,7 @@ static void handle_click(HWND window, int x, int y)
                                 &g_selected_inventory_item,
                                 &g_hovered_inventory_item,
                                 &g_hovered_hall_command);
-                        } else if (g_pending_build_item_id >= 0) {
-                            if (place_pending_building(window, clicked_location)) {
-                                g_selected_location = clicked_location;
-                            }
+                            update_interaction_cursor();
                         } else {
                             g_selected_location = clicked_location;
                             (void)open_iw_construct(clicked_location);
@@ -5569,11 +5822,8 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
 {
     switch (message) {
     case WM_SETCURSOR:
-        if (g_menu.screen == SCREEN_ISLAND &&
-            game_glyph_inventory_cursor_slot(g_selected_glyph,
-                                               g_selected_inventory_item) == 0x0b &&
-            LOWORD(lparam) == HTCLIENT && g_glyph_interaction_cursor != NULL) {
-            SetCursor(g_glyph_interaction_cursor);
+        if (LOWORD(lparam) == HTCLIENT) {
+            update_interaction_cursor();
             return TRUE;
         }
         break;
@@ -5598,6 +5848,8 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             }
             if (g_menu.screen == SCREEN_ISLAND && g_game_session_valid) {
                 game_session_dispatch_island_events(&g_game_session);
+                (void)game_session_dispatch_trade_requests(&g_game_session);
+                (void)game_session_dispatch_build_selections(&g_game_session);
                 game_session_tick_item_animations(&g_game_session,
                                                   &g_building_render_catalog);
                 game_session_tick_floater_moves(&g_game_session,
@@ -5730,6 +5982,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         y = ((GET_Y_LPARAM(lparam) - viewport.top) * LOGICAL_HEIGHT) /
             (viewport.bottom - viewport.top);
         handle_click(window, x, y);
+        update_interaction_cursor();
         return 0;
     }
     case WM_RBUTTONDOWN:
@@ -5851,6 +6104,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             InvalidateRect(window, NULL, FALSE);
         }
         update_window_title(window);
+        update_interaction_cursor();
         return 0;
     case WM_DESTROY:
         stop_background_tune();
@@ -5960,7 +6214,8 @@ static int load_game_session_for_selected_world(char *error, size_t error_capaci
     config.home_island_index = 0;
     config.randomize_class0_assignment = 0;
     config.random_seed = g_random_state;
-    if (!game_session_initialize(world, island_records, &g_pad_catalog, &config, &session,
+    if (!game_session_initialize(world, island_records, &g_pad_catalog,
+                                 &g_floater_catalog, &config, &session,
                                  error, error_capacity)) return 0;
 
     g_game_session = session;
@@ -6000,39 +6255,46 @@ static int load_building_render_catalog(char *error, size_t error_capacity)
 {
     CobArchive archive = {0};
     const CobMember *pad_member;
+    const CobMember *floater_member;
     const CobMember *animation_member;
     const CobMember *description_member;
     const CobMember *name_member;
     unsigned char *pad_bytes = NULL;
+    unsigned char *floater_bytes = NULL;
     unsigned char *animation_bytes = NULL;
     unsigned char *description_bytes = NULL;
     unsigned char *name_bytes = NULL;
     PadCatalog pads;
+    FloaterCatalog floaters;
     BuildingRenderCatalog animations;
     int success = 0;
 
     if (!cob_archive_open("C:\\Program Files\\Tone\\TONE00.COB", &archive,
                           error, error_capacity)) return 0;
     pad_member = cob_archive_find(&archive, "pad.txt");
+    floater_member = cob_archive_find(&archive, "floater.txt");
     animation_member = cob_archive_find(&archive, "bldinf.txt");
     description_member = cob_archive_find(&archive, "bldtxt.txt");
     name_member = cob_archive_find(&archive, "bldname.txt");
-    if (pad_member == NULL || animation_member == NULL || description_member == NULL ||
+    if (pad_member == NULL || floater_member == NULL || animation_member == NULL || description_member == NULL ||
         name_member == NULL) {
         (void)snprintf(error, error_capacity,
-                       "pad.txt, bldinf.txt, bldtxt.txt or bldname.txt was not found in TONE00.COB");
+                       "pad.txt, floater.txt, bldinf.txt, bldtxt.txt or bldname.txt was not found in TONE00.COB");
         goto done;
     }
     pad_bytes = (unsigned char *)malloc(pad_member->length == 0 ? 1 : pad_member->length);
+    floater_bytes = (unsigned char *)malloc(floater_member->length == 0 ? 1 : floater_member->length);
     animation_bytes = (unsigned char *)malloc(animation_member->length == 0
                                                ? 1 : animation_member->length);
     description_bytes = (unsigned char *)malloc(description_member->length == 0
                                                   ? 1 : description_member->length);
     name_bytes = (unsigned char *)malloc(name_member->length == 0
                                            ? 1 : name_member->length);
-    if (pad_bytes == NULL || animation_bytes == NULL || description_bytes == NULL ||
+    if (pad_bytes == NULL || floater_bytes == NULL || animation_bytes == NULL || description_bytes == NULL ||
         name_bytes == NULL ||
         !cob_archive_read_member(&archive, pad_member, pad_bytes, pad_member->length,
+                                 error, error_capacity) ||
+        !cob_archive_read_member(&archive, floater_member, floater_bytes, floater_member->length,
                                  error, error_capacity) ||
         !cob_archive_read_member(&archive, animation_member, animation_bytes,
                                  animation_member->length, error, error_capacity) ||
@@ -6041,6 +6303,8 @@ static int load_building_render_catalog(char *error, size_t error_capacity)
         !cob_archive_read_member(&archive, name_member, name_bytes,
                                  name_member->length, error, error_capacity) ||
         !pad_catalog_load(pad_bytes, pad_member->length, &pads, error, error_capacity) ||
+        !floater_catalog_load(floater_bytes, floater_member->length, &floaters,
+                              error, error_capacity) ||
         !building_render_catalog_load(animation_bytes, animation_member->length,
                                        &pads, &animations, error, error_capacity)) {
         goto done;
@@ -6066,11 +6330,13 @@ static int load_building_render_catalog(char *error, size_t error_capacity)
         }
     }
     g_pad_catalog = pads;
+    g_floater_catalog = floaters;
     g_building_render_catalog = animations;
     success = 1;
 done:
     free(name_bytes);
     free(pad_bytes);
+    free(floater_bytes);
     free(animation_bytes);
     free(description_bytes);
     cob_archive_close(&archive);
@@ -6198,18 +6464,23 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     HWND window;
     MSG message;
     char error[256];
+    unsigned int cursor_index;
     (void)previous_instance;
     (void)command_line;
 
-    /* Load only the original PE resource section; this does not execute
-       FLOAT.EXE. Cursor slot 0x0b maps to group cursor resource 0x7f. */
+    /* Read the original PE cursor resources without executing FLOAT.EXE.
+       Resource IDs follow the 17-entry table at DAT_0049c950. */
     g_original_cursor_module = LoadLibraryExA(
         "C:\\Program Files\\Tone\\FLOAT.EXE", NULL,
         LOAD_LIBRARY_AS_DATAFILE);
     if (g_original_cursor_module != NULL) {
-        g_glyph_interaction_cursor = (HCURSOR)LoadImageA(
-            g_original_cursor_module, MAKEINTRESOURCEA(0x7f), IMAGE_CURSOR,
-            0, 0, LR_DEFAULTSIZE);
+        for (cursor_index = 0; cursor_index < GAME_CURSOR_SLOT_COUNT;
+             ++cursor_index) {
+            g_interaction_cursors[cursor_index] = (HCURSOR)LoadImageA(
+                g_original_cursor_module,
+                MAKEINTRESOURCEA(g_cursor_resource_ids[cursor_index]),
+                IMAGE_CURSOR, 0, 0, LR_DEFAULTSIZE);
+        }
     }
 
     if (!load_world_map(error, sizeof(error)) ||
@@ -6274,9 +6545,12 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
         DispatchMessageA(&message);
     }
     if (g_original_cursor_module != NULL) {
-        if (g_glyph_interaction_cursor != NULL) {
-            DestroyCursor(g_glyph_interaction_cursor);
-            g_glyph_interaction_cursor = NULL;
+        for (cursor_index = 0; cursor_index < GAME_CURSOR_SLOT_COUNT;
+             ++cursor_index) {
+            if (g_interaction_cursors[cursor_index] != NULL) {
+                DestroyCursor(g_interaction_cursors[cursor_index]);
+                g_interaction_cursors[cursor_index] = NULL;
+            }
         }
         FreeLibrary(g_original_cursor_module);
         g_original_cursor_module = NULL;
@@ -6311,6 +6585,8 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_tone_crys_art);
     free_sprite_sheet(&g_magctone_art);
     free_sprite_sheet(&g_hall_stock_art);
+    free_sprite_sheet(&g_repair_button_art);
+    free_sprite_sheet(&g_building_command_art);
     free_sprite_sheet(&g_inventory_item_art);
     free_sprite_sheet(&g_diplomacy_art);
     {

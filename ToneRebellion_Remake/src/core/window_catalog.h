@@ -100,6 +100,10 @@ int32_t window_catalog_hover_frame(int32_t base_frame,
    without one use the adjacent frame convention used by the title menus. */
 int32_t window_catalog_control_frame(const WindowTemplate *control,
                                      int hovered);
+/* Returns the transparent highlight frame for a second-pass hover draw, or
+   -1 when the control has no hover overlay. */
+int32_t window_catalog_control_overlay_frame(const WindowTemplate *control,
+                                             int hovered);
 
 /* These names and panel numbers mirror FUN_0042f150 / FUN_0042f303 and the
    permanent-button messages dispatched by FUN_0042fa0f. */

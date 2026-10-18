@@ -1,0 +1,7 @@
+# Contrôle On/Off de l'île
+
+**Observation statique :** `windows.txt` associe `BC_OnOff` aux frames 19/21 de `BLDCMD`; le message 101 devient un événement catégorie 1 traité par `FUN_00465793`, qui appelle `FUN_00453bf6` (`ev_c2399ce6a8fecca53e69a4af05ef6c3ba38bd6b3e5b6012eb9d63fce9cfd4876`, `ev_755e1288ced30a7fe092fd7b9e582830db85c688621cff0a4b316fde227937f0`). Désactiver efface le bit `+0x1c & 0x400`; activer exige un propriétaire 0–3 et que la maintenance `pad.txt.+0xc` ne dépasse pas `owner.+0x6191f8` (`ev_ae39f7605eeb24b5fa6accafa3740bce5c8df5b07c06ec25b3411ce2df278b84`). L'initialisation du garde `+0x6191f8` reste inconnue (`ev_8fd5329bb2170ffd1ef0369222f3f7befe89f12d4983edc8a3b1c065bbe78400`).
+
+Après un changement du bit, `FUN_00453a5f` compare son état avant/après et appelle un handler dépendant de l'indice de slot (`ev_4b06859def34177afced44333f2b4eb932a3551642c6967c6a8b294e931d8e90`). Sur désactivation, `FUN_0045cbaa` annule trois tâches liées aux IDs stockés à `+0x4e/+0x52/+0x54`, puis remet ces champs à `-1` (`ev_7745f53805c8cafec9e67b37e3d97b0c7c86a644a124ba9ac2a812d50fdb0bb`). Ils sont initialisés à `-1` par `FUN_0045c3fe` (`ev_3142cbcc06580f8dc9e0e6abf7ae809237128bfa1b4b7f4a5c3557e4b8914294`). Les effets internes des callbacks et l'identité des tâches liées ne sont pas établis.
+
+**Port :** le remake dessine l'icône et met la cible joueur/île/lieu en file; il ne modifie pas le bit et n'applique pas les callbacks ni les annulations, car le garde et les liens de tâches ne sont pas modélisés. Le bit `0x400` est distinct du bit Hall `0x001`.

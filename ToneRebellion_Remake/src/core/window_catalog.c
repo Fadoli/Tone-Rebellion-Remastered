@@ -379,6 +379,15 @@ int32_t window_catalog_control_frame(const WindowTemplate *control,
     return control->shape_frame + 1;
 }
 
+int32_t window_catalog_control_overlay_frame(const WindowTemplate *control,
+                                             int hovered)
+{
+    if (control == NULL || !hovered || control->mouse_focus == 0 ||
+        control->shape_frame < 0) return -1;
+    if (control->has_hilite_frame) return control->hilite_frame;
+    return control->shape_frame + 1;
+}
+
 int window_catalog_hall_panel_mode(const char *control_name)
 {
     if (control_name == NULL) return WINDOW_ISLAND_PANEL_NONE;

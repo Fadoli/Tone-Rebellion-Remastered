@@ -108,10 +108,14 @@ static void verify_hover_frame_selection(void)
         control.hilite_frame = 4;
         assert(window_catalog_control_frame(&control, 0) == 1);
         assert(window_catalog_control_frame(&control, 1) == 4);
+        assert(window_catalog_control_overlay_frame(&control, 0) == -1);
+        assert(window_catalog_control_overlay_frame(&control, 1) == 4);
         control.has_hilite_frame = 0;
         assert(window_catalog_control_frame(&control, 1) == 2);
+        assert(window_catalog_control_overlay_frame(&control, 1) == 2);
         control.shape_frame = -1;
         assert(window_catalog_control_frame(&control, 1) == -1);
+        assert(window_catalog_control_overlay_frame(&control, 1) == -1);
     }
 }
 
@@ -130,15 +134,34 @@ static void verify_original_manifest(const char *path)
     free(bytes);
     assert(catalog.count == 100);
     assert(catalog.shape_cache_size == 4000000u);
+    window = window_catalog_find(&catalog, "BC_OnOff", 3);
+    assert(window != NULL && strcmp(window->shape_id, "BLDCMD") == 0 &&
+           window->shape_frame == 19 && window->has_hilite_frame &&
+           window->hilite_frame == 21 && window->send_message[0] == 101 &&
+           window->pane.left == 355 && window->pane.top == 390 &&
+           window->pane.right == 426 && window->pane.bottom == 461);
+    assert(window_catalog_control_frame(window, 0) == 19);
+    assert(window_catalog_control_frame(window, 1) == 21);
     window = window_catalog_hit_test(&catalog, 1, 600, 430);
     assert(window != NULL && strcmp(window->name, "BEGINGAME") == 0);
     window = window_catalog_hit_test(&catalog, 1, 10, 430);
     assert(window != NULL && strcmp(window->name, "EXITNEWGAME") == 0);
+    assert(window->shape_frame == 1 && window->pane.left == 7 &&
+           window->pane.top == 423 && window->pane.right == 75 &&
+           window->pane.bottom == 465);
     window = window_catalog_find(&catalog, "NEWGAMWND", 1);
     assert(window != NULL && window->type_id == 4);
-    assert(window->shape_frame == 0);
-    assert(window_catalog_hover_frame(window->shape_frame, -1, -1) ==
-           window->shape_frame);
+    assert(window->shape_frame == 0 && window->pane.left == 0 &&
+           window->pane.top == 0 && window->pane.right == 639 &&
+           window->pane.bottom == 479);
+    {
+        int hovered = window_catalog_hover_frame(window->shape_frame, -1, -1) !=
+                      window->shape_frame;
+        /* The full-screen footer descriptor has no caption mapping. Keep its
+           frame-0 strip at the bottom; it must never become the back button
+           at the descriptor's (0,0) pane. */
+        assert(window_catalog_control_frame(window, hovered) == 0);
+    }
     window = window_catalog_find(&catalog, "IWConstruct", 3);
     assert(window != NULL && window->type_id == 0x12);
     assert(window->pane.left == 192 && window->pane.top == 368 &&
@@ -169,6 +192,18 @@ static void verify_original_manifest(const char *path)
            window->send_message[0] == 0 && window->send_message[1] == 0 &&
            window->send_message[2] == 0 &&
            strcmp(window->message_destination, "MASTER") == 0);
+    window = window_catalog_find(&catalog, "BC_Repair", 3);
+    assert(window != NULL && window->type_id == 43 && window->mouse_focus == 1 &&
+           strcmp(window->shape_id, "REPAIR") == 0 && window->shape_frame == 0 &&
+           window->pane.left == 249 && window->pane.top == 370 &&
+           window->pane.right == 270 && window->pane.bottom == 390 &&
+           window->send_message[0] == 101 && window->send_message[1] == 0 &&
+           window->send_message[2] == 0 &&
+           strcmp(window->message_destination, "MASTER") == 0 &&
+           window->nstates == 11 && window->has_hilite_frame &&
+           window->hilite_frame == 11 &&
+           window_catalog_control_frame(window, 0) == 0 &&
+           window_catalog_control_frame(window, 1) == 11);
     window = window_catalog_find(&catalog, "IWInventory", 3);
     assert(window != NULL && window->shape_frame == 1 &&
            window->pane.left == 192 && window->pane.top == 368 &&
