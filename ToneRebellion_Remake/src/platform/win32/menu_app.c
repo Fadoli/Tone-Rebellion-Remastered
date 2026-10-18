@@ -3144,6 +3144,15 @@ static const char *task_label_text(const char *key)
     if (strcmp(key, "REPAIR") == 0) return g_task_label_text[1];
     if (strcmp(key, "DARTIFACT") == 0) return g_task_label_text[2];
     if (strcmp(key, "OARTIFACT") == 0) return g_task_label_text[3];
+    if (strcmp(key, "TNORM") == 0) return g_task_priority_text[0];
+    if (strcmp(key, "THIGH") == 0) return g_task_priority_text[1];
+    if (strcmp(key, "TEXCL") == 0) return g_task_priority_text[2];
+    if (strcmp(key, "DELIVER") == 0) return g_task_transfer_text[0];
+    if (strcmp(key, "RETRIEVE") == 0) return g_task_transfer_text[1];
+    if (strcmp(key, "STONE") == 0) return g_task_category_text[0];
+    if (strcmp(key, "CTONE") == 0) return g_task_category_text[1];
+    if (strcmp(key, "MTONE") == 0) return g_task_category_text[2];
+    if (strcmp(key, "ARTIFACT") == 0) return g_task_category_text[3];
     return NULL;
 }
 
@@ -3213,9 +3222,11 @@ static void draw_hall_panel(HDC dc, int hall_player)
                             control->pane.left, control->pane.top);
             }
         }
-        if (panel_state == WINDOW_ISLAND_PANEL_TASKS && g_empty_task_text[0] != '\0') {
+        if (panel_state == WINDOW_ISLAND_PANEL_TASKS) {
             const WindowTemplate *task_list_panel = window_catalog_find(
                 &g_window_catalog, "IWTasks", 3);
+            const WindowTemplate *task_info_panel = window_catalog_find(
+                &g_window_catalog, "IWTaskInfo", 3);
             uint8_t task_slots[GAME_SESSION_MAX_TASKS];
             size_t task_count = g_game_session_valid && hall_player >= 0
                 ? game_session_collect_task_slots(&g_game_session,
@@ -3224,18 +3235,29 @@ static void draw_hall_panel(HDC dc, int hall_player)
             int visible_rows = task_list_panel != NULL
                 ? (task_list_panel->pane.bottom - task_list_panel->pane.top) / 13
                 : 0;
-            if (task_list_panel != NULL && task_count == 0) {
-                int label_width = measure_bitmap_text(NULL, g_empty_task_text,
-                                                      strlen(g_empty_task_text));
-                int label_x;
-                int label_y;
-                if (island_panel_info_empty_task_label_position(task_list_panel,
-                        label_width, &label_x, &label_y)) {
-                    draw_bitmap_label(dc, g_empty_task_text, label_x, label_y,
-                                      RGB(185, 205, 220));
+            const GamePendingEvent *selected_event = NULL;
+            size_t selected_index;
+            if (task_count == 0) {
+                g_selected_task_slot = -1;
+            } else {
+                for (selected_index = 0; selected_index < task_count;
+                     ++selected_index) {
+                    if (task_slots[selected_index] == g_selected_task_slot) {
+                        selected_event = &g_game_session.pending_events[
+                            task_slots[selected_index]];
+                        break;
+                    }
                 }
-            } else if (task_list_panel != NULL && task_count != 0 &&
-                       visible_rows > 0) {
+                if (selected_event == NULL) {
+                    g_selected_task_slot = task_slots[0];
+                    selected_event = &g_game_session.pending_events[
+                        task_slots[0]];
+                    /* FUN_004455d1 selects the first task when the previous
+                       selection is absent from the refreshed projection. */
+                }
+            }
+            if (task_list_panel != NULL && task_count != 0 &&
+                visible_rows > 0) {
                 size_t visible_index;
                 int offset = g_task_scroll_offset;
                 if (offset < 0) offset = 0;
@@ -3268,6 +3290,58 @@ static void draw_hall_panel(HDC dc, int hall_player)
                         task_list_panel->pane.left + position.label_x,
                         task_list_panel->pane.top + position.y,
                         RGB(185, 205, 220));
+                }
+            }
+            if (task_info_panel != NULL && g_empty_task_text[0] != '\0') {
+                if (selected_event == NULL) {
+                    int label_width = measure_bitmap_text(NULL, g_empty_task_text,
+                                                          strlen(g_empty_task_text));
+                    int label_x;
+                    int label_y;
+                    if (island_panel_info_empty_task_label_position(task_info_panel,
+                            label_width, &label_x, &label_y)) {
+                        draw_bitmap_label(dc, g_empty_task_text, label_x, label_y,
+                                          RGB(185, 205, 220));
+                    }
+                } else {
+                    const char *priority_key =
+                        island_panel_info_task_priority_key(selected_event->priority);
+                    const char *priority_text = task_label_text(priority_key);
+                    if (priority_text != NULL && priority_text[0] != '\0') {
+                        draw_bitmap_label(dc, priority_text,
+                            task_info_panel->pane.left + 10,
+                            task_info_panel->pane.top + 0x2b,
+                            RGB(185, 205, 220));
+                    }
+                    {
+                        const char *title_key = NULL;
+                        const char *category_key = NULL;
+                        if (island_panel_info_task_transfer_keys(
+                                selected_event->action_type,
+                                selected_event->payload_12,
+                                &title_key, &category_key)) {
+                            const char *title_text = task_label_text(title_key);
+                            const char *category_text =
+                                task_label_text(category_key);
+                            if (title_text != NULL && title_text[0] != '\0') {
+                                int title_width = measure_bitmap_text(NULL,
+                                    title_text, strlen(title_text));
+                                int info_width = task_info_panel->pane.right -
+                                                 task_info_panel->pane.left;
+                                draw_bitmap_label(dc, title_text,
+                                    task_info_panel->pane.left +
+                                        (info_width - title_width) / 2,
+                                    task_info_panel->pane.top + 5,
+                                    RGB(185, 205, 220));
+                            }
+                            if (category_text != NULL && category_text[0] != '\0') {
+                                draw_bitmap_label(dc, category_text,
+                                    task_info_panel->pane.left + 10,
+                                    task_info_panel->pane.top + 0x1e,
+                                    RGB(185, 205, 220));
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -4732,6 +4806,32 @@ static void handle_click(HWND window, int x, int y)
                     direction);
                 InvalidateRect(window, NULL, FALSE);
                 return;
+            }
+            {
+                const WindowTemplate *task_panel = window_catalog_find(
+                    &g_window_catalog, "IWTasks", 3);
+                if (task_panel != NULL &&
+                    x > task_panel->pane.left &&
+                    x < task_panel->pane.right - 13 &&
+                    y > task_panel->pane.top &&
+                    y < task_panel->pane.bottom) {
+                    uint8_t task_slots[GAME_SESSION_MAX_TASKS];
+                    int hall_player = selected_hall_player();
+                    size_t task_count = g_game_session_valid && hall_player >= 0
+                        ? game_session_collect_task_slots(&g_game_session,
+                            (int16_t)hall_player, task_slots,
+                            sizeof(task_slots) / sizeof(task_slots[0])) : 0;
+                    int visible_rows =
+                        (task_panel->pane.bottom - task_panel->pane.top) / 13;
+                    int task_index = island_panel_info_task_index_at_y(
+                        task_panel, y, (unsigned int)visible_rows,
+                        g_task_scroll_offset, task_count);
+                    if (task_index >= 0) {
+                        g_selected_task_slot = task_slots[task_index];
+                    }
+                    InvalidateRect(window, NULL, FALSE);
+                    return;
+                }
             }
         }
         if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GLYPHS) {

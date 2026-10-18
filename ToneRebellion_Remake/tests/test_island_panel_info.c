@@ -239,7 +239,9 @@ int main(int argc, char **argv)
         long file_length;
         unsigned int cryptic_id;
         static const char *const task_keys[] = {
-            "CONSTR", "REPAIR", "DARTIFACT", "OARTIFACT"
+            "CONSTR", "REPAIR", "DARTIFACT", "OARTIFACT",
+            "TNORM", "THIGH", "TEXCL", "DELIVER", "RETRIEVE",
+            "STONE", "CTONE", "MTONE", "ARTIFACT"
         };
         size_t task_key_index;
         assert(file != NULL);
