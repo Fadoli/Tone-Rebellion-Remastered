@@ -4,7 +4,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
-enum { CURVED_TEXT_MAX_LINES = 64 };
+enum {
+    CURVED_TEXT_MAX_LINES = 64,
+    /* Calibrated to the supplied original-game capture. The numeric source
+       global used by FUN_0044ec5d is not resolved in the exported evidence. */
+    CURVED_TEXT_NEWGAME_LAST_LINE_Y = 392
+};
 
 typedef enum CurvedTextSide {
     CURVED_TEXT_LEFT = 0,

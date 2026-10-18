@@ -136,6 +136,9 @@ static void verify_original_manifest(const char *path)
     assert(window != NULL && strcmp(window->name, "EXITNEWGAME") == 0);
     window = window_catalog_find(&catalog, "NEWGAMWND", 1);
     assert(window != NULL && window->type_id == 4);
+    assert(window->shape_frame == 0);
+    assert(window_catalog_hover_frame(window->shape_frame, -1, -1) ==
+           window->shape_frame);
     window = window_catalog_find(&catalog, "IWConstruct", 3);
     assert(window != NULL && window->type_id == 0x12);
     assert(window->pane.left == 192 && window->pane.top == 368 &&
@@ -170,6 +173,30 @@ static void verify_original_manifest(const char *path)
     assert(window != NULL && window->shape_frame == 1 &&
            window->pane.left == 192 && window->pane.top == 368 &&
            window->pane.right == 447 && window->pane.bottom == 471);
+    {
+        static const char *const scroll_names[] = {
+            "scrollup", "scrolldn", "escrollup", "escrolldn"
+        };
+        static const int32_t scroll_frames[] = {0, 2, 0, 2};
+        static const int32_t scroll_messages[] = {6000, 6001, 6002, 6003};
+        static const int32_t scroll_left[] = {435, 435, 318, 318};
+        static const int32_t scroll_top[] = {368, 420, 368, 420};
+        size_t scroll_index;
+        for (scroll_index = 0; scroll_index < 4; ++scroll_index) {
+            window = window_catalog_find(&catalog, scroll_names[scroll_index], 3);
+            assert(window != NULL && window->type_id == 1 &&
+                   window->mouse_focus == 1 &&
+                   window->shape_frame == scroll_frames[scroll_index] &&
+                   strcmp(window->shape_id, "scroll") == 0 &&
+                   window->pane.left == scroll_left[scroll_index] &&
+                   window->pane.top == scroll_top[scroll_index] &&
+                   window->pane.right == scroll_left[scroll_index] + 12 &&
+                   window->pane.bottom == scroll_top[scroll_index] + 51 &&
+                   window->send_message[0] == scroll_messages[scroll_index] &&
+                   window->send_message[1] == 0 && window->send_message[2] == 0 &&
+                   strcmp(window->message_destination, "MASTER") == 0);
+        }
+    }
     window = window_catalog_find(&catalog, "BuildCycle", 3);
     assert(window != NULL && window->type_id == 1);
     assert(window->pane.left == 282 && window->pane.top == 368 &&
@@ -232,6 +259,16 @@ static void verify_original_manifest(const char *path)
            WINDOW_ISLAND_PANEL_TRADE);
     assert(window_catalog_hall_panel_mode("BC_Recall") ==
            WINDOW_ISLAND_PANEL_NONE);
+    assert(window_catalog_scroll_panel_mode("scrollup") ==
+           WINDOW_ISLAND_PANEL_TASKS);
+    assert(window_catalog_scroll_panel_mode("scrolldn") ==
+           WINDOW_ISLAND_PANEL_TASKS);
+    assert(window_catalog_scroll_panel_mode("escrollup") ==
+           WINDOW_ISLAND_PANEL_EFFECT_DEBUG);
+    assert(window_catalog_scroll_panel_mode("escrolldn") ==
+           WINDOW_ISLAND_PANEL_EFFECT_DEBUG);
+    assert(window_catalog_scroll_panel_mode("other") == WINDOW_ISLAND_PANEL_NONE);
+    assert(window_catalog_scroll_panel_mode(NULL) == WINDOW_ISLAND_PANEL_NONE);
     {
         static const char *const hall_controls[] = {
             "BC_GenInfo", "BC_Storage", "BC_Knowledge",

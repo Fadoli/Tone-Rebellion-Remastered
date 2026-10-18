@@ -19,6 +19,15 @@ typedef struct GameDiplomacyHit {
 int game_diplomacy_target_player(uint8_t local_player, uint8_t displayed_column,
                                  uint8_t *target_player);
 
+/* FUN_0043e5aa calls FUN_00428191 for the local player at the upper center,
+   then for each of the three displayed opponents around the lower panel.
+   Coordinates returned here are relative to the diplomacy pane. */
+int game_diplomacy_player_icon_position(uint8_t displayed_slot,
+                                        int32_t pane_left,
+                                        int32_t pane_width,
+                                        int32_t pane_height,
+                                        int32_t *x, int32_t *y);
+
 /* Mirrors FUN_0043e399's absolute screen-coordinate hover zones. The panel
    descriptor supplies its pane; the upper Amis/Ennemis row uses the three
    explicit source rectangles and the lower Communiquer row divides the pane

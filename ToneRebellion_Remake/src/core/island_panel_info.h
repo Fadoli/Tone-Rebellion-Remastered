@@ -39,6 +39,13 @@ typedef struct IslandPanelSelection {
 void island_panel_select_floater(IslandPanelSelection *selection,
                                 int32_t floater_index);
 
+/* FUN_0042fa0f's map-click path clears the selected inventory item and
+   returns to panel mode 0 after an inventory-target attempt. */
+void island_panel_finish_inventory_target(int *panel_mode,
+                                          int *selected_item_id,
+                                          int *hovered_item_id,
+                                          int *hovered_command_mode);
+
 /* FUN_00440567 and FUN_00440451 use these six IWLocInfo-relative anchors.
    Their hit boxes are strict 15-pixel half-width/height rectangles, and the
    source item ID 0x2f selects a separate anchor table. */

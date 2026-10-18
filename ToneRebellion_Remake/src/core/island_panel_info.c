@@ -10,6 +10,18 @@ void island_panel_select_floater(IslandPanelSelection *selection,
     selection->floater_index = floater_index;
 }
 
+void island_panel_finish_inventory_target(int *panel_mode,
+                                          int *selected_item_id,
+                                          int *hovered_item_id,
+                                          int *hovered_command_mode)
+{
+    if (panel_mode != NULL) *panel_mode = WINDOW_ISLAND_PANEL_GENERAL;
+    if (selected_item_id != NULL) *selected_item_id = -1;
+    if (hovered_item_id != NULL) *hovered_item_id = -1;
+    if (hovered_command_mode != NULL) *hovered_command_mode =
+        WINDOW_ISLAND_PANEL_NONE;
+}
+
 int island_panel_info_roster_position(unsigned int slot, int special_layout,
                                       int *x, int *y)
 {

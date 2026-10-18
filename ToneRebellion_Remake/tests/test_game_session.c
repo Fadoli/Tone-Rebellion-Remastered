@@ -126,7 +126,13 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
                start->nearest_site_location_index);
         assert(session.islands[start->island_index]
                    .locations[start->nearest_site_location_index]
-                   .resource_stock[GAME_RESOURCE_BUILD_TONE] == 0); /* model default; source start stock unresolved */
+                   .resource_stock[GAME_RESOURCE_BUILD_TONE] == 50);
+        assert(session.islands[start->island_index]
+                   .locations[start->nearest_site_location_index]
+                   .resource_stock[GAME_RESOURCE_CRYSTAL_TONE] == 0);
+        assert(session.islands[start->island_index]
+                   .locations[start->nearest_site_location_index]
+                   .resource_stock[GAME_RESOURCE_MAGIC_TONE] == 0);
         assert(floater->owner_slot == player);
         assert((session.islands[start->island_index].access_mask & (1U << player)) != 0);
         assert(game_session_can_enter_island(&session, start->island_index,
@@ -375,7 +381,7 @@ static void test_inventory_action_reserves_source_payload_without_mutation(void)
     session.economy[1].inventory_count[0] = 2;
 
     /* FUN_0042fa0f(0x40): empty class-0 location queues type 4. It does not
-       mutate the location or debit inventory before a later result event. */
+       mutate the location or debit inventory in this click handler. */
     slot = game_session_queue_inventory_action(&session, 1, 0, 0, 5);
     assert(slot == 0);
     assert(session.pending_event_count == 1);

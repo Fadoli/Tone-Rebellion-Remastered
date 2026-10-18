@@ -350,6 +350,10 @@ int game_session_initialize(const WorldDefinition *world,
         runtime->locations[location_index].record_value_10 =
             (int32_t)start->initial_pad_item_id + (int32_t)island_index * 16;
         runtime->locations[location_index].owner_id = (int32_t)island_index;
+        /* FUN_0046466f creates the Hall through FUN_004528ca, which clears
+           +0x28/+0x2a/+0x2c; startup then sets only +0x28 to 50. */
+        runtime->locations[location_index]
+            .resource_stock[GAME_RESOURCE_BUILD_TONE] = 50;
         next.economy[island_index].hall_island_index = start->island_index;
         next.economy[island_index].hall_location_index = (uint16_t)location_index;
         next.economy[island_index].hall_x = runtime_layouts[start->island_index]

@@ -15,6 +15,25 @@ int game_diplomacy_target_player(uint8_t local_player, uint8_t displayed_column,
     return 1;
 }
 
+int game_diplomacy_player_icon_position(uint8_t displayed_slot,
+                                        int32_t pane_left,
+                                        int32_t pane_width,
+                                        int32_t pane_height,
+                                        int32_t *x, int32_t *y)
+{
+    static const int32_t other_x_absolute[3] = {220, 300, 380};
+    if (x == 0 || y == 0 || pane_width <= 0 || pane_height <= 0 ||
+        displayed_slot >= GAME_START_PLAYER_COUNT) return 0;
+    if (displayed_slot == 0) {
+        *x = pane_width / 2;
+        *y = 10;
+        return 1;
+    }
+    *x = other_x_absolute[displayed_slot - 1U] - pane_left + 18;
+    *y = pane_height - (displayed_slot == 2 ? 20 : 30);
+    return 1;
+}
+
 static int inside(int32_t x, int32_t y,
                   int32_t left, int32_t top, int32_t right, int32_t bottom)
 {

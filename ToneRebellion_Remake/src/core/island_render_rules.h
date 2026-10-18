@@ -12,6 +12,12 @@ enum {
     ISLAND_TONE_POOL_BASE_FRAME = 0
 };
 
+enum {
+    ISLAND_FLOATER_OVERLAY_REALM = 1u << 0,
+    ISLAND_FLOATER_OVERLAY_HEALTH = 1u << 1,
+    ISLAND_FLOATER_OVERLAY_STATE = 1u << 2
+};
+
 /* FUN_0040bf98 composites POOL's BASE 1 1 before its animated CHUG layer.
    FUN_00450a71 gives POOL runtime IDs 0 and 5 distinct counter sequences.
    FUN_0040bf98 maps the selected counter through POOL CHUG 2..40, speed 3,
@@ -42,11 +48,16 @@ int island_site_should_draw_pad(int pad_group, int site_occupied_by_item);
 /* FUN_0042fa0f (message 2003) normalizes and flips each of the three
    independent FUN_0042704b overlay-enable globals. */
 uint8_t island_toggle_realm_overlay_flags(uint8_t flags);
+int island_worker_realm_overlay_enabled(uint8_t flags,
+                                        int renderer_allows_overlays);
+int island_worker_health_overlay_enabled(uint8_t flags,
+                                         int renderer_allows_overlays);
 
 /* FUN_0042704b's health badge for a class-0 worker is FLTINFO frame
-   0x15-max_hp. Its anchor is the body's opaque left edge minus eight (or
-   inclusive right edge when mirrored), top-aligned, then shifted +2 X. */
-int island_worker_health_badge_layout(uint8_t max_hit_points, int facing_left,
+   0x15-max_hp. Type 0/8 uses a +2 X offset; other types use +5 when normal
+   and +0 when mirrored. */
+int island_worker_health_badge_layout(uint8_t worker_type,
+                                      uint8_t max_hit_points, int facing_left,
                                       int32_t body_hit_left,
                                       int32_t body_hit_top,
                                       int32_t body_hit_right_exclusive,

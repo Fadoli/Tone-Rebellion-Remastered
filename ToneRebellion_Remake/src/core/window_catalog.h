@@ -56,10 +56,12 @@ typedef struct WindowCatalog {
 enum WindowIslandPanelMode {
     WINDOW_ISLAND_PANEL_NONE = -1,
     WINDOW_ISLAND_PANEL_GENERAL = 0,
+    WINDOW_ISLAND_PANEL_TASKS = 2,
     WINDOW_ISLAND_PANEL_INVENTORY = 4,
     WINDOW_ISLAND_PANEL_GLYPHS = 5,
     WINDOW_ISLAND_PANEL_DIPLOMACY = 6,
-    WINDOW_ISLAND_PANEL_TRADE = 7
+    WINDOW_ISLAND_PANEL_TRADE = 7,
+    WINDOW_ISLAND_PANEL_EFFECT_DEBUG = 8
 };
 
 enum WindowIslandButton {
@@ -102,6 +104,8 @@ int32_t window_catalog_control_frame(const WindowTemplate *control,
 /* These names and panel numbers mirror FUN_0042f150 / FUN_0042f303 and the
    permanent-button messages dispatched by FUN_0042fa0f. */
 int window_catalog_hall_panel_mode(const char *control_name);
+/* FUN_0042fa0f routes scrollup/dn to IWTasks and escrollup/dn to IWEffList. */
+int window_catalog_scroll_panel_mode(const char *control_name);
 int window_catalog_island_button(const char *control_name);
 
 #endif

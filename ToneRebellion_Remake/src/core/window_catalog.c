@@ -395,6 +395,20 @@ int window_catalog_hall_panel_mode(const char *control_name)
     return WINDOW_ISLAND_PANEL_NONE;
 }
 
+int window_catalog_scroll_panel_mode(const char *control_name)
+{
+    if (control_name == NULL) return WINDOW_ISLAND_PANEL_NONE;
+    if (strcmp(control_name, "scrollup") == 0 ||
+        strcmp(control_name, "scrolldn") == 0) {
+        return WINDOW_ISLAND_PANEL_TASKS;
+    }
+    if (strcmp(control_name, "escrollup") == 0 ||
+        strcmp(control_name, "escrolldn") == 0) {
+        return WINDOW_ISLAND_PANEL_EFFECT_DEBUG;
+    }
+    return WINDOW_ISLAND_PANEL_NONE;
+}
+
 int window_catalog_island_button(const char *control_name)
 {
     if (control_name == NULL) return WINDOW_ISLAND_BUTTON_NONE;

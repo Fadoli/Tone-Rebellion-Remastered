@@ -104,7 +104,22 @@ uint8_t island_toggle_realm_overlay_flags(uint8_t flags)
     return toggled;
 }
 
-int island_worker_health_badge_layout(uint8_t max_hit_points, int facing_left,
+int island_worker_realm_overlay_enabled(uint8_t flags,
+                                        int renderer_allows_overlays)
+{
+    return renderer_allows_overlays &&
+           (flags & ISLAND_FLOATER_OVERLAY_REALM) != 0;
+}
+
+int island_worker_health_overlay_enabled(uint8_t flags,
+                                         int renderer_allows_overlays)
+{
+    return renderer_allows_overlays &&
+           (flags & ISLAND_FLOATER_OVERLAY_HEALTH) != 0;
+}
+
+int island_worker_health_badge_layout(uint8_t worker_type,
+                                      uint8_t max_hit_points, int facing_left,
                                       int32_t body_hit_left,
                                       int32_t body_hit_top,
                                       int32_t body_hit_right_exclusive,
@@ -112,11 +127,15 @@ int island_worker_health_badge_layout(uint8_t max_hit_points, int facing_left,
                                       int32_t *x, int32_t *y)
 {
     uint8_t hp = max_hit_points;
-    if (frame == NULL || x == NULL || y == NULL ||
+    int horizontal_offset;
+    if (worker_type > 8U || frame == NULL || x == NULL || y == NULL ||
         body_hit_right_exclusive <= body_hit_left) return 0;
     if (hp > 10u) hp = 10u;
+    horizontal_offset = worker_type == 0U || worker_type == 8U
+        ? 2 : (facing_left ? 0 : 5);
     *frame = 0x15u - hp;
-    *x = (facing_left ? body_hit_right_exclusive - 1 : body_hit_left - 8) + 2;
+    *x = (facing_left ? body_hit_right_exclusive - 1 : body_hit_left - 8) +
+         horizontal_offset;
     *y = body_hit_top;
     return 1;
 }

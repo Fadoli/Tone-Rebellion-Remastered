@@ -29,6 +29,29 @@ static void test_displayed_player_order(void)
     }
 }
 
+static void test_source_player_icon_positions(void)
+{
+    static const int32_t expected_x[4] = {127, 46, 126, 206};
+    static const int32_t expected_y[4] = {10, 73, 83, 73};
+    uint8_t slot;
+    for (slot = 0; slot < 4; ++slot) {
+        int32_t x = -1;
+        int32_t y = -1;
+        assert(game_diplomacy_player_icon_position(slot, 192, 255, 103,
+                                                    &x, &y));
+        assert(x == expected_x[slot] && y == expected_y[slot]);
+    }
+    {
+        int32_t x = 77;
+        int32_t y = 88;
+        assert(!game_diplomacy_player_icon_position(4, 192, 255, 103,
+                                                    &x, &y));
+        assert(x == 77 && y == 88);
+        assert(!game_diplomacy_player_icon_position(0, 192, 0, 103,
+                                                    &x, &y));
+    }
+}
+
 static void test_source_hover_zones(void)
 {
     const int32_t left = 192;
@@ -117,6 +140,7 @@ static void test_session_toggles_and_outbox(void)
 int main(void)
 {
     test_displayed_player_order();
+    test_source_player_icon_positions();
     test_source_hover_zones();
     test_session_toggles_and_outbox();
     return 0;

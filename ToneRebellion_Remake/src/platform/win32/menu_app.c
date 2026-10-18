@@ -87,6 +87,7 @@ static SpriteSheet g_pad_art;
 static SpriteSheet g_bridge_trigger_art;
 static SpriteSheet g_temp_hole_art;
 static SpriteSheet g_build_cycle_art;
+static SpriteSheet g_task_scroll_art;
 static SpriteSheet g_bildtone_art;
 static SpriteSheet g_tone_crys_art;
 static SpriteSheet g_magctone_art;
@@ -162,7 +163,7 @@ static int g_hovered_glyph = -1;
 static int g_glyph_info_default = 1;
 static GameDiplomacyHit g_diplomacy_hover;
 static int g_diplomacy_hover_valid;
-static uint8_t g_island_realm_flags;
+static uint8_t g_floater_overlay_flags;
 static int g_selected_location = -1;
 static int g_selected_floater = -1;
 static IwConstructState g_iw_construct;
@@ -684,6 +685,7 @@ static int load_island_surface(int island_id, int map_island_index,
     SpriteSheet bridge_candidate = {0};
     SpriteSheet temp_hole_candidate = {0};
     SpriteSheet build_cycle_candidate = {0};
+    SpriteSheet task_scroll_candidate = {0};
     SpriteSheet bildtone_candidate = {0};
     SpriteSheet tone_crys_candidate = {0};
     SpriteSheet magctone_candidate = {0};
@@ -774,6 +776,8 @@ static int load_island_surface(int island_id, int map_island_index,
         !load_sprite_sheet(&archive, "data\\temphol0.shp", palette, &temp_hole_candidate,
                            error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\scarrow0.shp", palette, &build_cycle_candidate,
+                           error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\scroll.shp", palette, &task_scroll_candidate,
                            error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\bildtone.shp", palette, &bildtone_candidate,
                            error, error_capacity) ||
@@ -937,6 +941,7 @@ static int load_island_surface(int island_id, int map_island_index,
         goto done;
     }
     if (temp_hole_candidate.frame_count < 8 || build_cycle_candidate.frame_count < 1 ||
+        task_scroll_candidate.frame_count < 3 ||
         hall_stock_candidate.frame_count < 6 || main_buttons_candidate.frame_count < 8 ||
         hall_command_candidate.frame_count < 10 ||
         floater_info_candidate.frame_count < 26 ||
@@ -995,6 +1000,7 @@ static int load_island_surface(int island_id, int map_island_index,
     free_sprite_sheet(&g_bridge_trigger_art);
     free_sprite_sheet(&g_temp_hole_art);
     free_sprite_sheet(&g_build_cycle_art);
+    free_sprite_sheet(&g_task_scroll_art);
     free_sprite_sheet(&g_bildtone_art);
     free_sprite_sheet(&g_tone_crys_art);
     free_sprite_sheet(&g_magctone_art);
@@ -1056,6 +1062,8 @@ static int load_island_surface(int island_id, int map_island_index,
     memset(&temp_hole_candidate, 0, sizeof(temp_hole_candidate));
     g_build_cycle_art = build_cycle_candidate;
     memset(&build_cycle_candidate, 0, sizeof(build_cycle_candidate));
+    g_task_scroll_art = task_scroll_candidate;
+    memset(&task_scroll_candidate, 0, sizeof(task_scroll_candidate));
     g_bildtone_art = bildtone_candidate;
     memset(&bildtone_candidate, 0, sizeof(bildtone_candidate));
     g_tone_crys_art = tone_crys_candidate;
@@ -1103,6 +1111,7 @@ done:
     free_sprite_sheet(&bridge_candidate);
     free_sprite_sheet(&temp_hole_candidate);
     free_sprite_sheet(&build_cycle_candidate);
+    free_sprite_sheet(&task_scroll_candidate);
     free_sprite_sheet(&bildtone_candidate);
     free_sprite_sheet(&tone_crys_candidate);
     free_sprite_sheet(&magctone_candidate);
@@ -1271,6 +1280,66 @@ static int32_t measure_bitmap_text(void *context, const char *text, size_t lengt
     return width;
 }
 
+enum { CURVED_TEXT_RENDER_HEIGHT = 11 };
+
+static uint32_t curved_glyph_width(uint32_t source_width)
+{
+    uint32_t width = (source_width * CURVED_TEXT_RENDER_HEIGHT +
+                      g_bitmap_font.height / 2u) / g_bitmap_font.height;
+    return width == 0 ? 1u : width;
+}
+
+static int32_t measure_curved_bitmap_text(void *context, const char *text,
+                                          size_t length)
+{
+    size_t i;
+    int32_t width = 0;
+    (void)context;
+    for (i = 0; i < length; ++i) {
+        uint32_t glyph_width;
+        const uint8_t *glyph_pixels;
+        uint32_t code = (unsigned char)text[i];
+        if (code >= g_bitmap_font.glyph_count) code = (uint32_t)'?';
+        if (bitmap_font_get_glyph(&g_bitmap_font, code, &glyph_width, &glyph_pixels))
+            width += (int32_t)curved_glyph_width(glyph_width);
+    }
+    return width;
+}
+
+static void draw_curved_bitmap_text_at(DWORD *pixels, int surface_width,
+                                       int surface_height, const char *text,
+                                       int x, int y, DWORD ink)
+{
+    const unsigned char *cursor = (const unsigned char *)text;
+    while (*cursor != 0) {
+        uint32_t source_width;
+        const uint8_t *glyph_pixels;
+        uint32_t code = *cursor < g_bitmap_font.glyph_count
+            ? *cursor : (uint32_t)'?';
+        if (bitmap_font_get_glyph(&g_bitmap_font, code, &source_width,
+                                  &glyph_pixels)) {
+            uint32_t width = curved_glyph_width(source_width);
+            uint32_t row;
+            for (row = 0; row < CURVED_TEXT_RENDER_HEIGHT; ++row) {
+                uint32_t source_row =
+                    row * g_bitmap_font.height / CURVED_TEXT_RENDER_HEIGHT;
+                uint32_t col;
+                for (col = 0; col < width; ++col) {
+                    uint32_t source_col = col * source_width / width;
+                    int px = x + (int)col;
+                    int py = y + (int)row;
+                    if (glyph_pixels[(size_t)source_row * source_width + source_col] == 1u &&
+                        px >= 0 && px < surface_width && py >= 0 && py < surface_height) {
+                        pixels[(size_t)py * (size_t)surface_width + (size_t)px] = ink;
+                    }
+                }
+            }
+            x += (int)width;
+        }
+        ++cursor;
+    }
+}
+
 static void draw_justified_bitmap_line(DWORD *pixels, int surface_width,
                                        int surface_height, const char *text,
                                        const CurvedTextLine *line, DWORD ink)
@@ -1284,10 +1353,10 @@ static void draw_justified_bitmap_line(DWORD *pixels, int surface_width,
     int32_t text_width;
     int32_t extra;
     int32_t per_space;
-    int32_t single_space_width = measure_bitmap_text(NULL, " ", 1);
+    int32_t single_space_width = measure_curved_bitmap_text(NULL, " ", 1);
     int x = line->x;
     for (i = cursor; i < end; ++i) if (text[i] == ' ') ++space_count;
-    text_width = measure_bitmap_text(NULL, text + cursor, end - cursor);
+    text_width = measure_curved_bitmap_text(NULL, text + cursor, end - cursor);
     extra = line->width - text_width;
     if (extra < 0) extra = 0;
     if (space_count == 0) {
@@ -1295,8 +1364,8 @@ static void draw_justified_bitmap_line(DWORD *pixels, int surface_width,
         if (length >= sizeof(word)) length = sizeof(word) - 1;
         memcpy(word, text + cursor, length);
         word[length] = '\0';
-        draw_bitmap_text_at(pixels, surface_width, surface_height, word,
-                            x, line->y, ink);
+        draw_curved_bitmap_text_at(pixels, surface_width, surface_height,
+                                   word, x, line->y, ink);
         return;
     }
     per_space = extra / (int32_t)space_count;
@@ -1310,9 +1379,9 @@ static void draw_justified_bitmap_line(DWORD *pixels, int surface_width,
         if (word_length >= sizeof(word)) word_length = sizeof(word) - 1;
         memcpy(word, text + cursor, word_length);
         word[word_length] = '\0';
-        draw_bitmap_text_at(pixels, surface_width, surface_height, word,
-                            x, line->y, ink);
-        word_width = measure_bitmap_text(NULL, word, word_length);
+        draw_curved_bitmap_text_at(pixels, surface_width, surface_height,
+                                   word, x, line->y, ink);
+        word_width = measure_curved_bitmap_text(NULL, word, word_length);
         x += word_width;
         if (word_end < end) {
             x += single_space_width + per_space;
@@ -1726,8 +1795,9 @@ static int create_tribe_description_sheet(SpriteSheet *sheet,
         size_t line;
         if (!curved_text_layout(text,
                                 entry % 2 == 0 ? CURVED_TEXT_LEFT : CURVED_TEXT_RIGHT,
-                                410, (int32_t)g_bitmap_font.height,
-                                measure_bitmap_text, NULL, lines, MAX_LINES,
+                                CURVED_TEXT_NEWGAME_LAST_LINE_Y,
+                                CURVED_TEXT_RENDER_HEIGHT,
+                                measure_curved_bitmap_text, NULL, lines, MAX_LINES,
                                 &line_count)) {
             (void)snprintf(error, error_capacity,
                            "could not lay out curved tribe description %d", entry);
@@ -2067,11 +2137,17 @@ static void draw_configured_buttons(HDC dc, int state, const char *shape_id,
             strcmp(window->shape_id, shape_id) != 0 || window->shape_frame < 0) continue;
         frame = window->shape_frame;
         if (state == 0) {
-            frame = window_catalog_control_frame(
-                window, template_help_index(window) == g_hovered_help);
+            int help_index = template_help_index(window);
+            int hovered = window_catalog_hover_frame(
+                window->shape_frame, help_index, g_hovered_help) !=
+                window->shape_frame;
+            frame = window_catalog_control_frame(window, hovered);
         } else if (state == 1) {
-            frame = window_catalog_control_frame(
-                window, template_caption_index(window) == g_hovered_newgame_text);
+            int caption_index = template_caption_index(window);
+            int hovered = window_catalog_hover_frame(
+                window->shape_frame, caption_index,
+                g_hovered_newgame_text) != window->shape_frame;
+            frame = window_catalog_control_frame(window, hovered);
         }
         draw_sprite(dc, sheet, (uint32_t)frame, window->pane.left, window->pane.top);
     }
@@ -2129,10 +2205,8 @@ static void render_new_game(HDC dc)
             }
         }
     }
-    /* NGMEINTR frame 0 is the full-width footer plate (640x73 at y=407).
-       The window catalog only describes its individual controls, so keep
-       this background layer explicit before drawing those controls. */
-    draw_sprite(dc, &g_new_buttons, 0, 0, 0);
+    /* NEWGAMWND contributes the 640x73 frame-0 footer at y=407; do not draw
+       it twice or let its unmapped hover index select frame 1. */
     draw_configured_buttons(dc, 1, "NEWBUTT", &g_new_buttons);
     draw_sprite(dc, &g_realm_art, (uint32_t)g_menu.selected_tribe, 60, 40);
     draw_sprite(dc, &g_realm_art,
@@ -2867,6 +2941,27 @@ static void draw_hall_info_panel(HDC dc, int panel_state)
                               max_lines, g_island_palette[6]);
 }
 
+static void draw_diplomacy_initial_worker_icon(HDC dc,
+                                               const GameFloaterStart *floater,
+                                               int x, int y)
+{
+    const SpriteSheet *body_art;
+    const SpriteSheet *leg_art;
+    if (floater == NULL || floater->type_index >= GAME_START_PLAYER_COUNT) return;
+    body_art = floater->facing_left
+        ? &g_initial_floater_bodies_flipped[floater->type_index]
+        : &g_initial_floater_bodies[floater->type_index];
+    leg_art = floater->facing_left
+        ? &g_initial_floater_legs_flipped[floater->type_index]
+        : &g_initial_floater_legs[floater->type_index];
+    if (body_art->frame_count == 0 || leg_art->frame_count == 0) return;
+    /* FUN_0042704b uses frame zero for the observed initial worker pose.
+       Its later per-object animation and status-dependent frames are not
+       represented by the four-worker startup model. */
+    draw_sprite(dc, leg_art, 0, x, y);
+    draw_sprite(dc, body_art, 0, x, y);
+}
+
 static void draw_diplomacy_panel(HDC dc, const WindowTemplate *panel,
                                  int player_slot)
 {
@@ -2876,6 +2971,30 @@ static void draw_diplomacy_panel(HDC dc, const WindowTemplate *panel,
     unsigned int column;
     int pane_width = panel->pane.right - panel->pane.left;
     int pane_height = panel->pane.bottom - panel->pane.top;
+    const GameFloaterStart *player_floaters[GAME_START_PLAYER_COUNT] = {0};
+    if (g_game_session_valid) {
+        unsigned floater_index;
+        for (floater_index = 0; floater_index < g_game_session.floater_count;
+             ++floater_index) {
+            const GameFloaterStart *floater =
+                &g_game_session.floaters[floater_index];
+            if (floater->owner_slot < GAME_START_PLAYER_COUNT &&
+                floater->type_index < GAME_START_PLAYER_COUNT &&
+                player_floaters[floater->owner_slot] == NULL) {
+                player_floaters[floater->owner_slot] = floater;
+            }
+        }
+    }
+    {
+        int32_t icon_x;
+        int32_t icon_y;
+        if (game_diplomacy_player_icon_position(0, panel->pane.left,
+                pane_width, pane_height, &icon_x, &icon_y)) {
+            draw_diplomacy_initial_worker_icon(dc, player_floaters[player_slot],
+                panel->pane.left + (int)icon_x,
+                panel->pane.top + (int)icon_y);
+        }
+    }
     for (column = 0; column < GAME_TRADE_TARGET_COUNT; ++column) {
         uint8_t target_player;
         uint32_t emblem_frame = column * 7U;
@@ -2903,6 +3022,18 @@ static void draw_diplomacy_panel(HDC dc, const WindowTemplate *panel,
             draw_sprite(dc, &g_diplomacy_art, 23,
                         (int)control_left, action_y);
         }
+        {
+            int32_t icon_x;
+            int32_t icon_y;
+            if (game_diplomacy_player_icon_position((uint8_t)(column + 1U),
+                    panel->pane.left, pane_width, pane_height,
+                    &icon_x, &icon_y)) {
+                /* FUN_0043e5aa draws each player icon before its policy state. */
+                draw_diplomacy_initial_worker_icon(dc, player_floaters[target_player],
+                    panel->pane.left + (int)icon_x,
+                    panel->pane.top + (int)icon_y);
+            }
+        }
         action_frame =
             (g_game_session.diplomacy_policy_mask[player_slot] &
              (uint8_t)(1U << target_player)) != 0 ? 21U : 22U;
@@ -2928,21 +3059,58 @@ static void draw_hall_panel(HDC dc, int hall_player)
     const WindowTemplate *panel = NULL;
     const char *empty_message = NULL;
     int panel_state = g_island_panel_mode;
-    if (panel_state == 2) {
+    if (panel_state == WINDOW_ISLAND_PANEL_TASKS ||
+        panel_state == WINDOW_ISLAND_PANEL_EFFECT_DEBUG) {
         const char *const task_window_names[] = {
             "IWTasks", "IWTaskInfo", "IWTaskOptions"
         };
+        const char *const effect_window_names[] = {
+            "IWEffList", "IWSFXList"
+        };
+        static const char *const task_scroll_names[] = {
+            "scrollup", "scrolldn", "escrollup", "escrolldn"
+        };
         size_t task_index;
+        if (panel_state == WINDOW_ISLAND_PANEL_TASKS) {
+            for (task_index = 0;
+                 task_index < sizeof(task_window_names) / sizeof(task_window_names[0]);
+                 ++task_index) {
+                const WindowTemplate *task_panel = window_catalog_find(
+                    &g_window_catalog, task_window_names[task_index], 3);
+                if (task_panel != NULL && task_panel->shape_frame >= 0 &&
+                    g_temp_hole_art.frame_count > (uint32_t)task_panel->shape_frame) {
+                    draw_sprite(dc, &g_temp_hole_art,
+                                (uint32_t)task_panel->shape_frame,
+                                task_panel->pane.left, task_panel->pane.top);
+                }
+            }
+        } else {
+            for (task_index = 0;
+                 task_index < sizeof(effect_window_names) / sizeof(effect_window_names[0]);
+                 ++task_index) {
+                const WindowTemplate *effect_panel = window_catalog_find(
+                    &g_window_catalog, effect_window_names[task_index], 3);
+                if (effect_panel != NULL && effect_panel->shape_frame >= 0 &&
+                    g_temp_hole_art.frame_count > (uint32_t)effect_panel->shape_frame) {
+                    draw_sprite(dc, &g_temp_hole_art,
+                                (uint32_t)effect_panel->shape_frame,
+                                effect_panel->pane.left, effect_panel->pane.top);
+                }
+            }
+        }
         for (task_index = 0;
-             task_index < sizeof(task_window_names) / sizeof(task_window_names[0]);
+             task_index < sizeof(task_scroll_names) / sizeof(task_scroll_names[0]);
              ++task_index) {
-            const WindowTemplate *task_panel = window_catalog_find(
-                &g_window_catalog, task_window_names[task_index], 3);
-            if (task_panel != NULL && task_panel->shape_frame >= 0 &&
-                g_temp_hole_art.frame_count > (uint32_t)task_panel->shape_frame) {
-                draw_sprite(dc, &g_temp_hole_art,
-                            (uint32_t)task_panel->shape_frame,
-                            task_panel->pane.left, task_panel->pane.top);
+            const WindowTemplate *control = window_catalog_find(
+                &g_window_catalog, task_scroll_names[task_index], 3);
+            if (control != NULL &&
+                window_catalog_scroll_panel_mode(control->name) == panel_state &&
+                control->shape_frame >= 0 &&
+                g_task_scroll_art.frame_count > (uint32_t)control->shape_frame) {
+                /* FUN_0042fa0f routes each pair to its distinct list panel. */
+                draw_sprite(dc, &g_task_scroll_art,
+                            (uint32_t)control->shape_frame,
+                            control->pane.left, control->pane.top);
             }
         }
         return;
@@ -3677,6 +3845,59 @@ static void render_island_view(HDC dc)
                           : &g_initial_floater_legs[floater->type_index];
             draw_sprite(dc, leg_art, leg_frame, floater_x, floater_y);
             draw_sprite(dc, body_art, 0, floater_x, floater_y);
+            /* FUN_0042822b calls FUN_0042704b with param_5=1 for world
+               floaters. The first overlay global gates FLTINFO realm frames
+               22..25; other overlay values need runtime state not modeled by
+               the startup-floater record. */
+            if (island_worker_realm_overlay_enabled(
+                    g_floater_overlay_flags, 1) &&
+                g_floater_info_art.frame_count >= 26 &&
+                body_art->frame_count != 0) {
+                const SpriteFrame *body_frame = &body_art->frames[0];
+                int32_t body_left = floater_x + body_frame->x_offset +
+                                    body_frame->hit_left;
+                int32_t body_top = floater_y + body_frame->y_offset +
+                                   body_frame->hit_top;
+                int32_t body_right = floater_x + body_frame->x_offset +
+                                     body_frame->hit_right;
+                uint32_t realm_frame;
+                int32_t badge_x;
+                int32_t badge_y;
+                if (island_worker_realm_badge_layout(
+                        floater->type_index, 0, 0, floater->facing_left,
+                        body_left, body_top, body_right,
+                        &realm_frame, &badge_x, &badge_y) &&
+                    realm_frame < g_floater_info_art.frame_count) {
+                    draw_sprite(dc, &g_floater_info_art, realm_frame,
+                                badge_x, badge_y);
+                }
+            }
+            /* FUN_0042704b gates health FLTINFO frames with the second
+               TOGREALM flag. Initial workers are created with +0x1c cleared
+               by FUN_00466fe4/FUN_0041e4e4, so their world badge is eligible. */
+            if (island_worker_health_overlay_enabled(
+                    g_floater_overlay_flags, 1) &&
+                g_floater_info_art.frame_count >= 26 &&
+                body_art->frame_count != 0) {
+                const SpriteFrame *body_frame = &body_art->frames[0];
+                int32_t body_left = floater_x + body_frame->x_offset +
+                                    body_frame->hit_left;
+                int32_t body_top = floater_y + body_frame->y_offset +
+                                   body_frame->hit_top;
+                int32_t body_right = floater_x + body_frame->x_offset +
+                                     body_frame->hit_right;
+                uint32_t health_frame;
+                int32_t badge_x;
+                int32_t badge_y;
+                if (island_worker_health_badge_layout(
+                        floater->type_index, floater->max_hit_points,
+                        floater->facing_left, body_left, body_top, body_right,
+                        &health_frame, &badge_x, &badge_y) &&
+                    health_frame < g_floater_info_art.frame_count) {
+                    draw_sprite(dc, &g_floater_info_art, health_frame,
+                                badge_x, badge_y);
+                }
+            }
         }
     }
     if (focus != NULL) {
@@ -3893,6 +4114,7 @@ static void render_island_view(HDC dc)
                     int32_t body_right = sprite_x + body_frame->x_offset +
                                          body_frame->hit_right;
                     if (island_worker_health_badge_layout(
+                            selected_floater->type_index,
                             selected_floater->max_hit_points,
                             selected_floater->facing_left,
                             body_left, body_top, body_right,
@@ -4435,13 +4657,14 @@ static void handle_click(HWND window, int x, int y)
                     g_selected_inventory_item = -1;
                     update_window_title(window);
                 } else if (button_index == WINDOW_ISLAND_BUTTON_TASKS) {
-                    g_island_panel_mode = g_island_panel_mode == 2
-                        ? WINDOW_ISLAND_PANEL_GENERAL : 2;
+                    g_island_panel_mode =
+                        g_island_panel_mode == WINDOW_ISLAND_PANEL_TASKS
+                        ? WINDOW_ISLAND_PANEL_GENERAL : WINDOW_ISLAND_PANEL_TASKS;
                 } else if (button_index == WINDOW_ISLAND_BUTTON_REALM) {
                     /* FUN_0042fa0f assigns each source global (flag == 0),
                        independently normalizing and flipping all three. */
-                    g_island_realm_flags =
-                        island_toggle_realm_overlay_flags(g_island_realm_flags);
+                    g_floater_overlay_flags =
+                        island_toggle_realm_overlay_flags(g_floater_overlay_flags);
                 } else if (button_index == WINDOW_ISLAND_BUTTON_PANIC) {
                     /* 2002 -> FUN_0042fa0f(0x3b) -> type 3/subtype 0.
                        FUN_00465793 toggles bit 0 in this player's raw island
@@ -4525,9 +4748,14 @@ static void handle_click(HWND window, int x, int y)
                                 (uint8_t)g_menu.selected_map_island,
                                 (uint16_t)clicked_location,
                                 (uint8_t)g_selected_inventory_item);
-                            /* The source clears the global selection after
-                               this attempt, including rejected locations. */
-                            g_selected_inventory_item = -1;
+                            /* FUN_0042fa0f clears the selection and returns
+                               to general mode even if the location guard
+                               prevented the request from being queued. */
+                            island_panel_finish_inventory_target(
+                                &g_island_panel_mode,
+                                &g_selected_inventory_item,
+                                &g_hovered_inventory_item,
+                                &g_hovered_hall_command);
                         } else if (g_pending_build_item_id >= 0) {
                             if (place_pending_building(window, clicked_location)) {
                                 g_selected_location = clicked_location;
@@ -5275,6 +5503,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_bridge_trigger_art);
     free_sprite_sheet(&g_temp_hole_art);
     free_sprite_sheet(&g_build_cycle_art);
+    free_sprite_sheet(&g_task_scroll_art);
     free_sprite_sheet(&g_bildtone_art);
     free_sprite_sheet(&g_tone_crys_art);
     free_sprite_sheet(&g_magctone_art);

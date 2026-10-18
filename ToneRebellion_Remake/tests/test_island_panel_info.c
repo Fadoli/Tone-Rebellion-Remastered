@@ -16,6 +16,10 @@ int main(int argc, char **argv)
     IslandHallResourceRow resource_row;
     WindowTemplate info_panel = {0};
     IslandPanelSelection panel_selection = {7, -1};
+    int panel_mode = WINDOW_ISLAND_PANEL_INVENTORY;
+    int selected_inventory_item = 12;
+    int hovered_inventory_item = 12;
+    int hovered_command = WINDOW_ISLAND_PANEL_INVENTORY;
     static const unsigned char plot04[] =
         "PLOT03\r\nOther entry\r\nEND\r\n"
         "PLOT04 \r\nLanterne d'ether\r\n emits light. \r\nEND\r\n";
@@ -56,6 +60,13 @@ int main(int argc, char **argv)
     assert(panel_selection.location_index == 7);
     assert(panel_selection.floater_index == 3);
     island_panel_select_floater(NULL, 9);
+    island_panel_finish_inventory_target(&panel_mode, &selected_inventory_item,
+                                         &hovered_inventory_item,
+                                         &hovered_command);
+    assert(panel_mode == WINDOW_ISLAND_PANEL_GENERAL);
+    assert(selected_inventory_item == -1 && hovered_inventory_item == -1);
+    assert(hovered_command == WINDOW_ISLAND_PANEL_NONE);
+    island_panel_finish_inventory_target(NULL, NULL, NULL, NULL);
     assert(island_panel_info_roster_position(0, 0, &roster_x, &roster_y));
     assert(roster_x == 230 && roster_y == 21);
     assert(island_panel_info_roster_position(3, 0, &roster_x, &roster_y));

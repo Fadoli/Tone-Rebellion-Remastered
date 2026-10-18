@@ -133,6 +133,7 @@ static unsigned int island_ui_frame_requirement(const char *name)
     if (ascii_case_equal(name, "data\\thbutt.shp")) return 6;
     if (ascii_case_equal(name, "data\\temphol0.shp")) return 8;
     if (ascii_case_equal(name, "data\\glinv.shp")) return 29;
+    if (ascii_case_equal(name, "data\\scroll.shp")) return 3;
     if (ascii_case_equal(name, "data\\trade.shp")) return 4;
     if (ascii_case_equal(name, "data\\bildtone.shp")) return 25;
     if (ascii_case_equal(name, "data\\tonecrys.shp") ||
@@ -359,7 +360,7 @@ int main(int argc, char **argv)
     }
 
     if (shapes_found == 0 || halls_found != 4 || island_template_sheets_found != 4 ||
-        island_ui_sheets_found != 11 ||
+        island_ui_sheets_found != 12 ||
         health_badge_frames_found != 1 ||
         realm_badge_frames_found != 4 ||
         newgame_footer_frames_found != 1 ||
@@ -367,7 +368,7 @@ int main(int argc, char **argv)
         cob_archive_find(&archive, "data\\br-trg01.shp") == NULL ||
         !manifest_contains(shape_names, shape_name_count, "data\\br-trg01.shp")) {
         (void)fprintf(stderr,
-                      "expected Hall/UI and Trade resource sheets, the New Game footer overlay, four tribe templates, four worker bodies, four worker leg sheets, and manifested data\\br-trg01.shp\n");
+                      "expected Hall/UI/scroll and Trade resource sheets, the New Game footer overlay, four tribe templates, four worker bodies, four worker leg sheets, and manifested data\\br-trg01.shp\n");
         cob_archive_close(&archive);
         return 1;
     }
