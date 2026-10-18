@@ -17,6 +17,9 @@ int main(int argc, char **argv)
     int task_label_y;
     int task_icon_x;
     int task_icon_y;
+    unsigned int gauge_fill;
+    uint16_t construction_catalog_item_id;
+    size_t construction_name_index;
     IslandHallResourceRow resource_row;
     IslandTaskRow task_row;
     IslandTaskRowPosition task_position;
@@ -103,6 +106,14 @@ int main(int argc, char **argv)
     assert(island_panel_info_stock_task_row(2, &task_row));
     assert(task_row.resource_icon_type == 2);
     assert(!island_panel_info_stock_task_row(3, &task_row));
+    assert(island_panel_info_stock_gauge_fill(0, 0, 70, &gauge_fill));
+    assert(gauge_fill == 0);
+    assert(island_panel_info_stock_gauge_fill(50, 0, 70, &gauge_fill));
+    assert(gauge_fill == 23);
+    assert(island_panel_info_stock_gauge_fill(200, 0, 70, &gauge_fill));
+    assert(gauge_fill == 70);
+    assert(!island_panel_info_stock_gauge_fill(50, -3, 70, &gauge_fill));
+    assert(!island_panel_info_stock_gauge_fill(50, 0, 70, NULL));
     assert(island_panel_info_task_row(0xd, 0, &task_row));
     assert(strcmp(task_row.label_key, "OARTIFACT") == 0 &&
            task_row.task_icon_frame == 4);
@@ -155,6 +166,18 @@ int main(int argc, char **argv)
     assert(task_icon_x == 319 && task_icon_y == 409);
     assert(!island_panel_info_task_icon_position(NULL, 0, 0,
         0, 0, 1, 1, 10, &task_icon_x, &task_icon_y));
+    assert(island_panel_info_construction_task_indices(0x25, 0,
+        &construction_catalog_item_id, &construction_name_index));
+    assert(construction_catalog_item_id == 0x25 && construction_name_index == 0);
+    assert(island_panel_info_construction_task_indices(0x34, 3,
+        &construction_catalog_item_id, &construction_name_index));
+    assert(construction_catalog_item_id == 0x64 && construction_name_index == 63);
+    assert(!island_panel_info_construction_task_indices(0x24, 0,
+        &construction_catalog_item_id, &construction_name_index));
+    assert(!island_panel_info_construction_task_indices(0x35, 0,
+        &construction_catalog_item_id, &construction_name_index));
+    assert(!island_panel_info_construction_task_indices(0x25, 4,
+        &construction_catalog_item_id, &construction_name_index));
     assert(island_panel_info_task_transfer_keys(0xd, 2, &task_title_key,
                                                 &task_category_key));
     assert(strcmp(task_title_key, "RETRIEVE") == 0 &&
@@ -272,7 +295,7 @@ int main(int argc, char **argv)
         unsigned int cryptic_id;
         static const char *const task_keys[] = {
             "CONSTR", "REPAIR", "DARTIFACT", "OARTIFACT", "STOCK",
-            "TNORM", "THIGH", "TEXCL", "DELIVER", "RETRIEVE",
+            "BLDCONST", "TNORM", "THIGH", "TEXCL", "DELIVER", "RETRIEVE",
             "STONE", "CTONE", "MTONE", "ARTIFACT"
         };
         size_t task_key_index;

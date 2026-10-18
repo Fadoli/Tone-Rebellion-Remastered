@@ -127,6 +127,7 @@ static char g_empty_inventory_text[256];
 static char g_empty_task_text[256];
 static char g_task_label_text[4][256];
 static char g_task_stock_text[256];
+static char g_task_building_const_text[256];
 static char g_task_priority_text[3][256];
 static char g_task_transfer_text[2][256];
 static char g_task_category_text[4][256];
@@ -1687,6 +1688,13 @@ static int load_newgame_captions(char *error, size_t error_capacity)
                        "gamey.txt key STOCK is missing or empty");
         goto done;
     }
+    if (!extract_help_entry(bytes, member->length, "BLDCONST",
+                            g_task_building_const_text,
+                            sizeof(g_task_building_const_text))) {
+        (void)snprintf(error, error_capacity,
+                       "gamey.txt key BLDCONST is missing or empty");
+        goto done;
+    }
     {
         static const char *const priority_keys[3] = {
             "TNORM", "THIGH", "TEXCL"
@@ -3193,6 +3201,41 @@ static int hall_resource_task_index(int hall_player, int slot)
     return -1;
 }
 
+static void draw_task_stock_gauge(HDC dc, const WindowTemplate *panel,
+                                  int hall_player, unsigned int resource,
+                                  int row_y)
+{
+    const GamePlayerEconomy *economy;
+    const GameRuntimeIsland *island;
+    const GameRuntimeLocation *hall;
+    unsigned int fill_width;
+    int gauge_x;
+    int gauge_y;
+    if (!g_game_session_valid || panel == NULL || hall_player < 0 ||
+        hall_player >= GAME_START_PLAYER_COUNT ||
+        resource >= GAME_RESOURCE_TYPE_COUNT ||
+        g_task_icon_art.frame_count <= 9U) return;
+    economy = &g_game_session.economy[hall_player];
+    if (economy->hall_island_index >= g_game_session.island_count ||
+        economy->hall_location_index >=
+            g_game_session.islands[economy->hall_island_index].location_count)
+        return;
+    island = &g_game_session.islands[economy->hall_island_index];
+    hall = &island->locations[economy->hall_location_index];
+    if (!island_panel_info_stock_gauge_fill(hall->resource_stock[resource],
+            hall->source_capacity_4a, 70U, &fill_width)) return;
+    gauge_x = panel->pane.left + 0xaa;
+    gauge_y = panel->pane.top + row_y;
+    /* FUN_004459e6 passes TASKICON frame 9 to FUN_004118df, which draws the
+       frame then fills its 70x7 interior from the left using palette index 0. */
+    draw_sprite(dc, &g_task_icon_art, 9U, gauge_x, gauge_y);
+    if (fill_width != 0U) {
+        fill_rect(dc, gauge_x + 2, gauge_y + 2,
+                  gauge_x + 2 + (int)fill_width, gauge_y + 5,
+                  g_island_palette[0]);
+    }
+}
+
 static void draw_hall_panel(HDC dc, int hall_player)
 {
     const WindowTemplate *panel = NULL;
@@ -3350,6 +3393,8 @@ static void draw_hall_panel(HDC dc, int hall_player)
                             resource_art[(unsigned int)row.resource_icon_type], 0,
                             task_list_panel->pane.left + position.resource_icon_x,
                             task_list_panel->pane.top + position.y + 7);
+                        draw_task_stock_gauge(dc, task_list_panel, hall_player,
+                            (unsigned int)row.resource_icon_type, position.y);
                     }
                 }
             }
@@ -3375,51 +3420,97 @@ static void draw_hall_panel(HDC dc, int hall_player)
                             RGB(185, 205, 220));
                     }
                     {
-                        const char *title_key = NULL;
-                        const char *category_key = NULL;
-                        if (island_panel_info_task_transfer_keys(
-                                selected_event->action_type,
-                                selected_event->payload_12,
-                                &title_key, &category_key)) {
-                            const char *title_text = task_label_text(title_key);
-                            const char *category_text =
-                                task_label_text(category_key);
-                            if (title_text != NULL && title_text[0] != '\0') {
-                                int title_width = measure_bitmap_text(NULL,
-                                    title_text, strlen(title_text));
-                                int info_width = task_info_panel->pane.right -
-                                                 task_info_panel->pane.left;
-                                draw_bitmap_label(dc, title_text,
-                                    task_info_panel->pane.left +
-                                        (info_width - title_width) / 2,
-                                    task_info_panel->pane.top + 5,
-                                    RGB(185, 205, 220));
+                        if (selected_event->action_type == 5) {
+                            uint16_t item_id;
+                            size_t name_index;
+                            if (island_panel_info_construction_task_indices(
+                                    selected_event->payload_12,
+                                    (uint8_t)hall_player, &item_id,
+                                    &name_index)) {
+                                if (g_task_building_const_text[0] != '\0') {
+                                    int label_width = measure_bitmap_text(NULL,
+                                        g_task_building_const_text,
+                                        strlen(g_task_building_const_text));
+                                    int info_width =
+                                        task_info_panel->pane.right -
+                                        task_info_panel->pane.left;
+                                    draw_bitmap_label(dc,
+                                        g_task_building_const_text,
+                                        task_info_panel->pane.left +
+                                            (info_width - label_width) / 2,
+                                        task_info_panel->pane.top + 5,
+                                        RGB(185, 205, 220));
+                                }
+                                if (name_index < BUILDING_NAME_COUNT &&
+                                    g_building_names[name_index][0] != '\0') {
+                                    draw_bitmap_label(dc,
+                                        g_building_names[name_index],
+                                        task_info_panel->pane.left + 10,
+                                        task_info_panel->pane.top + 0x1e,
+                                        RGB(185, 205, 220));
+                                }
+                                if (item_id < g_pad_catalog.item_count &&
+                                    item_id < PAD_CATALOG_MAX_ITEMS &&
+                                    g_building_art[item_id].frame_count != 0) {
+                                    int pane_width = task_info_panel->pane.right -
+                                                     task_info_panel->pane.left;
+                                    int pane_height = task_info_panel->pane.bottom -
+                                                      task_info_panel->pane.top;
+                                    (void)draw_building_preview(dc, item_id,
+                                        (uint8_t)hall_player,
+                                        task_info_panel->pane.left + pane_width - 0x1e,
+                                        task_info_panel->pane.top + pane_height - 10,
+                                        0x8000U);
+                                }
                             }
-                            if (category_text != NULL && category_text[0] != '\0') {
-                                draw_bitmap_label(dc, category_text,
-                                    task_info_panel->pane.left + 10,
-                                    task_info_panel->pane.top + 0x1e,
-                                    RGB(185, 205, 220));
-                            }
-                            if (selected_event->payload_12 >= 1 &&
-                                selected_event->payload_12 <= 3) {
-                                static const SpriteSheet *const resource_art[] = {
-                                    &g_bildtone_art, &g_tone_crys_art,
-                                    &g_magctone_art
-                                };
-                                const SpriteSheet *sheet = resource_art[
-                                    (unsigned int)selected_event->payload_12 - 1U];
-                                if (sheet->frame_count > 4U) {
-                                    const SpriteFrame *icon = &sheet->frames[4];
-                                    int icon_x;
-                                    int icon_y;
-                                    if (island_panel_info_task_icon_position(
-                                            task_info_panel, icon->x_offset,
-                                            icon->y_offset, icon->hit_left,
-                                            icon->hit_top, icon->hit_right,
-                                            icon->hit_bottom, 10,
-                                            &icon_x, &icon_y)) {
-                                        draw_sprite(dc, sheet, 4, icon_x, icon_y);
+                        } else {
+                            const char *title_key = NULL;
+                            const char *category_key = NULL;
+                            if (island_panel_info_task_transfer_keys(
+                                    selected_event->action_type,
+                                    selected_event->payload_12,
+                                    &title_key, &category_key)) {
+                                const char *title_text = task_label_text(title_key);
+                                const char *category_text =
+                                    task_label_text(category_key);
+                                if (title_text != NULL && title_text[0] != '\0') {
+                                    int title_width = measure_bitmap_text(NULL,
+                                        title_text, strlen(title_text));
+                                    int info_width = task_info_panel->pane.right -
+                                                     task_info_panel->pane.left;
+                                    draw_bitmap_label(dc, title_text,
+                                        task_info_panel->pane.left +
+                                            (info_width - title_width) / 2,
+                                        task_info_panel->pane.top + 5,
+                                        RGB(185, 205, 220));
+                                }
+                                if (category_text != NULL && category_text[0] != '\0') {
+                                    draw_bitmap_label(dc, category_text,
+                                        task_info_panel->pane.left + 10,
+                                        task_info_panel->pane.top + 0x1e,
+                                        RGB(185, 205, 220));
+                                }
+                                if (selected_event->payload_12 >= 1 &&
+                                    selected_event->payload_12 <= 3) {
+                                    static const SpriteSheet *const resource_art[] = {
+                                        &g_bildtone_art, &g_tone_crys_art,
+                                        &g_magctone_art
+                                    };
+                                    const SpriteSheet *sheet = resource_art[
+                                        (unsigned int)selected_event->payload_12 - 1U];
+                                    if (sheet->frame_count > 4U) {
+                                        const SpriteFrame *icon = &sheet->frames[4];
+                                        int icon_x;
+                                        int icon_y;
+                                        if (island_panel_info_task_icon_position(
+                                                task_info_panel, icon->x_offset,
+                                                icon->y_offset, icon->hit_left,
+                                                icon->hit_top, icon->hit_right,
+                                                icon->hit_bottom, 10,
+                                                &icon_x, &icon_y)) {
+                                            draw_sprite(dc, sheet, 4,
+                                                        icon_x, icon_y);
+                                        }
                                     }
                                 }
                             }

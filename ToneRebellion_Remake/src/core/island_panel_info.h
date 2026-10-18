@@ -114,6 +114,12 @@ int island_panel_info_task_row(int16_t action_type, int16_t item_id,
    one of the three resource shapes. */
 int island_panel_info_stock_task_row(unsigned int resource_type,
                                      IslandTaskRow *row);
+/* FUN_004459e6 uses stock / (short(Hall+0x4a) * 50 + 150), capped at 1,
+   for the TASKICON frame-9 gauge. Returns false for a nonpositive divisor. */
+int island_panel_info_stock_gauge_fill(uint16_t stock,
+                                       int16_t source_field_4a,
+                                       unsigned int gauge_width,
+                                       unsigned int *fill_width);
 /* FUN_004459e6 centers visible 13px rows vertically and draws the icon at x=25,
    label at x=45; returned y is the pane-local row origin. */
 int island_panel_info_task_row_position(const WindowTemplate *panel,
@@ -140,6 +146,12 @@ int island_panel_info_task_icon_position(const WindowTemplate *panel,
                                          int opaque_left, int opaque_top,
                                          int opaque_right, int opaque_bottom,
                                          int extra_x, int *draw_x, int *draw_y);
+/* FUN_004469d6 normalizes construction task IDs from 0x25..0x34 and indexes
+   the 16-entry BLDNAME block for the task's player. */
+int island_panel_info_construction_task_indices(int16_t item_id,
+                                                uint8_t player_slot,
+                                                uint16_t *catalog_item_id,
+                                                size_t *building_name_index);
 
 /* Reads one key-delimited text entry, trimming horizontal whitespace on keys. */
 int island_panel_info_extract_entry(const unsigned char *bytes, size_t length,

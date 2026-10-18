@@ -28,16 +28,16 @@ Porter uniquement les comportements établis par le binaire et les données loca
 - [x] Commandes de barre d'île, badges santé/royaume et descriptions de survol actuellement portées.
 - [x] Sons de menu et sélection de musique du royaume.
 - [x] Icônes des quatre joueurs dans la bannière Diplomatie à partir des ouvriers initiaux et des ancres source; animation et autres états en attente.
-- [x] Tasks : lignes et défilement portés pour actions 5, 0x12, 4 (items 5–33) et 0xd; clic sélectionne le slot, le panneau détail affiche priorité et catégorie/titre de transfert. Clic sur `IWTaskOptions` modifie la priorité ou libère le slot après garde d'identité. Autres libellés, icônes de détail et surbrillance restent incomplets. Effets : cadres `SCROLL.SHP`; défilement borné testé. `InvCycle` utilise aussi son frame de survol.
+- [x] Tasks : lignes/défilement des actions 5, 0x12, 4 et 0xd; clic sélectionne le slot et affiche priorité. `IWTaskInfo` montre `BLDCONST`, le nom BLDNAME, l’aperçu statique pour l’action 5, le détail des transferts; la jauge STOCK utilise les champs Hall observés. Action 0x12 et surbrillance restent à porter. `IWTaskOptions` change la priorité ou libère le slot après garde d'identité; les scrolls et survols utilisent les frames source.
 - [x] `IWTaskOptions` : boutons dessinés depuis `PRIOR.SHP` aux panes de `windows.txt`, avec survol et routage source de leurs commandes.
 - [x] Réserves Hall : au tick, demande type 4 créée/retirée selon mode, stock, bit Hall et lien de slot observés; annulation utilisateur nettoie le lien modélisé. Les demandes liées sont rendues comme `STOCK` avec les deux cadres TASKICON et l’icône ressource.
 - [x] Clic d'un glyphe possédé : mémorise l'index et arme le curseur source du mode `0x11`; le clic carte et son effet restent en attente des gardes/consommateur.
+- [x] Vérifications courantes : CTest 19/19; `windows.txt` 100 descripteurs; COB 210 feuilles/4821 images; ressources locales des panneaux validées.
 - [x] Inventory : la fiche `IWTextInfo` suit l'ID sélectionné après la fin du survol; couvert par `test_island_panel_info`.
 - [x] `TOGREALM` inverse ses trois flags; royaume (`FLTINFO` 22–25) et santé (`0x15−maxHP`) sont rendus pour les ouvriers initiaux. Les autres badges attendent leurs champs runtime.
 - [x] `PANIC` émet l'événement local type 3/sous-type 0 et le dispatch bascule le bit 0 du mot d'île par joueur; la sémantique reste inconnue.
 - [x] Texte New Game : hauteur source 13 px sans réduction verticale; largeur ramenée à 11/13 et interligne `+1` comme compromis de traduction (la source avance de `+3`); huit paragraphes testés dans la zone utile.
-- [x] Vérification Release courante : CTest 19/19; `windows.txt` 100 descripteurs; COB 210 spritesheets/4821 images; exécutable 297238 octets, SHA-256 `E9A8C7A35F2E6A39531A557DA5D95172676F28E383A0993AFF1885524F27BDE4`.
-- [ ] Compléter `IWTaskInfo` (quantité/jauge et détails action 5/0x12; aperçu Hall incomplet); porter les liens de flotteurs et autres tables annulées; mapper les autres actions, leurs producteurs runtime et leur libération.
+- [ ] Compléter `IWTaskInfo` (jauge et cible action 0x12; aperçu Hall incomplet); porter les liens de flotteurs et autres tables annulées; mapper les autres actions, leurs producteurs runtime et leur libération.
 
 ## Références
 

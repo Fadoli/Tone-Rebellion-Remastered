@@ -226,6 +226,26 @@ int island_panel_info_stock_task_row(unsigned int resource_type,
     return 1;
 }
 
+int island_panel_info_stock_gauge_fill(uint16_t stock,
+                                       int16_t source_field_4a,
+                                       unsigned int gauge_width,
+                                       unsigned int *fill_width)
+{
+    int32_t denominator;
+    uint64_t scaled;
+    if (fill_width == NULL) return 0;
+    denominator = (int32_t)source_field_4a * 50 + 150;
+    if (denominator <= 0) return 0;
+    if ((int32_t)stock >= denominator) {
+        *fill_width = gauge_width;
+        return 1;
+    }
+    scaled = (uint64_t)stock * gauge_width;
+    *fill_width = (unsigned int)((scaled + (uint32_t)denominator / 2U) /
+                                 (uint32_t)denominator);
+    return 1;
+}
+
 int island_panel_info_task_row_position(const WindowTemplate *panel,
                                        unsigned int visible_rows,
                                        unsigned int visible_index,
@@ -319,6 +339,20 @@ int island_panel_info_task_icon_position(const WindowTemplate *panel,
         opaque_left - frame_x_offset + extra_x;
     *draw_y = panel->pane.top + (height - opaque_height) / 2 -
         opaque_top - frame_y_offset;
+    return 1;
+}
+
+int island_panel_info_construction_task_indices(int16_t item_id,
+                                                uint8_t player_slot,
+                                                uint16_t *catalog_item_id,
+                                                size_t *building_name_index)
+{
+    size_t index;
+    if (item_id < 0x25 || item_id >= 0x35 || player_slot >= 4 ||
+        catalog_item_id == NULL || building_name_index == NULL) return 0;
+    index = (size_t)player_slot * 16U + (size_t)(item_id - 0x25);
+    *catalog_item_id = (uint16_t)(0x25U + index);
+    *building_name_index = index;
     return 1;
 }
 
