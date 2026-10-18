@@ -5494,8 +5494,8 @@ static void handle_click(HWND window, int x, int y)
                             g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
                             /* FUN_0042fa0f(0x40) emits category-3/type-3
                                with the clicked island/location and selected
-                               glyph. The receiver's state-8 floater guard
-                               and resulting runtime order are not modelled. */
+                               glyph. The receiver's raw record filter (+0
+                               player, +4 == 8) and runtime order are not modelled. */
                             (void)game_session_queue_glyph_action(
                                 &g_game_session, g_menu.selected_tribe,
                                 (uint8_t)g_menu.selected_map_island,

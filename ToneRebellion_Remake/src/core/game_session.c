@@ -1403,8 +1403,8 @@ int game_session_queue_glyph_action(GameSession *session,
 
     /* FUN_0042fa0f's packet fields are category 3, player, type 3, clicked
        island/location, and DAT_0049e9c0 (the selected glyph). Keep only the
-       payload here; the receiver's FUN_0046562b(player, 8) check is unknown to
-       the current floater model. */
+       payload here; the current model has no active record matching
+       FUN_0046562b(player, 8): +0 == player and +4 == 8. */
     request = &session->glyph_actions[session->glyph_action_count++];
     request->player_slot = player_slot;
     request->island_index = island_index;

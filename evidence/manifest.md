@@ -5,6 +5,17 @@
 | `binary_overview` | `ev_78e02fea36715ea8de479afd53ecbe956f7050cb8cea229addc1a460097c39f3` | 2 410 procédures, 2 209 chaînes, image base `0x400000`, 7 segments | Observation Ghidra 12.1.4 via workflow REA. |
 | `list_procedures` | `ev_c01b8c54dcc2f60207f2b1d086a7768d14adb866a6a07f142f3c1ef365c344ac` | 2 410 procédures | Evidence complète récupérée du registre REA ; index initialisé depuis cette réponse. |
 | `analyze_function` | `ev_4ea4348ef088ca577694ef3daa25d523ab017af07ee682c3223e064798ca5191` | `entry`, `0x478460` | Pseudocode, appels et références associés. |
+| `procedure_callers` | `ev_2d79f304365a3c8484b4cf08c48a252a5a1bef7bc030214046ea9ada686a468e` | `FUN_0042219e`, `0x42219e` | Aucun appelant direct résolu ; appels calculés/indirects restent hors de cette relation Ghidra. |
+| `analyze_function` | `ev_b51f2311ff9bd9ad209f0663ea00bfe330e7ff0eff117e8a273292d3112a4e0e` | `FUN_00466ce2`, `0x466ce2` | Tick de simulation : actions monde, parcours des floaters actifs, compteurs et temporisateurs. |
+| `analyze_function` | `ev_96f90fdc7951d5fe26fcf0b495de08970ec0e6984d64572c67ff099abac40957` | `FUN_004211bb`, `0x4211bb` | Consommateur d'ordres : branches d'état, recherche de cibles, progression et annulation. |
+| `analyze_function` | `ev_787dc785055d52728b1408fa372d280fa57be569a05f32883f94a4022cbce846` | `FUN_0042219e`, `0x42219e` | Réévaluation de l'ordre et sélection de cible selon classe, état, distance et tâches disponibles. |
+| `analyze_function` | `ev_76a4661cb67067b44054706649c3ff1f80a7e9eec7116d8c36177f340ab15b36` | `FUN_00420a55`, `0x420a55` | Cinq filtres de candidats, scoring, shortlist de dix éléments et sélection finale. |
+| `analyze_function` | `ev_0a150ef6299ccee55e14aeab45e2de16381b5142b4063cda099503d87e818883` | `FUN_00420d97`, `0x420d97` | Wrapper de recherche qui fournit l'île courante du floater. |
+| `analyze_function` | `ev_b758701979d34e447f00b2067f67d58c0c58d9b8c28b444e24dfd4a160713da5` | `FUN_00420991`, `0x420991` | Garde candidat : état/flags, classe et seuils liés au niveau. |
+| `analyze_function` | `ev_810f7530a91d83a454c4d310d2142cafe948434cde2b0707fd5847693435b64f` | `FUN_00422d27`, `0x422d27` | Avancement spatial par pas borné jusqu'à destination. |
+| `analyze_function` | `ev_1d0bd9feec2d7550ea50129522ad783374e97af92bb6dd9bebd24510c185aedf` | `FUN_00460072`, `0x460072` | Affectation aléatoire de slots admissibles aux demandes de type d'unité et aux îles/features. |
+| `list_strings` | `ev_189665af46e3e7c1c67975389c462c48387e5c25127ebe9509729510bd2e66b7` | Chaînes définies, dont `FA_AttackFlt`, `FA_AttackLoc`, `FA_Cast`, `BC_AttackFlt`, `BC_AttackLoc`, `BC_Spell1`–`BC_Spell8` | Vocabulaire UI/action observé ; xrefs ciblées vers les routines d'IA non établies. |
+| `analyze_function` | `ev_0a3a5baa3dd85e9e4d8e576461b4c0ac5dde6dd1cb0ba6135191f046f1f98a93` | `FUN_00422d27`, `0x422d27` | Mouvement vers une destination et condition d'arrivée sur les deux axes. |
 | `analyze_function` | `ev_4447fdd9631929efaeb1d177248260afbbd55aec3775ce0996e1f9b427cb4e7f` | `FUN_0041d8e1` | Pseudocode, appels et chaînes associés. |
 | `analyze_function` | `ev_b6c592d2020a3b072f7d397ada43d048a75789229d848e76ffadec2a536491cf` | `FUN_0041c1d6` | Pseudocode, appels et chaînes associés. |
 | `analyze_function` | `ev_a3a1136454b116409a3a18908d27e23488bf809cdcb8d28b4d4d0805f05688e3` | `FUN_0041c46f` | Pseudocode, appels et chaînes associés. |

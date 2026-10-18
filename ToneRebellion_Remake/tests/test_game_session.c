@@ -862,8 +862,8 @@ static void test_glyph_map_click_queues_packet_without_world_effect(void)
     session.economy[1].glyph_mask = (uint16_t)((1U << 2) | (1U << 9));
 
     /* FUN_0042fa0f case 0x40 emits category 3/type 3 with these payload
-       fields. The downstream state-8 floater guard remains outside this
-       test and the queued request does not mutate island state. */
+       fields. The downstream record filter (+0 == player, +4 == 8) remains
+       outside this test; queueing does not mutate island state. */
     assert(game_session_queue_glyph_action(&session, 1, 0, 1, 9));
     assert(session.glyph_action_count == 1);
     assert(session.glyph_actions[0].player_slot == 1);

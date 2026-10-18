@@ -67,8 +67,8 @@ typedef struct GameDiplomacyRequest {
 } GameDiplomacyRequest;
 
 /* FUN_0042fa0f(0x40) emits category 3/type 3 when a glyph is selected.
-   This outbox preserves the target payload; FUN_00465793's state-8 floater
-   guard and resulting runtime order are not simulated. */
+   This outbox preserves the target payload; FUN_00465793's active-record
+   filter (+0 == player, +4 == 8) and resulting runtime order are not simulated. */
 typedef struct GameGlyphActionRequest {
     uint8_t player_slot;
     uint8_t island_index;
@@ -397,8 +397,8 @@ int game_session_queue_inventory_action(GameSession *session,
                                         uint16_t location_index,
                                         uint8_t item_id);
 /* FUN_0042fa0f(0x40) emits category-3/type-3 with player, island, location,
-   and selected glyph. This records the request only; the receiver's state-8
-   floater guard and runtime effect remain unmodeled. */
+   and selected glyph. This records the request only; the receiver's active
+   record filter (+0 == player, +4 == 8) and runtime effect remain unmodeled. */
 int game_session_queue_glyph_action(GameSession *session,
                                     uint8_t player_slot,
                                     uint8_t island_index,

@@ -4,7 +4,7 @@ Porter uniquement les comportements établis par le binaire et les données loca
 
 ## À faire
 
-- [ ] Relier l'activation de déplacement au dispatcher : `FUN_00441d3e` (`IWLocInfo`) envoie `0x48` via `FUN_0042970c`, tandis que `FUN_00465793` route les sous-types 5/6 vers début/fin; aucune preuve ne relie ces chemins ni n'attribue l'événement à la fenêtre `IWMove`. Le coût est porté/testé; la sélection de destination reste à établir.
+- [ ] Finir `IWMove`/`IWHallMove` : `FUN_0044003d` sélectionne un des six IDs liés au lieu via `0x3f`; `0x32` (aucun slot) et le clic droit `0x4d`/`0x3d` ne sont pas encore reliés à leurs effets. `FUN_00441d3e` envoie séparément `0x48`; son lien au dispatcher reste inconnu. Tracer l'affectation des IDs avant de brancher le roster initial. Voir [fonctions](../functions/0013_batch_0009.md#fun_0044003d--0x44003d).
 - [ ] Relier les producteurs d’événements Tasks et tracer leur libération; `FUN_004637fc` initialise les 64 indicateurs actifs, `FUN_004662b7` alloue les slots et `FUN_00466533` en libère.
 - [ ] Identifier le callback et la garde de classe des ordres directs avant d'exposer les commandes soldat/mage.
 - [ ] Finir les panneaux d'unités/bâtiments : l'écriture de `+0x22` est établie pour les floaters, mais pas les clés stats du Hall/site; tracer chaque action avant d'ajouter des boutons. Le roster actuel ne couvre que les quatre ouvriers initiaux.
@@ -12,7 +12,7 @@ Porter uniquement les comportements établis par le binaire et les données loca
 - [ ] Tracer l'initialisation/écriture de `DAT_006191f8` et la formule de `% WORKSTR` avant d'afficher surplus et ouvriers.
 - [ ] Relier les tâches aux compteurs Inventory; retrouver le contexte exact des appels à `FUN_004503bd` qui alimentent les deux bits de progression et attribuent un glyphe. Les call-sites existent, mais ne prouvent pas une arrivée au Hall.
 - [ ] Relier `FUN_00452c31`/`FUN_00452eac` aux transitions de floaters : gardes (+0x18 inclus) et débit local sont portés; l’index +0x18 runtime n’est pas prouvé égal à `IslandData.location_index` (tables 100 vs 0x60, sans alias trouvé). Affectation, choix source/destination, trajet et crédit au Hall restent à établir.
-- [ ] Finir l'effet monde du clic glyphe : le remake émet maintenant le paquet catégorie 3/type 3 avec joueur, île, emplacement et glyphe; le dispatch source exige `FUN_0046562b(player,8)` puis modifie l'ordre d'un floater. Le sens de ces champs et le floater cible restent inconnus.
+- [ ] Finir l'effet monde du clic glyphe : le dispatch cherche un record actif avec `+0 == joueur` et `+4 == 8`; le forçage de `+4=8` a des gardes de données et aléatoires non modélisées. Le schéma runtime et l'ordre `0x13` restent à porter.
 - [ ] Remplacer le placement immédiat par la construction différée source : coûts, sélection d'unité, ordre, trajet et achèvement.
 - [ ] Tracer l’activation du bit Hall `+0x1c & 1`; la création/annulation source des demandes mode 2/type 4 est portée, mais affectation, collecte, livraison et cycle idle restent ouverts.
 - [ ] Ajouter des tests source-backed pour les gardes refusées, commandes, construction différée et interactions de panneaux.
