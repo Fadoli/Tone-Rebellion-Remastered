@@ -156,6 +156,7 @@ static int g_hovered_hall_stock = -1;
 static int g_hovered_island_button = -1;
 static int g_hovered_hall_command = -1;
 static int g_island_panel_mode = WINDOW_ISLAND_PANEL_GENERAL;
+static int g_task_scroll_offset;
 static size_t g_inventory_page = 0;
 static int g_hovered_inventory_item = -1;
 static int g_selected_inventory_item = -1;
@@ -1094,6 +1095,7 @@ static int load_island_surface(int island_id, int map_island_index,
     g_selected_location = -1;
     g_hovered_location = -1;
     g_island_panel_mode = WINDOW_ISLAND_PANEL_GENERAL;
+    g_task_scroll_offset = 0;
     g_hovered_inventory_item = -1;
     g_hovered_hall_command = -1;
     g_iw_construct_open = 0;
@@ -4582,6 +4584,28 @@ static void handle_click(HWND window, int x, int y)
             }
         }
     } else if (g_menu.screen == SCREEN_ISLAND) {
+        if (g_island_panel_mode == WINDOW_ISLAND_PANEL_TASKS) {
+            static const char *const task_scroll_names[] = {
+                "scrollup", "scrolldn"
+            };
+            const WindowTemplate *scroll_control = window_catalog_hit_test_names(
+                &g_window_catalog, 3, x, y, task_scroll_names,
+                sizeof(task_scroll_names) / sizeof(task_scroll_names[0]));
+            if (scroll_control != NULL) {
+                const WindowTemplate *task_panel = window_catalog_find(
+                    &g_window_catalog, "IWTasks", 3);
+                int visible_rows = task_panel != NULL
+                    ? (task_panel->pane.bottom - task_panel->pane.top) / 13 : 0;
+                int direction = window_catalog_scroll_direction(
+                    scroll_control->name, WINDOW_ISLAND_PANEL_TASKS);
+                /* The source consumes 6000/6001 even at either bound. This
+                   remake has no task records yet, so both arrows stay at 0. */
+                g_task_scroll_offset = window_catalog_scroll_step(
+                    g_task_scroll_offset, 0, visible_rows, direction);
+                InvalidateRect(window, NULL, FALSE);
+                return;
+            }
+        }
         if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GLYPHS) {
             const WindowTemplate *glyph_panel = window_catalog_find(
                 &g_window_catalog, "IWGlyphs", 3);
@@ -4721,6 +4745,7 @@ static void handle_click(HWND window, int x, int y)
                     g_island_panel_mode =
                         g_island_panel_mode == WINDOW_ISLAND_PANEL_TASKS
                         ? WINDOW_ISLAND_PANEL_GENERAL : WINDOW_ISLAND_PANEL_TASKS;
+                    g_task_scroll_offset = 0;
                 } else if (button_index == WINDOW_ISLAND_BUTTON_REALM) {
                     /* FUN_0042fa0f assigns each source global (flag == 0),
                        independently normalizing and flipping all three. */

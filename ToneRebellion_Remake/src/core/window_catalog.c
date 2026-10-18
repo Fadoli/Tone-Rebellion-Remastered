@@ -409,6 +409,35 @@ int window_catalog_scroll_panel_mode(const char *control_name)
     return WINDOW_ISLAND_PANEL_NONE;
 }
 
+int window_catalog_scroll_direction(const char *control_name, int panel_mode)
+{
+    if (control_name == NULL ||
+        window_catalog_scroll_panel_mode(control_name) != panel_mode)
+        return 0;
+    if (strcmp(control_name, "scrollup") == 0 ||
+        strcmp(control_name, "escrollup") == 0) return -1;
+    if (strcmp(control_name, "scrolldn") == 0 ||
+        strcmp(control_name, "escrolldn") == 0) return 1;
+    return 0;
+}
+
+int window_catalog_scroll_step(int offset, int item_count, int visible_rows,
+                               int direction)
+{
+    int maximum;
+    if (item_count < 0) item_count = 0;
+    if (visible_rows < 0) visible_rows = 0;
+    maximum = item_count > visible_rows ? item_count - visible_rows : 0;
+    if (offset < 0) offset = 0;
+    if (offset > maximum) offset = maximum;
+    if (direction < 0) {
+        if (offset > 0) --offset;
+    } else if (direction > 0 && item_count > visible_rows && offset < maximum) {
+        ++offset;
+    }
+    return offset;
+}
+
 int window_catalog_island_button(const char *control_name)
 {
     if (control_name == NULL) return WINDOW_ISLAND_BUTTON_NONE;

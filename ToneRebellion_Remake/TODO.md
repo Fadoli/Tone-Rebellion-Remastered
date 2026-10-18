@@ -28,14 +28,14 @@ Porter uniquement les comportements établis par le binaire et les données loca
 - [x] Commandes de barre d'île, badges santé/royaume et descriptions de survol actuellement portées.
 - [x] Sons de menu et sélection de musique du royaume.
 - [x] Icônes des quatre joueurs dans la bannière Diplomatie à partir des ouvriers initiaux et des ancres source; animation et autres états en attente.
-- [x] Panneaux Tasks / effets : paires `SCROLL.SHP`, survol `MOUSEFOCUS` et état vide localisé `NOTASKS` dans `IWTasks` portés; données actives des tâches et défilement restent à porter. `InvCycle` utilise aussi son frame de survol.
+- [x] Panneaux Tasks / effets : cadres `SCROLL.SHP`, survol `MOUSEFOCUS`, `NOTASKS`; les clics Tasks sont consommés et le pas borné est testé. `InvCycle` utilise aussi son frame de survol.
 - [x] Clic d'un glyphe possédé : mémorise l'index et arme le curseur source du mode `0x11`; le clic carte et son effet restent en attente des gardes/consommateur.
 - [x] Inventory : la fiche `IWTextInfo` suit l'ID sélectionné après la fin du survol; couvert par `test_island_panel_info`.
 - [x] `TOGREALM` inverse ses trois flags; royaume (`FLTINFO` 22–25) et santé (`0x15−maxHP`) sont rendus pour les ouvriers initiaux. Les autres badges attendent leurs champs runtime.
 - [x] `PANIC` émet l'événement local type 3/sous-type 0 et le dispatch bascule le bit 0 du mot d'île par joueur; la sémantique reste inconnue.
 - [x] Texte New Game : hauteur source 13 px sans réduction verticale; largeur ramenée à 11/13 et interligne `+1` comme compromis de traduction (la source avance de `+3`); huit paragraphes testés dans la zone utile.
-- [ ] Vérifier visuellement le nouveau rendu New Game sur capture utilisateur; ancre basse encore calibrée.
-- [x] Vérification Release : CTest 19/19, manifest `windows.txt`, corpus îles/COB, catalogues Hall/construction et descriptions glyphes passent; curseur source `0x7f` résolu comme ressource; exécutable 273774 octets, SHA-256 `B9300B777595B63951A5D31F9A98C4DD008059FAF9E610008EFDF9CD9B176A5B`.
+- [x] Vérification Release courante : CTest 19/19; exécutable 274466 octets, SHA-256 `989A3085AD56A55C2DB20C961B4E8247FF740CDC350C58BCA887989221F9A992`.
+- [ ] Alimenter et rendre les records Tasks actifs avant d’activer le défilement visible; producteur et état initial non identifiés.
 
 ## Références
 

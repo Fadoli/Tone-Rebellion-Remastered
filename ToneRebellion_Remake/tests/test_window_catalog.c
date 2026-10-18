@@ -279,6 +279,23 @@ static void verify_original_manifest(const char *path)
            WINDOW_ISLAND_PANEL_EFFECT_DEBUG);
     assert(window_catalog_scroll_panel_mode("other") == WINDOW_ISLAND_PANEL_NONE);
     assert(window_catalog_scroll_panel_mode(NULL) == WINDOW_ISLAND_PANEL_NONE);
+    assert(window_catalog_scroll_direction("scrollup",
+           WINDOW_ISLAND_PANEL_TASKS) == -1);
+    assert(window_catalog_scroll_direction("scrolldn",
+           WINDOW_ISLAND_PANEL_TASKS) == 1);
+    assert(window_catalog_scroll_direction("escrollup",
+           WINDOW_ISLAND_PANEL_TASKS) == 0);
+    assert(window_catalog_scroll_direction("scrollup",
+           WINDOW_ISLAND_PANEL_EFFECT_DEBUG) == 0);
+    assert(window_catalog_scroll_direction(NULL,
+           WINDOW_ISLAND_PANEL_TASKS) == 0);
+    assert(window_catalog_scroll_step(0, 0, 5, -1) == 0);
+    assert(window_catalog_scroll_step(0, 0, 5, 1) == 0);
+    assert(window_catalog_scroll_step(0, 8, 5, 1) == 1);
+    assert(window_catalog_scroll_step(3, 8, 5, 1) == 3);
+    assert(window_catalog_scroll_step(3, 8, 5, -1) == 2);
+    assert(window_catalog_scroll_step(99, 8, 5, 0) == 3);
+    assert(window_catalog_scroll_step(-4, 8, 5, -1) == 0);
     {
         static const char *const hall_controls[] = {
             "BC_GenInfo", "BC_Storage", "BC_Knowledge",

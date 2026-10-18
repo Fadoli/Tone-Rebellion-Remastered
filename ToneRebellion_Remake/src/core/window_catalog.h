@@ -106,6 +106,12 @@ int32_t window_catalog_control_frame(const WindowTemplate *control,
 int window_catalog_hall_panel_mode(const char *control_name);
 /* FUN_0042fa0f routes scrollup/dn to IWTasks and escrollup/dn to IWEffList. */
 int window_catalog_scroll_panel_mode(const char *control_name);
+/* FUN_00445145 handles scroll messages even when bounds keep the offset at
+   its current value. Returns -1 for up, +1 for down, and 0 for other controls. */
+int window_catalog_scroll_direction(const char *control_name, int panel_mode);
+/* Bounded one-row scroll step used by IWTasks (messages 6000/6001). */
+int window_catalog_scroll_step(int offset, int item_count, int visible_rows,
+                               int direction);
 int window_catalog_island_button(const char *control_name);
 
 #endif
