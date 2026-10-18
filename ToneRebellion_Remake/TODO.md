@@ -30,7 +30,7 @@ Porter uniquement les comportements établis par le binaire et les données loca
 - [x] `TOGREALM` inverse ses trois flags; royaume (`FLTINFO` 22–25) et santé (`0x15−maxHP`) sont rendus pour les ouvriers initiaux. Les autres badges attendent leurs champs runtime.
 - [x] `PANIC` émet l'événement local type 3/sous-type 0 et le dispatch bascule le bit 0 du mot d'île par joueur; la sémantique reste inconnue.
 - [x] Texte New Game : 13 rangées source, largeur 12/13 et interligne 1 px; les huit paragraphes COB passent les bornes et dégagent emblèmes/pied de page.
-- [x] Build du 18/10/2026 : CTest 19/19, manifeste `windows.txt` (100 descripteurs), décodage COB (210 sheets/4821 images); exécutable 271445 octets, SHA-256 `8DC166107617498E8344338E9C2AA78776C39239E61EB120CC9BDF0F2D1FB2D1`.
+- [x] Build du 18/10/2026 : CTest 19/19 et huit descriptions COB validées; exécutable 271407 octets, SHA-256 `E036F8502110E4FAF60078CF2A2015C5292524A86055BB722EC7F20630CB37FB`.
 
 ## Références
 

@@ -9,7 +9,7 @@ enum {
     TEXT_RIGHT_MARGIN = 325,
     TEXT_CENTER_Y = 240,
     TEXT_RADIUS_SQUARED = 40000,
-    /* Keep the supplied translated descriptions within the rounded columns. */
+    /* Fit the supplied translated descriptions while retaining source rows. */
     TEXT_LINE_GAP = 1
 };
 

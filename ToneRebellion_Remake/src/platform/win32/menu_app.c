@@ -1280,15 +1280,6 @@ static int32_t measure_bitmap_text(void *context, const char *text, size_t lengt
     return width;
 }
 
-enum { CURVED_TEXT_WIDTH_SCALE = 12 };
-
-static uint32_t curved_glyph_width(uint32_t source_width)
-{
-    uint32_t width = (source_width * CURVED_TEXT_WIDTH_SCALE +
-                      g_bitmap_font.height / 2u) / g_bitmap_font.height;
-    return width == 0 ? 1u : width;
-}
-
 static int32_t measure_curved_bitmap_text(void *context, const char *text,
                                           size_t length)
 {
@@ -1301,7 +1292,8 @@ static int32_t measure_curved_bitmap_text(void *context, const char *text,
         uint32_t code = (unsigned char)text[i];
         if (code >= g_bitmap_font.glyph_count) code = (uint32_t)'?';
         if (bitmap_font_get_glyph(&g_bitmap_font, code, &glyph_width, &glyph_pixels))
-            width += (int32_t)curved_glyph_width(glyph_width);
+            width += (int32_t)((glyph_width * 12u + g_bitmap_font.height / 2u) /
+                               g_bitmap_font.height);
     }
     return width;
 }
@@ -1318,7 +1310,9 @@ static void draw_curved_bitmap_text_at(DWORD *pixels, int surface_width,
             ? *cursor : (uint32_t)'?';
         if (bitmap_font_get_glyph(&g_bitmap_font, code, &source_width,
                                   &glyph_pixels)) {
-            uint32_t width = curved_glyph_width(source_width);
+            uint32_t width = (source_width * 12u + g_bitmap_font.height / 2u) /
+                             g_bitmap_font.height;
+            if (width == 0) width = 1;
             uint32_t row;
             for (row = 0; row < g_bitmap_font.height; ++row) {
                 uint32_t col;
@@ -1795,7 +1789,7 @@ static int create_tribe_description_sheet(SpriteSheet *sheet,
         if (!curved_text_layout(text,
                                 entry % 2 == 0 ? CURVED_TEXT_LEFT : CURVED_TEXT_RIGHT,
                                 CURVED_TEXT_NEWGAME_LAST_LINE_Y,
-                                (int)g_bitmap_font.height,
+                (int)g_bitmap_font.height,
                                 measure_curved_bitmap_text, NULL, lines, MAX_LINES,
                                 &line_count)) {
             (void)snprintf(error, error_capacity,

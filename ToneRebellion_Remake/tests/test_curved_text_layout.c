@@ -65,7 +65,7 @@ static void test_original_description_bytes(const unsigned char *font_bytes,
         "PROTECT0", "PROTECT1", "SEEKER0", "SEEKER1",
         "MYSTIC0", "MYSTIC1", "LIFE0", "LIFE1"
     };
-    enum { TEXT_CAPACITY = 2048, FOOTER_TOP = 407, CURVED_HEIGHT = 13,
+    enum { TEXT_CAPACITY = 2048, FOOTER_TOP = 407, SOURCE_FONT_HEIGHT = 13,
            MIN_FIRST_LINE_Y = 80 };
     BitmapFont font = {0};
     char error[128];
@@ -75,7 +75,7 @@ static void test_original_description_bytes(const unsigned char *font_bytes,
     assert(font_bytes != NULL && text_bytes != NULL);
     assert(bitmap_font_init(&font, font_bytes, font_length,
                             error, sizeof(error)));
-    assert(font.height == CURVED_HEIGHT);
+    assert(font.height == SOURCE_FONT_HEIGHT);
     for (entry = 0; entry < 8; ++entry) {
         CurvedTextLine lines[CURVED_TEXT_MAX_LINES];
         size_t line_count = 0;
@@ -87,11 +87,13 @@ static void test_original_description_bytes(const unsigned char *font_bytes,
                                                sizeof(text)));
         assert(curved_text_layout(text, side,
                                   CURVED_TEXT_NEWGAME_LAST_LINE_Y,
-                                  CURVED_HEIGHT, measure_curved_font, &font,
+                                  (int)font.height,
+                                  measure_curved_font, &font,
                                   lines, CURVED_TEXT_MAX_LINES, &line_count));
         assert(line_count != 0);
         assert(lines[line_count - 1].y >=
-               CURVED_TEXT_NEWGAME_LAST_LINE_Y - 2 * CURVED_HEIGHT);
+                   CURVED_TEXT_NEWGAME_LAST_LINE_Y -
+                   2 * (int)font.height);
         if (lines[0].y < MIN_FIRST_LINE_Y)
             fprintf(stderr, "%s: first=%d last=%d lines=%lu\n", keys[entry],
                     (int)lines[0].y, (int)lines[line_count - 1].y,
@@ -104,10 +106,10 @@ static void test_original_description_bytes(const unsigned char *font_bytes,
                                       &expected_x, &expected_width));
             assert(lines[line].x == expected_x &&
                    lines[line].width == expected_width);
-            assert(lines[line].y + CURVED_HEIGHT <= FOOTER_TOP);
+            assert(lines[line].y + (int)font.height <= FOOTER_TOP);
             if (line != 0)
                 assert(lines[line].y - lines[line - 1].y ==
-                       CURVED_HEIGHT + 1);
+                       (int)font.height + 1);
         }
     }
     bitmap_font_free(&font);
