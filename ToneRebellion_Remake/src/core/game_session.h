@@ -10,6 +10,7 @@
 
 enum { GAME_SESSION_MAX_FLOATERS = GAME_START_PLAYER_COUNT * GAME_START_FLOATERS_PER_PLAYER };
 enum { GAME_SESSION_MAX_PENDING_EVENTS = 64, GAME_SESSION_MAX_TASKS = 32 };
+enum { GAME_SESSION_MAX_GLYPH_ACTIONS = 64 };
 enum { GAME_TRADE_TARGET_COUNT = GAME_START_PLAYER_COUNT - 1,
        GAME_SESSION_MAX_TRADE_REQUESTS = GAME_START_PLAYER_COUNT * GAME_TRADE_TARGET_COUNT };
 enum { GAME_SESSION_MAX_DIPLOMACY_REQUESTS =
@@ -64,6 +65,16 @@ typedef struct GameDiplomacyRequest {
     uint8_t target_player;
     uint8_t action;
 } GameDiplomacyRequest;
+
+/* FUN_0042fa0f(0x40) emits category 3/type 3 when a glyph is selected.
+   This outbox preserves the target payload; FUN_00465793's state-8 floater
+   guard and resulting runtime order are not simulated. */
+typedef struct GameGlyphActionRequest {
+    uint8_t player_slot;
+    uint8_t island_index;
+    uint16_t location_index;
+    uint8_t glyph_index;
+} GameGlyphActionRequest;
 
 /* FUN_004662b7 reserves one of 64 world-action records (stride 0x14).
    Priority is initialized to 1 there and read as such by FUN_004469d6. */
@@ -194,6 +205,8 @@ typedef struct GameSession {
     uint8_t message_recipient_mask[GAME_START_PLAYER_COUNT];
     uint8_t diplomacy_request_count;
     GameDiplomacyRequest diplomacy_requests[GAME_SESSION_MAX_DIPLOMACY_REQUESTS];
+    uint8_t glyph_action_count;
+    GameGlyphActionRequest glyph_actions[GAME_SESSION_MAX_GLYPH_ACTIONS];
     uint16_t class0_assignments;
     /* FUN_004718eb reads one active flag per WORLDPOS bridge pair. */
     uint32_t active_bridge_mask;
@@ -383,6 +396,16 @@ int game_session_queue_inventory_action(GameSession *session,
                                         uint8_t island_index,
                                         uint16_t location_index,
                                         uint8_t item_id);
+/* FUN_0042fa0f(0x40) emits category-3/type-3 with player, island, location,
+   and selected glyph. This records the request only; the receiver's state-8
+   floater guard and runtime effect remain unmodeled. */
+int game_session_queue_glyph_action(GameSession *session,
+                                    uint8_t player_slot,
+                                    uint8_t island_index,
+                                    uint16_t location_index,
+                                    uint8_t glyph_index);
+int game_session_pop_glyph_action(GameSession *session,
+                                  GameGlyphActionRequest *out);
 /* PANIC message 0x3b queues type 3/subtype 0. Parity coalescing retains the
    same state after FUN_00466221 drains the local action queue. */
 int game_session_queue_island_event3_subtype0(GameSession *session,

@@ -851,6 +851,48 @@ static void test_source_event3_subtype0_queues_and_toggles_only_player_bit(void)
     game_session_dispatch_island_events(NULL);
 }
 
+static void test_glyph_map_click_queues_packet_without_world_effect(void)
+{
+    GameSession session = {0};
+    GameGlyphActionRequest request;
+    unsigned int index;
+
+    session.island_count = 1;
+    session.islands[0].location_count = 2;
+    session.economy[1].glyph_mask = (uint16_t)((1U << 2) | (1U << 9));
+
+    /* FUN_0042fa0f case 0x40 emits category 3/type 3 with these payload
+       fields. The downstream state-8 floater guard remains outside this
+       test and the queued request does not mutate island state. */
+    assert(game_session_queue_glyph_action(&session, 1, 0, 1, 9));
+    assert(session.glyph_action_count == 1);
+    assert(session.glyph_actions[0].player_slot == 1);
+    assert(session.glyph_actions[0].island_index == 0);
+    assert(session.glyph_actions[0].location_index == 1);
+    assert(session.glyph_actions[0].glyph_index == 9);
+    assert(session.economy[1].glyph_mask == ((1U << 2) | (1U << 9)));
+    assert(session.islands[0].source_event_state[1] == 0);
+    assert(game_session_pop_glyph_action(&session, &request));
+    assert(request.player_slot == 1 && request.island_index == 0 &&
+           request.location_index == 1 && request.glyph_index == 9);
+    assert(!game_session_pop_glyph_action(&session, &request));
+
+    assert(game_session_queue_glyph_action(NULL, 1, 0, 0, 2) == -1);
+    assert(game_session_queue_glyph_action(&session, GAME_START_PLAYER_COUNT,
+                                            0, 0, 2) == -1);
+    assert(game_session_queue_glyph_action(&session, 1, 1, 0, 2) == -1);
+    assert(game_session_queue_glyph_action(&session, 1, 0, 2, 2) == -1);
+    assert(game_session_queue_glyph_action(&session, 1, 0, 0,
+                                            GAME_GLYPH_COUNT) == -1);
+    assert(game_session_queue_glyph_action(&session, 1, 0, 0, 3) == -1);
+
+    for (index = 0; index < GAME_SESSION_MAX_GLYPH_ACTIONS; ++index) {
+        assert(game_session_queue_glyph_action(&session, 1, 0, 0, 2));
+    }
+    assert(session.glyph_action_count == GAME_SESSION_MAX_GLYPH_ACTIONS);
+    assert(game_session_queue_glyph_action(&session, 1, 0, 0, 2) == -1);
+}
+
 static void test_glyph_ownership_mask_is_player_local_and_idempotent(void)
 {
     GameSession session = {0};
@@ -1305,6 +1347,7 @@ int main(void)
     test_task_command_dispatch_guards_and_effects();
     test_inventory_action_reserves_source_payload_without_mutation();
     test_source_event3_subtype0_queues_and_toggles_only_player_bit();
+    test_glyph_map_click_queues_packet_without_world_effect();
     test_glyph_ownership_mask_is_player_local_and_idempotent();
     test_item_animation_uses_source_flags_and_per_object_counters();
     test_tone_pool_uses_two_source_counter_sequences();

@@ -5488,7 +5488,22 @@ static void handle_click(HWND window, int x, int y)
                     int clicked_location = island_location_at(x, y);
                     g_selected_floater = -1;
                     if (clicked_location >= 0) {
-                        if (g_selected_inventory_item >=
+                        if (g_selected_glyph >= 0 &&
+                            g_selected_glyph < GAME_GLYPH_COUNT &&
+                            g_game_session_valid &&
+                            g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
+                            /* FUN_0042fa0f(0x40) emits category-3/type-3
+                               with the clicked island/location and selected
+                               glyph. The receiver's state-8 floater guard
+                               and resulting runtime order are not modelled. */
+                            (void)game_session_queue_glyph_action(
+                                &g_game_session, g_menu.selected_tribe,
+                                (uint8_t)g_menu.selected_map_island,
+                                (uint16_t)clicked_location,
+                                (uint8_t)g_selected_glyph);
+                            g_selected_glyph = -1;
+                            g_glyph_info_default = 1;
+                        } else if (g_selected_inventory_item >=
                                 GAME_INVENTORY_ITEM_FIRST_ID &&
                             g_selected_inventory_item <
                                 GAME_INVENTORY_ITEM_FIRST_ID +

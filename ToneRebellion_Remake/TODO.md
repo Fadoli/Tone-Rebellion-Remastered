@@ -12,7 +12,7 @@ Porter uniquement les comportements établis par le binaire et les données loca
 - [ ] Tracer l'initialisation/écriture de `DAT_006191f8` et la formule de `% WORKSTR` avant d'afficher surplus et ouvriers.
 - [ ] Relier les tâches aux compteurs Inventory; retrouver le contexte exact des appels à `FUN_004503bd` qui alimentent les deux bits de progression et attribuent un glyphe. Les call-sites existent, mais ne prouvent pas une arrivée au Hall.
 - [ ] Relier `FUN_00452c31`/`FUN_00452eac` aux transitions de floaters : gardes (+0x18 inclus) et débit local sont portés; l’index +0x18 runtime n’est pas prouvé égal à `IslandData.location_index` (tables 100 vs 0x60, sans alias trouvé). Affectation, choix source/destination, trajet et crédit au Hall restent à établir.
-- [ ] Finir le clic carte après sélection d'un glyphe : sur `ISLEVIEW`, le routage direct atteint le callback état 3 `FUN_0042fa0f`, qui met à jour le mode/curseur pour `0x65/0x11` et `/0x13`. Tracer l'effet monde et la sélection résultante avant de simuler une acquisition.
+- [ ] Finir l'effet monde du clic glyphe : le remake émet maintenant le paquet catégorie 3/type 3 avec joueur, île, emplacement et glyphe; le dispatch source exige `FUN_0046562b(player,8)` puis modifie l'ordre d'un floater. Le sens de ces champs et le floater cible restent inconnus.
 - [ ] Remplacer le placement immédiat par la construction différée source : coûts, sélection d'unité, ordre, trajet et achèvement.
 - [ ] Tracer l’activation du bit Hall `+0x1c & 1`; la création/annulation source des demandes mode 2/type 4 est portée, mais affectation, collecte, livraison et cycle idle restent ouverts.
 - [ ] Ajouter des tests source-backed pour les gardes refusées, commandes, construction différée et interactions de panneaux.
