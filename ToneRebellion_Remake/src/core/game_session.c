@@ -330,6 +330,9 @@ int game_session_initialize(const WorldDefinition *world,
         unsigned int location_index = start->nearest_site_location_index;
         unsigned int unit;
 
+        for (unit = 0; unit < GAME_RESOURCE_TYPE_COUNT; ++unit)
+            next.economy[island_index].resource_task_slot[unit] = -1;
+
         /* FUN_0046466f sets island runtime +0x29ac + player*4 for each
            player's assigned starting island; FUN_0047117d reads this flag. */
         runtime->access_mask |= (uint8_t)(1U << island_index);
@@ -822,6 +825,51 @@ int game_session_cycle_resource_stock_mode(GameSession *session,
     return (int)*mode;
 }
 
+unsigned int game_session_update_resource_requests(GameSession *session)
+{
+    unsigned int changes = 0;
+    unsigned int player;
+    if (session == NULL) return 0;
+    for (player = 0; player < GAME_START_PLAYER_COUNT; ++player) {
+        GamePlayerEconomy *economy = &session->economy[player];
+        GameRuntimeLocation *hall;
+        unsigned int resource;
+        if (economy->hall_island_index >= session->island_count ||
+            economy->hall_location_index >=
+                session->islands[economy->hall_island_index].location_count)
+            continue;
+        hall = &session->islands[economy->hall_island_index]
+                    .locations[economy->hall_location_index];
+        for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
+            const int16_t linked_slot = economy->resource_task_slot[resource];
+            const int request_active = economy->stock_mode[resource] == 2 &&
+                (hall->source_flags_1c & 1U) != 0 &&
+                hall->resource_stock[resource] <
+                    hall->source_capacity_4a * 50 + 150;
+            if (request_active && linked_slot == -1) {
+                const int slot = game_session_pending_event_add(
+                    session, (int16_t)player,
+                    (int16_t)economy->hall_island_index, 4, 0,
+                    (int16_t)economy->hall_location_index,
+                    (int16_t)(resource + 1U));
+                if (slot >= 0) {
+                    economy->resource_task_slot[resource] = (int16_t)slot;
+                    ++changes;
+                }
+            } else if (!request_active && linked_slot != -1) {
+                if (linked_slot >= 0 &&
+                    linked_slot < GAME_SESSION_MAX_PENDING_EVENTS) {
+                    (void)game_session_pending_event_release(
+                        session, (uint8_t)linked_slot);
+                }
+                economy->resource_task_slot[resource] = -1;
+                ++changes;
+            }
+        }
+    }
+    return changes;
+}
+
 int game_session_adjust_trade_offer(GameSession *session, uint8_t player_slot,
                                     uint8_t resource_row,
                                     uint8_t target_column, int direction)
@@ -1063,9 +1111,36 @@ int game_session_dispatch_task_command(GameSession *session, uint8_t slot,
         event->action_type != expected->action_type ||
         event->payload_12 != expected->payload_12) return 0;
     if (subtype == 12) {
-        /* FUN_00465793 first removes linked references through FUN_0045fb6f,
-           then FUN_00466533 releases the slot. Those external link tables
-           are not represented in this session model. */
+        unsigned int player;
+        if (event->action_type == 5 && event->payload_0a >= 0 &&
+            (uint16_t)event->payload_0a < session->island_count) {
+            GameRuntimeIsland *island =
+                &session->islands[(uint16_t)event->payload_0a];
+            if (event->payload_0e >= 0 &&
+                (uint16_t)event->payload_0e < island->location_count) {
+                GameRuntimeLocation *location =
+                    &island->locations[(uint16_t)event->payload_0e];
+                if (location->record_value_10 == 0 ||
+                    location->record_value_10 == 1) {
+                    /* FUN_00466533 clears the construction site's owner for
+                       these two status values before releasing the slot. */
+                    location->owner_id = -1;
+                }
+            }
+        }
+        /* FUN_0045fb6f clears the matching Hall resource-request reference
+           and returns that mode to 1. Other source link tables are unmodeled. */
+        for (player = 0; player < GAME_START_PLAYER_COUNT; ++player) {
+            GamePlayerEconomy *economy = &session->economy[player];
+            unsigned int resource;
+            for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
+                if (economy->resource_task_slot[resource] == (int16_t)slot) {
+                    economy->resource_task_slot[resource] = -1;
+                    economy->stock_mode[resource] = 1;
+                    break;
+                }
+            }
+        }
         return game_session_pending_event_release(session, slot);
     }
     event->priority = (uint16_t)(subtype - 12);

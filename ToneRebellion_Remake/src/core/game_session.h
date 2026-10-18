@@ -39,6 +39,9 @@ typedef struct GamePlayerEconomy {
     /* FUN_0045f755 cycles each Hall reserve mode through raw values 0..2;
        FUN_0045eaa7 treats mode 2 as an active fill request. */
     uint8_t stock_mode[GAME_RESOURCE_TYPE_COUNT];
+    /* FUN_0045eaa7 stores the slot reserved for each of its three type-4
+       stock requests; -1 means no request is linked. */
+    int16_t resource_task_slot[GAME_RESOURCE_TYPE_COUNT];
     /* IWTrade keeps three resource amounts for each of the three other
        players. Columns use the source display order with the local player
        omitted (FUN_0043edac / FUN_0043ec78). */
@@ -110,6 +113,10 @@ typedef struct GameRuntimeLocation {
        +0x2c. Ghidra reads them as short fields; exact signedness/caps remain
        unconfirmed. */
     uint16_t resource_stock[GAME_RESOURCE_TYPE_COUNT];
+    /* Raw Hall fields read by FUN_0045eaa7. The active-bit writer is still
+       unknown, so these begin at the zeroed runtime value. */
+    int16_t source_capacity_4a;
+    uint32_t source_flags_1c;
     uint16_t chug_progress;
     uint16_t glyph_progress;
     uint16_t inci_progress;
@@ -274,6 +281,9 @@ int game_session_debit_resource(GameSession *session, uint8_t player_slot,
 int game_session_cycle_resource_stock_mode(GameSession *session,
                                            uint8_t player_slot,
                                            GameResourceType type);
+/* FUN_0045eaa7: create/cancel deferred type-4 resource requests from each
+   player's Hall modes, stocks, slot references, and raw Hall guards. */
+unsigned int game_session_update_resource_requests(GameSession *session);
 /* FUN_0043ec78: left/right cell clicks add/subtract 10 and clamp to 0..1000.
    target_column is the displayed column after omitting player_slot. */
 int game_session_adjust_trade_offer(GameSession *session, uint8_t player_slot,

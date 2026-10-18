@@ -398,6 +398,101 @@ static void test_task_projection_matches_source_filter_and_cap(void)
            GAME_SESSION_MAX_TASKS) == 0);
 }
 
+static void test_task_command_dispatch_guards_and_effects(void)
+{
+    GameSession session = {0};
+    GamePendingEvent expected;
+    int slot = game_session_pending_event_add(&session, 2, 17, 4,
+                                               33, 45, 9);
+    assert(slot == 0);
+    expected = session.pending_events[slot];
+
+    assert(game_session_dispatch_task_command(&session, (uint8_t)slot,
+                                               13, &expected));
+    assert(session.pending_events[slot].priority == 1);
+    assert(game_session_dispatch_task_command(&session, (uint8_t)slot,
+                                               14, &expected));
+    assert(session.pending_events[slot].priority == 2);
+    assert(game_session_dispatch_task_command(&session, (uint8_t)slot,
+                                               15, &expected));
+    assert(session.pending_events[slot].priority == 3);
+    assert(session.pending_event_count == 1);
+
+    /* FUN_00465793 compares the command identity before touching a reused slot. */
+    session.pending_events[slot].payload_0a++;
+    assert(!game_session_dispatch_task_command(&session, (uint8_t)slot,
+                                                12, &expected));
+    assert(session.pending_events[slot].active == 1);
+    assert(session.pending_event_count == 1);
+    session.pending_events[slot].payload_0a = expected.payload_0a;
+    session.pending_events[slot].player_id++;
+    assert(!game_session_dispatch_task_command(&session, (uint8_t)slot,
+                                                13, &expected));
+    session.pending_events[slot].player_id = expected.player_id;
+    expected.action_type++;
+    assert(!game_session_dispatch_task_command(&session, (uint8_t)slot,
+                                                13, &expected));
+    expected.action_type = session.pending_events[slot].action_type;
+    expected.payload_12++;
+    assert(!game_session_dispatch_task_command(&session, (uint8_t)slot,
+                                                13, &expected));
+    expected = session.pending_events[slot];
+
+    assert(!game_session_dispatch_task_command(&session,
+        GAME_SESSION_MAX_PENDING_EVENTS, 13, &expected));
+    assert(!game_session_dispatch_task_command(&session, (uint8_t)slot,
+                                               11, &expected));
+    assert(!game_session_dispatch_task_command(NULL, (uint8_t)slot,
+                                               13, &expected));
+    assert(!game_session_dispatch_task_command(&session, (uint8_t)slot,
+                                               13, NULL));
+
+    assert(game_session_dispatch_task_command(&session, (uint8_t)slot,
+                                               12, &expected));
+    assert(session.pending_events[slot].active == 0);
+    assert(session.pending_events[slot].priority == 3);
+    assert(session.pending_event_count == 0);
+    assert(!game_session_dispatch_task_command(&session, (uint8_t)slot,
+                                                12, &expected));
+
+    memset(&session, 0, sizeof(session));
+    session.island_count = 1;
+    session.islands[0].location_count = 2;
+    session.islands[0].locations[1].record_value_10 = 1;
+    session.islands[0].locations[1].owner_id = 2;
+    slot = game_session_pending_event_add(&session, 2, 0, 5,
+                                           0, 1, 44);
+    assert(slot == 0);
+    expected = session.pending_events[slot];
+    assert(game_session_dispatch_task_command(&session, (uint8_t)slot,
+                                               12, &expected));
+    assert(session.islands[0].locations[1].owner_id == -1);
+    assert(session.pending_event_count == 0);
+
+    /* FUN_00466533 clears the site owner only for status 0 or 1. */
+    session.islands[0].locations[0].record_value_10 = 2;
+    session.islands[0].locations[0].owner_id = 3;
+    slot = game_session_pending_event_add(&session, 2, 0, 5,
+                                           0, 0, 45);
+    assert(slot == 0);
+    expected = session.pending_events[slot];
+    assert(game_session_dispatch_task_command(&session, (uint8_t)slot,
+                                               12, &expected));
+    assert(session.islands[0].locations[0].owner_id == 3);
+    assert(session.pending_event_count == 0);
+
+    session.islands[0].locations[0].record_value_10 = 0;
+    session.islands[0].locations[0].owner_id = 1;
+    slot = game_session_pending_event_add(&session, 2, 0, 5,
+                                           0, 0, 46);
+    assert(slot == 0);
+    expected = session.pending_events[slot];
+    assert(game_session_dispatch_task_command(&session, (uint8_t)slot,
+                                               12, &expected));
+    assert(session.islands[0].locations[0].owner_id == -1);
+    assert(session.pending_event_count == 0);
+}
+
 static void test_inventory_action_reserves_source_payload_without_mutation(void)
 {
     GameSession session = {0};
@@ -837,6 +932,7 @@ int main(void)
     test_inventory_counts_cover_source_item_id_range();
     test_pending_event_table_matches_source_slots_and_deduplication();
     test_task_projection_matches_source_filter_and_cap();
+    test_task_command_dispatch_guards_and_effects();
     test_inventory_action_reserves_source_payload_without_mutation();
     test_source_event3_subtype0_queues_and_toggles_only_player_bit();
     test_glyph_ownership_mask_is_player_local_and_idempotent();

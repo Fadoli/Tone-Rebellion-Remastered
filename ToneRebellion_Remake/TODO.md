@@ -28,15 +28,15 @@ Porter uniquement les comportements établis par le binaire et les données loca
 - [x] Commandes de barre d'île, badges santé/royaume et descriptions de survol actuellement portées.
 - [x] Sons de menu et sélection de musique du royaume.
 - [x] Icônes des quatre joueurs dans la bannière Diplomatie à partir des ouvriers initiaux et des ancres source; animation et autres états en attente.
-- [x] Tasks : lignes et défilement portés pour actions 5, 0x12, 4 (items 5–33) et 0xd; clic sélectionne le slot, le panneau détail affiche priorité et catégorie/titre de transfert. Options, autres libellés, icônes de détail et surbrillance restent incomplets. Effets : cadres `SCROLL.SHP`; clics Tasks consommés et défilement borné testé. `InvCycle` utilise aussi son frame de survol.
-- [x] `IWTaskOptions` : boutons priorité/annulation dessinés depuis `PRIOR.SHP` aux panes de `windows.txt`, avec frames de survol testés par le manifeste. Le traitement des commandes émises au clic reste en attente.
+- [x] Tasks : lignes et défilement portés pour actions 5, 0x12, 4 (items 5–33) et 0xd; clic sélectionne le slot, le panneau détail affiche priorité et catégorie/titre de transfert. Clic sur `IWTaskOptions` modifie la priorité ou libère le slot après garde d'identité. Autres libellés, icônes de détail et surbrillance restent incomplets. Effets : cadres `SCROLL.SHP`; défilement borné testé. `InvCycle` utilise aussi son frame de survol.
+- [x] `IWTaskOptions` : boutons dessinés depuis `PRIOR.SHP` aux panes de `windows.txt`, avec survol et routage source de leurs commandes.
 - [x] Clic d'un glyphe possédé : mémorise l'index et arme le curseur source du mode `0x11`; le clic carte et son effet restent en attente des gardes/consommateur.
 - [x] Inventory : la fiche `IWTextInfo` suit l'ID sélectionné après la fin du survol; couvert par `test_island_panel_info`.
 - [x] `TOGREALM` inverse ses trois flags; royaume (`FLTINFO` 22–25) et santé (`0x15−maxHP`) sont rendus pour les ouvriers initiaux. Les autres badges attendent leurs champs runtime.
 - [x] `PANIC` émet l'événement local type 3/sous-type 0 et le dispatch bascule le bit 0 du mot d'île par joueur; la sémantique reste inconnue.
 - [x] Texte New Game : hauteur source 13 px sans réduction verticale; largeur ramenée à 11/13 et interligne `+1` comme compromis de traduction (la source avance de `+3`); huit paragraphes testés dans la zone utile.
-- [x] Vérification Release courante : CTest 19/19; manifeste `windows.txt` 100 descripteurs; COB 210 spritesheets/4821 images; exécutable 288092 octets, SHA-256 `874B1D801CCB57C5FC031551E8D6470757B43A7A27514C8F963645ACB7580BD1`.
-- [ ] Compléter `IWTaskInfo` (icônes et détails action 5/0x12), porter l’effet des commandes priorité/annulation, puis mapper les autres actions, leurs producteurs runtime et leur libération.
+- [x] Vérification Release courante : CTest 19/19; manifeste `windows.txt` 100 descripteurs; COB 210 spritesheets/4821 images; exécutable 288658 octets, SHA-256 `7809C0ED19F81302294094A2AFCE77F3053A30FA85DCF028F310FEA97E508D75`.
+- [ ] Compléter `IWTaskInfo` (icônes et détails action 5/0x12); porter le nettoyage des références liées à l’annulation; mapper les autres actions, leurs producteurs runtime et leur libération.
 
 ## Références
 
