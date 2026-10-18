@@ -1048,6 +1048,30 @@ size_t game_session_collect_task_slots(const GameSession *session,
     return count;
 }
 
+int game_session_dispatch_task_command(GameSession *session, uint8_t slot,
+                                       uint8_t subtype,
+                                       const GamePendingEvent *expected)
+{
+    GamePendingEvent *event;
+    if (session == NULL || expected == NULL ||
+        slot >= GAME_SESSION_MAX_PENDING_EVENTS ||
+        subtype < 12 || subtype > 15) return 0;
+    event = &session->pending_events[slot];
+    if (event->active == 0 ||
+        event->player_id != expected->player_id ||
+        event->payload_0a != expected->payload_0a ||
+        event->action_type != expected->action_type ||
+        event->payload_12 != expected->payload_12) return 0;
+    if (subtype == 12) {
+        /* FUN_00465793 first removes linked references through FUN_0045fb6f,
+           then FUN_00466533 releases the slot. Those external link tables
+           are not represented in this session model. */
+        return game_session_pending_event_release(session, slot);
+    }
+    event->priority = (uint16_t)(subtype - 12);
+    return 1;
+}
+
 int game_session_queue_inventory_action(GameSession *session,
                                         uint8_t player_slot,
                                         uint8_t island_index,

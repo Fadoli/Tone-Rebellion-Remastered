@@ -313,6 +313,12 @@ size_t game_session_collect_task_slots(const GameSession *session,
                                        int16_t player_id,
                                        uint8_t *slot_indices,
                                        size_t capacity);
+/* FUN_00465793 category-3 subtypes 12..15 match the queued record by player,
+   payload_0a, action_type and payload_12 before cancelling or changing its
+   priority. `expected` is the task snapshot used to form the command. */
+int game_session_dispatch_task_command(GameSession *session, uint8_t slot,
+                                       uint8_t subtype,
+                                       const GamePendingEvent *expected);
 /* FUN_0042fa0f(0x40): queue an inventory-use request for a clicked island
    location. Mirrors its class-0 occupied-location rejection and stores the
    source's island/location/item payload; it does not apply the item effect or

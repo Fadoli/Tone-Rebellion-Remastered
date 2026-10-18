@@ -223,6 +223,41 @@ static void verify_original_manifest(const char *path)
         assert(window_catalog_hit_test_names(&catalog, 3, 280, 380,
             inventory_control, 1) == NULL);
     }
+    {
+        static const char *const option_names[] = {
+            "TaskNorm", "TaskHigh", "TaskExcl", "TaskKill"
+        };
+        static const int32_t option_frames[] = {0, 2, 4, 6};
+        static const int32_t option_left[] = {456, 500, 544, 593};
+        static const int32_t option_top[] = {429, 429, 429, 431};
+        static const int32_t option_right[] = {500, 544, 588, 629};
+        static const int32_t option_bottom[] = {471, 471, 471, 469};
+        static const int32_t option_messages[] = {4000, 4000, 4000, 4003};
+        static const int32_t option_params[] = {1, 2, 3, 0};
+        size_t option_index;
+        for (option_index = 0; option_index < 4; ++option_index) {
+            window = window_catalog_find(&catalog, option_names[option_index], 3);
+            assert(window != NULL && window->type_id == 1 &&
+                   window->mouse_focus == 1 && window->shape_frame ==
+                   option_frames[option_index] &&
+                   strcmp(window->shape_id, "PRIOR") == 0 &&
+                   window->pane.left == option_left[option_index] &&
+                   window->pane.top == option_top[option_index] &&
+                   window->pane.right == option_right[option_index] &&
+                   window->pane.bottom == option_bottom[option_index] &&
+                   window->send_message[0] == option_messages[option_index] &&
+                   window->send_message[1] == option_params[option_index] &&
+                   window->send_message[2] == 0 &&
+                   strcmp(window->message_destination, "MASTER") == 0);
+            assert(window_catalog_control_frame(window, 0) ==
+                   option_frames[option_index]);
+            assert(window_catalog_control_frame(window, 1) ==
+                   option_frames[option_index] + 1);
+            assert(window_catalog_hit_test_names(&catalog, 3,
+                option_left[option_index] + 1, option_top[option_index] + 1,
+                option_names, 4) == window);
+        }
+    }
     window = window_catalog_find(&catalog, "WORLDVIEW", 2);
     assert(window != NULL && window->type_id == 0x0b);
     window = window_catalog_find(&catalog, "BC_TrnStkC", 3);

@@ -165,14 +165,14 @@ int main(int argc, char **argv)
     assert(!island_panel_info_hall_resource_row(3, &resource_row));
     assert(!island_panel_info_hall_resource_row(0, NULL));
     {
-        WindowTemplate task_panel = {0};
-        task_panel.pane.left = 192;
-        task_panel.pane.top = 368;
-        task_panel.pane.right = 447;
-        task_panel.pane.bottom = 471;
-        assert(island_panel_info_empty_task_label_position(&task_panel, 105,
+        WindowTemplate task_info_panel = {0};
+        task_info_panel.pane.left = 456;
+        task_info_panel.pane.top = 328;
+        task_info_panel.pane.right = 631;
+        task_info_panel.pane.bottom = 395;
+        assert(island_panel_info_empty_task_label_position(&task_info_panel, 105,
                    &task_label_x, &task_label_y));
-        assert(task_label_x == 267 && task_label_y == 418);
+        assert(task_label_x == 491 && task_label_y == 378);
         assert(!island_panel_info_empty_task_label_position(NULL, 105,
                    &task_label_x, &task_label_y));
     }

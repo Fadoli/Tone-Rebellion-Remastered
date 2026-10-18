@@ -97,8 +97,8 @@ int island_panel_info_building_sprite_position(const WindowTemplate *panel,
 int island_panel_info_hall_resource_row(unsigned int resource,
                                         IslandHallResourceRow *row);
 
-/* FUN_004469d6 centers NOTASKS in IWTasks at pane-local y=50 when the task
-   list or its first entry is null. */
+/* FUN_004469d6 centers NOTASKS in IWTaskInfo at pane-local y=50 when no task
+   reference is selected. */
 int island_panel_info_empty_task_label_position(const WindowTemplate *panel,
                                                int text_width,
                                                int *x, int *y);

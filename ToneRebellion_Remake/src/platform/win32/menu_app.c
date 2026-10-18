@@ -89,6 +89,7 @@ static SpriteSheet g_temp_hole_art;
 static SpriteSheet g_build_cycle_art;
 static SpriteSheet g_task_scroll_art;
 static SpriteSheet g_task_icon_art;
+static SpriteSheet g_task_priority_art;
 static SpriteSheet g_bildtone_art;
 static SpriteSheet g_tone_crys_art;
 static SpriteSheet g_magctone_art;
@@ -698,6 +699,7 @@ static int load_island_surface(int island_id, int map_island_index,
     SpriteSheet build_cycle_candidate = {0};
     SpriteSheet task_scroll_candidate = {0};
     SpriteSheet task_icon_candidate = {0};
+    SpriteSheet task_priority_candidate = {0};
     SpriteSheet bildtone_candidate = {0};
     SpriteSheet tone_crys_candidate = {0};
     SpriteSheet magctone_candidate = {0};
@@ -793,6 +795,8 @@ static int load_island_surface(int island_id, int map_island_index,
                            error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\taskicon.shp", palette,
                            &task_icon_candidate, error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\prior.shp", palette,
+                           &task_priority_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\bildtone.shp", palette, &bildtone_candidate,
                            error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\tonecrys.shp", palette,
@@ -957,6 +961,7 @@ static int load_island_surface(int island_id, int map_island_index,
     if (temp_hole_candidate.frame_count < 8 || build_cycle_candidate.frame_count < 2 ||
         task_scroll_candidate.frame_count < 4 ||
         task_icon_candidate.frame_count < 5 ||
+        task_priority_candidate.frame_count < 8 ||
         hall_stock_candidate.frame_count < 6 || main_buttons_candidate.frame_count < 8 ||
         hall_command_candidate.frame_count < 10 ||
         floater_info_candidate.frame_count < 26 ||
@@ -1017,6 +1022,7 @@ static int load_island_surface(int island_id, int map_island_index,
     free_sprite_sheet(&g_build_cycle_art);
     free_sprite_sheet(&g_task_scroll_art);
     free_sprite_sheet(&g_task_icon_art);
+    free_sprite_sheet(&g_task_priority_art);
     free_sprite_sheet(&g_bildtone_art);
     free_sprite_sheet(&g_tone_crys_art);
     free_sprite_sheet(&g_magctone_art);
@@ -1082,6 +1088,8 @@ static int load_island_surface(int island_id, int map_island_index,
     memset(&task_scroll_candidate, 0, sizeof(task_scroll_candidate));
     g_task_icon_art = task_icon_candidate;
     memset(&task_icon_candidate, 0, sizeof(task_icon_candidate));
+    g_task_priority_art = task_priority_candidate;
+    memset(&task_priority_candidate, 0, sizeof(task_priority_candidate));
     g_bildtone_art = bildtone_candidate;
     memset(&bildtone_candidate, 0, sizeof(bildtone_candidate));
     g_tone_crys_art = tone_crys_candidate;
@@ -1133,6 +1141,7 @@ done:
     free_sprite_sheet(&build_cycle_candidate);
     free_sprite_sheet(&task_scroll_candidate);
     free_sprite_sheet(&task_icon_candidate);
+    free_sprite_sheet(&task_priority_candidate);
     free_sprite_sheet(&bildtone_candidate);
     free_sprite_sheet(&tone_crys_candidate);
     free_sprite_sheet(&magctone_candidate);
@@ -3344,6 +3353,35 @@ static void draw_hall_panel(HDC dc, int hall_player)
                     }
                 }
             }
+            if (selected_event != NULL) {
+                static const char *const task_option_names[] = {
+                    "TaskNorm", "TaskHigh", "TaskExcl", "TaskKill"
+                };
+                const WindowTemplate *hovered_option = g_mouse_inside
+                    ? window_catalog_hit_test_names(&g_window_catalog, 3,
+                        g_mouse_x, g_mouse_y, task_option_names,
+                        sizeof(task_option_names) / sizeof(task_option_names[0]))
+                    : NULL;
+                size_t option_index;
+                for (option_index = 0;
+                     option_index < sizeof(task_option_names) /
+                                    sizeof(task_option_names[0]);
+                     ++option_index) {
+                    const WindowTemplate *option = window_catalog_find(
+                        &g_window_catalog, task_option_names[option_index], 3);
+                    int frame;
+                    if (option == NULL ||
+                        strcmp(option->shape_id, "PRIOR") != 0 ||
+                        option->shape_frame < 0) continue;
+                    frame = window_catalog_control_frame(
+                        option, option == hovered_option);
+                    if (frame >= 0 &&
+                        g_task_priority_art.frame_count > (uint32_t)frame) {
+                        draw_sprite(dc, &g_task_priority_art, (uint32_t)frame,
+                                    option->pane.left, option->pane.top);
+                    }
+                }
+            }
         }
         return;
     }
@@ -4781,9 +4819,36 @@ static void handle_click(HWND window, int x, int y)
         }
     } else if (g_menu.screen == SCREEN_ISLAND) {
         if (g_island_panel_mode == WINDOW_ISLAND_PANEL_TASKS) {
+            static const char *const task_option_names[] = {
+                "TaskNorm", "TaskHigh", "TaskExcl", "TaskKill"
+            };
             static const char *const task_scroll_names[] = {
                 "scrollup", "scrolldn"
             };
+            const WindowTemplate *task_option =
+                g_selected_task_slot >= 0
+                ? window_catalog_hit_test_names(&g_window_catalog, 3, x, y,
+                    task_option_names,
+                    sizeof(task_option_names) / sizeof(task_option_names[0]))
+                : NULL;
+            if (task_option != NULL) {
+                if (g_game_session_valid &&
+                    g_selected_task_slot < GAME_SESSION_MAX_PENDING_EVENTS) {
+                    const uint8_t slot = (uint8_t)g_selected_task_slot;
+                    const GamePendingEvent expected =
+                        g_game_session.pending_events[slot];
+                    const uint8_t subtype = task_option->send_message[0] == 4003
+                        ? 12 : (uint8_t)(12 + task_option->send_message[1]);
+                    if (game_session_dispatch_task_command(&g_game_session,
+                            slot, subtype, &expected)) {
+                        if (subtype == 12) g_selected_task_slot = -1;
+                        InvalidateRect(window, NULL, FALSE);
+                    }
+                }
+                /* Keep configured task controls modal even if the selected
+                   record became stale before dispatch. */
+                return;
+            }
             const WindowTemplate *scroll_control = window_catalog_hit_test_names(
                 &g_window_catalog, 3, x, y, task_scroll_names,
                 sizeof(task_scroll_names) / sizeof(task_scroll_names[0]));
@@ -5845,6 +5910,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_build_cycle_art);
     free_sprite_sheet(&g_task_scroll_art);
     free_sprite_sheet(&g_task_icon_art);
+    free_sprite_sheet(&g_task_priority_art);
     free_sprite_sheet(&g_bildtone_art);
     free_sprite_sheet(&g_tone_crys_art);
     free_sprite_sheet(&g_magctone_art);
