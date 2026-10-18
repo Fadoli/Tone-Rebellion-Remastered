@@ -86,6 +86,12 @@ int island_panel_info_building_sprite_position(const WindowTemplate *panel,
 int island_panel_info_hall_resource_row(unsigned int resource,
                                         IslandHallResourceRow *row);
 
+/* FUN_004469d6 centers NOTASKS in IWTasks at pane-local y=50 when the task
+   list or its first entry is null. */
+int island_panel_info_empty_task_label_position(const WindowTemplate *panel,
+                                               int text_width,
+                                               int *x, int *y);
+
 /* Reads one key-delimited text entry, trimming horizontal whitespace on keys. */
 int island_panel_info_extract_entry(const unsigned char *bytes, size_t length,
                                     const char *key,

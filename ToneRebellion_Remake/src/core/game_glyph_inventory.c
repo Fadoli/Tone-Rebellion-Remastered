@@ -32,6 +32,15 @@ int game_glyph_inventory_hit_test(uint16_t glyph_mask,
     return -1;
 }
 
+int game_glyph_inventory_update_hover(
+    int previous_glyph, uint16_t glyph_mask,
+    const GameGlyphCenter centers[GAME_GLYPH_COUNT], int event_in_pane,
+    int x, int y)
+{
+    if (!event_in_pane) return previous_glyph;
+    return game_glyph_inventory_hit_test(glyph_mask, centers, x, y);
+}
+
 int game_glyph_inventory_key(unsigned int glyph_index,
                              char *output, size_t output_capacity)
 {
@@ -45,4 +54,10 @@ int game_glyph_inventory_key(unsigned int glyph_index,
         return 0;
     }
     return 1;
+}
+
+int game_glyph_inventory_cursor_slot(int selected_glyph,
+                                     int selected_inventory_item)
+{
+    return selected_glyph != -1 || selected_inventory_item != -1 ? 0x0b : 0x0d;
 }

@@ -6,6 +6,12 @@
 
 enum {
     CURVED_TEXT_MAX_LINES = 64,
+    /* Preserve native glyph rows; narrow translated text to fit the arc. */
+    CURVED_TEXT_NEWGAME_RENDER_HEIGHT = 13,
+    CURVED_TEXT_NEWGAME_WIDTH_NUMERATOR = 11,
+    CURVED_TEXT_NEWGAME_WIDTH_DENOMINATOR = 13,
+    /* Keeps translated paragraphs clear of the top icons at native height. */
+    CURVED_TEXT_NEWGAME_LINE_GAP = 1,
     /* Calibrated to the supplied original-game capture. The numeric source
        global used by FUN_0044ec5d is not resolved in the exported evidence. */
     CURVED_TEXT_NEWGAME_LAST_LINE_Y = 392

@@ -122,6 +122,7 @@ static char g_help_text[HELP_ENTRY_COUNT][1024];
 static char g_newgame_text[8][256];
 static char g_empty_glyph_text[256];
 static char g_empty_inventory_text[256];
+static char g_empty_task_text[256];
 static char g_hall_population_label[64];
 static char g_inventory_info_text[768];
 static char g_glyph_info_text[768];
@@ -160,7 +161,10 @@ static int g_hovered_inventory_item = -1;
 static int g_selected_inventory_item = -1;
 static int g_inventory_info_mode = ISLAND_PANEL_INFO_INVENTORY_DEFAULT;
 static int g_hovered_glyph = -1;
+static int g_selected_glyph = -1;
 static int g_glyph_info_default = 1;
+static HMODULE g_original_cursor_module;
+static HCURSOR g_glyph_interaction_cursor;
 static GameDiplomacyHit g_diplomacy_hover;
 static int g_diplomacy_hover_valid;
 static uint8_t g_floater_overlay_flags;
@@ -1275,7 +1279,9 @@ static int32_t measure_bitmap_text(void *context, const char *text, size_t lengt
         uint32_t code = (unsigned char)text[i];
         if (code >= g_bitmap_font.glyph_count) code = (uint32_t)'?';
         if (bitmap_font_get_glyph(&g_bitmap_font, code, &glyph_width, &glyph_pixels))
-            width += (int32_t)glyph_width;
+            width += (int32_t)((glyph_width * CURVED_TEXT_NEWGAME_WIDTH_NUMERATOR +
+                                CURVED_TEXT_NEWGAME_WIDTH_DENOMINATOR / 2u) /
+                               CURVED_TEXT_NEWGAME_WIDTH_DENOMINATOR);
     }
     return width;
 }
@@ -1292,8 +1298,7 @@ static int32_t measure_curved_bitmap_text(void *context, const char *text,
         uint32_t code = (unsigned char)text[i];
         if (code >= g_bitmap_font.glyph_count) code = (uint32_t)'?';
         if (bitmap_font_get_glyph(&g_bitmap_font, code, &glyph_width, &glyph_pixels))
-            width += (int32_t)((glyph_width * 12u + g_bitmap_font.height / 2u) /
-                               g_bitmap_font.height);
+            width += (int32_t)glyph_width;
     }
     return width;
 }
@@ -1310,11 +1315,12 @@ static void draw_curved_bitmap_text_at(DWORD *pixels, int surface_width,
             ? *cursor : (uint32_t)'?';
         if (bitmap_font_get_glyph(&g_bitmap_font, code, &source_width,
                                   &glyph_pixels)) {
-            uint32_t width = (source_width * 12u + g_bitmap_font.height / 2u) /
-                             g_bitmap_font.height;
+            uint32_t width = (source_width * CURVED_TEXT_NEWGAME_WIDTH_NUMERATOR +
+                              CURVED_TEXT_NEWGAME_WIDTH_DENOMINATOR / 2u) /
+                             CURVED_TEXT_NEWGAME_WIDTH_DENOMINATOR;
             if (width == 0) width = 1;
             uint32_t row;
-            for (row = 0; row < g_bitmap_font.height; ++row) {
+            for (row = 0; row < CURVED_TEXT_NEWGAME_RENDER_HEIGHT; ++row) {
                 uint32_t col;
                 for (col = 0; col < width; ++col) {
                     uint32_t source_col = col * source_width / width;
@@ -1628,6 +1634,12 @@ static int load_newgame_captions(char *error, size_t error_capacity)
                        "gamey.txt key NOART is missing or empty");
         goto done;
     }
+    if (!extract_help_entry(bytes, member->length, "NOTASKS",
+                            g_empty_task_text, sizeof(g_empty_task_text))) {
+        (void)snprintf(error, error_capacity,
+                       "gamey.txt key NOTASKS is missing or empty");
+        goto done;
+    }
     if (!extract_help_entry(bytes, member->length, "POPSTR",
                             g_hall_population_label,
                             sizeof(g_hall_population_label))) {
@@ -1789,7 +1801,7 @@ static int create_tribe_description_sheet(SpriteSheet *sheet,
         if (!curved_text_layout(text,
                                 entry % 2 == 0 ? CURVED_TEXT_LEFT : CURVED_TEXT_RIGHT,
                                 CURVED_TEXT_NEWGAME_LAST_LINE_Y,
-                (int)g_bitmap_font.height,
+                                CURVED_TEXT_NEWGAME_RENDER_HEIGHT,
                                 measure_curved_bitmap_text, NULL, lines, MAX_LINES,
                                 &line_count)) {
             (void)snprintf(error, error_capacity,
@@ -2679,28 +2691,33 @@ static int update_glyph_hover(int x, int y)
     if (g_menu.screen != SCREEN_ISLAND || hall_player < 0 ||
         g_island_panel_mode != WINDOW_ISLAND_PANEL_GLYPHS) return 0;
     panel = window_catalog_find(&g_window_catalog, "IWGlyphs", 3);
-    if (panel == NULL || x < panel->pane.left || x > panel->pane.right ||
-        y < panel->pane.top || y > panel->pane.bottom) return 0;
+    if (panel == NULL) return 0;
 
-    pane_width = panel->pane.right - panel->pane.left;
-    pane_height = panel->pane.bottom - panel->pane.top;
     economy = &g_game_session.economy[(unsigned int)hall_player];
-    for (glyph_index = 0; glyph_index < GAME_GLYPH_COUNT; ++glyph_index) {
-        const SpriteFrame *frame = &g_glyph_inventory_art.frames[glyph_index + 1U];
-        if (frame->hit_right <= frame->hit_left ||
-            frame->hit_bottom <= frame->hit_top) {
-            centers[glyph_index].x = -10000;
-            centers[glyph_index].y = -10000;
-            continue;
+    if (x >= panel->pane.left && x <= panel->pane.right &&
+        y >= panel->pane.top && y <= panel->pane.bottom) {
+        pane_width = panel->pane.right - panel->pane.left;
+        pane_height = panel->pane.bottom - panel->pane.top;
+        for (glyph_index = 0; glyph_index < GAME_GLYPH_COUNT; ++glyph_index) {
+            const SpriteFrame *frame = &g_glyph_inventory_art.frames[glyph_index + 1U];
+            if (frame->hit_right <= frame->hit_left ||
+                frame->hit_bottom <= frame->hit_top) {
+                centers[glyph_index].x = -10000;
+                centers[glyph_index].y = -10000;
+                continue;
+            }
+            centers[glyph_index].x = pane_width + frame->x_offset + frame->hit_left +
+                (frame->hit_right - frame->hit_left + 1) / 2;
+            centers[glyph_index].y = pane_height + frame->y_offset + frame->hit_top +
+                (frame->hit_bottom - frame->hit_top + 1) / 2;
         }
-        centers[glyph_index].x = pane_width + frame->x_offset + frame->hit_left +
-            (frame->hit_right - frame->hit_left + 1) / 2;
-        centers[glyph_index].y = pane_height + frame->y_offset + frame->hit_top +
-            (frame->hit_bottom - frame->hit_top + 1) / 2;
+        hovered = game_glyph_inventory_update_hover(g_hovered_glyph,
+            economy->glyph_mask, centers, 1, x - panel->pane.left,
+            y - panel->pane.top);
+    } else {
+        hovered = game_glyph_inventory_update_hover(g_hovered_glyph,
+            economy->glyph_mask, NULL, 0, 0, 0);
     }
-    hovered = game_glyph_inventory_hit_test(economy->glyph_mask, centers,
-                                             x - panel->pane.left,
-                                             y - panel->pane.top);
     if (hovered == g_hovered_glyph) return 0;
     g_hovered_glyph = hovered;
     g_glyph_info_default = 0;
@@ -3112,6 +3129,22 @@ static void draw_hall_panel(HDC dc, int hall_player)
                 /* FUN_0042fa0f routes each pair to its distinct list panel. */
                 draw_sprite(dc, &g_task_scroll_art, (uint32_t)frame,
                             control->pane.left, control->pane.top);
+            }
+        }
+        if (panel_state == WINDOW_ISLAND_PANEL_TASKS && g_empty_task_text[0] != '\0') {
+            const WindowTemplate *task_list_panel = window_catalog_find(
+                &g_window_catalog, "IWTasks", 3);
+            int label_width = measure_bitmap_text(NULL, g_empty_task_text,
+                                                  strlen(g_empty_task_text));
+            int label_x;
+            int label_y;
+            /* The remake has no task records yet. The source shows NOTASKS
+               when its task-list pointer or first entry is null. */
+            if (task_list_panel != NULL &&
+                island_panel_info_empty_task_label_position(task_list_panel,
+                    label_width, &label_x, &label_y)) {
+                draw_bitmap_label(dc, g_empty_task_text, label_x, label_y,
+                                  RGB(185, 205, 220));
             }
         }
         return;
@@ -4549,6 +4582,26 @@ static void handle_click(HWND window, int x, int y)
             }
         }
     } else if (g_menu.screen == SCREEN_ISLAND) {
+        if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GLYPHS) {
+            const WindowTemplate *glyph_panel = window_catalog_find(
+                &g_window_catalog, "IWGlyphs", 3);
+            if (glyph_panel != NULL && x >= glyph_panel->pane.left &&
+                x <= glyph_panel->pane.right && y >= glyph_panel->pane.top &&
+                y <= glyph_panel->pane.bottom) {
+                (void)update_glyph_hover(x, y);
+                if (g_hovered_glyph >= 0) {
+                    /* IWGlyphs sends message 0x43 with its owned, hovered ID.
+                       The source then arms interaction mode 0x11. The later
+                       map-command guards/effect are not modelled here. */
+                    g_selected_glyph = g_hovered_glyph;
+                    if (g_glyph_interaction_cursor != NULL) {
+                        SetCursor(g_glyph_interaction_cursor);
+                    }
+                    InvalidateRect(window, NULL, FALSE);
+                    return;
+                }
+            }
+        }
         {
             IslandLocationActionControl action = selected_location_action();
             const char *action_name = action == ISLAND_LOCATION_ACTION_HALL_MOVE
@@ -4810,6 +4863,13 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                                           WPARAM wparam, LPARAM lparam)
 {
     switch (message) {
+    case WM_SETCURSOR:
+        if (g_menu.screen == SCREEN_ISLAND && g_selected_glyph >= 0 &&
+            LOWORD(lparam) == HTCLIENT && g_glyph_interaction_cursor != NULL) {
+            SetCursor(g_glyph_interaction_cursor);
+            return TRUE;
+        }
+        break;
     case WM_PAINT:
         paint_window(window);
         return 0;
@@ -5427,6 +5487,17 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     (void)previous_instance;
     (void)command_line;
 
+    /* Load only the original PE resource section; this does not execute
+       FLOAT.EXE. Cursor slot 0x0b maps to group cursor resource 0x7f. */
+    g_original_cursor_module = LoadLibraryExA(
+        "C:\\Program Files\\Tone\\FLOAT.EXE", NULL,
+        LOAD_LIBRARY_AS_DATAFILE);
+    if (g_original_cursor_module != NULL) {
+        g_glyph_interaction_cursor = (HCURSOR)LoadImageA(
+            g_original_cursor_module, MAKEINTRESOURCEA(0x7f), IMAGE_CURSOR,
+            0, 0, LR_DEFAULTSIZE);
+    }
+
     if (!load_world_map(error, sizeof(error)) ||
         !load_window_catalog(error, sizeof(error)) ||
         !load_building_render_catalog(error, sizeof(error)) ||
@@ -5487,6 +5558,14 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     while (GetMessageA(&message, NULL, 0, 0) > 0) {
         TranslateMessage(&message);
         DispatchMessageA(&message);
+    }
+    if (g_original_cursor_module != NULL) {
+        if (g_glyph_interaction_cursor != NULL) {
+            DestroyCursor(g_glyph_interaction_cursor);
+            g_glyph_interaction_cursor = NULL;
+        }
+        FreeLibrary(g_original_cursor_module);
+        g_original_cursor_module = NULL;
     }
     free_sprite_sheet(&g_title_art);
     free_sprite_sheet(&g_new_background);

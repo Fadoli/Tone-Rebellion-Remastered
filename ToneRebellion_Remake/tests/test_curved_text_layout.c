@@ -50,8 +50,9 @@ static int32_t measure_curved_font(void *context, const char *text, size_t lengt
         uint32_t code = (unsigned char)text[i];
         if (code >= font->glyph_count) code = (uint32_t)'?';
         if (!bitmap_font_get_glyph(font, code, &glyph_width, &pixels)) continue;
-        width += (int32_t)((glyph_width * 12u + font->height / 2u) /
-                           font->height);
+        width += (int32_t)((glyph_width * CURVED_TEXT_NEWGAME_WIDTH_NUMERATOR +
+                            CURVED_TEXT_NEWGAME_WIDTH_DENOMINATOR / 2u) /
+                           CURVED_TEXT_NEWGAME_WIDTH_DENOMINATOR);
     }
     return width;
 }
@@ -76,6 +77,8 @@ static void test_original_description_bytes(const unsigned char *font_bytes,
     assert(bitmap_font_init(&font, font_bytes, font_length,
                             error, sizeof(error)));
     assert(font.height == SOURCE_FONT_HEIGHT);
+    assert(CURVED_TEXT_NEWGAME_RENDER_HEIGHT == font.height);
+    assert(CURVED_TEXT_NEWGAME_LINE_GAP == 1);
     for (entry = 0; entry < 8; ++entry) {
         CurvedTextLine lines[CURVED_TEXT_MAX_LINES];
         size_t line_count = 0;
@@ -87,7 +90,7 @@ static void test_original_description_bytes(const unsigned char *font_bytes,
                                                sizeof(text)));
         assert(curved_text_layout(text, side,
                                   CURVED_TEXT_NEWGAME_LAST_LINE_Y,
-                                  (int)font.height,
+                                  CURVED_TEXT_NEWGAME_RENDER_HEIGHT,
                                   measure_curved_font, &font,
                                   lines, CURVED_TEXT_MAX_LINES, &line_count));
         assert(line_count != 0);
@@ -106,10 +109,11 @@ static void test_original_description_bytes(const unsigned char *font_bytes,
                                       &expected_x, &expected_width));
             assert(lines[line].x == expected_x &&
                    lines[line].width == expected_width);
-            assert(lines[line].y + (int)font.height <= FOOTER_TOP);
+            assert(lines[line].y + CURVED_TEXT_NEWGAME_RENDER_HEIGHT <= FOOTER_TOP);
             if (line != 0)
                 assert(lines[line].y - lines[line - 1].y ==
-                       (int)font.height + 1);
+                       CURVED_TEXT_NEWGAME_RENDER_HEIGHT +
+                       CURVED_TEXT_NEWGAME_LINE_GAP);
         }
     }
     bitmap_font_free(&font);

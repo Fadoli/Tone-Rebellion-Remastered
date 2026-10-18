@@ -9,8 +9,7 @@ enum {
     TEXT_RIGHT_MARGIN = 325,
     TEXT_CENTER_Y = 240,
     TEXT_RADIUS_SQUARED = 40000,
-    /* Fit the supplied translated descriptions while retaining source rows. */
-    TEXT_LINE_GAP = 1
+    TEXT_LINE_GAP = CURVED_TEXT_NEWGAME_LINE_GAP
 };
 
 static int32_t integer_sqrt(int32_t value)

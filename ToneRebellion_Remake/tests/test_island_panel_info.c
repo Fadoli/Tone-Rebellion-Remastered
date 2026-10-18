@@ -13,6 +13,8 @@ int main(int argc, char **argv)
     int sprite_y;
     int roster_x;
     int roster_y;
+    int task_label_x;
+    int task_label_y;
     IslandHallResourceRow resource_row;
     WindowTemplate info_panel = {0};
     IslandPanelSelection panel_selection = {7, -1};
@@ -107,6 +109,18 @@ int main(int argc, char **argv)
            resource_row.amount_y == 90);
     assert(!island_panel_info_hall_resource_row(3, &resource_row));
     assert(!island_panel_info_hall_resource_row(0, NULL));
+    {
+        WindowTemplate task_panel = {0};
+        task_panel.pane.left = 192;
+        task_panel.pane.top = 368;
+        task_panel.pane.right = 447;
+        task_panel.pane.bottom = 471;
+        assert(island_panel_info_empty_task_label_position(&task_panel, 105,
+                   &task_label_x, &task_label_y));
+        assert(task_label_x == 267 && task_label_y == 418);
+        assert(!island_panel_info_empty_task_label_position(NULL, 105,
+                   &task_label_x, &task_label_y));
+    }
     assert(island_panel_info_inventory_key(5, key, sizeof(key)));
     assert(strcmp(key, "BRIDGE00") == 0);
     assert(island_panel_info_inventory_key(6, key, sizeof(key)));
@@ -182,6 +196,10 @@ int main(int argc, char **argv)
                                                "POPSTR", description,
                                                sizeof(description)));
         assert(strcmp(description, "Pop") == 0);
+        assert(island_panel_info_extract_entry(bytes, (size_t)file_length,
+                                               "NOTASKS", description,
+                                               sizeof(description)));
+        assert(description[0] != '\0');
         for (cryptic_id = 0; cryptic_id < ISLAND_PANEL_INFO_CRYPTIC_COUNT;
              ++cryptic_id) {
             assert(island_panel_info_cryptic_key(cryptic_id, key, sizeof(key)));

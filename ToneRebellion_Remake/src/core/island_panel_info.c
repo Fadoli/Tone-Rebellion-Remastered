@@ -171,6 +171,21 @@ int island_panel_info_hall_resource_row(unsigned int resource,
     return 1;
 }
 
+int island_panel_info_empty_task_label_position(const WindowTemplate *panel,
+                                               int text_width,
+                                               int *x, int *y)
+{
+    int width;
+    if (panel == NULL || x == NULL || y == NULL || text_width < 0) return 0;
+    width = panel->pane.right - panel->pane.left;
+    if (width <= 0) return 0;
+    /* FUN_004469d6 measures NOTASKS, centers it in the task pane, and draws
+       it at local y=0x32. */
+    *x = panel->pane.left + (width - text_width) / 2;
+    *y = panel->pane.top + 0x32;
+    return 1;
+}
+
 int island_panel_info_extract_entry(const unsigned char *bytes, size_t length,
                                     const char *key,
                                     char *output, size_t output_capacity)

@@ -251,6 +251,10 @@ static void verify_original_manifest(const char *path)
                 stock_y[resource], stock_controls, 3);
             assert(window != NULL && strcmp(window->name,
                    stock_controls[resource]) == 0);
+            assert(window->mouse_focus == 1 && window->has_hilite_frame &&
+                   window->hilite_frame == 4);
+            assert(window_catalog_control_frame(window, 0) == window->shape_frame);
+            assert(window_catalog_control_frame(window, 1) == 4);
         }
     }
     assert(window_catalog_hall_panel_mode("BC_GenInfo") ==

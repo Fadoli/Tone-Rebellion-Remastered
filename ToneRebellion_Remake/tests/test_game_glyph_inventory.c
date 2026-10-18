@@ -27,11 +27,23 @@ int main(int argc, char **argv)
     assert(game_glyph_inventory_hit_test(0x2000U, centers, 40, 50) == -1);
     assert(game_glyph_inventory_hit_test(0, centers, 40, 50) == -1);
     assert(game_glyph_inventory_hit_test(1U, NULL, 40, 50) == -1);
+    {
+        int hovered = game_glyph_inventory_update_hover(-1, 1U, centers,
+                                                        1, 40, 50);
+        assert(hovered == 0);
+        assert(game_glyph_inventory_update_hover(hovered, 1U, NULL,
+                                                  0, -1, -1) == 0);
+        assert(game_glyph_inventory_update_hover(hovered, 1U, centers,
+                                                  1, 56, 50) == -1);
+    }
     assert(game_glyph_inventory_key(0, key, sizeof(key)));
     assert(strcmp(key, "GLYPH00") == 0);
     assert(game_glyph_inventory_key(13, key, sizeof(key)));
     assert(strcmp(key, "GLYPH13") == 0);
     assert(!game_glyph_inventory_key(14, key, sizeof(key)));
+    assert(game_glyph_inventory_cursor_slot(-1, -1) == 0x0d);
+    assert(game_glyph_inventory_cursor_slot(0, -1) == 0x0b);
+    assert(game_glyph_inventory_cursor_slot(-1, 5) == 0x0b);
 
     if (argc > 1) {
         FILE *file = fopen(argv[1], "rb");

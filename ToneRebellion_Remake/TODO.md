@@ -5,11 +5,13 @@ Porter uniquement les comportements établis par le binaire et les données loca
 ## À faire
 
 - [ ] Tracer le consommateur de l'ordre 9 issu du type 34, son événement 7 et les montants de coût absents de `DAT_005eac08`; `0x4c` est un chemin distinct.
+- [ ] Identifier l’initialisation/producteur des records Tasks `DAT_006183bc` (pas 0x14); le filtre/panneau est connu, mais ni l’état initial ni le flux complet ne le sont.
 - [ ] Identifier le callback et la garde de classe des ordres directs avant d'exposer les commandes soldat/mage.
 - [ ] Finir les panneaux d'unités/bâtiments : l'écriture de `+0x22` est établie pour les floaters, mais pas les clés stats du Hall/site; tracer chaque action avant d'ajouter des boutons. Le roster actuel ne couvre que les quatre ouvriers initiaux.
 - [ ] Mapper les champs runtime nécessaires aux badges état/charge; établir le sens visuel ou gameplay du mot d'île basculé par `PANIC`. L'événement et son écriture XOR sont identifiés, mais pas l'effet du mot.
 - [ ] Tracer l'initialisation/écriture de `DAT_006191f8` et la formule de `% WORKSTR` avant d'afficher surplus et ouvriers.
-- [ ] Relier les tâches aux compteurs Inventory; établir le producteur des deux bits Hall qui déclenchent l'acquisition Glyphes avant de porter ce chemin.
+- [ ] Relier les tâches aux compteurs Inventory; retrouver le contexte exact des appels à `FUN_004503bd` qui alimentent les deux bits de progression et attribuent un glyphe. Les call-sites existent, mais ne prouvent pas une arrivée au Hall.
+- [ ] Finir le clic carte après sélection d'un glyphe : son paquet type 3 est observé, mais les gardes de destination, le consommateur et l'effet restent inconnus.
 - [ ] Remplacer le placement immédiat par la construction différée source : coûts, sélection d'unité, ordre, trajet et achèvement.
 - [ ] Tracer l’activation du bit Hall `+0x1c & 1` avant les demandes de réserve mode 2; relier le type 4 à l’affectation, collecte, livraison et au cycle idle.
 - [ ] Ajouter des tests source-backed pour les gardes refusées, commandes, construction différée et interactions de panneaux.
@@ -26,12 +28,14 @@ Porter uniquement les comportements établis par le binaire et les données loca
 - [x] Commandes de barre d'île, badges santé/royaume et descriptions de survol actuellement portées.
 - [x] Sons de menu et sélection de musique du royaume.
 - [x] Icônes des quatre joueurs dans la bannière Diplomatie à partir des ouvriers initiaux et des ancres source; animation et autres états en attente.
-- [x] Panneaux Tasks / effets : paires `SCROLL.SHP` et survol `MOUSEFOCUS` portés pour `IWTasks`/`IWEffList`; données des tâches restent à porter. `InvCycle` utilise aussi son frame de survol.
+- [x] Panneaux Tasks / effets : paires `SCROLL.SHP`, survol `MOUSEFOCUS` et état vide localisé `NOTASKS` dans `IWTasks` portés; données actives des tâches et défilement restent à porter. `InvCycle` utilise aussi son frame de survol.
+- [x] Clic d'un glyphe possédé : mémorise l'index et arme le curseur source du mode `0x11`; le clic carte et son effet restent en attente des gardes/consommateur.
 - [x] Inventory : la fiche `IWTextInfo` suit l'ID sélectionné après la fin du survol; couvert par `test_island_panel_info`.
 - [x] `TOGREALM` inverse ses trois flags; royaume (`FLTINFO` 22–25) et santé (`0x15−maxHP`) sont rendus pour les ouvriers initiaux. Les autres badges attendent leurs champs runtime.
 - [x] `PANIC` émet l'événement local type 3/sous-type 0 et le dispatch bascule le bit 0 du mot d'île par joueur; la sémantique reste inconnue.
-- [x] Texte New Game : 13 rangées source, largeur 12/13 et interligne 1 px; les huit paragraphes COB passent les bornes et dégagent emblèmes/pied de page.
-- [x] Build du 18/10/2026 : CTest 19/19; exécutable 271467 octets, SHA-256 `F97102FA18FC278EAEE24A0AA59D05488AB42F549C5ADB3C7683BC832EBE9903`.
+- [x] Texte New Game : hauteur source 13 px sans réduction verticale; largeur ramenée à 11/13 et interligne `+1` comme compromis de traduction (la source avance de `+3`); huit paragraphes testés dans la zone utile.
+- [ ] Vérifier visuellement le nouveau rendu New Game sur capture utilisateur; ancre basse encore calibrée.
+- [x] Vérification Release : CTest 19/19, manifest `windows.txt`, corpus îles/COB, catalogues Hall/construction et descriptions glyphes passent; curseur source `0x7f` résolu comme ressource; exécutable 273774 octets, SHA-256 `B9300B777595B63951A5D31F9A98C4DD008059FAF9E610008EFDF9CD9B176A5B`.
 
 ## Références
 
