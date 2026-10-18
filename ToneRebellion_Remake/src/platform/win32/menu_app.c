@@ -126,6 +126,7 @@ static char g_empty_glyph_text[256];
 static char g_empty_inventory_text[256];
 static char g_empty_task_text[256];
 static char g_task_label_text[4][256];
+static char g_task_stock_text[256];
 static char g_task_priority_text[3][256];
 static char g_task_transfer_text[2][256];
 static char g_task_category_text[4][256];
@@ -960,7 +961,7 @@ static int load_island_surface(int island_id, int map_island_index,
     }
     if (temp_hole_candidate.frame_count < 8 || build_cycle_candidate.frame_count < 2 ||
         task_scroll_candidate.frame_count < 4 ||
-        task_icon_candidate.frame_count < 5 ||
+        task_icon_candidate.frame_count < 8 ||
         task_priority_candidate.frame_count < 8 ||
         hall_stock_candidate.frame_count < 6 || main_buttons_candidate.frame_count < 8 ||
         hall_command_candidate.frame_count < 10 ||
@@ -1679,6 +1680,12 @@ static int load_newgame_captions(char *error, size_t error_capacity)
                 goto done;
             }
         }
+    }
+    if (!extract_help_entry(bytes, member->length, "STOCK",
+                            g_task_stock_text, sizeof(g_task_stock_text))) {
+        (void)snprintf(error, error_capacity,
+                       "gamey.txt key STOCK is missing or empty");
+        goto done;
     }
     {
         static const char *const priority_keys[3] = {
@@ -3153,6 +3160,7 @@ static const char *task_label_text(const char *key)
     if (strcmp(key, "REPAIR") == 0) return g_task_label_text[1];
     if (strcmp(key, "DARTIFACT") == 0) return g_task_label_text[2];
     if (strcmp(key, "OARTIFACT") == 0) return g_task_label_text[3];
+    if (strcmp(key, "STOCK") == 0) return g_task_stock_text;
     if (strcmp(key, "TNORM") == 0) return g_task_priority_text[0];
     if (strcmp(key, "THIGH") == 0) return g_task_priority_text[1];
     if (strcmp(key, "TEXCL") == 0) return g_task_priority_text[2];
@@ -3163,6 +3171,26 @@ static const char *task_label_text(const char *key)
     if (strcmp(key, "MTONE") == 0) return g_task_category_text[2];
     if (strcmp(key, "ARTIFACT") == 0) return g_task_category_text[3];
     return NULL;
+}
+
+static int hall_resource_task_index(int hall_player, int slot)
+{
+    unsigned int resource;
+    const GamePendingEvent *event;
+    if (!g_game_session_valid || hall_player < 0 ||
+        hall_player >= GAME_START_PLAYER_COUNT || slot < 0 ||
+        slot >= GAME_SESSION_MAX_PENDING_EVENTS) return -1;
+    event = &g_game_session.pending_events[slot];
+    if (event->active == 0) return -1;
+    for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
+        const GamePlayerEconomy *economy = &g_game_session.economy[hall_player];
+        if (economy->resource_task_slot[resource] == slot &&
+            event->player_id == hall_player && event->action_type == 4 &&
+            event->payload_0a == economy->hall_island_index &&
+            event->payload_0e == economy->hall_location_index &&
+            event->payload_12 == (int16_t)(resource + 1U)) return (int)resource;
+    }
+    return -1;
 }
 
 static void draw_hall_panel(HDC dc, int hall_player)
@@ -3277,11 +3305,19 @@ static void draw_hall_panel(HDC dc, int hall_player)
                      ++visible_index) {
                     const GamePendingEvent *event = &g_game_session.pending_events[
                         task_slots[(size_t)offset + visible_index]];
+                    const int stock_resource = hall_resource_task_index(
+                        hall_player, task_slots[(size_t)offset + visible_index]);
+                    static const SpriteSheet *const resource_art[] = {
+                        &g_bildtone_art, &g_tone_crys_art, &g_magctone_art
+                    };
                     IslandTaskRow row;
                     IslandTaskRowPosition position;
                     const char *label;
-                    if (!island_panel_info_task_row(event->action_type,
-                                                    event->payload_12, &row) ||
+                    if (!(stock_resource >= 0
+                            ? island_panel_info_stock_task_row(
+                                  (unsigned int)stock_resource, &row)
+                            : island_panel_info_task_row(event->action_type,
+                                  event->payload_12, &row)) ||
                         !island_panel_info_task_row_position(task_list_panel,
                             (unsigned int)visible_rows,
                             (unsigned int)visible_index, &position)) continue;
@@ -3299,6 +3335,22 @@ static void draw_hall_panel(HDC dc, int hall_player)
                         task_list_panel->pane.left + position.label_x,
                         task_list_panel->pane.top + position.y,
                         RGB(185, 205, 220));
+                    if (row.secondary_task_icon_frame >= 0 &&
+                        g_task_icon_art.frame_count >
+                            (uint32_t)row.secondary_task_icon_frame) {
+                        draw_sprite(dc, &g_task_icon_art,
+                            (uint32_t)row.secondary_task_icon_frame,
+                            task_list_panel->pane.left + position.secondary_icon_x,
+                            task_list_panel->pane.top + position.y);
+                    }
+                    if (row.resource_icon_type >= 0 &&
+                        row.resource_icon_type < GAME_RESOURCE_TYPE_COUNT &&
+                        resource_art[(unsigned int)row.resource_icon_type]->frame_count > 0) {
+                        draw_sprite(dc,
+                            resource_art[(unsigned int)row.resource_icon_type], 0,
+                            task_list_panel->pane.left + position.resource_icon_x,
+                            task_list_panel->pane.top + position.y + 7);
+                    }
                 }
             }
             if (task_info_panel != NULL && g_empty_task_text[0] != '\0') {
@@ -3325,7 +3377,9 @@ static void draw_hall_panel(HDC dc, int hall_player)
                     {
                         const char *title_key = NULL;
                         const char *category_key = NULL;
-                        if (island_panel_info_task_transfer_keys(
+                        if (hall_resource_task_index(hall_player,
+                                g_selected_task_slot) < 0 &&
+                            island_panel_info_task_transfer_keys(
                                 selected_event->action_type,
                                 selected_event->payload_12,
                                 &title_key, &category_key)) {
@@ -5213,6 +5267,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                                                   &g_building_render_catalog);
                 game_session_tick_floater_moves(&g_game_session,
                                                 g_menu.animation_ticks);
+                (void)game_session_update_resource_requests(&g_game_session);
             }
             InvalidateRect(window, NULL, FALSE);
         }

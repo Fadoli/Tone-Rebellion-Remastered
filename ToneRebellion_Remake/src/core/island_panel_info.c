@@ -194,6 +194,8 @@ int island_panel_info_task_row(int16_t action_type, int16_t item_id,
     if (row == NULL) return 0;
     value.label_key = NULL;
     value.task_icon_frame = -1;
+    value.secondary_task_icon_frame = -1;
+    value.resource_icon_type = -1;
     if (action_type == 5) {
         value.label_key = "CONSTR";
         value.task_icon_frame = 0;
@@ -213,6 +215,17 @@ int island_panel_info_task_row(int16_t action_type, int16_t item_id,
     return 1;
 }
 
+int island_panel_info_stock_task_row(unsigned int resource_type,
+                                     IslandTaskRow *row)
+{
+    if (row == NULL || resource_type >= 3) return 0;
+    row->label_key = "STOCK";
+    row->task_icon_frame = 3;
+    row->secondary_task_icon_frame = 7;
+    row->resource_icon_type = (int8_t)resource_type;
+    return 1;
+}
+
 int island_panel_info_task_row_position(const WindowTemplate *panel,
                                        unsigned int visible_rows,
                                        unsigned int visible_index,
@@ -228,6 +241,8 @@ int island_panel_info_task_row_position(const WindowTemplate *panel,
     if (row_y < INT16_MIN || row_y > INT16_MAX) return 0;
     position->icon_x = 25;
     position->label_x = 45;
+    position->secondary_icon_x = 150;
+    position->resource_icon_x = 135;
     position->y = (int16_t)row_y;
     return 1;
 }

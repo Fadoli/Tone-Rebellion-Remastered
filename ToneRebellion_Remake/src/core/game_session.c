@@ -1134,7 +1134,12 @@ int game_session_dispatch_task_command(GameSession *session, uint8_t slot,
             GamePlayerEconomy *economy = &session->economy[player];
             unsigned int resource;
             for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
-                if (economy->resource_task_slot[resource] == (int16_t)slot) {
+                if (economy->resource_task_slot[resource] == (int16_t)slot &&
+                    event->player_id == (int16_t)player &&
+                    event->action_type == 4 &&
+                    event->payload_0a == economy->hall_island_index &&
+                    event->payload_0e == economy->hall_location_index &&
+                    event->payload_12 == (int16_t)(resource + 1U)) {
                     economy->resource_task_slot[resource] = -1;
                     economy->stock_mode[resource] = 1;
                     break;

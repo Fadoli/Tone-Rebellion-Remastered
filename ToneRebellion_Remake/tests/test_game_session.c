@@ -93,11 +93,14 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
     }
     for (player = 0; player < GAME_START_PLAYER_COUNT; ++player) {
         const GamePlayerStart *start = &session.player_starts.players[player];
+        unsigned int resource;
         const GameRuntimeLocation *pad = &session.islands[start->island_index]
             .locations[start->nearest_site_location_index];
         const GameRuntimeLocation *marker = &session.islands[start->island_index]
             .locations[start->marker_location_index];
         const GameFloaterStart *floater = &session.floaters[player * GAME_START_FLOATERS_PER_PLAYER];
+        for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource)
+            assert(session.economy[player].resource_task_slot[resource] == -1);
         assert((marker->tribe_visibility_mask & (uint8_t)(1U << player)) != 0);
         assert(pad->record_value_10 ==
                GAME_START_INITIAL_PAD_ITEM_ID + (int32_t)player * 16);
@@ -291,6 +294,66 @@ static void test_hall_resource_modes_cycle_through_original_three_states(void)
                &session, GAME_START_PLAYER_COUNT, GAME_RESOURCE_BUILD_TONE) == -1);
     assert(game_session_cycle_resource_stock_mode(
                &session, 1, (GameResourceType)7) == -1);
+}
+
+static void test_hall_stock_mode_creates_and_releases_linked_resource_tasks(void)
+{
+    GameSession session = {0};
+    GamePlayerEconomy *economy = &session.economy[1];
+    GameRuntimeLocation *hall;
+    GamePendingEvent expected;
+    int slot;
+    unsigned int resource;
+    unsigned int player;
+
+    session.island_count = 1;
+    session.islands[0].location_count = 1;
+    for (player = 0; player < GAME_START_PLAYER_COUNT; ++player) {
+        for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource)
+            session.economy[player].resource_task_slot[resource] = -1;
+    }
+    economy->hall_island_index = 0;
+    economy->hall_location_index = 0;
+    hall = &session.islands[0].locations[0];
+    hall->source_flags_1c = 1;
+    economy->stock_mode[GAME_RESOURCE_BUILD_TONE] = 2;
+    hall->resource_stock[GAME_RESOURCE_BUILD_TONE] = 149;
+
+    /* FUN_0045eaa7 uses strict stock < (short(+0x4a) * 50 + 150). */
+    assert(game_session_update_resource_requests(&session) == 1);
+    assert(session.pending_event_count == 1);
+    slot = economy->resource_task_slot[GAME_RESOURCE_BUILD_TONE];
+    assert(slot == 0);
+    assert(session.pending_events[slot].player_id == 1);
+    assert(session.pending_events[slot].payload_0a == 0);
+    assert(session.pending_events[slot].payload_0c == 0);
+    assert(session.pending_events[slot].action_type == 4);
+    assert(session.pending_events[slot].payload_0e == 0);
+    assert(session.pending_events[slot].payload_12 == 1);
+    assert(game_session_update_resource_requests(&session) == 0);
+
+    hall->resource_stock[GAME_RESOURCE_BUILD_TONE] = 150;
+    assert(game_session_update_resource_requests(&session) == 1);
+    assert(session.pending_event_count == 0);
+    assert(economy->resource_task_slot[GAME_RESOURCE_BUILD_TONE] == -1);
+    assert(economy->stock_mode[GAME_RESOURCE_BUILD_TONE] == 2);
+
+    hall->resource_stock[GAME_RESOURCE_BUILD_TONE] = 149;
+    assert(game_session_update_resource_requests(&session) == 1);
+    slot = economy->resource_task_slot[GAME_RESOURCE_BUILD_TONE];
+    expected = session.pending_events[slot];
+    assert(game_session_dispatch_task_command(&session, (uint8_t)slot,
+                                               12, &expected));
+    assert(economy->resource_task_slot[GAME_RESOURCE_BUILD_TONE] == -1);
+    assert(economy->stock_mode[GAME_RESOURCE_BUILD_TONE] == 1);
+    assert(session.pending_event_count == 0);
+    assert(game_session_update_resource_requests(&session) == 0);
+
+    economy->stock_mode[GAME_RESOURCE_CRYSTAL_TONE] = 2;
+    hall->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 0;
+    hall->source_flags_1c = 0;
+    assert(game_session_update_resource_requests(&session) == 0);
+    assert(economy->resource_task_slot[GAME_RESOURCE_CRYSTAL_TONE] == -1);
 }
 
 static void test_inventory_counts_cover_source_item_id_range(void)
@@ -929,6 +992,7 @@ int main(void)
     test_session_initializes_player_starts_and_runtime_items();
     test_hall_resource_ledger_is_safe();
     test_hall_resource_modes_cycle_through_original_three_states();
+    test_hall_stock_mode_creates_and_releases_linked_resource_tasks();
     test_inventory_counts_cover_source_item_id_range();
     test_pending_event_table_matches_source_slots_and_deduplication();
     test_task_projection_matches_source_filter_and_cap();

@@ -26,11 +26,15 @@ typedef struct IslandHallResourceRow {
 typedef struct IslandTaskRow {
     const char *label_key;
     int8_t task_icon_frame;
+    int8_t secondary_task_icon_frame;
+    int8_t resource_icon_type;
 } IslandTaskRow;
 
 typedef struct IslandTaskRowPosition {
     int16_t icon_x;
     int16_t label_x;
+    int16_t secondary_icon_x;
+    int16_t resource_icon_x;
     int16_t y;
 } IslandTaskRowPosition;
 
@@ -106,6 +110,10 @@ int island_panel_info_empty_task_label_position(const WindowTemplate *panel,
 /* FUN_004459e6 row branches with explicit gamey.txt labels and taskicon frames. */
 int island_panel_info_task_row(int16_t action_type, int16_t item_id,
                                IslandTaskRow *row);
+/* FUN_004459e6's Hall-reserve request row uses TASKICON frames 3 and 7 and
+   one of the three resource shapes. */
+int island_panel_info_stock_task_row(unsigned int resource_type,
+                                     IslandTaskRow *row);
 /* FUN_004459e6 centers visible 13px rows vertically and draws the icon at x=25,
    label at x=45; returned y is the pane-local row origin. */
 int island_panel_info_task_row_position(const WindowTemplate *panel,

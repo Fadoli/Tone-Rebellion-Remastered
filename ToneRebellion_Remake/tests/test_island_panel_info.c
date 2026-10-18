@@ -93,6 +93,14 @@ int main(int argc, char **argv)
            task_row.task_icon_frame == 4);
     assert(island_panel_info_task_row(4, 33, &task_row));
     assert(!island_panel_info_task_row(4, 34, &task_row));
+    assert(island_panel_info_stock_task_row(0, &task_row));
+    assert(strcmp(task_row.label_key, "STOCK") == 0 &&
+           task_row.task_icon_frame == 3 &&
+           task_row.secondary_task_icon_frame == 7 &&
+           task_row.resource_icon_type == 0);
+    assert(island_panel_info_stock_task_row(2, &task_row));
+    assert(task_row.resource_icon_type == 2);
+    assert(!island_panel_info_stock_task_row(3, &task_row));
     assert(island_panel_info_task_row(0xd, 0, &task_row));
     assert(strcmp(task_row.label_key, "OARTIFACT") == 0 &&
            task_row.task_icon_frame == 4);
@@ -101,8 +109,9 @@ int main(int argc, char **argv)
     info_panel.pane.bottom = 471;
     assert(island_panel_info_task_row_position(&info_panel, 7, 0,
                                                &task_position));
-    assert(task_position.icon_x == 25 && task_position.label_x == 45 &&
-           task_position.y == 6);
+        assert(task_position.icon_x == 25 && task_position.label_x == 45 &&
+           task_position.secondary_icon_x == 150 &&
+           task_position.resource_icon_x == 135 && task_position.y == 6);
     assert(island_panel_info_task_row_position(&info_panel, 7, 6,
                                                &task_position));
     assert(task_position.y == 84);
@@ -239,7 +248,7 @@ int main(int argc, char **argv)
         long file_length;
         unsigned int cryptic_id;
         static const char *const task_keys[] = {
-            "CONSTR", "REPAIR", "DARTIFACT", "OARTIFACT",
+            "CONSTR", "REPAIR", "DARTIFACT", "OARTIFACT", "STOCK",
             "TNORM", "THIGH", "TEXCL", "DELIVER", "RETRIEVE",
             "STONE", "CTONE", "MTONE", "ARTIFACT"
         };
