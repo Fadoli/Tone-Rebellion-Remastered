@@ -68,8 +68,7 @@ static void render_island_view(HDC dc)
         /* PIT_Object has no building SHP of its own; generated collectible
            items draw their TRIGGERS frame from +0x24 below. PIT_FeatureTrigger
            also has no SHP. Item IDs are distinct from renderer_class. */
-        if (location->kind == ISLAND_LOCATION_PAD ||
-            (location->renderer_class == 3 && location->renderer_variant == 3)) {
+        if (location->renderer_class == 3 && location->renderer_variant == 3) {
             if (runtime_location == NULL || runtime_location->record_value_10 <= 0) continue;
         }
         if (x < -4 || x >= LOGICAL_WIDTH + 4) continue;
@@ -141,6 +140,22 @@ static void render_island_view(HDC dc)
                                                   (unsigned)pad_group,
                                                   location->renderer_subtype);
                 draw_sprite(dc, &g_pad_art, frame, x, y);
+                drew_location = 1;
+            }
+            /* Build Tone is stored on an empty runtime pad until construction
+               consumes it. Keep the deposited stock visible at the site. */
+            if (is_construction_site && runtime_location != NULL &&
+                runtime_location->record_value_10 == 0 &&
+                runtime_location->resource_stock[GAME_RESOURCE_BUILD_TONE] != 0 &&
+                g_bildtone_art.frame_count != 0) {
+                char stock_label[8];
+                unsigned int stock = runtime_location->resource_stock[
+                    GAME_RESOURCE_BUILD_TONE];
+                draw_sprite_scaled(dc, &g_bildtone_art, 0, x - 5, y - 12,
+                                   0x00008000U);
+                (void)snprintf(stock_label, sizeof(stock_label), "%u", stock);
+                draw_bitmap_label(dc, stock_label, x + 3, y - 10,
+                                  RGB(255, 238, 164));
                 drew_location = 1;
             }
         }
@@ -233,9 +248,9 @@ static void render_island_view(HDC dc)
                                 badge_x, badge_y);
                 }
             }
-            /* Resource code 1 is Build Tone, code 2 Tone Crystal, and code 3
-               Magic Tone. Keep the cargo marker separate from the worker
-               sprite so transport remains visible while the unit is moving. */
+            /* FUN_0042704b places the resolved resource at the body's +0x25/
+               +0x26 anchor when +0x18 is nonzero. shapeinf's exact hand offsets
+               are unavailable, so attach the half-size sprite beside the body. */
             if (floater->carried_resource_code >= 1 &&
                 floater->carried_resource_code <= GAME_RESOURCE_TYPE_COUNT) {
                 static const SpriteSheet *const carried_art[] = {
@@ -243,9 +258,13 @@ static void render_island_view(HDC dc)
                 };
                 const SpriteSheet *cargo_art = carried_art[
                     (unsigned int)floater->carried_resource_code - 1U];
-                if (cargo_art->frame_count != 0) {
+                if (cargo_art->frame_count != 0 && body_art->frame_count != 0) {
+                    const SpriteFrame *body_frame = &body_art->frames[0];
+                    int hand_x = floater_x + body_frame->x_offset +
+                                 (floater->facing_left ? -6 : 5);
+                    int hand_y = floater_y + body_frame->y_offset - 1;
                     draw_sprite_scaled(dc, cargo_art, 0,
-                                       floater_x - 4, floater_y - 13,
+                                       hand_x, hand_y,
                                        0x00008000U);
                 }
             }

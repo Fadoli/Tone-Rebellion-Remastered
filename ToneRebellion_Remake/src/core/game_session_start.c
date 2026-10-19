@@ -49,6 +49,10 @@ int game_session_initialize_start_players(
         runtime->locations[location_index].record_value_10 =
             (int32_t)start->initial_pad_item_id + (int32_t)island_index * 16;
         runtime->locations[location_index].owner_id = (int32_t)island_index;
+        /* FUN_00452859 delegates to FUN_004528ca(item, player), which also
+           stores the player in site +0x14. */
+        runtime->locations[location_index].source_value_14 =
+            (int32_t)island_index;
         /* FUN_0046466f creates the Hall through FUN_004528ca, which clears
            +0x28/+0x2a/+0x2c; startup then sets only +0x28 to 50. */
         runtime->locations[location_index]
@@ -179,6 +183,7 @@ int game_session_initialize_start_islands(
             /* FUN_004500c4 initializes owner to -1 and clears +0x10 except for class 3. */
             state->record_value_10 = location->renderer_class == 3 ? location->renderer_variant : 0;
             state->owner_id = -1;
+            state->source_value_14 = -1;
             state->source_location_slot_18 = -1;
             state->source_category_slot_60 = -1;
             state->source_value_34 = -1;

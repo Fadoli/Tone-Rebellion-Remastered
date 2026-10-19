@@ -1,5 +1,7 @@
 #include "game_session_delivery_internal.h"
 #include "game_session_action9.h"
+#include "game_session_events.h"
+#include "game_session_internal.h"
 #include "game_session_movement_internal.h"
 #include "iw_construct.h"
 #include "island_data.h"
@@ -189,7 +191,8 @@ static int construction_task_details(const GameSession *session,
         target = &island->locations[(uint16_t)event->payload_0e];
     }
     if (target->renderer_class != 0 || target->owner_id != -1 ||
-        target->record_value_10 != 0 || target->construction_site_size > 2U)
+        !game_session_build_target_available(target,
+            (uint8_t)event->player_id) || target->construction_site_size > 2U)
         return 0;
     item_id = (uint16_t)(event->payload_12 + event->player_id * 16);
     item = pad_catalog_find(catalog, item_id);
@@ -296,6 +299,12 @@ void game_session_update_construction_tasks(GameSession *session,
                 (uint8_t)event->player_id, (uint8_t)event->payload_0a,
                 (uint16_t)event->payload_0e, &site,
                 (uint16_t)event->payload_12, NULL, 0)) {
+            GameRuntimeLocation *placed = &session->islands[event->payload_0a]
+                .locations[(uint16_t)event->payload_0e];
+            /* FUN_004527ee recalculates the newly placed site's active bit
+               immediately after FUN_004528ca initializes it. */
+            (void)game_session_recalculate_location_active_with_visibility(
+                placed);
             (void)game_session_pending_event_release(session, (uint8_t)slot);
         }
     }
@@ -307,9 +316,7 @@ void game_session_update_construction_tasks(GameSession *session,
          ++floater_index) {
         GameFloaterStart *floater = &session->floaters[floater_index];
         unsigned int task_slot;
-        unsigned int best_task_slot = GAME_SESSION_MAX_PENDING_EVENTS;
-        uint64_t best_progress_numerator = 0;
-        uint64_t best_progress_denominator = 1;
+        unsigned int selected_task_slot = GAME_SESSION_MAX_PENDING_EVENTS;
         if (!game_session_floater_is_active(floater) ||
             (floater->source_runtime_flags & 0x008U) != 0) continue;
         /* Idle workers normally enter FA_Wander (action/state 9) very soon
@@ -332,8 +339,8 @@ void game_session_update_construction_tasks(GameSession *session,
             GamePendingEvent *event = &session->pending_events[task_slot];
             const GameRuntimeLocation *target;
             const PadCatalogItem *item;
-            uint64_t reserved;
-            uint64_t maximum;
+            uint32_t reserved;
+            uint32_t maximum;
 
             if (event->player_id != floater->owner_slot ||
                 !construction_task_details(session, catalog, event,
@@ -346,19 +353,14 @@ void game_session_update_construction_tasks(GameSession *session,
             maximum = (uint16_t)item->building_tone_cost;
             if (reserved >= maximum) continue;
 
-            /* Pick the least-served task by its projected completion ratio.
-               `assigned_floater_count` includes workers already carrying or
-               collecting a unit, not just material deposited on the site. */
-            if (best_task_slot == GAME_SESSION_MAX_PENDING_EVENTS ||
-                reserved * best_progress_denominator <
-                    best_progress_numerator * maximum) {
-                best_task_slot = task_slot;
-                best_progress_numerator = reserved;
-                best_progress_denominator = maximum;
-            }
+            /* FUN_0042219e walks task slots in ascending order and stops at
+               the first eligible record. Preserve that queue priority. */
+            selected_task_slot = task_slot;
+            break;
         }
-        if (best_task_slot != GAME_SESSION_MAX_PENDING_EVENTS) {
-            GamePendingEvent *event = &session->pending_events[best_task_slot];
+        if (selected_task_slot != GAME_SESSION_MAX_PENDING_EVENTS) {
+            GamePendingEvent *event =
+                &session->pending_events[selected_task_slot];
             const GameRuntimeLocation *target;
             const PadCatalogItem *item;
             uint8_t source_island = floater->island_index;
@@ -376,7 +378,7 @@ void game_session_update_construction_tasks(GameSession *session,
             ++event->assigned_floater_count;
             floater->active_order_action = 4;
             floater->order_resource_code = 1;
-            floater->linked_task_slot = (int16_t)best_task_slot;
+            floater->linked_task_slot = (int16_t)selected_task_slot;
             floater->order_target_location = event->payload_0e;
             floater->order_target_island = (uint8_t)event->payload_0a;
             floater->order_source_island = source_island;

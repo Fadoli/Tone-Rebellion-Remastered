@@ -162,7 +162,7 @@ static int action9_find_category4_site(GameSession *session,
         unsigned int largest_index;
         unsigned int candidate;
 
-        if (location->renderer_class != 0 || location->owner_id == 4 ||
+        if (location->renderer_class != 0 || location->source_value_14 == 4 ||
             location->record_value_10 < 0x25 ||
             location->record_value_10 > 0x34 ||
             location->record_value_10 == 0x2a) continue;
@@ -204,6 +204,124 @@ static int action9_find_category4_site(GameSession *session,
         }
     }
     return -1;
+}
+
+static int action9_find_category4_subtype9_site(
+    GameSession *session, const GameFloaterStart *floater, int32_t site_class)
+{
+    uint16_t candidate_indices[10];
+    int32_t candidate_distances[10];
+    unsigned int candidate_count = 0;
+    int32_t distance_sum = 0;
+    double inverse_weight_sum = 0.0;
+    int32_t roll;
+    GameRuntimeIsland *island;
+    unsigned int index;
+
+    if (floater->island_index >= session->island_count) return -1;
+    island = &session->islands[floater->island_index];
+    for (index = 0; index < island->location_count; ++index) {
+        const GameRuntimeLocation *location = &island->locations[index];
+        int32_t distance;
+        unsigned int largest_index;
+        unsigned int candidate;
+
+        if (location->renderer_class != site_class ||
+            (location->source_value_14 != -1 &&
+             !(location->record_value_10 == 1 &&
+               location->record_value_24 == 1))) continue;
+        distance = game_session_source_chebyshev_distance(
+            floater->x, floater->y, location->x, location->y);
+        if (distance == 0) continue;
+        if (candidate_count < 10U) {
+            candidate_indices[candidate_count] = (uint16_t)index;
+            candidate_distances[candidate_count] = distance;
+            ++candidate_count;
+            continue;
+        }
+        largest_index = 0;
+        for (candidate = 1; candidate < candidate_count; ++candidate) {
+            if (candidate_distances[candidate] >
+                candidate_distances[largest_index]) largest_index = candidate;
+        }
+        if (distance < candidate_distances[largest_index]) {
+            candidate_indices[largest_index] = (uint16_t)index;
+            candidate_distances[largest_index] = distance;
+        }
+    }
+    if (candidate_count == 0) return -1;
+
+    for (index = 0; index < candidate_count; ++index)
+        distance_sum += candidate_distances[index];
+    for (index = 0; index < candidate_count; ++index)
+        inverse_weight_sum += (double)distance_sum /
+                              (double)candidate_distances[index];
+    roll = tone_rng_bounded(&session->random_state, 1000);
+    {
+        int32_t cumulative = 0;
+        for (index = 0; index < candidate_count; ++index) {
+            double weight = (double)distance_sum /
+                            (double)candidate_distances[index];
+            cumulative += action9_round_source_float(
+                (1000.0 / inverse_weight_sum) * weight);
+            if (roll < cumulative) return (int)candidate_indices[index];
+        }
+    }
+    return -1;
+}
+
+int game_session_assign_category4_subtype9_order(
+    GameSession *session, unsigned int floater_index, uint32_t source_tick)
+{
+    GameFloaterStart *floater;
+    int target_class1;
+    int target_class0;
+
+    if (session == NULL || floater_index >= session->floater_count) return 0;
+    floater = &session->floaters[floater_index];
+    if (!game_session_floater_is_active(floater) || floater->type_index != 4U ||
+        floater->source_subtype != 9U ||
+        (floater->source_runtime_flags & 0x008U) != 0 ||
+        (floater->active_order_action != 0 &&
+         floater->active_order_action != 0x0e) ||
+        floater->movement_state != 0 || floater->has_move_order ||
+        floater->island_index >= session->island_count) return 0;
+
+    /* FUN_0042219e queries site class 1 before class 0. Its class-1 preference
+       globals are zero in FLOAT.EXE's loaded image and have no direct writers. */
+    target_class1 = action9_find_category4_subtype9_site(session, floater, 1);
+    target_class0 = action9_find_category4_subtype9_site(session, floater, 0);
+    (void)target_class1;
+    if (target_class0 >= 0) {
+        GameRuntimeLocation *target = &session->islands[
+            floater->island_index].locations[(unsigned int)target_class0];
+        floater->active_order_action = 1;
+        floater->order_target_location = (int16_t)target_class0;
+        floater->order_target_floater = -1;
+        floater->order_target_island = floater->island_index;
+        floater->source_order_parameter_32 = (uint16_t)target_class0;
+        floater->order_progress = 1;
+        floater->movement_state = 1;
+        floater->stop_radius = 0;
+        floater->destination_x = target->x;
+        floater->destination_y = target->y;
+        floater->has_move_order = 1;
+        floater->has_wander_order = 0;
+        floater->wander_timer = 0;
+        return 1;
+    }
+
+    floater->active_order_action = 0;
+    floater->order_target_location = -1;
+    floater->order_target_floater = -1;
+    if ((source_tick & 0x7fU) == 0 && floater->current_hit_points != 0) {
+        --floater->current_hit_points;
+        if (floater->current_hit_points == 0) {
+            floater->source_runtime_flags |= 0x008U;
+            floater->source_death_timer = 0;
+        }
+    }
+    return 0;
 }
 
 int game_session_assign_category4_autonomous_order(

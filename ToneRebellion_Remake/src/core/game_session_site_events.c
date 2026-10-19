@@ -62,6 +62,23 @@ static int game_session_recalculate_location_active(GameRuntimeLocation *locatio
     return ((previous_flags ^ current_flags) & 1U) != 0;
 }
 
+int game_session_recalculate_location_active_with_visibility(
+    GameRuntimeLocation *location)
+{
+    uint32_t visibility_bit;
+
+    if (location == NULL) return 0;
+    if (location->renderer_class == 2 || location->renderer_class == 3) return 0;
+    visibility_bit = 1U << ((unsigned int)location->source_value_14 & 31U);
+    if (location->source_value_14 != 4 &&
+        (location->source_value_22 & visibility_bit) == 0) {
+        uint32_t previous_flags = location->source_flags;
+        location->source_flags &= ~1U;
+        return (previous_flags & 1U) != 0;
+    }
+    return game_session_recalculate_location_active(location);
+}
+
 unsigned int game_session_recalculate_active_locations(GameSession *session)
 {
     unsigned int island_index;
@@ -74,8 +91,11 @@ unsigned int game_session_recalculate_active_locations(GameSession *session)
 
         for (location_index = 0; location_index < island->location_count;
              ++location_index) {
-            changed += (unsigned int)game_session_recalculate_location_active(
-                &island->locations[location_index]);
+            /* FUN_00453a5f recalculates through FUN_004539e9, including the
+               owner-visibility gate, for each changed site. */
+            changed += (unsigned int)
+                game_session_recalculate_location_active_with_visibility(
+                    &island->locations[location_index]);
         }
     }
     return changed;
@@ -140,7 +160,10 @@ unsigned int game_session_dispatch_onoff_actions(GameSession *session,
                 location->source_task_slot[subtype] = -1;
             }
         }
-        active_flag_changed = game_session_recalculate_location_active(location);
+        /* FUN_00453bf6 ends in FUN_00453a5f/FUN_004539e9, which also
+           gates the active bit by the site's +0x22 owner visibility mask. */
+        active_flag_changed =
+            game_session_recalculate_location_active_with_visibility(location);
         if (was_enabled != ((location->source_flags & 0x400U) != 0) ||
             active_flag_changed) ++changed;
     }

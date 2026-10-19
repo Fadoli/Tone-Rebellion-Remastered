@@ -110,7 +110,8 @@ int game_session_construction_task_values(const GameSession *session,
         session->islands[event->payload_0a].location_count) return 0;
     location = &session->islands[event->payload_0a].locations[event->payload_0e];
     if (location->renderer_class != 0 || location->owner_id != -1 ||
-        location->record_value_10 != 0 || location->construction_site_size > 2U)
+        !game_session_build_target_available(location,
+            (uint8_t)event->player_id) || location->construction_site_size > 2U)
         return 0;
     item_id = (int32_t)event->payload_12 + (int32_t)event->player_id * 16;
     if (item_id < 0 || item_id > 100) return 0;
@@ -156,8 +157,8 @@ int game_session_place_building(GameSession *session,
         return 0;
     }
     runtime = &session->islands[island_index].locations[location_index];
-    if (runtime->renderer_class != 0 || runtime->record_value_10 != 0 ||
-        runtime->owner_id != -1 ||
+    if (runtime->renderer_class != 0 || runtime->owner_id != -1 ||
+        !game_session_build_target_available(runtime, player_slot) ||
         !iw_construct_site_size(site, &site_size)) {
         set_error(error, error_capacity, "building placement requires an empty construction site");
         return 0;
@@ -195,13 +196,18 @@ int game_session_place_building(GameSession *session,
         set_error(error, error_capacity, "building has no usable source field +0x34");
         return 0;
     }
+    /* FUN_004528ca stores its owner argument at site +0x14. The existing
+       +0x22 visibility byte survives this initialization in the source. */
+    runtime->source_value_14 = player_slot;
     runtime->source_value_34 = source_value_34_maximum;
     runtime->source_capacity_4a = 0;
     runtime->record_value_24 = 0;
     runtime->resource_stock[GAME_RESOURCE_BUILD_TONE] = 0;
     runtime->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 0;
     runtime->resource_stock[GAME_RESOURCE_MAGIC_TONE] = 0;
-    runtime->source_flags = 0x410;
+    /* FUN_00452fcb clears low bits 1..3; FUN_004528ca clears bit 0 and adds
+       0x410 while preserving the site's other runtime flags. */
+    runtime->source_flags = (runtime->source_flags & ~0x0fU) | 0x410U;
     runtime->base_progress = 0;
     runtime->producer_cadence = 0;
     runtime->chug_progress = 0;
@@ -211,7 +217,5 @@ int game_session_place_building(GameSession *session,
     runtime->production_progress = 0;
     runtime->animation_rate = 1;
     runtime->barg_progress = 0.0;
-    runtime->tribe_visibility_mask = 0;
-    runtime->source_value_22 = 0;
     return 1;
 }

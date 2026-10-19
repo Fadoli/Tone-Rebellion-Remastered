@@ -37,7 +37,18 @@ static void game_session_remove_floater(GameSession *session,
             !game_session_floater_is_active(other) ||
             other->order_target_floater != (int16_t)floater_index ||
             (other->source_runtime_flags & 0x004U) == 0) continue;
+        /* FUN_004206b2 routes this through FUN_00421ec1(-1): drop the
+           linked order/claim and clear its target bookkeeping and flags. */
         release_task_claim(session, other);
+        other->active_order_action = 0;
+        other->order_target_floater = -1;
+        other->order_target_location = -1;
+        other->order_target_island = UINT8_MAX;
+        other->order_progress = 0;
+        other->source_order_state_2c = 0;
+        other->source_order_coordinate_30 = 0;
+        other->source_order_pending = 0;
+        other->source_runtime_flags &= ~0x065U;
     }
     floater->is_active = 0;
     floater->movement_state = 0;
@@ -57,6 +68,52 @@ static void game_session_remove_floater(GameSession *session,
         if (session->active_cast_effect_count != 0)
             --session->active_cast_effect_count;
     }
+}
+
+static int game_session_advance_category4_subtype9_order(
+    GameSession *session, unsigned int floater_index)
+{
+    GameFloaterStart *floater = &session->floaters[floater_index];
+    GameRuntimeLocation *target;
+
+    if (floater->active_order_action != 1 || floater->movement_state != 1 ||
+        floater->has_move_order) return 0;
+    if (floater->island_index >= session->island_count ||
+        floater->order_target_location < 0 ||
+        (uint16_t)floater->order_target_location >=
+            session->islands[floater->island_index].location_count) {
+        floater->active_order_action = 0;
+        floater->movement_state = 0;
+        floater->order_target_location = -1;
+        floater->order_progress = 0;
+        return 0;
+    }
+
+    target = &session->islands[floater->island_index].locations[
+        (uint16_t)floater->order_target_location];
+    if ((target->renderer_class != 0 && target->renderer_class != 1) ||
+        (target->record_value_10 != 0 && target->record_value_10 != 1)) {
+        floater->active_order_action = 0;
+        floater->movement_state = 0;
+        floater->order_target_location = -1;
+        floater->order_progress = 0;
+        return 0;
+    }
+
+    if ((target->source_flags & 0x200U) != 0) {
+        floater->current_hit_points = 0;
+        floater->source_runtime_flags |= 0x008U;
+        floater->source_death_timer = 0;
+        return 0;
+    }
+
+    /* FUN_0041e569 writes location +0x14=4, clears flag 2, then calls
+       FUN_00453a5f before FUN_00467101 removes this subtype-9 floater. */
+    target->source_value_14 = 4;
+    target->source_flags &= ~0x002U;
+    (void)game_session_recalculate_location_active_with_visibility(target);
+    game_session_remove_floater(session, floater_index);
+    return 1;
 }
 
 static int game_session_tick_floater_death(GameSession *session,
@@ -444,8 +501,11 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
         if (game_session_tick_floater_death(session, i)) continue;
         if (game_session_tick_floater_charge(session, i)) continue;
         if (game_session_tick_merge_completion(session, i, floater)) continue;
+        if (game_session_advance_category4_subtype9_order(session, i)) continue;
         game_session_advance_category4_autonomous_order(session, i);
         (void)game_session_assign_category4_autonomous_order(session, i);
+        (void)game_session_assign_category4_subtype9_order(
+            session, i, source_tick);
 
         /* FUN_0041e569 polls FUN_0042219e while idle and once per ten ticks
            while moving. The bridge leaves the linked order pending during

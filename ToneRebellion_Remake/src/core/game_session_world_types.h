@@ -6,6 +6,9 @@
 typedef struct GameRuntimeLocation {
     int32_t record_value_10;
     int32_t owner_id;
+    /* Raw site +0x14. FUN_004500c4 initializes it to -1, FUN_004528ca stores
+       the placing player, and subtype-9 selection/arrival also use it. */
+    int32_t source_value_14;
     /* Source signed short +0x18. FUN_004528ca stores the owning player's
        100-byte source-record index here for item IDs 0x2c..0x32. */
     int16_t source_location_slot_18;
@@ -71,6 +74,8 @@ typedef struct GameRuntimeLocation {
     /* Construction pads are retained from the island layout so a completed
        CONSTR task can validate placement without a separate layout lookup. */
     uint8_t construction_site_size;
+    /* Raw site +0x04: FUN_004500c4 leaves it intact; FUN_00453958 uses it
+       to admit class 1, and FUN_004539e9 skips classes 2 and 3. */
     uint8_t renderer_class;
     uint8_t tribe_visibility_mask;
     /* FUN_004669bd sets bit 0 at runtime record +0x1c on both paired

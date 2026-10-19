@@ -8,10 +8,22 @@
 
 #include "game_session_layout_internal.h"
 
+/* FUN_004526de accepts an empty site or PIT_Object when its +0x14 owner is
+   unclaimed/matching and the player's visibility bit is present in +0x22. */
+static inline int game_session_build_target_available(
+    const GameRuntimeLocation *location, uint8_t player_slot)
+{
+    return location != NULL && player_slot < GAME_START_PLAYER_COUNT &&
+        (location->source_value_14 == -1 ||
+         location->source_value_14 == (int32_t)player_slot) &&
+        (location->record_value_10 == 0 || location->record_value_10 == 1) &&
+        (location->source_value_22 & (uint16_t)(1U << player_slot)) != 0;
+}
+
 /* Shared runtime pad maximum used during session setup and building updates. */
-static int game_session_source_value_34_max(const PadCatalog *catalog,
-                                             const GameRuntimeLocation *location,
-                                             int16_t *maximum)
+static inline int game_session_source_value_34_max(
+    const PadCatalog *catalog, const GameRuntimeLocation *location,
+    int16_t *maximum)
 {
     const PadCatalogItem *item;
     int32_t base_item_id;

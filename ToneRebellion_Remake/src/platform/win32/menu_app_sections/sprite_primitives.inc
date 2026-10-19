@@ -496,7 +496,10 @@ static int mirror_sprite_sheet_horizontally(const SpriteSheet *source,
         }
         *output = *input;
         output->bitmap = bitmap;
-        output->x_offset = -input->x_offset;
+        /* Keep the frame's origin fixed while mirroring its pixels. Negating
+           the SHP offset moves the whole floater across its world coordinate
+           whenever facing changes. */
+        output->x_offset = input->x_offset;
         output->hit_left = input->width - input->hit_right;
         output->hit_right = input->width - input->hit_left;
     }

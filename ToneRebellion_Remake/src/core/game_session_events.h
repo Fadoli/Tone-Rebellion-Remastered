@@ -79,6 +79,9 @@ unsigned int game_session_dispatch_onoff_actions(GameSession *session,
                                                  const PadCatalog *catalog);
 /* Recompute runtime active bit 0 using FUN_00453958's observed predicate. */
 unsigned int game_session_recalculate_active_locations(GameSession *session);
+/* FUN_004539e9 updates one site's active bit, including its visibility gate. */
+int game_session_recalculate_location_active_with_visibility(
+    GameRuntimeLocation *location);
 /* FUN_0042fa0f(0x34): retain the observed category-0/type-5 selection packet
    for the active island location. The final synchronized consumer is unknown. */
 int game_session_queue_build_selection(GameSession *session,

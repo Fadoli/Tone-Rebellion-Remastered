@@ -15,5 +15,7 @@ int game_session_assign_category4_autonomous_order(
     GameSession *session, unsigned int floater_index);
 void game_session_advance_category4_autonomous_order(
     GameSession *session, unsigned int floater_index);
+int game_session_assign_category4_subtype9_order(
+    GameSession *session, unsigned int floater_index, uint32_t source_tick);
 
 #endif
