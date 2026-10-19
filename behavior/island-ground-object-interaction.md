@@ -53,6 +53,28 @@ de l'événement catégorie 3/sous-type 4 qui crédite l'inventaire reste aussi
 inconnu. Il faut établir cette transition et l'éventuelle mutation du record
 `item=1` avant de porter le ramassage.
 
+## Autre chemin : clic carte depuis Inventory
+
+Ce chemin ne correspond pas au « grab » de `IWLocInfo`. Dans
+`FUN_0042fa0f`, l'action carte `0x40`, si `DAT_0049e9c4` contient un sélecteur
+d'objet et que le joueur n'est pas dans l'état qui bloque l'action, construit
+une commande catégorie 0/type 4 associant ce sélecteur au point de carte cliqué.
+La commande est ajoutée à la file locale; la branche efface ensuite le
+sélecteur et ferme le mode Inventory (`ev_6ac7cc6650dc8a0e9b412c055606948d1c6dbbdd3e6c6df0a7fcc1551764419e`).
+Le hit-test carte et l'émission de `0x40` sont dans `FUN_00435826`
+(`ev_9fac3ab32e724258b184a4abd7ffd102c61b15164169cc041ae03f1859b5bb49`).
+
+Au tick, le dispatcher envoie les commandes catégorie 0 à `FUN_004662b7`, qui
+les range dans des slots de tâches de 0x14 octets
+(`ev_63d9efb5bce1c51e26da896805829764236e9140de5f842cda6ad015f1c8ad1b`,
+`ev_db281f9a7a1fbb3e9bd29b7389912081c306195183d45c11b3bae8830ccff761`).
+`FUN_00422031` traite aussi un cas de tâche 4 avec un sélecteur dans la plage
+5–33, mais le chaînage observé ne démontre pas que cette tâche crée l'objet sur
+le site, débite l'inventaire ou enlève un `PIT_Object` déjà présent
+(`ev_9d5d129cd6bb5e1095f8136fbde959c47360ad898c94d3104c63add6dcda3bc7`).
+Cette branche documente donc une requête de placement depuis Inventory; elle
+n'établit pas une interaction de collecte d'un objet posé.
+
 Evidences complémentaires : les références entrantes de `FUN_0045f337` montrent
 les call-sites UI et les transactions grab/place, sans call-site de tick
 floater (`ev_0fb01505c0a7e326de1d7e85aa13d4df42a1c47415115b384c04cc90f31f9a6d`).

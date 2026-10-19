@@ -1,6 +1,6 @@
 const ticksPerSecond = Number(process.argv[2] || 30);
 const seconds = Number(process.argv[3] || 60);
-const redrawDivisor = 6;
+const redrawDivisor = 1;
 const previousRedrawDivisor = 3;
 
 if (!Number.isInteger(ticksPerSecond) || ticksPerSecond < 1 ||
@@ -24,5 +24,6 @@ process.stdout.write(JSON.stringify({
   reductionFromPreviousPercent: (1 - taskPaints / previousTaskPaints) * 100,
   reductionPercent: (1 - taskPaints / regularPaints) * 100,
   redrawDivisor,
-  note: 'Scheduled paint-count comparison only; excludes input-triggered paints and does not measure CPU time.',
+  ticksPerPaint: redrawDivisor,
+  note: 'Scheduled paint-count comparison only; input-triggered paints are immediate and excluded. Simulation ticks continue at full rate; this does not measure CPU time.',
 }) + '\n');

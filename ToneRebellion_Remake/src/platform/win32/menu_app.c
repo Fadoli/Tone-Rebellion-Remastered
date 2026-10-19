@@ -3695,9 +3695,12 @@ static void draw_hall_panel(HDC dc, int hall_player)
             if (task_list_panel != NULL && task_count != 0 &&
                 visible_rows > 0) {
                 size_t visible_index;
-                int offset = g_task_scroll_offset;
-                if (offset < 0) offset = 0;
-                if ((size_t)offset > task_count) offset = (int)task_count;
+                int offset = window_catalog_scroll_step(
+                    g_task_scroll_offset, (int)task_count, visible_rows, 0);
+                /* Task slots can disappear between scroll input events. Keep
+                   the view inside the same max offset used by 6000/6001 so
+                   the list cannot remain blank past its new end. */
+                g_task_scroll_offset = offset;
                 for (visible_index = 0;
                      visible_index < (size_t)visible_rows &&
                      (size_t)offset + visible_index < task_count;
@@ -6025,9 +6028,8 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                                                 g_menu.animation_ticks);
                 (void)game_session_update_resource_requests(&g_game_session);
             }
-            /* WM_PAINT redraws the complete island, including world
-               animation. Keep repaint cadence aligned with the 33 ms game
-               tick even when the task panel or construction grid is open. */
+            /* Redraw the full animated screen at every 30 Hz simulation tick,
+               including while the Tasks panel is open. */
             InvalidateRect(window, NULL, FALSE);
         }
         return 0;

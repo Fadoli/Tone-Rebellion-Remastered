@@ -15,7 +15,7 @@
 
 ## PANIC et tâches
 
-- **PANIC observé/porté :** sous-type 0 inverse bit 0 du mot d’île à `+0x29bc + joueur*4`; l’initialisation met ces mots à zéro. Le sens du bit reste inconnu. Preuves : `ev_6ac7cc6650dc8a0e9b412c055606948d1c6dbbdd3e6c6df0a7fcc1551764419e`, `ev_60cc3b805a032ead183ce15cfa0965bb14b5d6c84b45414f6d11fbbb2eaca75b`.
+- **PANIC :** état et limites dans [l'analyse des panneaux](island-panels.md).
 - La projection Tasks et les handlers de priorité/annulation sont documentés dans [island-tasks.md](island-tasks.md); producteurs et cycle de vie restent ouverts.
 
 Pseudocodes : [batch 0008](../functions/0012_batch_0008.md), [batch 0013](../functions/0017_batch_0013.md).

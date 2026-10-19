@@ -7,6 +7,31 @@ static int32_t clamp_axis_delta(int32_t delta, int32_t limit)
     return delta;
 }
 
+uint16_t floater_motion_effective_speed(
+    const FloaterMotionSpeedContext *context)
+{
+    uint16_t speed;
+
+    if (context == 0) return 0;
+
+    if (context->state == 0x0e ||
+        ((context->state == 8 || context->state == 9) &&
+         context->near_target_override)) {
+        speed = 1;
+    } else {
+        speed = context->unit_speed;
+    }
+
+    /* The original stores each adjustment back to a 16-bit unsigned value. */
+    if (context->subtype == 0 && context->category_speed_modifier > 0) {
+        speed = (uint16_t)(speed << 1);
+    }
+    if (context->site_speed_bonus) {
+        speed = (uint16_t)(speed + 1U);
+    }
+    return speed;
+}
+
 int floater_motion_step(FloaterPosition *position,
                         FloaterPosition destination,
                         uint16_t effective_speed,

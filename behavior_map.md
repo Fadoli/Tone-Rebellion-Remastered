@@ -64,6 +64,20 @@ La boucle de jeu semble utiliser le pump Win32 comme entrée, puis une file d’
 
 Le chemin observé correspond à une boucle cadencée qui collecte les événements, fait avancer plusieurs objets/états et compose une image. Les chaînes et appels de surface sont compatibles avec une présentation à pages et une voie de copie GDI, mais le type exact des interfaces COM et le rôle métier de chaque objet restent à vérifier.
 
+## Mouvement des entités flottantes
+
+### Observations Ghidra
+
+- `FUN_00466ce2` parcourt les floaters actifs dans la table fixe de 256 slots et appelle `FUN_0041e569` pour leur mise à jour individuelle (`ev_b51f2311ff9bd9ad209f0663ea00bfe330e7ff0eff117e8a273292d3112a4e0e`).
+- Dans ce tick, `FUN_0042219e` choisit ou réévalue l'action, tandis que `FUN_004211bb` consomme une action déjà stockée. La réévaluation est appelée à chaque tick quand l'état runtime `+0x2c` vaut 0, sinon à une phase sur dix décalée par l'index du floater (`ev_4c7ea2d2c94eba918c2e82e0709966a1d9d2c60e1d2c705361285aceb05e5dea`, `ev_0e9d3fbfa8df7eb8f372d0b17bc92593ddd6fc2eb7cebe7c043ca611798b4abd`).
+- Le pas `FUN_00422d27` lit une destination en coordonnées pixel ou la reconstruit depuis une coordonnée compactée, résout la vitesse à partir des statistiques et de quelques modificateurs, réduit le pas près de la cible et limite X/Y séparément. L'arrivée de son noyau est l'égalité exacte des deux coordonnées (`ev_810f7530a91d83a454c4d310d2142cafe948434cde2b0707fd5847693435b64f`).
+- Les états runtime `0x0f` et `0x10` ont une garde d'arrivée par distance de Chebyshev : rayon 10 par défaut, remplacé par la portée d'attaque non nulle renvoyée par `FUN_00420721`; l'action `0x14` impose un rayon nul. La portée est multipliée par 5/4 (division entière) sous une condition de site/bit encore sémantiquement inconnue. L'état runtime `0x0e` utilise plutôt l'arrivée exacte du pas pour décrémenter son minuteur. `FUN_00423068` adapte l'ancre de dessin et le sens; `FUN_0042704b` applique le miroir horizontal au rendu (`ev_6c3ec9c58f2e2ec6ef837d8737ba3dfece6d35c11a918338523e688a6746c25a`, `ev_234f0678b3bbd27430c793e465dfd5095240536d821d1821e23bb5b1acb00e41`, `ev_810f7530a91d83a454c4d310d2142cafe948434cde2b0707fd5847693435b64f`, `ev_3dde3e48aa8d5db8b349dce765fef2704415afc59c5392eaecb900882a0f899f`, `ev_d21d92e7afdc377fecc4fce5fecca40c344273a5e036a4c507b40f99ab2e04b1`).
+- Pour les unités régulières sans action persistante, `FUN_0042219e` peut examiner les 64 enregistrements de tâche, appliquer des gardes et attacher un candidat; si aucun ne passe, un floater sans tâche peut recevoir l'action `FA_Wander` et l'île d'accueil comme cible. Les champs métier de ces enregistrements restent partiellement inconnus.
+
+### Limites et interprétation
+
+Ces fonctions décrivent une mise à jour partagée par les unités, avec sélection d'action, exécution, mouvement et arrivée comme étapes séparées. Le filtre des cibles, les transitions complètes de certaines tâches et la conversion des ticks en secondes restent partiellement reconstruits. Le chemin souris `0x4c` utilise un mode UI et un callback indirect dont le garde destinataire n'est pas identifié; il ne faut donc pas le confondre avec l'attribution autonome des destinations. Le remake porte le noyau de pas et l'orientation, mais ne produit pas encore les cibles autonomes des floaters initiaux. Voir [l'analyse détaillée du mouvement](ToneRebellion_Remake/MOVEMENT_REVERSE_ENGINEERING.md) et [les contrôles de déplacement](behavior/island-units-and-movement.md).
+
 ## Création d'une partie et placements initiaux
 
 ### Observations Ghidra

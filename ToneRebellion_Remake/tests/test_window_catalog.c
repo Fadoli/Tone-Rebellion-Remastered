@@ -383,6 +383,7 @@ static void verify_original_manifest(const char *path)
     assert(window_catalog_scroll_step(3, 8, 5, 1) == 3);
     assert(window_catalog_scroll_step(3, 8, 5, -1) == 2);
     assert(window_catalog_scroll_step(99, 8, 5, 0) == 3);
+    assert(window_catalog_scroll_step(7, 3, 5, 0) == 0);
     assert(window_catalog_scroll_step(-4, 8, 5, -1) == 0);
     {
         static const char *const hall_controls[] = {

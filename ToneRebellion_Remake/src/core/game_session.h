@@ -220,6 +220,13 @@ typedef struct GameFloaterStart {
     uint16_t destination_x;
     uint16_t destination_y;
     uint16_t movement_speed;
+    /* FUN_00422d27's speed context is resolved before its coordinate step.
+       Initial workers use state 0; the remaining modifiers stay zero until
+       their runtime sources are modeled by the session. */
+    uint8_t movement_state;
+    int16_t category_speed_modifier;
+    uint8_t near_target_speed_override;
+    uint8_t site_speed_bonus;
     uint16_t stop_radius;
     uint8_t has_move_order;
     uint8_t facing_left;

@@ -35,7 +35,22 @@
 | `analyze_function` | `ev_a3a1136454b116409a3a18908d27e23488bf809cdcb8d28b4d4d0805f05688e3` | `FUN_0041c46f` | Pseudocode, appels et chaînes associés. |
 | `analyze_function` | `ev_5e71afc99fd4ab5273b4c07b5dc6e556212856d3462a715fb6a2569b19ce1407` | `FUN_0040bf98` | Réponse dossier dépassait le budget MCP ; pseudocode complet récupéré via `inspect_analysis_view`, Evidence de projection `ev_b27af7c4aa7fe81484bab129b8d52fbeac54c332a8df1d60fb47c7d01c7eb5ab`, 19 350 unités UTF-16. |
 | `analyze_function` | `ev_6c3ec9c58f2e2ec6ef837d8737ba3dfece6d35c11a918338523e688a6746c25a` | `FUN_0041e569` | Pseudocode complet obtenu par pagination de la projection conservée, 20 237 unités UTF-16. |
+| `analyze_function` | `ev_234f0678b3bbd27430c793e465dfd5095240536d821d1821e23bb5b1acb00e41` | `FUN_00420721`, `0x420721` | Rayon d'arrivée optionnel : garde catégorie/sous-type, lecture de la portée d'attaque dans la table de stats et modulation entière conditionnelle par `5/4`. |
+| `analyze_function` | `ev_601b55f72156209d4f5c1ae6f9060918a71e3fc3423c72c12074227bdb69a5c6` | `FUN_004207c2`, `0x4207c2` | Garde du rayon optionnel : catégorie 4, ou sous-type non nul avec champ floater `+0x22` positif. |
+| `analyze_function` | `ev_400be7fc416e3e48c58ebeae7f1497639f909f0569891b58d5b3cba579bbab2a` | `FUN_004207f2`, `0x4207f2` | Retourne le pointeur de site courant si le lien floater `+0x0c` diffère de `-1`. |
+| `analyze_function` | `ev_0f1bf5caca4a6c5c244c4a2b8bee6e591fc8367f9b451a0694329a19e3378011` | `FUN_0045c3bb`, `0x45c3bb` | Résout le pointeur de lieu/site à partir des champs d'indice et d'île du floater. |
+| `xrefs` | `ev_da7542c8d20a92a354e31176edb14fccd1ee1f3fac24ff7f7cfd1464503b3b49` | `DAT_006183cc`, table d’action des tâches | Quatre références directes vers le champ d’action des slots. |
+| `procedure_pseudo_code` | `ev_bd805382bd750a65076a58742501849e1bdeb29a87bc0717a5bac1e0307b1077` | `FUN_00422031` | Validation d’un slot de tâche; seules certaines valeurs d’action ont des gardes explicites. |
+| `procedure_pseudo_code` | `ev_25d048fc082b5ed144709e4886b7748e44943fd30f5e02a0e06addfc60beaec9` | `FUN_004455d1` | Énumération des slots visibles dans Tasks; filtre l’action `0x0b`. |
+| `procedure_pseudo_code` | `ev_ed75141a79f1bac30a4ad39dcad68e710e351330bcd3044aa3cb304ef2a796b2` | `FUN_0042fa0f` | Recherche d’un slot actif par l’interface Tasks. |
+| `read_bytes` | `ev_bc254ddb3b5d4bfc3b423aa3c2a839a6aa1f4f771807016000e59944447f751e` | `DAT_006183bc..0x6188bc` | 0x500 octets lus dans l’image chargée; tous nuls. |
+| `list_segments` | `ev_254928ccff2cf0ec576eeddf8c2bba7d672a4d24c5d348d39bb0e17288171961` | Segment `.data` | Ghidra marque le segment contenant les slots comme initialisé. |
+| `inspect_native_instruction` | `ev_50a5fda0ff82969f755c9db1bc3df1f158c35f1c08640ce4cc393b308f55d113` | `DAT_006183cc` | Références typées entrantes : aucune écriture directe observée sur le champ. |
 | `analyze_function` | `ev_6ac7cc6650dc8a0e9b412c055606948d1c6dbbdd3e6c6df0a7fcc1551764419e` | `FUN_0042fa0f` | Réponse paginée du registre Evidence ; pseudocode complet (31 897 unités UTF-16). |
+| `procedure_pseudo_code` | `ev_9fac3ab32e724258b184a4abd7ffd102c61b15164169cc041ae03f1859b5bb49` | `FUN_00435826` | Hit-test carte; chemin qui émet `0x40` avec le sélecteur Inventory actif. |
+| `analyze_function` | `ev_63d9efb5bce1c51e26da896805829764236e9140de5f842cda6ad015f1c8ad1b` | `FUN_00466221` | Dépile les commandes locales et transmet les paquets catégorie 0 à `FUN_004662b7`. |
+| `procedure_pseudo_code` | `ev_db281f9a7a1fbb3e9bd29b7389912081c306195183d45c11b3bae8830ccff761` | `FUN_004662b7` | Stocke les paquets catégorie 0 dans une table de 64 slots de tâches différées. |
+| `analyze_function` | `ev_9d5d129cd6bb5e1095f8136fbde959c47360ad898c94d3104c63add6dcda3bc7` | `FUN_00422031` | Cas de validation des tâches de type 4; l'effet monde final n'est pas établi. |
 | `procedure_pseudo_code` | `ev_dfa9260d630c5590f535d54281a0b8f2c2767e3ca99d4a00ffdd596b3104b7eb` | `FUN_0044003d`, `0x44003d` | Émission de `0x32` selon le slot sélectionné et `+0x18`. |
 | `procedure_pseudo_code` | `ev_196d5ce18818030f061f610add4e421b67b51a08a81cfe4b30f91fd722d4a4dc` | `FUN_0042970c`, `0x42970c` | Routage selon mode 0/1/2 du dispatch. |
 | `procedure_pseudo_code` | `ev_1a06455495cb08c19a3e95bb1bd8abb4f5f2df731cdd09e809cc8c2a78f504f9` | `FUN_0041c46f`, `0x41c46f` | Inscription du callback au slot 3; état initial choisi 0 ou 8. |

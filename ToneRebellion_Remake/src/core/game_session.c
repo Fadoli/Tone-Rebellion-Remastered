@@ -848,6 +848,8 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
         GameFloaterStart *floater = &session->floaters[i];
         FloaterPosition position;
         FloaterPosition destination;
+        FloaterMotionSpeedContext speed_context;
+        uint16_t effective_speed;
         int32_t dx;
         int32_t dy;
         int32_t distance;
@@ -872,14 +874,26 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
         position.y = floater->y;
         destination.x = floater->destination_x;
         destination.y = floater->destination_y;
-        (void)floater_motion_step(&position, destination,
-                                  floater->movement_speed, source_tick);
+        speed_context.unit_speed = floater->movement_speed;
+        speed_context.state = floater->movement_state;
+        speed_context.subtype = floater->source_subtype;
+        speed_context.category_speed_modifier =
+            floater->category_speed_modifier;
+        speed_context.near_target_override =
+            floater->near_target_speed_override;
+        speed_context.site_speed_bonus = floater->site_speed_bonus;
+        effective_speed = floater_motion_effective_speed(&speed_context);
+        (void)floater_motion_step(&position, destination, effective_speed,
+                                  source_tick);
         floater->x = (uint16_t)position.x;
         floater->y = (uint16_t)position.y;
         dx = (int32_t)floater->destination_x - floater->x;
         dy = (int32_t)floater->destination_y - floater->y;
-        if ((dx < 0 ? -dx : dx) <= floater->stop_radius &&
-            (dy < 0 ? -dy : dy) <= floater->stop_radius) {
+        distance = dx < 0 ? -dx : dx;
+        if ((dy < 0 ? -dy : dy) > distance) {
+            distance = dy < 0 ? -dy : dy;
+        }
+        if (distance <= floater->stop_radius) {
             floater->has_move_order = 0;
         }
 

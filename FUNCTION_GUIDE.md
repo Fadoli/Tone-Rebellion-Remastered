@@ -8,6 +8,7 @@ Index des notes de comportement. Elles separent les observations Ghidra/donnees 
 - [Demarrage et placement initial](behavior/world-start.md)
 - [Construction sur une ile](behavior/island-construction.md)
 - [Ressources, Hall et taches](behavior/island-resources-and-tasks.md)
+- [Unites, panneaux de lieu et deplacement](behavior/island-units-and-movement.md) · [Details du tick, des cibles et du pas de mouvement](ToneRebellion_Remake/MOVEMENT_REVERSE_ENGINEERING.md)
 - [Acces aux iles depuis la carte](behavior/world-map.md)
 - [Index des panneaux](behavior/island-panels.md) · [Inventory et glyphes](behavior/island-inventory-glyphs.md) · [Trade, diplomatie et événements](behavior/island-trade-diplomacy.md)
 - [Contrôle Repair de l'île](behavior/island-repair-control.md)
