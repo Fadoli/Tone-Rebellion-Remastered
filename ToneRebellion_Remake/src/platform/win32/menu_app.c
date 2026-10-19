@@ -117,6 +117,7 @@ static COLORREF g_newgame_palette[256];
 static COLORREF g_map_palette[256];
 static COLORREF g_island_palette[256];
 static IslandPaletteLookup g_island_palette_lookup;
+static DWORD g_task_highlight_pixels[256];
 static uint32_t g_random_state;
 static unsigned char *g_button_sound;
 static unsigned char *g_fltbuild_sound;
@@ -287,6 +288,17 @@ static void rebuild_island_palette_lookup(void)
     }
     /* Task row highlights use entries 0..254 in the original scan. */
     island_palette_lookup_build(&g_island_palette_lookup, palette_rgb24, 255U);
+    /* The selected row uses this fixed haze transform for every pixel. Cache
+       the final opaque color by palette index instead of repeating haze and
+       COLORREF conversion work in the per-pixel loop. */
+    for (index = 0; index < 256U; ++index) {
+        uint8_t remapped_index = island_haze_remap(&g_island_haze, 1, 1,
+                                                   (uint8_t)index);
+        COLORREF color = g_island_palette[remapped_index];
+        g_task_highlight_pixels[index] = 0xff000000U |
+            ((DWORD)GetRValue(color) << 16) |
+            ((DWORD)GetGValue(color) << 8) | (DWORD)GetBValue(color);
+    }
 }
 
 static void update_interaction_cursor(void)
@@ -2604,6 +2616,20 @@ static void draw_bitmap_label(HDC dc, const char *text, int x, int y, COLORREF c
     }
 }
 
+/* Caller has flushed GDI writes to the paint DIB already. */
+static void draw_bitmap_label_pixels(const char *text, int x, int y,
+                                     COLORREF color)
+{
+    uint32_t dib_pixel;
+    if (text == NULL || g_paint_buffer_pixels == NULL) return;
+    dib_pixel = ((uint32_t)GetRValue(color) << 16) |
+                ((uint32_t)GetGValue(color) << 8) |
+                (uint32_t)GetBValue(color);
+    (void)bitmap_font_render_pixels(&g_bitmap_font, text,
+        (uint32_t *)g_paint_buffer_pixels, LOGICAL_WIDTH, LOGICAL_HEIGHT,
+        LOGICAL_WIDTH, x, y, dib_pixel);
+}
+
 static void draw_wrapped_bitmap_label(HDC dc, const char *text, int x, int y,
                                       int max_width, int max_lines, COLORREF color)
 {
@@ -3445,18 +3471,17 @@ static void draw_task_row_highlight(HDC dc, const WindowTemplate *panel,
     (void)GdiFlush();
     for (y = row_top + panel->pane.top; y < row_top + panel->pane.top + row_height; ++y) {
         int mask_y = y - panel->pane.top - mask_frame->y_offset;
+        const uint32_t *mask_row;
         int x;
         if (mask_y < 0 || mask_y >= mask_frame->height) continue;
+        mask_row = (const uint32_t *)((const unsigned char *)mask_dib.dsBm.bmBits +
+            (size_t)mask_y * (size_t)mask_dib.dsBm.bmWidthBytes);
         for (x = left; x < right; ++x) {
             int mask_x = x - panel->pane.left - mask_frame->x_offset;
-            const uint32_t *mask_row;
             DWORD background_pixel;
             COLORREF background;
             uint8_t source_index;
-            uint8_t remapped_index;
             if (mask_x < 0 || mask_x >= mask_frame->width) continue;
-            mask_row = (const uint32_t *)((const unsigned char *)mask_dib.dsBm.bmBits +
-                (size_t)mask_y * (size_t)mask_dib.dsBm.bmWidthBytes);
             if ((mask_row[mask_x] >> 24) == 0U) continue;
             background_pixel = g_paint_buffer_pixels[(size_t)y * LOGICAL_WIDTH +
                                                        (size_t)x];
@@ -3468,16 +3493,10 @@ static void draw_task_row_highlight(HDC dc, const WindowTemplate *panel,
             if (!island_palette_lookup_nearest(&g_island_palette_lookup,
                     (uint32_t)background & UINT32_C(0x00ffffff),
                     &source_index)) continue;
-            remapped_index = island_haze_remap(&g_island_haze, 1, 1, source_index);
-            {
-                COLORREF color = g_island_palette[remapped_index];
-                g_paint_buffer_pixels[(size_t)y * LOGICAL_WIDTH + (size_t)x] =
-                    0xff000000U | ((DWORD)GetRValue(color) << 16) |
-                    ((DWORD)GetGValue(color) << 8) | (DWORD)GetBValue(color);
-            }
+            g_paint_buffer_pixels[(size_t)y * LOGICAL_WIDTH + (size_t)x] =
+                g_task_highlight_pixels[source_index];
         }
     }
-    (void)GdiFlush();
 }
 
 static void draw_task_stock_gauge(HDC dc, const WindowTemplate *panel,
@@ -3643,6 +3662,12 @@ static void draw_hall_panel(HDC dc, int hall_player)
                 ? game_session_collect_task_slots(&g_game_session,
                     (int16_t)hall_player, task_slots,
                     sizeof(task_slots) / sizeof(task_slots[0])) : 0;
+            struct TaskRowLabel {
+                const char *text;
+                int x;
+                int y;
+            } row_labels[GAME_SESSION_MAX_TASKS];
+            size_t row_label_count = 0;
             int visible_rows = task_list_panel != NULL
                 ? (task_list_panel->pane.bottom - task_list_panel->pane.top) / 13
                 : 0;
@@ -3711,10 +3736,14 @@ static void draw_hall_panel(HDC dc, int hall_player)
                             task_list_panel->pane.left + position.icon_x,
                             task_list_panel->pane.top + position.y);
                     }
-                    draw_bitmap_label(dc, label,
-                        task_list_panel->pane.left + position.label_x,
-                        task_list_panel->pane.top + position.y,
-                        RGB(185, 205, 220));
+                    if (row_label_count < GAME_SESSION_MAX_TASKS) {
+                        row_labels[row_label_count].text = label;
+                        row_labels[row_label_count].x = task_list_panel->pane.left +
+                                                       position.label_x;
+                        row_labels[row_label_count].y = task_list_panel->pane.top +
+                                                       position.y;
+                        ++row_label_count;
+                    }
                     if (row.secondary_task_icon_frame >= 0 &&
                         g_task_icon_art.frame_count >
                             (uint32_t)row.secondary_task_icon_frame) {
@@ -3740,6 +3769,18 @@ static void draw_hall_panel(HDC dc, int hall_player)
                         draw_task_construction_gauge(dc, task_list_panel, event,
                                                      position.y);
                     }
+                }
+            }
+            if (row_label_count != 0) {
+                size_t label_index;
+                /* Row icons and gauges are GDI blits. Flush once, then write
+                   all task labels directly so each row doesn't stall GDI. */
+                (void)GdiFlush();
+                for (label_index = 0; label_index < row_label_count;
+                     ++label_index) {
+                    draw_bitmap_label_pixels(row_labels[label_index].text,
+                        row_labels[label_index].x, row_labels[label_index].y,
+                        RGB(185, 205, 220));
                 }
             }
             if (task_info_panel != NULL && g_empty_task_text[0] != '\0') {
@@ -4373,24 +4414,44 @@ static int draw_runtime_item(HDC dc, const GameRuntimeLocation *runtime_location
     return draw_runtime_item_scaled(dc, runtime_location, x, y, 0x10000U);
 }
 
+/* Resolve the map sprite independently from the pad catalog shape. PIT_Object
+   (runtime ID 1) stores its collectible shape/frame selector in +0x24; the
+   source renderer maps values 5..33 to TRIGGERS frames 0..28. Ordinary loose
+   inventory items use their runtime item ID for that same sheet. */
+static int ground_item_icon_frame(const GameRuntimeLocation *runtime_location,
+                                  uint32_t *frame_index)
+{
+    const SpriteFrame *frame;
+    int32_t item_id;
+    uint32_t resolved_frame;
+
+    if (runtime_location == NULL || frame_index == NULL) return 0;
+    item_id = runtime_location->record_value_10;
+    if (item_id == 1) {
+        int32_t shape = runtime_location->record_value_24;
+        if (shape < GAME_INVENTORY_ITEM_FIRST_ID ||
+            shape >= GAME_INVENTORY_ITEM_FIRST_ID + GAME_INVENTORY_ITEM_COUNT) return 0;
+        resolved_frame = (uint32_t)(shape - GAME_INVENTORY_ITEM_FIRST_ID);
+    } else {
+        if (item_id < GAME_INVENTORY_ITEM_FIRST_ID ||
+            item_id >= GAME_INVENTORY_ITEM_FIRST_ID + GAME_INVENTORY_ITEM_COUNT) return 0;
+        resolved_frame = (uint32_t)(item_id - GAME_INVENTORY_ITEM_FIRST_ID);
+    }
+    if (resolved_frame >= g_inventory_item_art.frame_count) return 0;
+    frame = &g_inventory_item_art.frames[resolved_frame];
+    if (frame->bitmap == NULL) return 0;
+    *frame_index = resolved_frame;
+    return 1;
+}
+
 /* Use the inventory sprite only when an item has no drawable building SHP.
    Drawing it over the building creates a second, mismatched image. */
 static int draw_ground_item_icon(HDC dc,
                                  const GameRuntimeLocation *runtime_location,
                                  int x, int y)
 {
-    const SpriteFrame *frame;
-    int32_t item_id;
     uint32_t frame_index;
-
-    if (runtime_location == NULL) return 0;
-    item_id = runtime_location->record_value_10;
-    if (item_id < GAME_INVENTORY_ITEM_FIRST_ID ||
-        item_id >= GAME_INVENTORY_ITEM_FIRST_ID + GAME_INVENTORY_ITEM_COUNT) return 0;
-    frame_index = (uint32_t)(item_id - GAME_INVENTORY_ITEM_FIRST_ID);
-    if (frame_index >= g_inventory_item_art.frame_count) return 0;
-    frame = &g_inventory_item_art.frames[frame_index];
-    if (frame->bitmap == NULL) return 0;
+    if (!ground_item_icon_frame(runtime_location, &frame_index)) return 0;
     draw_sprite(dc, &g_inventory_item_art, frame_index, x, y);
     return 1;
 }
@@ -4401,17 +4462,11 @@ static void draw_ground_item_fallback(HDC dc,
                                       const GameRuntimeLocation *runtime_location,
                                       int x, int y)
 {
-    int32_t item_id;
+    uint32_t frame_index;
     if (runtime_location == NULL) return;
-    item_id = runtime_location->record_value_10;
-    if (item_id >= GAME_INVENTORY_ITEM_FIRST_ID &&
-        item_id < GAME_INVENTORY_ITEM_FIRST_ID + GAME_INVENTORY_ITEM_COUNT &&
-        (uint32_t)(item_id - GAME_INVENTORY_ITEM_FIRST_ID) <
-            g_inventory_item_art.frame_count &&
-        g_inventory_item_art.frames[item_id - GAME_INVENTORY_ITEM_FIRST_ID].bitmap != NULL)
-        return;
+    if (ground_item_icon_frame(runtime_location, &frame_index)) return;
 
-    /* PIT_Object has no SHP or subtype in the data currently modeled. */
+    /* Keep a neutral marker only for occupied records with no known frame. */
     {
         HPEN outline = CreatePen(PS_SOLID, 1, RGB(96, 62, 24));
         HBRUSH fill = CreateSolidBrush(RGB(244, 197, 77));
@@ -4666,9 +4721,9 @@ static void render_island_view(HDC dc)
             runtime_location->bridge_neighbor_island < 0) {
             runtime_class = 0;
         }
-        /* The pad catalog's PIT_Object (item 1) and PIT_FeatureTrigger
-           (item 3) entries have no shape asset. These item IDs are distinct
-           from an island record's renderer_class. */
+        /* PIT_Object has no building SHP of its own; generated collectible
+           items draw their TRIGGERS frame from +0x24 below. PIT_FeatureTrigger
+           also has no SHP. Item IDs are distinct from renderer_class. */
         if (location->kind == ISLAND_LOCATION_PAD ||
             (location->renderer_class == 3 && location->renderer_variant == 3)) {
             if (runtime_location == NULL || runtime_location->record_value_10 <= 0) continue;
