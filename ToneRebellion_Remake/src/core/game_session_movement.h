@@ -9,6 +9,16 @@ void game_session_tick_item_animations(GameSession *session,
 /* Advance idle FA_Wander routes and simulation-assigned destinations through
    the FUN_00422d27 step kernel. Player input must not call this as an order. */
 void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick);
+/* Port of the state-11/12 CHARGE link operation for a floater at a source. */
+int game_session_link_floater_charge(GameSession *session,
+                                     unsigned int floater_index,
+                                     uint16_t source_location_index);
+/* Port of the state-12 CHARGE debit on an already linked source. */
+int game_session_refill_floater_charge(GameSession *session,
+                                       unsigned int floater_index);
+/* Remove the floater's slot and invalidate its local source proxy. */
+int game_session_unlink_floater_charge(GameSession *session,
+                                       unsigned int floater_index);
 /* Resolve state 6/7 attack timing and damage for one floater. */
 void game_session_tick_floater_combat(GameSession *session,
                                       unsigned int floater_index);
@@ -25,5 +35,12 @@ int game_session_order_floater_to_coordinate(GameSession *session,
                                              unsigned int floater_index,
                                              uint16_t x,
                                              uint16_t y);
+/* Order an unlinked local floater to a player-owned charge source (state 11).
+   Repeating the order on that same site requests a state-12 debit. */
+int game_session_order_floater_to_charge_site(GameSession *session,
+                                              uint8_t player_slot,
+                                              uint8_t island_index,
+                                              unsigned int floater_index,
+                                              uint16_t location_index);
 
 #endif

@@ -283,6 +283,10 @@ int game_session_tick_floater_handoff(GameSession *session,
             floater->y = arrival_y;
             floater->destination_x = arrival->x;
             floater->destination_y = arrival_y;
+            /* The session's CHARGE source index is local to the current
+               island; release it before switching island tables. */
+            (void)game_session_unlink_floater_charge(
+                session, (unsigned int)(floater - session->floaters));
             floater->island_index = floater->handoff_target_island;
         }
     }

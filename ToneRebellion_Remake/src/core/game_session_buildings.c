@@ -13,6 +13,50 @@ static void set_error(char *error, size_t capacity, const char *message)
     error[capacity - 1] = '\0';
 }
 
+static int reserve_source_record(const GameSession *session, uint8_t owner,
+                                 uint16_t item_id, int16_t *record_index,
+                                 int16_t *category_slot)
+{
+    uint8_t used_records[GAME_SOURCE_RECORDS_PER_PLAYER] = {0};
+    uint8_t used_categories[GAME_SOURCE_SUBSLOTS_PER_ITEM] = {0};
+    unsigned int island_index;
+    unsigned int record_candidate;
+    unsigned int category_candidate;
+
+    for (island_index = 0; island_index < session->island_count; ++island_index) {
+        const GameRuntimeIsland *island = &session->islands[island_index];
+        unsigned int location_index;
+        for (location_index = 0; location_index < island->location_count;
+             ++location_index) {
+            const GameRuntimeLocation *location = &island->locations[location_index];
+            if (location->owner_id != owner) continue;
+            if (location->source_location_slot_18 >= 0 &&
+                location->source_location_slot_18 < GAME_SOURCE_RECORDS_PER_PLAYER) {
+                used_records[location->source_location_slot_18] = 1;
+            }
+            if (location->record_value_10 == item_id &&
+                location->source_category_slot_60 >= 0 &&
+                location->source_category_slot_60 < GAME_SOURCE_SUBSLOTS_PER_ITEM) {
+                used_categories[location->source_category_slot_60] = 1;
+            }
+        }
+    }
+
+    for (record_candidate = 0; record_candidate < GAME_SOURCE_RECORDS_PER_PLAYER;
+         ++record_candidate) {
+        if (!used_records[record_candidate]) break;
+    }
+    if (record_candidate == GAME_SOURCE_RECORDS_PER_PLAYER) return 0;
+    for (category_candidate = 0; category_candidate < GAME_SOURCE_SUBSLOTS_PER_ITEM;
+         ++category_candidate) {
+        if (!used_categories[category_candidate]) break;
+    }
+    if (category_candidate == GAME_SOURCE_SUBSLOTS_PER_ITEM) return 0;
+    *record_index = (int16_t)record_candidate;
+    *category_slot = (int16_t)category_candidate;
+    return 1;
+}
+
 int game_session_repair_task_values(const GameSession *session,
                                     const PadCatalog *pad_catalog,
                                     const GamePendingEvent *event,
@@ -97,6 +141,9 @@ int game_session_place_building(GameSession *session,
     const PadCatalogItem *item;
     uint8_t site_size;
     uint16_t runtime_item_id;
+    int16_t source_record_index = -1;
+    int16_t source_category_slot = -1;
+    int16_t source_value_34_maximum;
 
     if (error != NULL && error_capacity != 0) error[0] = '\0';
     if (session == NULL || catalog == NULL || site == NULL || player_slot >= 4 ||
@@ -123,17 +170,34 @@ int game_session_place_building(GameSession *session,
         set_error(error, error_capacity, "building is not allowed on this site");
         return 0;
     }
+    if (base_item_id >= 0x2c && base_item_id <= 0x32 &&
+        !reserve_source_record(session, player_slot, runtime_item_id,
+                               &source_record_index, &source_category_slot)) {
+        set_error(error, error_capacity,
+                  "owner source-record table has no available slot");
+        return 0;
+    }
 
-    /* FUN_004528ca sets +0x32 to 1 and flags to 0x410. The source does not
-       explicitly reset producer +0x0c; new remake placements start it at 0. */
+    /* FUN_004528ca sets +0x32 to 1 and flags to 0x410. */
     runtime->record_value_10 = runtime_item_id;
     runtime->owner_id = player_slot;
-    runtime->source_capacity_4a = 0;
-    if (!game_session_source_value_34_max(catalog, runtime, &runtime->source_value_34)) {
+    runtime->source_location_slot_18 = source_record_index;
+    runtime->source_category_slot_60 = source_category_slot;
+    if (!game_session_source_value_34_max(catalog, runtime,
+                                          &source_value_34_maximum)) {
+        runtime->record_value_10 = 0;
+        runtime->owner_id = -1;
+        runtime->source_location_slot_18 = -1;
+        runtime->source_category_slot_60 = -1;
         set_error(error, error_capacity, "building has no usable source field +0x34");
         return 0;
     }
+    runtime->source_value_34 = source_value_34_maximum;
+    runtime->source_capacity_4a = 0;
     runtime->record_value_24 = 0;
+    runtime->resource_stock[GAME_RESOURCE_BUILD_TONE] = 0;
+    runtime->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 0;
+    runtime->resource_stock[GAME_RESOURCE_MAGIC_TONE] = 0;
     runtime->source_flags = 0x410;
     runtime->base_progress = 0;
     runtime->producer_cadence = 0;
@@ -145,5 +209,6 @@ int game_session_place_building(GameSession *session,
     runtime->animation_rate = 1;
     runtime->barg_progress = 0.0;
     runtime->tribe_visibility_mask = 0;
+    runtime->source_value_22 = 0;
     return 1;
 }

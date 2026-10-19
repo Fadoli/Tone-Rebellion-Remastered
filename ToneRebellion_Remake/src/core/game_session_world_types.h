@@ -6,10 +6,11 @@
 typedef struct GameRuntimeLocation {
     int32_t record_value_10;
     int32_t owner_id;
-    /* Source signed short +0x18. FUN_00452c31 requires this != -1 before
-       owner Inventory is available on non-Hall locations; FUN_004528ca sets
-       it for source item IDs 0x2c..0x32. Slot assignment is not yet modeled. */
+    /* Source signed short +0x18. FUN_004528ca stores the owning player's
+       100-byte source-record index here for item IDs 0x2c..0x32. */
     int16_t source_location_slot_18;
+    /* Source record +0x60 subslot, assigned 0..9 per item by FUN_0045ee26. */
+    int16_t source_category_slot_60;
     /* On producer items 0x25/0x26/0x27, FUN_00450a71 stores a pending
        resource code 1/3/2 here when PROD completes; other classes use the
        same runtime field for different purposes. */
@@ -35,11 +36,23 @@ typedef struct GameRuntimeLocation {
        +0x2c. Ghidra reads them as short fields; exact signedness/caps remain
        unconfirmed. */
     uint16_t resource_stock[GAME_RESOURCE_TYPE_COUNT];
+    /* FUN_0045c797 clears source short +0x30 after a CHARGE debit. */
+    uint16_t charge_source_value_30;
+    /* FUN_0045c470's eight floater links and +0x24 count. */
+    int16_t charge_floater_slots[8];
+    uint16_t charge_floater_count;
+    int16_t charge_recent_floater;
     /* Raw Hall threshold read by FUN_0045eaa7. */
     int16_t source_capacity_4a;
     /* FUN_004528ca initializes runtime +0x34 from FUN_00450978; repair task
        rows later read this mutable short from their target location. */
     int16_t source_value_34;
+    /* Raw site short +0x08; FUN_00420188 increments it after a positive
+       state-7 result. Its gameplay meaning is unresolved. */
+    uint16_t source_progress_08;
+    /* Raw site short +0x22. The low byte is also read as the visibility mask;
+       state 7 decrements the whole short when positive. */
+    uint16_t source_value_22;
     /* FUN_00452e4d stores the last floater pickup tick it checked for a
        resource output at runtime +0x36. */
     int16_t resource_retry_tick_36;

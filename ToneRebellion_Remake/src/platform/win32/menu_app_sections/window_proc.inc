@@ -203,11 +203,19 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             g_menu.selected_map_island < g_game_session.island_count &&
             g_menu.selected_tribe < GAME_START_PLAYER_COUNT &&
             g_game_session.floaters[g_selected_floater].source_subtype != 0) {
-            (void)game_session_order_floater_to_coordinate(
-                &g_game_session, g_menu.selected_tribe,
-                (uint8_t)g_menu.selected_map_island,
-                (unsigned int)g_selected_floater,
-                (uint16_t)(x + g_island_scroll_x), (uint16_t)y);
+            int clicked_location = island_location_at(x, y);
+            if (clicked_location < 0 ||
+                !game_session_order_floater_to_charge_site(
+                    &g_game_session, g_menu.selected_tribe,
+                    (uint8_t)g_menu.selected_map_island,
+                    (unsigned int)g_selected_floater,
+                    (uint16_t)clicked_location)) {
+                (void)game_session_order_floater_to_coordinate(
+                    &g_game_session, g_menu.selected_tribe,
+                    (uint8_t)g_menu.selected_map_island,
+                    (unsigned int)g_selected_floater,
+                    (uint16_t)(x + g_island_scroll_x), (uint16_t)y);
+            }
             InvalidateRect(window, NULL, FALSE);
         }
         return 0;

@@ -7,6 +7,168 @@
 
 #include <string.h>
 
+static void game_session_apply_charge_debit(GameFloaterStart *floater,
+                                            GameRuntimeLocation *source)
+{
+    source->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] -= 10U;
+    source->charge_source_value_30 = 0;
+    floater->source_runtime_flags |= 0x21U;
+    if (floater->source_subtype == 0 &&
+        (floater->source_runtime_flags & 0x100U) != 0) {
+        floater->source_runtime_flags &= ~0x100U;
+    }
+}
+
+static int game_session_tick_floater_charge(GameSession *session,
+                                            unsigned int floater_index)
+{
+    GameFloaterStart *floater = &session->floaters[floater_index];
+    int succeeded;
+
+    if (floater->movement_state != 11 && floater->movement_state != 12) return 0;
+
+    /* FUN_0041e569 cases 10/11 retry only when the +0x34 short wraps to zero;
+       otherwise they advance it once per floater update. */
+    if (floater->order_timer != 0) {
+        ++floater->order_timer;
+        return 1;
+    }
+
+    if (floater->island_index >= session->island_count ||
+        floater->source_order_parameter_32 >=
+            session->islands[floater->island_index].location_count) {
+        succeeded = 0;
+    } else if (floater->movement_state == 11) {
+        GameRuntimeLocation *target = &session->islands[floater->island_index]
+            .locations[floater->source_order_parameter_32];
+        if (floater->x != target->x || floater->y != target->y) {
+            floater->destination_x = target->x;
+            floater->destination_y = target->y;
+            floater->stop_radius = 0;
+            floater->has_move_order = 1;
+            return 0;
+        }
+        floater->has_move_order = 0;
+        succeeded = game_session_link_floater_charge(
+            session, floater_index, floater->source_order_parameter_32);
+    } else {
+        succeeded = floater->charge_source_island == floater->island_index &&
+            floater->charge_source_location == floater->source_order_parameter_32 &&
+            game_session_refill_floater_charge(session, floater_index);
+    }
+
+    if (succeeded) {
+        floater->order_timer = 1;
+    } else {
+        floater->movement_state = 0;
+        floater->order_timer = 0;
+        floater->has_move_order = 0;
+    }
+    return 1;
+}
+
+int game_session_link_floater_charge(GameSession *session,
+                                     unsigned int floater_index,
+                                     uint16_t source_location_index)
+{
+    GameFloaterStart *floater;
+    GameRuntimeIsland *island;
+    GameRuntimeLocation *source;
+    unsigned int slot;
+
+    if (session == NULL || floater_index >= session->floater_count ||
+        floater_index >= GAME_SESSION_MAX_FLOATERS) return 0;
+    floater = &session->floaters[floater_index];
+    if (floater->island_index >= session->island_count ||
+        floater->source_link_0c != -1) return 0;
+    island = &session->islands[floater->island_index];
+    if (source_location_index >= island->location_count) return 0;
+    source = &island->locations[source_location_index];
+    if (source->source_location_slot_18 < 0 ||
+        source->owner_id != (int32_t)floater->owner_slot ||
+        source->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] < 10U ||
+        source->charge_floater_count >= 8U) return 0;
+
+    for (slot = 0; slot < 8; ++slot) {
+        if (source->charge_floater_slots[slot] == -1) break;
+    }
+    if (slot == 8) return 0;
+
+    source->charge_floater_slots[slot] = (int16_t)floater_index;
+    ++source->charge_floater_count;
+    source->charge_recent_floater = (int16_t)floater_index;
+    floater->source_link_0c = source->source_location_slot_18;
+    floater->charge_source_island = floater->island_index;
+    floater->charge_source_location = source_location_index;
+    game_session_apply_charge_debit(floater, source);
+    return 1;
+}
+
+int game_session_refill_floater_charge(GameSession *session,
+                                       unsigned int floater_index)
+{
+    GameFloaterStart *floater;
+    GameRuntimeIsland *island;
+    GameRuntimeLocation *source;
+    unsigned int slot;
+
+    if (session == NULL || floater_index >= session->floater_count ||
+        floater_index >= GAME_SESSION_MAX_FLOATERS) return 0;
+    floater = &session->floaters[floater_index];
+    if (floater->source_link_0c < 0 ||
+        floater->charge_source_island >= session->island_count) return 0;
+    if (floater->island_index != floater->charge_source_island) return 0;
+    island = &session->islands[floater->charge_source_island];
+    if (floater->charge_source_location >= island->location_count) return 0;
+    source = &island->locations[floater->charge_source_location];
+    if (source->source_location_slot_18 != floater->source_link_0c ||
+        source->owner_id != (int32_t)floater->owner_slot) return 0;
+    if (source->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] < 10U) return 0;
+
+    for (slot = 0; slot < 8; ++slot) {
+        if (source->charge_floater_slots[slot] == (int16_t)floater_index) break;
+    }
+    if (slot == 8) return 0;
+
+    game_session_apply_charge_debit(floater, source);
+    return 1;
+}
+
+int game_session_unlink_floater_charge(GameSession *session,
+                                       unsigned int floater_index)
+{
+    GameFloaterStart *floater;
+    GameRuntimeIsland *island;
+    GameRuntimeLocation *source;
+    unsigned int slot;
+
+    if (session == NULL || floater_index >= session->floater_count ||
+        floater_index >= GAME_SESSION_MAX_FLOATERS) return 0;
+    floater = &session->floaters[floater_index];
+    if (floater->source_link_0c < 0 ||
+        floater->charge_source_island >= session->island_count) return 0;
+    if (floater->island_index != floater->charge_source_island) return 0;
+    island = &session->islands[floater->charge_source_island];
+    if (floater->charge_source_location >= island->location_count) return 0;
+    source = &island->locations[floater->charge_source_location];
+    if (source->source_location_slot_18 != floater->source_link_0c ||
+        source->owner_id != (int32_t)floater->owner_slot) return 0;
+
+    for (slot = 0; slot < 8; ++slot) {
+        if (source->charge_floater_slots[slot] == (int16_t)floater_index) break;
+    }
+    if (slot == 8) return 0;
+
+    source->charge_floater_slots[slot] = -1;
+    if (source->charge_floater_count != 0) --source->charge_floater_count;
+    if (source->charge_recent_floater == (int16_t)floater_index)
+        source->charge_recent_floater = -1;
+    floater->source_link_0c = -1;
+    floater->charge_source_island = UINT8_MAX;
+    floater->charge_source_location = UINT16_MAX;
+    return 1;
+}
+
 static int game_session_resolve_cast_destination(
     GameSession *session, GameFloaterStart *floater)
 {
@@ -103,6 +265,8 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
         int32_t dy;
         int32_t distance;
 
+        if (game_session_tick_floater_charge(session, i)) continue;
+
         /* FUN_0041e569 polls FUN_0042219e while idle and once per ten ticks
            while moving. The bridge leaves the linked order pending during
            FA_Cast (0x13), then transfers it to the tick record at a later poll. */
@@ -155,8 +319,24 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
 
         if (floater->active_order_action == 0x13 &&
             floater->movement_state == 0x13) {
-            if (!game_session_resolve_cast_destination(session, floater))
+            if ((floater->source_runtime_flags & 0x200U) != 0) {
                 game_session_cancel_cast_order(floater);
+            } else if (!game_session_resolve_cast_destination(session, floater)) {
+                game_session_cancel_cast_order(floater);
+            } else if (game_session_source_chebyshev_distance(
+                           floater->x, floater->y,
+                           floater->destination_x,
+                           floater->destination_y) <= 30) {
+                /* FUN_0042383d uses DAT_0049d230[kind] (30 for kind 0x16)
+                   and starts FUN_0041660b on the tenth in-range tick. */
+                if (floater->order_timer < 400U) ++floater->order_timer;
+                if (floater->order_timer == 10U) {
+                    (void)game_session_schedule_cast_effect_step(
+                        session, i, 0x16, floater->order_target_location, 0);
+                }
+                if (floater->order_timer >= 400U)
+                    game_session_cancel_cast_order(floater);
+            }
             continue;
         }
 
@@ -387,5 +567,53 @@ int game_session_order_floater_to_coordinate(GameSession *session,
     }
 
     floater->source_order_pending = 1;
+    return 1;
+}
+
+int game_session_order_floater_to_charge_site(GameSession *session,
+                                              uint8_t player_slot,
+                                              uint8_t island_index,
+                                              unsigned int floater_index,
+                                              uint16_t location_index)
+{
+    GameFloaterStart *floater;
+    const GameRuntimeIsland *island;
+    const GameRuntimeLocation *source;
+    uint8_t charge_state;
+
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        island_index >= session->island_count ||
+        floater_index >= session->floater_count ||
+        floater_index >= GAME_SESSION_MAX_FLOATERS) return 0;
+    floater = &session->floaters[floater_index];
+    island = &session->islands[island_index];
+    if (location_index >= island->location_count ||
+        floater->owner_slot != player_slot || floater->island_index != island_index ||
+        floater->active_order_action != 0 || floater->linked_task_slot != -1) return 0;
+    source = &island->locations[location_index];
+    if (source->owner_id != player_slot ||
+        source->record_value_10 < 0x2c || source->record_value_10 > 0x32 ||
+        source->source_location_slot_18 < 0) return 0;
+
+    if (floater->source_link_0c == -1) {
+        charge_state = 11;
+    } else {
+        if (floater->charge_source_island != island_index ||
+            floater->charge_source_location != location_index ||
+            floater->x != source->x || floater->y != source->y) return 0;
+        charge_state = 12;
+    }
+
+    floater->source_order_parameter_32 = location_index;
+    floater->movement_state = charge_state;
+    floater->order_timer = 0;
+    floater->destination_x = source->x;
+    floater->destination_y = source->y;
+    floater->stop_radius = 0;
+    floater->has_move_order = (uint8_t)(charge_state == 11 &&
+        (floater->x != source->x || floater->y != source->y));
+    floater->source_order_pending = 0;
+    floater->has_wander_order = 0;
+    floater->wander_timer = 0;
     return 1;
 }

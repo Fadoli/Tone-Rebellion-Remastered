@@ -16,6 +16,10 @@ typedef struct GameFloaterStart {
     uint8_t current_hit_points;
     uint8_t max_hit_points;
     uint8_t attack_strength;
+    /* Raw short +0x08; FUN_004200d2 increments it after a positive attack
+       result. Its gameplay meaning is not established yet. */
+    uint16_t source_progress_08;
+    int16_t max_attack_points;
     int16_t attack_realm;
     /* Raw source +0x0a: low nibble is the level and the high nibble is its
        attack modifier. Initial runtime floaters currently start at zero. */
@@ -33,10 +37,13 @@ typedef struct GameFloaterStart {
     uint16_t source_death_timer;
     /* Floater runtime short +0x0c gates IWLocInfo CHARGE through
        FUN_004207f2; +0x22 is the mutable charge counter. Initial workers
-       start at -1 and 0 respectively. Assignment and charge ticks are not
-       modeled yet. The charge maintenance helpers decrement counters on
-       category/source records, not this floater field. */
+       start at -1 and 0 respectively. State-6 attacks decrement the target's
+       +0x22 through the same 0x4c-byte floater table. */
     int16_t source_link_0c;
+    /* Port-side island key for resolving source_link_0c, which stores the
+       per-owner 100-byte source-row index returned by FUN_0045c325. */
+    uint8_t charge_source_island;
+    uint16_t charge_source_location;
     int16_t charge_current;
     uint16_t x;
     uint16_t y;
@@ -77,6 +84,8 @@ typedef struct GameFloaterStart {
     uint8_t source_order_state_2c;
     uint8_t source_order_island_28;
     uint16_t source_order_coordinate_30;
+    /* FUN_0041e569 resolves the source location from floater +0x32 for
+       runtime CHARGE states 11/12. */
     uint16_t source_order_parameter_32;
     uint8_t source_order_pending;
     uint8_t has_move_order;
@@ -110,7 +119,12 @@ typedef struct GameSession {
         uint8_t caster_index;
         uint8_t step;
         uint8_t odd_updates_remaining;
+        /* Zero is the fixed-delay path; 1/2/3 model ASCEND, travel, FREEZESC. */
+        uint8_t animation_phase;
+        uint8_t phase_odd_updates_remaining;
         int16_t target_location_index;
+        uint16_t effect_x;
+        uint16_t effect_y;
     } cast_effects[GAME_SESSION_MAX_CAST_EFFECTS];
     uint8_t active_cast_effect_count;
     GamePlayerEconomy economy[GAME_START_PLAYER_COUNT];

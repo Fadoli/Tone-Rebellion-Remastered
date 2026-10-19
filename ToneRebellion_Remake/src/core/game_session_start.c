@@ -40,6 +40,8 @@ int game_session_initialize_start_players(
         if (start->marker_location_index < runtime->location_count) {
             runtime->locations[start->marker_location_index].tribe_visibility_mask |=
                 (uint8_t)(1U << island_index);
+            runtime->locations[start->marker_location_index].source_value_22 =
+                runtime->locations[start->marker_location_index].tribe_visibility_mask;
         }
         /* FUN_0046466f calls FUN_00452859(0x2a, player); FUN_004641de
            resolves that base item into the player's 16-entry pad block. */
@@ -83,6 +85,8 @@ int game_session_initialize_start_players(
             floater->current_hit_points = (uint8_t)stats->hit_points;
             floater->max_hit_points = (uint8_t)stats->hit_points;
             floater->attack_strength = (uint8_t)stats->attack_strength;
+            floater->source_progress_08 = 0;
+            floater->max_attack_points = stats->max_attack_points;
             floater->attack_realm = stats->attack_realm;
             if (stats->attack_realm >= 0 && stats->attack_realm < 4) {
                 memcpy(floater->attack_impact_frame_counts,
@@ -92,6 +96,8 @@ int game_session_initialize_start_players(
             floater->attack_range = stats->attack_range;
             floater->attack_period = stats->attack_period;
             floater->source_link_0c = -1;
+            floater->charge_source_island = UINT8_MAX;
+            floater->charge_source_location = UINT16_MAX;
             floater->charge_current = 0;
             floater->carried_resource_code = 0;
             floater->order_resource_code = 0;
@@ -172,10 +178,20 @@ int game_session_initialize_start_islands(
             state->record_value_10 = location->renderer_class == 3 ? location->renderer_variant : 0;
             state->owner_id = -1;
             state->source_location_slot_18 = -1;
+            state->source_category_slot_60 = -1;
             state->source_value_34 = -1;
+            state->source_progress_08 = 0;
+            state->source_value_22 = 0;
             state->source_task_slot[0] = -1;
             state->source_task_slot[1] = -1;
             state->source_task_slot[2] = -1;
+            {
+                unsigned int slot;
+                for (slot = 0; slot < 8; ++slot)
+                    state->charge_floater_slots[slot] = -1;
+            }
+            state->charge_floater_count = 0;
+            state->charge_recent_floater = -1;
             state->record_value_24 = 0;
             state->bridge_neighbor_island = bridge_neighbors[island_index][location_index];
             state->x = location->x;

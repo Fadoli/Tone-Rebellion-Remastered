@@ -160,6 +160,7 @@ unsigned int game_session_dispatch_glyph_actions(GameSession *session)
             floater->cast_spell_kind = 0x16;
             floater->movement_state = 0x13;
             floater->order_progress = UINT8_MAX;
+            floater->order_timer = 0;
             floater->source_runtime_flags &= ~0x200U;
             floater->has_move_order = 0;
             floater->has_wander_order = 0;

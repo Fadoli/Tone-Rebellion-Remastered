@@ -36,13 +36,14 @@ int32_t game_session_apply_cast_site_effect(GameSession *session,
    and route nearby sites through FUN_00450817. Returns affected targets. */
 unsigned int game_session_apply_cast_blast(GameSession *session,
                                            unsigned int caster_index);
-/* FUN_004239e9 dispatches the resolved FA_Cast impact: case 7 is the area
-   blast, while case 9 applies FUN_00450847 to the selected location. */
+/* FUN_004239e9 cases 7/9 resolve the blast and selected-site impacts; case
+   0x16 applies the 30000 site effect when the item matches the player key. */
 unsigned int game_session_resolve_cast_effect_step(
     GameSession *session, unsigned int caster_index, uint8_t step,
     int16_t target_location_index);
-/* Reserve a source effect slot and resolve case 7/9 after the specified number
-   of odd effect-manager updates. The visual producer supplies the delay. */
+/* Reserve a source effect slot. For case 7/9/0x16, a positive delay counts odd
+   effect updates; case 0x16 with delay 0 runs ASCEND, UPGRADE travel and the
+   FREEZESC impact transition from the loaded source descriptors. */
 int game_session_schedule_cast_effect_step(
     GameSession *session, unsigned int caster_index, uint8_t step,
     int16_t target_location_index, uint8_t odd_updates_until_impact);
