@@ -139,11 +139,13 @@ static int load_building_render_catalog(char *error, size_t error_capacity)
     CobArchive archive = {0};
     const CobMember *pad_member;
     const CobMember *floater_member;
+    const CobMember *floater_animation_member;
     const CobMember *animation_member;
     const CobMember *description_member;
     const CobMember *name_member;
     unsigned char *pad_bytes = NULL;
     unsigned char *floater_bytes = NULL;
+    unsigned char *floater_animation_bytes = NULL;
     unsigned char *animation_bytes = NULL;
     unsigned char *description_bytes = NULL;
     unsigned char *name_bytes = NULL;
@@ -156,29 +158,36 @@ static int load_building_render_catalog(char *error, size_t error_capacity)
                           error, error_capacity)) return 0;
     pad_member = cob_archive_find(&archive, "pad.txt");
     floater_member = cob_archive_find(&archive, "floater.txt");
+    floater_animation_member = cob_archive_find(&archive, "fltinf.txt");
     animation_member = cob_archive_find(&archive, "bldinf.txt");
     description_member = cob_archive_find(&archive, "bldtxt.txt");
     name_member = cob_archive_find(&archive, "bldname.txt");
-    if (pad_member == NULL || floater_member == NULL || animation_member == NULL || description_member == NULL ||
+    if (pad_member == NULL || floater_member == NULL || floater_animation_member == NULL ||
+        animation_member == NULL || description_member == NULL ||
         name_member == NULL) {
         (void)snprintf(error, error_capacity,
-                       "pad.txt, floater.txt, bldinf.txt, bldtxt.txt or bldname.txt was not found in TONE00.COB");
+                       "pad.txt, floater.txt, fltinf.txt, bldinf.txt, bldtxt.txt or bldname.txt was not found in TONE00.COB");
         goto done;
     }
     pad_bytes = (unsigned char *)malloc(pad_member->length == 0 ? 1 : pad_member->length);
     floater_bytes = (unsigned char *)malloc(floater_member->length == 0 ? 1 : floater_member->length);
+    floater_animation_bytes = (unsigned char *)malloc(floater_animation_member->length == 0
+                                                       ? 1 : floater_animation_member->length);
     animation_bytes = (unsigned char *)malloc(animation_member->length == 0
                                                ? 1 : animation_member->length);
     description_bytes = (unsigned char *)malloc(description_member->length == 0
                                                   ? 1 : description_member->length);
     name_bytes = (unsigned char *)malloc(name_member->length == 0
                                            ? 1 : name_member->length);
-    if (pad_bytes == NULL || floater_bytes == NULL || animation_bytes == NULL || description_bytes == NULL ||
+    if (pad_bytes == NULL || floater_bytes == NULL || floater_animation_bytes == NULL ||
+        animation_bytes == NULL || description_bytes == NULL ||
         name_bytes == NULL ||
         !cob_archive_read_member(&archive, pad_member, pad_bytes, pad_member->length,
                                  error, error_capacity) ||
         !cob_archive_read_member(&archive, floater_member, floater_bytes, floater_member->length,
                                  error, error_capacity) ||
+        !cob_archive_read_member(&archive, floater_animation_member, floater_animation_bytes,
+                                 floater_animation_member->length, error, error_capacity) ||
         !cob_archive_read_member(&archive, animation_member, animation_bytes,
                                  animation_member->length, error, error_capacity) ||
         !cob_archive_read_member(&archive, description_member, description_bytes,
@@ -188,6 +197,9 @@ static int load_building_render_catalog(char *error, size_t error_capacity)
         !pad_catalog_load(pad_bytes, pad_member->length, &pads, error, error_capacity) ||
         !floater_catalog_load(floater_bytes, floater_member->length, &floaters,
                               error, error_capacity) ||
+        !floater_catalog_load_animations(floater_animation_bytes,
+                                         floater_animation_member->length,
+                                         &floaters, error, error_capacity) ||
         !building_render_catalog_load(animation_bytes, animation_member->length,
                                        &pads, &animations, error, error_capacity)) {
         goto done;
@@ -220,6 +232,7 @@ done:
     free(name_bytes);
     free(pad_bytes);
     free(floater_bytes);
+    free(floater_animation_bytes);
     free(animation_bytes);
     free(description_bytes);
     cob_archive_close(&archive);

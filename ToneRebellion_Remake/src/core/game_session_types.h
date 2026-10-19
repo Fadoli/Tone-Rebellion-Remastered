@@ -234,6 +234,10 @@ typedef struct GameFloaterStart {
     uint8_t max_hit_points;
     uint8_t attack_strength;
     int16_t attack_range;
+    /* FUN_0042520e's state-6/7 cadence, resolved from the draw ID's fltinf
+       attack animation during session initialization. */
+    uint16_t attack_period;
+    uint16_t attack_timer;
     /* Floater runtime short +0x0c gates IWLocInfo CHARGE through
        FUN_004207f2; +0x22 is the mutable charge counter. Initial workers
        start at -1 and 0 respectively. Assignment and charge ticks are not

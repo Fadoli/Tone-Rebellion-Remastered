@@ -186,6 +186,7 @@ int game_session_initialize(const WorldDefinition *world,
             floater->max_hit_points = (uint8_t)stats->hit_points;
             floater->attack_strength = (uint8_t)stats->attack_strength;
             floater->attack_range = stats->attack_range;
+            floater->attack_period = stats->attack_period;
             floater->source_link_0c = -1;
             floater->charge_current = 0;
             floater->carried_resource_code = 0;

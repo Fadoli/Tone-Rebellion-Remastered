@@ -83,6 +83,18 @@ static int parse_short(const char *token, int16_t *value)
     return 1;
 }
 
+static int ascii_case_equal(const char *left, const char *right)
+{
+    while (*left != '\0' && *right != '\0') {
+        unsigned char a = (unsigned char)*left++;
+        unsigned char b = (unsigned char)*right++;
+        if (a >= 'A' && a <= 'Z') a = (unsigned char)(a + ('a' - 'A'));
+        if (b >= 'A' && b <= 'Z') b = (unsigned char)(b + ('a' - 'A'));
+        if (a != b) return 0;
+    }
+    return *left == *right;
+}
+
 static int parse_row(const char *line, FloaterStats *row)
 {
     char token[FLOATER_TOKEN_CAPACITY];
@@ -93,11 +105,142 @@ static int parse_row(const char *line, FloaterStats *row)
     unsigned int i;
     int status = next_token(&cursor, token, sizeof(token));
     if (status != 1) return 0;
+    if (strlen(token) >= sizeof(row->draw_id)) return 0;
+    memcpy(row->draw_id, token, strlen(token) + 1);
     for (i = 0; i < sizeof(values) / sizeof(values[0]); ++i) {
         status = next_token(&cursor, token, sizeof(token));
         if (status != 1 || !parse_short(token, values[i])) return 0;
     }
     return next_token(&cursor, token, sizeof(token)) == 0;
+}
+
+typedef struct FloaterAnimationEntry {
+    char item_name[9];
+    int16_t attack_start;
+    int16_t attack_terminal;
+    int16_t ticks_per_frame;
+    uint8_t has_attack;
+} FloaterAnimationEntry;
+
+static int parse_attack_animation(const char *line, FloaterAnimationEntry *entry)
+{
+    char token[FLOATER_TOKEN_CAPACITY];
+    const char *cursor = line;
+    int16_t start;
+    int16_t end;
+    int16_t ticks_per_frame = 2;
+    int16_t terminal;
+    int status;
+
+    status = next_token(&cursor, token, sizeof(token));
+    if (status != 1 || !ascii_case_equal(token, "attack")) return 0;
+    status = next_token(&cursor, token, sizeof(token));
+    if (status != 1 || !parse_short(token, &start)) return 0;
+    status = next_token(&cursor, token, sizeof(token));
+    if (status != 1 || !parse_short(token, &end)) return 0;
+    terminal = end;
+
+    status = next_token(&cursor, token, sizeof(token));
+    if (status == 1) {
+        if (parse_short(token, &ticks_per_frame)) {
+            status = next_token(&cursor, token, sizeof(token));
+            if (status == 1) {
+                status = next_token(&cursor, token, sizeof(token));
+                if (status == 1 && !parse_short(token, &terminal)) return 0;
+            }
+        } else {
+            status = next_token(&cursor, token, sizeof(token));
+            if (status == 1 && !parse_short(token, &terminal)) return 0;
+        }
+    }
+    if (next_token(&cursor, token, sizeof(token)) != 0 || ticks_per_frame < 0)
+        return 0;
+    entry->attack_start = start;
+    entry->attack_terminal = terminal;
+    entry->ticks_per_frame = ticks_per_frame;
+    entry->has_attack = 1;
+    return 1;
+}
+
+int floater_catalog_load_animations(const unsigned char *bytes, size_t length,
+                                    FloaterCatalog *catalog, char *error,
+                                    size_t error_capacity)
+{
+    FloaterAnimationEntry entries[FLOATER_ANIMATION_CATALOG_MAX_ITEMS];
+    size_t position = 0;
+    size_t line_number = 0;
+    unsigned int entry_count = 0;
+    int current_entry = -1;
+    char line[FLOATER_LINE_CAPACITY];
+    int status;
+    unsigned int row_index;
+
+    if (error != NULL && error_capacity != 0) error[0] = '\0';
+    if (bytes == NULL || catalog == NULL) {
+        set_error(error, error_capacity, "animation bytes and floater catalog are required", 0);
+        return 0;
+    }
+    memset(entries, 0, sizeof(entries));
+    while ((status = next_record(bytes, length, &position, &line_number, line)) > 0) {
+        char tag[FLOATER_TOKEN_CAPACITY];
+        char name[FLOATER_TOKEN_CAPACITY];
+        const char *cursor = line;
+        int token_status = next_token(&cursor, tag, sizeof(tag));
+        if (token_status != 1) continue;
+        if (ascii_case_equal(tag, "item")) {
+            token_status = next_token(&cursor, name, sizeof(name));
+            if (token_status != 1 || strlen(name) >= sizeof(entries[0].item_name) ||
+                entry_count >= FLOATER_ANIMATION_CATALOG_MAX_ITEMS) {
+                set_error(error, error_capacity, "invalid or excessive floater animation item",
+                          line_number);
+                return 0;
+            }
+            current_entry = (int)entry_count++;
+            memcpy(entries[current_entry].item_name, name, strlen(name) + 1);
+        } else if (ascii_case_equal(tag, "attack") && current_entry >= 0) {
+            if (!parse_attack_animation(line, &entries[current_entry])) {
+                set_error(error, error_capacity, "invalid floater attack animation", line_number);
+                return 0;
+            }
+        }
+    }
+    if (status < 0) {
+        set_error(error, error_capacity, "floater animation line is too long", line_number);
+        return 0;
+    }
+    if (entry_count == 0) {
+        set_error(error, error_capacity, "no floater animation items were found", 0);
+        return 0;
+    }
+
+    for (row_index = 0; row_index < FLOATER_CATALOG_ROW_COUNT; ++row_index) {
+        FloaterStats *row = &catalog->rows[row_index];
+        unsigned int animation_index;
+        row->shape_info_index = -1;
+        row->attack_period = 0;
+        for (animation_index = 0; animation_index < entry_count; ++animation_index) {
+            const FloaterAnimationEntry *entry = &entries[animation_index];
+            int32_t period;
+            if (!ascii_case_equal(row->draw_id, entry->item_name)) continue;
+            row->shape_info_index = (int16_t)animation_index;
+            if (!entry->has_attack) break;
+            /* FUN_0042520e returns (attack terminal frame - first frame) times
+               the parsed attack rate at row offsets +0x38/+0x3c/+0x3e. */
+            period = ((int32_t)entry->attack_terminal - entry->attack_start) *
+                     entry->ticks_per_frame;
+            if (period < 0 || period > (int32_t)UINT16_MAX) {
+                set_error(error, error_capacity, "floater attack period is out of range", 0);
+                return 0;
+            }
+            row->attack_period = (uint16_t)period;
+            break;
+        }
+        if (row->shape_info_index < 0) {
+            set_error(error, error_capacity, "floater draw ID is missing from fltinf.txt", 0);
+            return 0;
+        }
+    }
+    return 1;
 }
 
 int floater_catalog_load(const unsigned char *bytes, size_t length,
