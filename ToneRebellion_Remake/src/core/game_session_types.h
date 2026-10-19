@@ -176,6 +176,9 @@ typedef struct GameRuntimeLocation {
     /* FUN_004528ca initializes runtime +0x34 from FUN_00450978; repair task
        rows later read this mutable short from their target location. */
     int16_t source_value_34;
+    /* FUN_00452e4d stores the last floater pickup tick it checked for a
+       resource output at runtime +0x36. */
+    int16_t resource_retry_tick_36;
     /* Producer items 0x25..0x27 use source +0x0c to start PROD after the
        running object's cadence reaches 20; separate from BASE +0x4a. */
     uint16_t producer_cadence;
@@ -248,6 +251,14 @@ typedef struct GameFloaterStart {
     uint8_t active_order_action;
     int16_t order_target_floater;
     int16_t order_target_location;
+    /* FA_Deliver's action-4 order uses the tick record's +0x18 cargo, +0x34
+       pickup counter and +0x46 subphase. Only local resource codes 1..3 are
+       currently dispatched from Hall refill requests. */
+    int16_t carried_resource_code;
+    int16_t order_resource_code;
+    int16_t linked_task_slot;
+    uint16_t order_timer;
+    int16_t order_source_location;
     uint32_t source_runtime_flags;
     /* FUN_00422d27's speed context is resolved before its coordinate step.
        Initial workers start idle and take the fallback FA_Wander route on

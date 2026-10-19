@@ -1,9 +1,9 @@
 #include "game_session.h"
 
 #include "floater_motion.h"
-#include "iw_construct.h"
 #include "island_render_rules.h"
 #include "pad_catalog.h"
+#include "game_session_internal.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -13,286 +13,6 @@ static void set_error(char *error, size_t capacity, const char *message)
     if (error == NULL || capacity == 0) return;
     (void)snprintf(error, capacity, "%s", message);
     error[capacity - 1] = '\0';
-}
-
-static int is_construction_location(const IslandLocation *location)
-{
-    uint8_t site_size;
-    return iw_construct_site_size(location, &site_size);
-}
-
-static int island_has_typed_construction_sites(const IslandData *source)
-{
-    unsigned int index;
-    for (index = 0; index < source->location_count; ++index) {
-        if (source->locations[index].renderer_class == 0 &&
-            is_construction_location(&source->locations[index])) return 1;
-    }
-    return 0;
-}
-
-static int choose_empty_class0(const IslandData *source,
-                               GameRuntimeIsland *runtime,
-                               ToneRng *rng,
-                               unsigned int *location_index)
-{
-    unsigned int available = 0;
-    unsigned int choice;
-    unsigned int index;
-    int prefer_typed_sites = island_has_typed_construction_sites(source);
-    int selected;
-
-    for (index = 0; index < source->location_count; ++index) {
-        if (source->locations[index].renderer_class == 0 &&
-            (!prefer_typed_sites || is_construction_location(&source->locations[index])) &&
-            runtime->locations[index].owner_id == -1 &&
-            runtime->locations[index].record_value_10 == 0) {
-            ++available;
-        }
-    }
-    if (available == 0) return 0;
-    selected = tone_rng_bounded(rng, (int32_t)available);
-    if (selected < 0 || (unsigned int)selected >= available) return 0;
-    choice = (unsigned int)selected;
-    for (index = 0; index < source->location_count; ++index) {
-        if (source->locations[index].renderer_class != 0 ||
-            (prefer_typed_sites && !is_construction_location(&source->locations[index])) ||
-            runtime->locations[index].owner_id != -1 ||
-            runtime->locations[index].record_value_10 != 0) continue;
-        if (choice == 0) {
-            *location_index = index;
-            return 1;
-        }
-        --choice;
-    }
-    return 0;
-}
-
-static int prepare_runtime_layouts(const WorldDefinition *world,
-                                   const IslandData *sources,
-                                   IslandData *layouts,
-                                   int32_t bridge_neighbors[WORLD_MAP_MAX_ISLANDS][ISLAND_DATA_MAX_LOCATIONS],
-                                   char *error, size_t error_capacity)
-{
-    unsigned int island_index;
-    for (island_index = 0; island_index < world->island_count; ++island_index) {
-        uint16_t class2_locations[ISLAND_DATA_MAX_LOCATIONS];
-        unsigned int class2_count = 0;
-        unsigned int incident_count = 0;
-        unsigned int location_index;
-        unsigned int bridge_index;
-        uint8_t incident_neighbors[WORLD_MAP_MAX_BRIDGES];
-        unsigned int incident_neighbor_count = 0;
-
-        for (location_index = 0; location_index < ISLAND_DATA_MAX_LOCATIONS; ++location_index) {
-            bridge_neighbors[island_index][location_index] = -1;
-        }
-
-        if (sources[island_index].location_count > ISLAND_DATA_MAX_LOCATIONS) {
-            if (error != NULL && error_capacity != 0) {
-                (void)snprintf(error, error_capacity,
-                               "island %u exceeds the original location capacity", island_index);
-                error[error_capacity - 1] = '\0';
-            }
-            return 0;
-        }
-        layouts[island_index] = sources[island_index];
-        for (location_index = 0; location_index < layouts[island_index].location_count;
-             ++location_index) {
-            if (layouts[island_index].locations[location_index].renderer_class == 2) {
-                unsigned int insert_at = class2_count;
-                uint16_t source_index = (uint16_t)location_index;
-                while (insert_at > 0 &&
-                       layouts[island_index].locations[class2_locations[insert_at - 1U]].x >
-                       layouts[island_index].locations[source_index].x) {
-                    class2_locations[insert_at] = class2_locations[insert_at - 1U];
-                    --insert_at;
-                }
-                class2_locations[insert_at] = source_index;
-                ++class2_count;
-            }
-        }
-        for (bridge_index = 0; bridge_index < world->bridge_count; ++bridge_index) {
-            const WorldBridge *bridge = &world->bridges[bridge_index];
-            if (bridge->island_a >= world->island_count ||
-                bridge->island_b >= world->island_count ||
-                bridge->island_a == bridge->island_b) {
-                set_error(error, error_capacity, "world bridge has an invalid island endpoint");
-                return 0;
-            }
-            if (bridge->island_a == island_index || bridge->island_b == island_index) {
-                uint8_t neighbor = bridge->island_a == island_index
-                    ? bridge->island_b : bridge->island_a;
-                unsigned int insert_at = incident_neighbor_count;
-                while (insert_at > 0 &&
-                       world->islands[incident_neighbors[insert_at - 1U]].angle_degrees >
-                       world->islands[neighbor].angle_degrees) {
-                    incident_neighbors[insert_at] = incident_neighbors[insert_at - 1U];
-                    --insert_at;
-                }
-                incident_neighbors[insert_at] = neighbor;
-                ++incident_neighbor_count;
-                ++incident_count;
-            }
-        }
-        /* FUN_00461859 sorts class-2 records by X and demotes the surplus first. */
-        if (class2_count > incident_count) {
-            unsigned int demote_count = class2_count - incident_count;
-            for (location_index = 0; location_index < demote_count; ++location_index) {
-                layouts[island_index].locations[class2_locations[location_index]].renderer_class = 0;
-            }
-        }
-        for (location_index = 0;
-             location_index < class2_count - (class2_count > incident_count
-                                               ? class2_count - incident_count : 0U);
-             ++location_index) {
-            unsigned int retained_index = location_index +
-                (class2_count > incident_count ? class2_count - incident_count : 0U);
-            if (location_index < incident_neighbor_count) {
-                bridge_neighbors[island_index][class2_locations[retained_index]] =
-                    (int32_t)incident_neighbors[location_index];
-            }
-        }
-    }
-    return 1;
-}
-
-static int assign_initial_bridge_sites(const WorldDefinition *world,
-                                       const IslandData *sources,
-                                       GameSession *session,
-                                       ToneRng *rng,
-                                       char *error, size_t error_capacity)
-{
-    unsigned int ordinal;
-    unsigned int island_count = world->island_count;
-    unsigned int wrap_span = island_count - 1U;
-
-    for (ordinal = 0; ordinal < world->bridge_count; ++ordinal) {
-        unsigned int target_island = ordinal;
-        unsigned int location_index;
-        while (target_island >= wrap_span) {
-            unsigned int previous = target_island;
-            target_island = target_island - wrap_span + 4U;
-            if (target_island >= previous) {
-                set_error(error, error_capacity, "bridge-site wrap rule does not converge for this world");
-                return 0;
-            }
-        }
-        if (!choose_empty_class0(&sources[target_island], &session->islands[target_island],
-                                 rng, &location_index)) {
-            if (error != NULL && error_capacity != 0) {
-                (void)snprintf(error, error_capacity,
-                               "island %u has no free class-0 record for bridge setup", target_island);
-                error[error_capacity - 1] = '\0';
-            }
-            return 0;
-        }
-        session->islands[target_island].locations[location_index].record_value_10 = 1;
-        session->islands[target_island].locations[location_index].record_value_24 = 5;
-        ++session->class0_assignments;
-    }
-    return 1;
-}
-
-static int assign_class0_links(const WorldDefinition *world,
-                               const IslandData *sources,
-                               const int32_t shape_ids[WORLD_MAP_MAX_ISLANDS],
-                               GameSession *session,
-                               ToneRng *rng,
-                               char *error, size_t error_capacity)
-{
-    unsigned int ordinal;
-    unsigned int count = ((unsigned int)world->island_count - 1U) * 2U;
-    unsigned int total_free = 0;
-
-    if (session->config.randomize_class0_assignment != 0) {
-        unsigned int island_index;
-        for (island_index = 0; island_index + 1U < world->island_count; ++island_index) {
-            unsigned int location_index;
-            int prefer_typed_sites = island_has_typed_construction_sites(
-                &sources[island_index]);
-            for (location_index = 0; location_index < sources[island_index].location_count;
-                 ++location_index) {
-                if (sources[island_index].locations[location_index].renderer_class == 0 &&
-                    (!prefer_typed_sites || is_construction_location(
-                        &sources[island_index].locations[location_index])) &&
-                    session->islands[island_index].locations[location_index].owner_id == -1 &&
-                    session->islands[island_index].locations[location_index].record_value_10 == 0) {
-                    ++total_free;
-                }
-            }
-        }
-        if (total_free < count) {
-            set_error(error, error_capacity, "not enough free class-0 records for randomized link setup");
-            return 0;
-        }
-    }
-
-    for (ordinal = 0; ordinal < count; ++ordinal) {
-        unsigned int target_island = ordinal / 2U;
-        unsigned int location_index;
-        int selected = 0;
-
-        while (!selected) {
-            if (session->config.randomize_class0_assignment != 0) {
-                int random_island = tone_rng_bounded(rng, (int32_t)world->island_count - 1);
-                if (random_island < 0 || random_island >= (int)world->island_count - 1) {
-                    set_error(error, error_capacity, "random island index is out of range");
-                    return 0;
-                }
-                target_island = (unsigned int)random_island;
-            }
-            if (choose_empty_class0(&sources[target_island], &session->islands[target_island],
-                                    rng, &location_index)) {
-                selected = 1;
-            } else if (session->config.randomize_class0_assignment == 0) {
-                if (error != NULL && error_capacity != 0) {
-                    (void)snprintf(error, error_capacity,
-                                   "island %u has no free class-0 record for link setup", target_island);
-                    error[error_capacity - 1] = '\0';
-                }
-                return 0;
-            }
-        }
-        session->islands[target_island].locations[location_index].record_value_10 = 1;
-        session->islands[target_island].locations[location_index].record_value_24 =
-            6 + shape_ids[ordinal / 2U] * 2 + (int32_t)(ordinal & 1U);
-        ++session->class0_assignments;
-    }
-    return 1;
-}
-
-static int source_value_34_max(const PadCatalog *catalog,
-                               const GameRuntimeLocation *location,
-                               int16_t *maximum)
-{
-    const PadCatalogItem *item;
-    int32_t base_item_id;
-    int32_t value;
-
-    if (catalog == NULL || location == NULL || maximum == NULL ||
-        location->owner_id < -1 || location->owner_id > GAME_START_PLAYER_COUNT ||
-        location->record_value_10 < 0) return 0;
-    if (location->owner_id == -1) {
-        *maximum = -1;
-        return 1;
-    }
-    base_item_id = location->record_value_10;
-    if (location->owner_id < GAME_START_PLAYER_COUNT)
-        base_item_id -= location->owner_id * 16;
-    if (base_item_id <= 1) {
-        *maximum = -1;
-        return 1;
-    }
-    item = pad_catalog_find(catalog, (uint16_t)location->record_value_10);
-    if (item == NULL) return 0;
-    /* FUN_0046303b stores the seventh parsed integer (pad.txt hit points)
-       at record +0x0e; FUN_00450978 adds runtime +0x4a * 5. */
-    value = (int32_t)item->hit_points +
-            (int32_t)location->source_capacity_4a * 5;
-    if (value < INT16_MIN || value > INT16_MAX) return 0;
-    *maximum = (int16_t)value;
-    return 1;
 }
 
 int game_session_initialize(const WorldDefinition *world,
@@ -337,7 +57,7 @@ int game_session_initialize(const WorldDefinition *world,
     memset(&next, 0, sizeof(next));
     next.config = *config;
     next.island_count = world->island_count;
-    if (!prepare_runtime_layouts(world, islands_by_world_index, runtime_layouts,
+    if (!game_session_prepare_runtime_layouts(world, islands_by_world_index, runtime_layouts,
                                  bridge_neighbors,
                                  error, error_capacity)) {
         return 0;
@@ -468,6 +188,10 @@ int game_session_initialize(const WorldDefinition *world,
             floater->attack_range = stats->attack_range;
             floater->source_link_0c = -1;
             floater->charge_current = 0;
+            floater->carried_resource_code = 0;
+            floater->order_resource_code = 0;
+            floater->linked_task_slot = -1;
+            floater->order_source_location = -1;
             floater->x = start->marker_x;
             floater->y = start->marker_y;
             floater->destination_x = start->marker_x;
@@ -516,10 +240,8 @@ int game_session_initialize(const WorldDefinition *world,
             }
         }
     }
-    if (!assign_initial_bridge_sites(world, runtime_layouts, &next, &rng,
-                                     error, error_capacity) ||
-        !assign_class0_links(world, runtime_layouts, shape_ids, &next, &rng,
-                             error, error_capacity)) {
+    if (!game_session_assign_initial_sites(world, runtime_layouts, shape_ids,
+                                           &next, &rng, error, error_capacity)) {
         return 0;
     }
     next.random_state = rng;
@@ -539,7 +261,7 @@ int game_session_initialize(const WorldDefinition *world,
             }
             if (state->owner_id >= 0 &&
                 state->record_value_10 > 0 &&
-                !source_value_34_max(pad_catalog, state, &state->source_value_34)) {
+                !game_session_source_value_34_max(pad_catalog, state, &state->source_value_34)) {
                 set_error(error, error_capacity,
                           "runtime item has no pad record for source field +0x34");
                 return 0;
@@ -548,140 +270,5 @@ int game_session_initialize(const WorldDefinition *world,
     }
 
     *out = next;
-    return 1;
-}
-
-int game_session_repair_task_values(const GameSession *session,
-                                    const PadCatalog *pad_catalog,
-                                    const GamePendingEvent *event,
-                                    int16_t *current, int16_t *maximum)
-{
-    if (session == NULL || pad_catalog == NULL || event == NULL ||
-        current == NULL || maximum == NULL || event->active == 0 ||
-        event->action_type != 0x12 || event->payload_0a < 0 ||
-        event->payload_0e < 0 || event->payload_0a >= session->island_count) return 0;
-    return game_session_repair_location_values(session, pad_catalog,
-        (uint8_t)event->payload_0a, (uint16_t)event->payload_0e,
-        current, maximum);
-}
-
-int game_session_repair_location_values(const GameSession *session,
-                                        const PadCatalog *pad_catalog,
-                                        uint8_t island_index,
-                                        uint16_t location_index,
-                                        int16_t *current, int16_t *maximum)
-{
-    const GameRuntimeIsland *island;
-    const GameRuntimeLocation *location;
-    int16_t computed_maximum;
-
-    if (session == NULL || pad_catalog == NULL || current == NULL ||
-        maximum == NULL || island_index >= session->island_count) return 0;
-    island = &session->islands[island_index];
-    if (location_index >= island->location_count) return 0;
-    location = &island->locations[location_index];
-    if (!source_value_34_max(pad_catalog, location, &computed_maximum) ||
-        location->source_value_34 == -1 || computed_maximum <= 0) return 0;
-    *current = location->source_value_34;
-    *maximum = computed_maximum;
-    return 1;
-}
-
-int game_session_construction_task_values(const GameSession *session,
-                                          const PadCatalog *pad_catalog,
-                                          const GamePendingEvent *event,
-                                          int16_t *current, int16_t *maximum)
-{
-    const GameRuntimeLocation *location;
-    const PadCatalogItem *item;
-    int32_t item_id;
-    if (session == NULL || pad_catalog == NULL || event == NULL ||
-        current == NULL || maximum == NULL || event->active == 0 ||
-        event->action_type != 5 || event->payload_0a < 0 ||
-        event->payload_0e < 0 || event->payload_0a >= session->island_count ||
-        event->player_id < 0 || event->player_id >= GAME_START_PLAYER_COUNT) return 0;
-    if ((uint16_t)event->payload_0e >=
-        session->islands[event->payload_0a].location_count) return 0;
-    location = &session->islands[event->payload_0a].locations[event->payload_0e];
-    item_id = (int32_t)event->payload_12 + (int32_t)event->player_id * 16;
-    if (item_id < 0 || item_id > 100) return 0;
-    item = pad_catalog_find(pad_catalog, (uint16_t)item_id);
-    if (item == NULL || item->building_tone_cost <= 0) return 0;
-    *current = (int16_t)location->resource_stock[0];
-    *maximum = item->building_tone_cost;
-    return *current >= 0;
-}
-
-int game_session_acquire_glyph(GameSession *session, uint8_t player_slot,
-                               uint8_t glyph_index)
-{
-    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
-        glyph_index >= GAME_GLYPH_COUNT) return 0;
-    session->economy[player_slot].glyph_mask = (uint16_t)(
-        session->economy[player_slot].glyph_mask | (uint16_t)(1U << glyph_index));
-    return 1;
-}
-
-int game_session_place_building(GameSession *session,
-                                const PadCatalog *catalog,
-                                uint8_t player_slot,
-                                uint8_t island_index,
-                                uint16_t location_index,
-                                const struct IslandLocation *site,
-                                uint16_t base_item_id,
-                                char *error, size_t error_capacity)
-{
-    GameRuntimeLocation *runtime;
-    const PadCatalogItem *item;
-    uint8_t site_size;
-    uint16_t runtime_item_id;
-
-    if (error != NULL && error_capacity != 0) error[0] = '\0';
-    if (session == NULL || catalog == NULL || site == NULL || player_slot >= 4 ||
-        island_index >= session->island_count ||
-        location_index >= session->islands[island_index].location_count) {
-        set_error(error, error_capacity, "building placement target or player is out of range");
-        return 0;
-    }
-    runtime = &session->islands[island_index].locations[location_index];
-    if (runtime->renderer_class != 0 || runtime->record_value_10 != 0 ||
-        runtime->owner_id != -1 ||
-        !iw_construct_site_size(site, &site_size)) {
-        set_error(error, error_capacity, "building placement requires an empty construction site");
-        return 0;
-    }
-    if (base_item_id == 0) {
-        set_error(error, error_capacity, "source rejects item ID zero for construction");
-        return 0;
-    }
-    runtime_item_id = (uint16_t)(base_item_id + (uint16_t)player_slot * 16U);
-    item = pad_catalog_find(catalog, runtime_item_id);
-    if (item == NULL || item->size < 0 || item->size > site_size ||
-        item->building_tone_cost == -1) {
-        set_error(error, error_capacity, "building is not allowed on this site");
-        return 0;
-    }
-
-    /* FUN_004528ca sets +0x32 to 1 and flags to 0x410. The source does not
-       explicitly reset producer +0x0c; new remake placements start it at 0. */
-    runtime->record_value_10 = runtime_item_id;
-    runtime->owner_id = player_slot;
-    runtime->source_capacity_4a = 0;
-    if (!source_value_34_max(catalog, runtime, &runtime->source_value_34)) {
-        set_error(error, error_capacity, "building has no usable source field +0x34");
-        return 0;
-    }
-    runtime->record_value_24 = 0;
-    runtime->source_flags = 0x410;
-    runtime->base_progress = 0;
-    runtime->producer_cadence = 0;
-    runtime->chug_progress = 0;
-    runtime->glyph_progress = 0;
-    runtime->inci_progress = 0;
-    runtime->construction_progress = 0;
-    runtime->production_progress = 0;
-    runtime->animation_rate = 1;
-    runtime->barg_progress = 0.0;
-    runtime->tribe_visibility_mask = 0;
     return 1;
 }

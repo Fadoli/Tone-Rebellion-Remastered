@@ -31,10 +31,10 @@ Sections détaillées ci-dessous. Les titres sont repris ici pour conserver les 
 [Section complète](MOVEMENT_TICK.md#update-sequence)
 
 ### Destination resolution and step size
-[Section complète](MOVEMENT_TICK.md#destination-resolution-and-step-size)
+[Section complète](MOVEMENT_STEP_KERNEL.md#destination-resolution-and-step-size)
 
 ### Target source and facing adjustment
-[Section complète](MOVEMENT_TICK.md#target-source-and-facing-adjustment)
+[Section complète](MOVEMENT_STEP_KERNEL.md#target-source-and-facing-adjustment)
 
 ### `FA_Move`: local target approach and arrival
 [Section complète](MOVEMENT_LOCAL_ORDERS.md#fa_move-local-target-approach-and-arrival)
@@ -43,10 +43,10 @@ Sections détaillées ci-dessous. Les titres sont repris ici pour conserver les 
 [Section complète](MOVEMENT_LOCAL_ORDERS.md#fa_defendflt-reach-target-select-a-nearby-unit-then-approach-it)
 
 ### Autonomous order selection and execution
-[Section complète](MOVEMENT_LOCAL_ORDERS.md#autonomous-order-selection-and-execution)
+[Section complète](MOVEMENT_AUTONOMOUS_ORDERS.md#autonomous-order-selection-and-execution)
 
 ### `FA_Wander` destination generation and repeated movement
-[Section complète](MOVEMENT_LOCAL_ORDERS.md#fa_wander-destination-generation-and-repeated-movement)
+[Section complète](MOVEMENT_AUTONOMOUS_ORDERS.md#fa_wander-destination-generation-and-repeated-movement)
 
 ### Attack orders: approach then stationary combat state
 [Section complète](MOVEMENT_LOCAL_ORDERS.md#attack-orders-approach-then-stationary-combat-state)
@@ -76,13 +76,13 @@ Sections détaillées ci-dessous. Les titres sont repris ici pour conserver les 
 [Section complète](MOVEMENT_SPECIAL_ORDERS.md#fa_mergewith-0x14-approach-then-idleroam-state)
 
 ### Orders without a local consumer branch
-[Section complète](MOVEMENT_SPECIAL_ORDERS.md#orders-without-a-local-consumer-branch)
+[Section complète](MOVEMENT_ORDER_EDGE_CASES.md#orders-without-a-local-consumer-branch)
 
 ### Facing and rendered anchor
-[Section complète](MOVEMENT_SPECIAL_ORDERS.md#facing-and-rendered-anchor)
+[Section complète](MOVEMENT_ORDER_EDGE_CASES.md#facing-and-rendered-anchor)
 
 ## Current port and limits
 [Section complète](MOVEMENT_PORT.md#current-port-and-limits)
 
 ## Order 9 from the Hall move context
-[Section complète](MOVEMENT_PORT.md#order-9-from-the-hall-move-context)
+[Section complète](MOVEMENT_HALL_CONTEXT.md#order-9-from-the-hall-move-context)

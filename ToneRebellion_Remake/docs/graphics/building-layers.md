@@ -1,0 +1,7 @@
+# Building layers and animation
+
+## Runtime items
+
+### Runtime building items and their animation segments
+
+The remake now reads `pad.txt` and `bldinf.txt` from `TONE00.COB`. `pad.txt` row IDs identify runtime item records; the `ITEM`/optional `SHAPE` and animation records in `bldinf.txt` provide the sprite sheet and segments. Ghidra identifies `FUN_0040bf98` as the generic item renderer. On island load the remake resolves runtime IDs actually present there and loads their SHP sheets from `TONE01.COB`. It draws runtime items at construction locations (`pad`, `smpad`, `mdpad`, and `lgpad`), including the player-specific halls (`0x2a + 16 × player`). Existing Leviathan buildings recorded on Tone locations also draw over the POOL art; this rendering exception does not allow construction placement on Tone locations. Initial IDs 6–9 stored on `tone` locations are not rendered as placed items. Tone locations otherwise retain their original `POOL` runtime-ID gate and do not receive generic building or inventory-icon overlays. It now parses and draws `BASE`, `CHUG`, `GLYP`, `INCI`, `CONS`, `PROD`, and conditional `OCCU` layers. The animated `PROD` frame is drawn at the item anchor. Its descriptor offsets are used only by a conditional threshold overlay, not by that frame. The `POOL` and `PADS` paths remain separate because those `bldinf` records are named entities, not `pad.txt` item IDs.
