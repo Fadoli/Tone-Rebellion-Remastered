@@ -36,6 +36,9 @@ typedef struct GamePlayerEconomy {
     uint16_t hall_location_index;
     uint16_t hall_x;
     uint16_t hall_y;
+    /* FUN_00453bf6 compares pad.txt maintenance against player +0x6191f8.
+       The observed static dword is zero; a runtime writer remains unknown. */
+    int32_t source_maintenance_budget;
     /* FUN_0043d59b enumerates player-owned inventory counts for item IDs 5..33.
        The UI count table is distinct from resources and island placements. */
     uint16_t inventory_count[GAME_INVENTORY_ITEM_COUNT];
@@ -81,8 +84,7 @@ typedef struct GameGlyphActionRequest {
 } GameGlyphActionRequest;
 
 /* FUN_0042fa0f's BC_OnOff command reaches FUN_00465793 as type-1/subtype-0.
-   Keep its target as a request; the activation threshold is not initialized
-   in the current remake model, so queueing does not change the location bit. */
+   Keep its target as a request until the island tick dispatches it. */
 typedef struct GameOnOffActionRequest {
     uint8_t player_slot;
     uint8_t island_index;
@@ -154,6 +156,13 @@ typedef struct GameRuntimeLocation {
     /* Runtime +0x1c bitword. Bit 0x400 is changed by FUN_00453bf6;
        FUN_0045eaa7 separately checks bit 0x001 for Hall stock requests. */
     uint32_t source_flags;
+    /* FUN_00453958 reads these runtime shorts at +0x44 and +0x58 when
+       recomputing active bit 0. Their field meanings are not established. */
+    int16_t source_value_44;
+    int16_t source_value_58;
+    /* FUN_0045cbaa clears the three subtype 1..3 links when a site is turned
+       off. -1 means the source has no linked task for that subtype. */
+    int16_t source_task_slot[GAME_RESOURCE_TYPE_COUNT];
     /* FUN_0041ff2e reads the selected record's word at +0x0a and displays
        its low nibble plus one as LEVEL. */
     uint16_t source_level_flags;
@@ -191,6 +200,11 @@ typedef struct GameRuntimeIsland {
        the data loader for the original per-category limits is not modeled. */
     int32_t floater_min_x[GAME_FLOATER_CATEGORY_COUNT];
     int32_t floater_max_x[GAME_FLOATER_CATEGORY_COUNT];
+    /* FUN_00420991 uses DAT_0061fa2e[island] to decide whether a category-4
+       floater seeks a different category or another category-4 floater. The
+       loaded image initializes all 15 entries to zero; no direct writer was
+       found, though indirect runtime updates remain possible. */
+    int16_t source_level;
     /* FUN_0047117d checks one per-player access dword at island +0x29ac. */
     uint8_t access_mask;
     /* FUN_00465793 message type 3/subtype 0 toggles bit 0 in one raw dword
@@ -215,6 +229,7 @@ typedef struct GameFloaterStart {
     uint8_t current_hit_points;
     uint8_t max_hit_points;
     uint8_t attack_strength;
+    int16_t attack_range;
     /* Floater runtime short +0x0c gates IWLocInfo CHARGE through
        FUN_004207f2; +0x22 is the mutable charge counter. Initial workers
        start at -1 and 0 respectively. Assignment and charge ticks are not
@@ -226,6 +241,14 @@ typedef struct GameFloaterStart {
     uint16_t destination_x;
     uint16_t destination_y;
     uint16_t movement_speed;
+    /* Action-9 post-arrival stages mirror tick +0x46 and +0x32. The target
+       candidate table/policy for non-enemy units is only partly reconstructed. */
+    uint8_t order_progress;
+    /* Tick record +0x3c. FUN_0042219e does not replace FA_Cast (0x13). */
+    uint8_t active_order_action;
+    int16_t order_target_floater;
+    int16_t order_target_location;
+    uint32_t source_runtime_flags;
     /* FUN_00422d27's speed context is resolved before its coordinate step.
        Initial workers start idle and take the fallback FA_Wander route on
        their first simulation tick. Remaining modifiers stay zero until their
@@ -528,9 +551,12 @@ int game_session_queue_onoff_action(GameSession *session,
                                     uint16_t location_index);
 int game_session_pop_onoff_action(GameSession *session,
                                   GameOnOffActionRequest *out);
-/* Applies the verified OFF transition (clear bit 0x400). ON remains inactive
-   until the source budget at DAT_006191f8 is modeled. */
-unsigned int game_session_dispatch_onoff_actions(GameSession *session);
+/* Applies FUN_00453bf6: OFF clears bit 0x400; ON compares the pad maintenance
+   value with the supplied per-player source budget. Also updates active bit 0
+   through the observed FUN_00453958/FUN_004539e9 predicate and releases linked
+   subtype 1..3 tasks on OFF. */
+unsigned int game_session_dispatch_onoff_actions(GameSession *session,
+                                                 const PadCatalog *catalog);
 /* FUN_0042fa0f(0x34): retain the observed category-0/type-5 selection packet
    for the active island location. The final synchronized consumer is unknown. */
 int game_session_queue_build_selection(GameSession *session,

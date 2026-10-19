@@ -7,7 +7,7 @@ provisional. The user has clarified that workers cannot receive direct orders:
 selecting them only shows stats, while soldiers and mages are orderable. The
 remake now routes mode `0x13` to state 9 for selected floaters with nonzero
 subtype. That subtype mapping is an implementation gate following the user's
-constraint; the original allowlist and tick-record bridge remain unresolved.
+constraint; the original allowlist and `FA_Cast` interaction remain unresolved.
 
 ## Input and destination path
 
@@ -16,7 +16,11 @@ constraint; the original allowlist and tick-record bridge remain unresolved.
 | `FUN_0042eba0` (`0x42eba0`) | `ev_65e41f9afa35457a4a0cb35010dd615e0a62eb7384057e13a9aea3fb6ea6465b` | Maps Win32 left/right button-down messages `0x201`/`0x204` to input queue types 2/4. |
 | `FUN_00469f56` (`0x469f56`) | `ev_584be7e8cdd9be7c4fd1a0432ef83685f37123ab5a4622037dde65bf4a47704e` | Input code 2 dispatches island event 6 with pointer coordinates; input code 4 dispatches island event 7. The preceding input-queue function maps Win32 left/right button-down to these codes. |
 | `FUN_00435826` (`0x435826`) | `ev_5fabac375596d1e1457b7649fb698b76bf3f96b23dab00f021e899fcd4d2c1f2` | Hit-tests a floater and island locations. A floater hit emits message `0x3f`; its empty-ground coordinate branch emits message `0x4c` only while UI state bit `0x4` at `+0x178` is active. A location hit follows separate site/location message branches. |
-| `FUN_00420991` (`0x420991`) | `ev_b758701979d34e447f00b2067f67d58c0c58d9b8c28b444e24dfd4a160713da5` | The autonomous task selector calls this candidate guard before ranking candidates. It rejects the current object and records with flag mask `0x809`; for object class 4 it uses a level threshold table at `DAT_0061fa2e`, and for other classes it allows the same class or requires the per-player class value at `DAT_00619290` to be zero. This supports a source class filter but does not identify the table's runtime values as a soldier/mage allowlist. |
+| `FUN_00420991` (`0x420991`) | `ev_411f9b92a081b58e088c1211eab32abe03c557b1223ad19809ff3137f5adb8b9` | Rejects the source floater and candidate flags `0x809`. For a category-4 source, the island level at `DAT_0061fa2e` selects non-category-4 candidates below `0x65`, otherwise category 4. Other source categories always allow category 4; their other class pairs depend on `DAT_00619290`. |
+| `DAT_0061fa2e` | `ev_eeb25b6678a6c791d85939752da2fce5a89edbee4b5a44e448b1a1a540122f14`; `ev_254928ccff2cf0ec576eeddf8c2bba7d672a4d24c5d348d39bb0e17288171961`; `ev_df9ff00f31d3cbd66592f631e042a35f06856b7a4f30bcad11691235f66ee973` | The 15 loaded-image shorts are zero; the region is writable `.data`. Direct xrefs show only the two known reads and no direct writer. An indirect writer or external source remains possible. |
+| `FUN_00420829` (`0x420829`) | `ev_2d6bc0d0d833e197c1ba90a9115c8ad83b5fd4e309eb164c34fee513a80d2077` | Scans the current-island floater list in its stored order and returns the first candidate accepted by `FUN_00420991` whose Chebyshev distance from the decoded order coordinate is below `0xfa`. |
+| `FUN_00420a55` (`0x420a55`) | `ev_972c7be8480c9f42a25ceb8fe511e285988b2597d9053edae31c0bf00e14a4eb` | Mode 4 filters class-4 sites owned by player 4, item IDs below `0x16`, flags `0x90` clear, and Chebyshev distance below `0x5a`; it retains the ten nearest candidates and delegates weighted choice to `FUN_0041e28e`. |
+| `FUN_0041e28e` (`0x41e28e`) | `ev_f02850da627848b9d878de83799986890e7e38edd323d872ceca323e5a32fdbd` | Builds inverse-distance weights, converts each positive bucket with `__ftol`, and rolls `FUN_00467260(1000)` across the cumulative buckets. The remake rounds those bucket weights instead of truncating them. |
 | `FUN_00435826` (`0x435826`) | `ev_29719d9690c28e9b3bb41c88f5ff96ce6cc8f4ad226b062deb47d6a23217879c` | Revalidated click handler: a floater hit emits selection message `0x3f`. The `0x4c` destination order is a separate empty-ground path gated by UI state bit `0x4`; it is not issued by selecting a floater. |
 | `FUN_0043530b` (`0x43530b`) | `ev_5e3fc63f4718af2e8a051c86de5109504655264091ec1257449307a1b02b0952` | Decodes the UI action modes raised by `FUN_00435826`: mode `0x13` sets interaction bit `0x4` and cursor/action id `0x0f` (the only mode in this set that enables the empty-ground `0x4c` path); `0x10` and `0x12` both set bit `0x2` but choose cursor/action ids `3` and `5`; `0x11` sets bit `0x1` and cursor/action id `0x0d` or `0x0b` depending on the two stored targets. The table's initialization and class meaning remain unknown. |
 | `FUN_00465793` (`0x465793`) | `ev_b625919fbba21cb67016167d2d318c548f89e6fc5ec6620530ee862c32f1153f` | For type-1 mode `0x13`, requires a selected location index other than `-1` and a non-null record from `FUN_00450385`; then calls `FUN_0045d8b2` with the current island and packed destination. This receiver has no explicit subtype/class test. |
@@ -68,10 +72,10 @@ movement fields differ and the active tick task is not `FA_Cast`, copies linked
 progress `+0x46`. `FUN_004211bb` consumes task action 9 by entering movement
 state 9 and copying the packed target to state target `+0x32`. The remake now
 retains the linked-record order fields in `GameFloaterStart`, transfers them
-to the movement state at the next island tick, and expands the packed
-coordinate through the existing movement kernel. The remake's unified record
-does not yet model the source reevaluation cadence, `FA_Cast` suppression, or
-the action-9 follow-up candidate/site phases. Evidence: re-evaluation
+while idle or on the source's 10-tick reevaluation cadence while moving, and
+expands the packed coordinate through the existing movement kernel. `FA_Cast`
+suppression and the action-9 follow-up candidate/site phases remain unported.
+Evidence: re-evaluation
 `ev_83d2c58354af7da0f0eac81274ce4acc13b27060e77eb7d82b4ed0f74897a266`,
 task consumption `ev_9cf6e091e5052554584128e5f6d9e26420d03c257fa83061e471eda1b608d689`,
 and per-tick call site `ev_838b98af4b5e94befce77b8cfdb9bdf9236d7b06d07b2827e533bd229c201f60`.
@@ -978,8 +982,26 @@ consumes such task state. The remake ports the `FA_Wander` coordinate/timer
 cycle for its unlinked initial floaters, but it does not yet model the source
 task-candidate scan that decides whether another task should replace wandering.
 The UI mode table remains unresolved. The remake models the linked-record
-transfer at the next tick, but not the source's 10-tick reevaluation cadence,
-`FA_Cast` suppression, or the action-9 follow-up candidate/site phases.
+transfer while idle and at the source's 10-tick reevaluation cadence while
+moving. After action 9 reaches its packed point, the port scans same-island
+floaters in insertion order, applies the `FUN_00420991` class/flag policy where
+modeled, then falls back to eligible class-4 sites owned by player 4. Category-4
+source targeting starts at level 0, matching the 15 zero-valued loaded-image
+entries, so the initial branch seeks non-category-4 floaters. No direct writer
+was found; indirect runtime updates remain possible. Other category-pair rules
+still depend on `DAT_00619290`. Both unit and site approaches use the source's 43-unit
+side-offset, then enter state 6 or 7. The bridge
+now preserves the source order while the tick action is `FA_Cast` (`0x13`);
+the remake does not yet produce that action itself.
+
+The state-9 route now resolves its packed coordinate to a random waypoint with
+the source's bounded offsets and global X/Y limits. Its step falls to 1 when
+the floater is within 100 coordinate units of the decoded anchor, independently
+of the randomized waypoint. Entity/site approaches check their previously
+resolved destination against a 10-unit radius before refreshing the live target;
+their radius can use the floater's catalog attack range when `FUN_00420721`'s
+category/subtype/charge guard permits it. The linked-site 5/4 radius modifier
+remains unmodeled because its table bit and runtime link source are unresolved.
 
 The REA pseudocode establishes that `FUN_00435826` chooses UI action modes
 `0x10`–`0x13` using the player/type table at `DAT_00619290`, and that UI bit
@@ -1061,7 +1083,7 @@ When the floater is idle, `FUN_004211bb` consumes that action in switch case 8
 |---:|---|---|
 | `0` | Set state `9`, copy packed target `+0x42` into `+0x32`, clear flag `0x004`, set progress `1`. | The per-floater tick can move toward the decoded packed coordinate while in state 9. |
 | `1` | Call `FUN_00420829` on the packed target. It scans the current-island candidate list in order, applies `FUN_00420991`, and returns the first eligible candidate whose Chebyshev distance from the decoded target is below 250. | On hit, set state `0x0f`, store that candidate index in `+0x32`, set flag `0x004`, progress `2`. |
-| `1`, no nearby candidate | Call `FUN_00420d97(4, packed_target)`. Mode 4 decodes the target and selects among current-island locations that pass its type/flag checks and lie within distance 90. The selector ranks eligible sites and chooses from at most ten using `FUN_0041e28e`. | On hit, set state `0x10`, store the selected location index in `+0x32`, progress `3`. If no site qualifies, reset progress to `0` so the search can be retried. |
+| `1`, no nearby candidate | Call `FUN_00420d97(4, packed_target)`. Mode 4 decodes the target and selects current-island class-4 sites owned by player 4, with item ID below `0x16`, flags `0x90` clear, and distance below 90. The selector retains at most ten nearest sites and chooses among them with inverse-distance weights via `FUN_0041e28e`. | On hit, set state `0x10`, store the selected location index in `+0x32`, progress `3`. If no site qualifies, reset progress to `0` so the search can be retried. |
 | `2` | Set state `6`, retain the original target index, set progress to `1`. | The subsequent state-6 handler runs; movement is gated off for states 6/7. |
 | `3` | Set state `7`, retain the selected location index, set progress to `1`. | The subsequent state-7 handler runs; movement is gated off for states 6/7. |
 

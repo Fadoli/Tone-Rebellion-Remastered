@@ -366,6 +366,7 @@ int game_session_initialize(const WorldDefinition *world,
             return 0;
         }
         runtime->location_count = source->location_count;
+        runtime->source_level = 0;
         {
             unsigned int category;
             for (category = 0; category < GAME_FLOATER_CATEGORY_COUNT; ++category) {
@@ -383,6 +384,9 @@ int game_session_initialize(const WorldDefinition *world,
             state->owner_id = -1;
             state->source_location_slot_18 = -1;
             state->source_value_34 = -1;
+            state->source_task_slot[0] = -1;
+            state->source_task_slot[1] = -1;
+            state->source_task_slot[2] = -1;
             state->record_value_24 = 0;
             state->bridge_neighbor_island = bridge_neighbors[island_index][location_index];
             state->x = location->x;
@@ -462,12 +466,15 @@ int game_session_initialize(const WorldDefinition *world,
             floater->current_hit_points = (uint8_t)stats->hit_points;
             floater->max_hit_points = (uint8_t)stats->hit_points;
             floater->attack_strength = (uint8_t)stats->attack_strength;
+            floater->attack_range = stats->attack_range;
             floater->source_link_0c = -1;
             floater->charge_current = 0;
             floater->x = start->marker_x;
             floater->y = start->marker_y;
             floater->destination_x = start->marker_x;
             floater->destination_y = start->marker_y;
+            floater->order_target_floater = -1;
+            floater->order_target_location = -1;
             /* No task table is modeled yet; these unlinked initial floaters
                take the source's idle FA_Wander fallback. */
             floater->has_wander_order = 1;
@@ -851,6 +858,226 @@ void game_session_tick_item_animations(GameSession *session,
     }
 }
 
+static int32_t source_chebyshev_distance(int32_t x1, int32_t y1,
+                                         int32_t x2, int32_t y2)
+{
+    int32_t dx = x1 - x2;
+    int32_t dy = y1 - y2;
+    if (dx < 0) dx = -dx;
+    if (dy < 0) dy = -dy;
+    return dx > dy ? dx : dy;
+}
+
+static int action9_find_floater(const GameSession *session,
+                                unsigned int source_index,
+                                uint16_t target_x, uint16_t target_y)
+{
+    const GameFloaterStart *source = &session->floaters[source_index];
+    int source_level = -1;
+    unsigned int index;
+
+    /* FUN_00420829 scans the current-island candidate list and accepts the
+       first class/flag/distance match. The source table order currently
+       follows floater insertion order in this model. */
+    if (source->island_index < session->island_count) {
+        source_level = session->islands[source->island_index].source_level;
+    }
+    for (index = 0; index < session->floater_count; ++index) {
+        const GameFloaterStart *candidate = &session->floaters[index];
+        int category_matches;
+
+        if (source->type_index == 4) {
+            /* DAT_0061fa2e selects non-category-4 candidates below 0x65 and
+               category 4 at or above it. Its loaded-image default is zero. */
+            category_matches = source_level < 0x65
+                ? candidate->type_index != 4 : candidate->type_index == 4;
+        } else {
+            /* Category 4 is always accepted; the other class-pair cases
+               depend on unmodeled DAT_00619290 values. */
+            category_matches = candidate->type_index == 4;
+        }
+        if (index == source_index || candidate->island_index != source->island_index ||
+            !category_matches || (candidate->source_runtime_flags & 0x809U) != 0) {
+            continue;
+        }
+        if (source_chebyshev_distance(candidate->x, candidate->y,
+                                      target_x, target_y) < 250) return (int)index;
+    }
+    return -1;
+}
+
+static int action9_find_enemy_site(GameSession *session,
+                                   const GameFloaterStart *floater,
+                                   uint16_t target_x, uint16_t target_y)
+{
+    uint16_t candidate_indices[10];
+    int32_t candidate_distances[10];
+    unsigned int candidate_count = 0;
+    int32_t distance_sum = 0;
+    double inverse_weight_sum = 0.0;
+    int32_t roll;
+    unsigned int island_index = floater->island_index;
+    GameRuntimeIsland *island;
+    unsigned int location_index;
+
+    if (island_index >= session->island_count) return -1;
+    island = &session->islands[island_index];
+    for (location_index = 0; location_index < island->location_count; ++location_index) {
+        const GameRuntimeLocation *location = &island->locations[location_index];
+        int32_t distance;
+        unsigned int largest_index;
+        unsigned int i;
+
+        if (location->renderer_class != 4 || location->owner_id != 4 ||
+            location->record_value_10 >= 0x16 ||
+            (location->source_flags & 0x90U) != 0) continue;
+        distance = source_chebyshev_distance(location->x, location->y,
+                                             target_x, target_y);
+        /* FUN_00420a55's inverse-distance weighting divides by distance. */
+        if (distance == 0 || distance >= 90) continue;
+        if (candidate_count < 10) {
+            candidate_indices[candidate_count] = (uint16_t)location_index;
+            candidate_distances[candidate_count] = distance;
+            ++candidate_count;
+            continue;
+        }
+
+        largest_index = 0;
+        for (i = 1; i < candidate_count; ++i) {
+            if (candidate_distances[i] > candidate_distances[largest_index])
+                largest_index = i;
+        }
+        if (distance < candidate_distances[largest_index]) {
+            candidate_indices[largest_index] = (uint16_t)location_index;
+            candidate_distances[largest_index] = distance;
+        }
+    }
+    if (candidate_count == 0) return -1;
+
+    for (location_index = 0; location_index < candidate_count; ++location_index) {
+        distance_sum += candidate_distances[location_index];
+    }
+    for (location_index = 0; location_index < candidate_count; ++location_index) {
+        inverse_weight_sum += (double)distance_sum /
+                              (double)candidate_distances[location_index];
+    }
+    roll = tone_rng_bounded(&session->random_state, 1000);
+    {
+        int32_t cumulative = 0;
+        for (location_index = 0; location_index < candidate_count; ++location_index) {
+            double raw_weight = (double)distance_sum /
+                                (double)candidate_distances[location_index];
+            /* FUN_0041e28e converts each positive bucket with __ftol, which
+               rounds to the nearest integer under the default FP mode. */
+            cumulative += (int32_t)((1000.0 / inverse_weight_sum) * raw_weight + 0.5);
+            if (roll < cumulative) return (int)candidate_indices[location_index];
+        }
+    }
+    return -1;
+}
+
+static void floater_set_approach_point(GameFloaterStart *floater,
+                                       int32_t target_x, int32_t target_y)
+{
+    int32_t approach_x = target_x;
+    if (floater->x < target_x) {
+        approach_x -= 43;
+        floater->facing_left = 0;
+    } else if (floater->x > target_x) {
+        approach_x += 43;
+        floater->facing_left = 1;
+    } else {
+        approach_x -= 43;
+    }
+    if (approach_x < 0) approach_x = 0;
+    if (approach_x > 0x9ff) approach_x = 0x9ff;
+    if (target_y < 0x28) target_y = 0x28;
+    if (target_y > 0x122) target_y = 0x122;
+    floater->destination_x = (uint16_t)approach_x;
+    floater->destination_y = (uint16_t)target_y;
+}
+
+static uint16_t floater_approach_radius(const GameFloaterStart *floater)
+{
+    if (floater->type_index == 4U ||
+        (floater->source_subtype != 0 && floater->charge_current > 0)) {
+        if (floater->attack_range > 0) return (uint16_t)floater->attack_range;
+    }
+    return 10;
+}
+
+static void game_session_advance_action9(GameSession *session,
+                                         unsigned int floater_index)
+{
+    GameFloaterStart *floater = &session->floaters[floater_index];
+    uint16_t target_x;
+    uint16_t target_y;
+    int target_index;
+
+    if (floater->source_order_state_2c != 9 || floater->movement_state != 0 ||
+        floater->has_move_order) return;
+
+    if (floater->order_progress == 0) {
+        floater->destination_x =
+            (uint16_t)(floater->source_order_coordinate_30 >> 8) * 10U;
+        floater->destination_y =
+            (uint16_t)(floater->source_order_coordinate_30 & 0xffU) * 10U;
+        floater->movement_state = 9;
+        floater->stop_radius = 0;
+        floater->source_runtime_flags &= ~0x004U;
+        floater->has_wander_order = 0;
+        floater->wander_timer = 0;
+        floater->has_move_order = 1;
+        floater->order_progress = 1;
+        return;
+    }
+    if (floater->order_progress == 2) {
+        floater->movement_state = 6;
+        floater->order_progress = 1;
+        return;
+    }
+    if (floater->order_progress == 3) {
+        floater->movement_state = 7;
+        floater->order_progress = 1;
+        return;
+    }
+    if (floater->order_progress != 1) return;
+
+    target_x = (uint16_t)(floater->source_order_coordinate_30 >> 8) * 10U;
+    target_y = (uint16_t)(floater->source_order_coordinate_30 & 0xffU) * 10U;
+    target_index = action9_find_floater(session, floater_index, target_x, target_y);
+    if (target_index >= 0) {
+        GameFloaterStart *target = &session->floaters[target_index];
+        floater->order_target_floater = (int16_t)target_index;
+        floater->order_target_location = -1;
+        floater->movement_state = 0x0f;
+        floater->stop_radius = floater_approach_radius(floater);
+        floater->source_runtime_flags |= 0x004U;
+        floater_set_approach_point(floater, target->x, target->y);
+        floater->has_move_order = 1;
+        floater->order_progress = 2;
+        return;
+    }
+
+    target_index = action9_find_enemy_site(session, floater, target_x, target_y);
+    if (target_index >= 0) {
+        const GameRuntimeLocation *target =
+            &session->islands[floater->island_index].locations[target_index];
+        floater->order_target_location = (int16_t)target_index;
+        floater->order_target_floater = -1;
+        floater->movement_state = 0x10;
+        floater->stop_radius = floater_approach_radius(floater);
+        floater_set_approach_point(floater, target->x, target->y);
+        floater->has_move_order = 1;
+        floater->order_progress = 3;
+        return;
+    }
+
+    /* Source progress returns to zero when neither follow-up target exists,
+       so the packed coordinate can be approached and checked again later. */
+    floater->order_progress = 0;
+}
+
 void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
 {
     unsigned int i;
@@ -867,25 +1094,46 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
         int32_t dy;
         int32_t distance;
 
-        /* FUN_0042219e observes a changed linked-record order and transfers
-           +0x28/+0x2c/+0x30/+0x32 into the tick record's island, action,
-           coordinate and parameter fields. FUN_004211bb then consumes action
-           9 as movement state 9 with the packed coordinate target. */
-        if (floater->source_order_pending) {
+        /* FUN_0041e569 polls FUN_0042219e while idle and once per ten ticks
+           while moving. The bridge leaves the linked order pending during
+           FA_Cast (0x13), then transfers it to the tick record at a later poll. */
+        if (floater->source_order_pending &&
+            floater->active_order_action != 0x13 &&
+            (floater->movement_state == 0 || (source_tick + i) % 10U == 0)) {
             floater->source_order_pending = 0;
             if (floater->source_order_state_2c == 9 &&
                 floater->source_order_island_28 == floater->island_index) {
-                floater->destination_x =
-                    (uint16_t)(floater->source_order_coordinate_30 >> 8) * 10U;
-                floater->destination_y =
-                    (uint16_t)(floater->source_order_coordinate_30 & 0xffU) * 10U;
+                FloaterPosition waypoint;
+                int32_t anchor_x =
+                    (int32_t)(floater->source_order_coordinate_30 >> 8) * 10;
+                int32_t anchor_y =
+                    (int32_t)(floater->source_order_coordinate_30 & 0xffU) * 10;
+
+                floater->active_order_action = 9;
                 floater->movement_state = 9;
                 floater->stop_radius = 0;
                 floater->has_wander_order = 0;
                 floater->wander_timer = 0;
                 floater->has_move_order = 1;
+                floater->order_progress = 1;
+                if (floater_motion_wander_destination(
+                        &session->random_state, anchor_x, anchor_y,
+                        0, 0x9ff, &waypoint)) {
+                    floater->destination_x = (uint16_t)waypoint.x;
+                    floater->destination_y = (uint16_t)waypoint.y;
+                    if (waypoint.x < floater->x) floater->facing_left = 1;
+                    else if (waypoint.x > floater->x) floater->facing_left = 0;
+                } else {
+                    floater->source_order_state_2c = 0;
+                    floater->active_order_action = 0;
+                    floater->movement_state = 0;
+                    floater->has_move_order = 0;
+                    floater->order_progress = 0;
+                }
             }
         }
+
+        game_session_advance_action9(session, i);
 
         if (floater->has_move_order && floater->has_wander_order) {
             /* A newly assigned route replaces the idle fallback action. */
@@ -969,7 +1217,28 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
         if ((dy < 0 ? -dy : dy) > distance) distance = dy < 0 ? -dy : dy;
         if (distance <= floater->stop_radius) {
             floater->has_move_order = 0;
+            if (floater->movement_state == 9 || floater->movement_state == 0x0f ||
+                floater->movement_state == 0x10) floater->movement_state = 0;
             continue;
+        }
+
+        /* State 0x0f/0x10 tests its previously resolved destination against
+           the arrival radius before refreshing the live target coordinates. */
+        if (floater->movement_state == 0x0f &&
+            floater->order_target_floater >= 0 &&
+            (unsigned int)floater->order_target_floater < session->floater_count) {
+            const GameFloaterStart *target =
+                &session->floaters[(unsigned int)floater->order_target_floater];
+            floater_set_approach_point(floater, target->x, target->y);
+        } else if (floater->movement_state == 0x10 &&
+                   floater->island_index < session->island_count &&
+                   floater->order_target_location >= 0 &&
+                   (uint16_t)floater->order_target_location <
+                       session->islands[floater->island_index].location_count) {
+            const GameRuntimeLocation *target =
+                &session->islands[floater->island_index]
+                     .locations[(uint16_t)floater->order_target_location];
+            floater_set_approach_point(floater, target->x, target->y);
         }
 
         position.x = floater->x;
@@ -981,8 +1250,18 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
         speed_context.subtype = floater->source_subtype;
         speed_context.category_speed_modifier =
             floater->category_speed_modifier;
-        speed_context.near_target_override =
-            floater->near_target_speed_override;
+        if (floater->movement_state == 9) {
+            int32_t anchor_x =
+                (int32_t)(floater->source_order_coordinate_30 >> 8) * 10;
+            int32_t anchor_y =
+                (int32_t)(floater->source_order_coordinate_30 & 0xffU) * 10;
+            speed_context.near_target_override =
+                source_chebyshev_distance(floater->x, floater->y,
+                                          anchor_x, anchor_y) < 100;
+        } else {
+            speed_context.near_target_override =
+                floater->near_target_speed_override;
+        }
         speed_context.site_speed_bonus = floater->site_speed_bonus;
         effective_speed = floater_motion_effective_speed(&speed_context);
         (void)floater_motion_step(&position, destination, effective_speed,
@@ -995,8 +1274,12 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
         if ((dy < 0 ? -dy : dy) > distance) {
             distance = dy < 0 ? -dy : dy;
         }
-        if (distance <= floater->stop_radius) {
+        if (distance <= floater->stop_radius &&
+            floater->movement_state != 0x0f &&
+            floater->movement_state != 0x10) {
             floater->has_move_order = 0;
+            if (floater->movement_state == 9 || floater->movement_state == 0x0f ||
+                floater->movement_state == 0x10) floater->movement_state = 0;
         }
 
     }
@@ -1784,15 +2067,49 @@ int game_session_pop_onoff_action(GameSession *session,
     return 1;
 }
 
-unsigned int game_session_dispatch_onoff_actions(GameSession *session)
+static int game_session_recalculate_location_active(GameRuntimeLocation *location)
+{
+    uint32_t previous_flags;
+    uint32_t current_flags;
+    int can_be_active;
+
+    if (location->renderer_class == 2 || location->renderer_class == 3) return 0;
+    previous_flags = location->source_flags;
+    current_flags = previous_flags & ~1U;
+    can_be_active = (previous_flags & 0x90U) == 0 &&
+        ((previous_flags & 0x400U) != 0 ||
+         location->source_location_slot_18 != -1 ||
+         location->renderer_class == 1) &&
+        ((previous_flags & 0x100U) == 0 || location->source_value_44 < 20) &&
+        location->source_value_58 == 0 && location->record_value_10 >= 2;
+
+    if (can_be_active) {
+        if (location->owner_id == 4 ||
+            (location->owner_id >= 0 &&
+             location->owner_id < GAME_START_PLAYER_COUNT &&
+             (location->tribe_visibility_mask &
+              (uint8_t)(1U << (unsigned int)location->owner_id)) != 0)) {
+            current_flags |= 1U;
+        }
+    }
+    location->source_flags = current_flags;
+    return ((previous_flags ^ current_flags) & 1U) != 0;
+}
+
+unsigned int game_session_dispatch_onoff_actions(GameSession *session,
+                                                 const PadCatalog *catalog)
 {
     GameOnOffActionRequest request;
-    unsigned int switched_off = 0;
+    unsigned int changed = 0;
 
-    if (session == NULL) return 0;
+    if (session == NULL || catalog == NULL) return 0;
     while (game_session_pop_onoff_action(session, &request)) {
         GameRuntimeLocation *location;
+        const PadCatalogItem *item;
         int base_item_id;
+        int was_enabled;
+        int active_flag_changed;
+        unsigned int subtype;
 
         if (request.player_slot >= GAME_START_PLAYER_COUNT ||
             request.island_index >= session->island_count ||
@@ -1810,16 +2127,39 @@ unsigned int game_session_dispatch_onoff_actions(GameSession *session)
             continue;
         }
 
-        /* FUN_00453bf6(0) always clears bit 0x400. The inverse path can only
-           set it after comparing maintenance to DAT_006191f8, whose runtime
-           initializer is not reconstructed, so a request to turn ON is a
-           no-op for now. */
+        was_enabled = (location->source_flags & 0x400U) != 0;
         if ((location->source_flags & 0x400U) != 0) {
             location->source_flags &= ~0x400U;
-            ++switched_off;
+        } else {
+            item = location->record_value_10 >= 0 &&
+                   location->record_value_10 <= (int32_t)UINT16_MAX
+                ? pad_catalog_find(catalog, (uint16_t)location->record_value_10)
+                : NULL;
+            if (item != NULL && item->maintenance_tone_cost <=
+                    session->economy[request.player_slot].source_maintenance_budget) {
+                location->source_flags |= 0x400U;
+            }
         }
+
+        /* FUN_00450385 resolves the linked row; FUN_0045cbaa releases its
+           subtype 1..3 task links only after the site has ended up OFF. */
+        if (location->source_location_slot_18 != -1 &&
+            (location->source_flags & 0x400U) == 0) {
+            for (subtype = 0; subtype < GAME_RESOURCE_TYPE_COUNT; ++subtype) {
+                int16_t linked_slot = location->source_task_slot[subtype];
+                if (linked_slot >= 0 &&
+                    linked_slot < GAME_SESSION_MAX_PENDING_EVENTS) {
+                    (void)game_session_pending_event_release(
+                        session, (uint8_t)linked_slot);
+                }
+                location->source_task_slot[subtype] = -1;
+            }
+        }
+        active_flag_changed = game_session_recalculate_location_active(location);
+        if (was_enabled != ((location->source_flags & 0x400U) != 0) ||
+            active_flag_changed) ++changed;
     }
-    return switched_off;
+    return changed;
 }
 
 int game_session_queue_build_selection(GameSession *session,
