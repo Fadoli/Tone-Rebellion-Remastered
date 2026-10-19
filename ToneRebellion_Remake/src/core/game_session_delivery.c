@@ -57,6 +57,23 @@ static void floater_target_location(GameFloaterStart *floater,
     floater->has_move_order = 1;
 }
 
+static void release_task_claim(GameSession *session, GameFloaterStart *floater)
+{
+    int16_t slot = floater->linked_task_slot;
+    if (slot >= 0 && slot < GAME_SESSION_MAX_PENDING_EVENTS) {
+        GamePendingEvent *event = &session->pending_events[(uint8_t)slot];
+        if (event->active != 0 && event->action_type == 4 &&
+            event->player_id == floater->owner_slot &&
+            event->payload_0a == floater->island_index &&
+            event->payload_0e == floater->order_target_location &&
+            event->payload_12 == floater->order_resource_code &&
+            event->assigned_floater_count > 0) {
+            --event->assigned_floater_count;
+        }
+    }
+    floater->linked_task_slot = -1;
+}
+
 void game_session_assign_local_resource_tasks(GameSession *session)
 {
     unsigned int floater_index;
@@ -66,7 +83,8 @@ void game_session_assign_local_resource_tasks(GameSession *session)
         GameFloaterStart *floater = &session->floaters[floater_index];
         unsigned int slot;
 
-        if (floater->active_order_action != 0 || floater->source_link_0c != -1 ||
+        if (floater->active_order_action != 0 || floater->linked_task_slot != -1 ||
+            floater->source_link_0c != -1 ||
             floater->type_index == 4 || floater->source_subtype == 8 ||
             floater->movement_state == 6 || floater->movement_state == 7 ||
             floater->movement_state != 0 || floater->island_index >= session->island_count)
@@ -92,8 +110,10 @@ void game_session_assign_local_resource_tasks(GameSession *session)
                                       event->player_id, event->payload_12);
             if (floater->carried_resource_code != event->payload_12 && source_index < 0)
                 continue;
+            if (event->assigned_floater_count == INT16_MAX) continue;
 
             island = &session->islands[floater->island_index];
+            ++session->pending_events[slot].assigned_floater_count;
             floater->active_order_action = 4;
             floater->order_resource_code = event->payload_12;
             floater->linked_task_slot = (int16_t)slot;
@@ -156,7 +176,7 @@ void game_session_advance_local_resource_task(GameSession *session,
                     floater->island_index,
                     (uint16_t)floater->order_source_location, code)) {
                 floater->active_order_action = 0;
-                floater->linked_task_slot = -1;
+                release_task_claim(session, floater);
                 floater->has_move_order = 0;
                 floater->movement_state = 0;
                 floater->source_runtime_flags &= ~1U;
@@ -192,7 +212,7 @@ void game_session_advance_local_resource_task(GameSession *session,
                         (uint16_t)floater->order_source_location,
                         floater->owner_slot, code)) {
                     floater->active_order_action = 0;
-                    floater->linked_task_slot = -1;
+                    release_task_claim(session, floater);
                     floater->has_move_order = 0;
                     floater->movement_state = 0;
                     floater->source_runtime_flags &= ~1U;
@@ -233,7 +253,7 @@ void game_session_advance_local_resource_task(GameSession *session,
         }
         floater->source_runtime_flags &= ~1U;
         floater->active_order_action = 0;
-        floater->linked_task_slot = -1;
+        release_task_claim(session, floater);
         floater->has_move_order = 0;
         floater->movement_state = 0;
         floater->order_timer = 0;
@@ -248,7 +268,7 @@ void game_session_advance_local_resource_task(GameSession *session,
         floater->carried_resource_code = 0;
     }
     floater->active_order_action = 0;
-    floater->linked_task_slot = -1;
+    release_task_claim(session, floater);
     floater->has_move_order = 0;
     floater->movement_state = 0;
     floater->order_timer = 0;

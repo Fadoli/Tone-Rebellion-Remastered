@@ -10,7 +10,7 @@ static void test_pending_event_table_matches_source_slots_and_deduplication(void
     assert(first == 0);
     assert(session.pending_event_count == 1);
     assert(session.pending_events[first].active == 1);
-    assert(session.pending_events[first].reserved_zero == 0);
+    assert(session.pending_events[first].assigned_floater_count == 0);
     assert(session.pending_events[first].priority == 1);
     assert(session.pending_events[first].player_id == 2);
     assert(session.pending_events[first].payload_0a == 17);

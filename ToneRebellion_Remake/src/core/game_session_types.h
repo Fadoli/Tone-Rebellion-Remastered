@@ -114,7 +114,8 @@ typedef int (*GameInventoryResultApply)(void *context, uint8_t player_slot,
    Priority is initialized to 1 there and read as such by FUN_004469d6. */
 typedef struct GamePendingEvent {
     uint32_t active;
-    uint16_t reserved_zero;
+    /* FUN_00421ec1 increments/decrements slot +0x04 as floaters attach. */
+    int16_t assigned_floater_count;
     uint16_t priority;
     int16_t player_id;
     int16_t payload_0a;
