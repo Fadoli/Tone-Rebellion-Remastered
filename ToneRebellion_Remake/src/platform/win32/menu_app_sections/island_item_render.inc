@@ -399,7 +399,8 @@ static void draw_hall_stock_summary(HDC dc, int hall_player,
     int saved_dc;
     unsigned int resource;
 
-    if (hall_player < 0 || island == NULL ||
+    if (hall_player < 0 || selected_hall_player() != hall_player ||
+        island == NULL ||
         g_island_panel_mode != WINDOW_ISLAND_PANEL_GENERAL ||
         g_selected_location < 0 ||
         (uint16_t)g_selected_location >= island->location_count) return;
@@ -407,6 +408,7 @@ static void draw_hall_stock_summary(HDC dc, int hall_player,
     if (info == NULL || g_temp_hole_art.frame_count <= 1U) return;
 
     hall = &island->locations[g_selected_location];
+    if (hall->source_location_slot_18 != -1) return;
     pane.left = info->pane.left;
     pane.top = info->pane.top;
     pane.right = info->pane.right + 1;
@@ -414,6 +416,22 @@ static void draw_hall_stock_summary(HDC dc, int hall_player,
     saved_dc = SaveDC(dc);
     (void)IntersectClipRect(dc, pane.left, pane.top, pane.right, pane.bottom);
     draw_sprite(dc, &g_temp_hole_art, 1, info->pane.left, info->pane.top);
+    {
+        const int32_t item_id = hall->record_value_10;
+        const int32_t name_index = item_id - 0x25;
+        char level_label[24];
+        if (name_index >= 0 && name_index < BUILDING_NAME_COUNT &&
+            g_building_names[name_index][0] != '\0') {
+            draw_bitmap_label(dc, g_building_names[name_index],
+                              info->pane.left + 5, info->pane.top + 3,
+                              RGB(230, 238, 255));
+        }
+        (void)snprintf(level_label, sizeof(level_label), "LEVEL %u",
+            (unsigned int)game_session_location_display_level(hall));
+        draw_bitmap_label(dc, level_label,
+                          info->pane.left + 5, info->pane.top + 18,
+                          RGB(230, 238, 255));
+    }
     for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
         IslandHallResourceRow row;
         char amount[8];

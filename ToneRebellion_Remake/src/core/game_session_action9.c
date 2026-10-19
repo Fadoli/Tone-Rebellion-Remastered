@@ -240,3 +240,124 @@ void game_session_advance_action9(GameSession *session,
     floater->order_progress = 0;
 }
 
+void game_session_advance_merge_order(GameSession *session,
+                                      unsigned int floater_index)
+{
+    GameFloaterStart *floater;
+    GameFloaterStart *target;
+
+    if (session == NULL || floater_index >= session->floater_count) return;
+    floater = &session->floaters[floater_index];
+    if (floater->active_order_action != 0x14 || floater->has_move_order ||
+        floater->movement_state != 0) return;
+
+    if (floater->order_progress == 0) {
+        if (floater->order_target_floater < 0 ||
+            (unsigned int)floater->order_target_floater >= session->floater_count) {
+            floater->active_order_action = 0;
+            return;
+        }
+        target = &session->floaters[
+            (unsigned int)floater->order_target_floater];
+        if (target == floater || target->island_index != floater->island_index) {
+            floater->active_order_action = 0;
+            return;
+        }
+        floater->movement_state = 0x0f;
+        floater->stop_radius = 0;
+        floater->has_wander_order = 0;
+        floater->wander_timer = 0;
+        game_session_set_approach_point(floater, target->x, target->y);
+        floater->has_move_order = 1;
+        floater->order_progress = 1;
+    } else if (floater->order_progress == 1) {
+        floater->order_progress = 2;
+        if (floater->source_subtype == 8) {
+            /* FUN_004211bb sends subtype 8 into the existing FA_Wander tick. */
+            floater->movement_state = 0;
+            floater->has_wander_order = 1;
+            floater->wander_timer = 60;
+        } else {
+            /* The source's other-subtype terminal state is 0x15. */
+            floater->movement_state = 0x15;
+            floater->order_timer = 0;
+            floater->has_wander_order = 0;
+            floater->wander_timer = 0;
+        }
+    }
+}
+
+void game_session_advance_defend_order(GameSession *session,
+                                       unsigned int floater_index)
+{
+    GameFloaterStart *floater;
+    GameFloaterStart *target;
+    int candidate_index;
+
+    if (session == NULL || floater_index >= session->floater_count) return;
+    floater = &session->floaters[floater_index];
+    if (floater->active_order_action != 8) return;
+
+    if (floater->movement_state == 0 && floater->order_progress == 0) {
+        if (floater->order_target_floater < 0 ||
+            (unsigned int)floater->order_target_floater >= session->floater_count) {
+            floater->active_order_action = 0;
+            return;
+        }
+        target = &session->floaters[
+            (unsigned int)floater->order_target_floater];
+        if (target == floater || target->island_index != floater->island_index) {
+            floater->active_order_action = 0;
+            return;
+        }
+        floater->defend_offset_x =
+            (int16_t)(tone_rng_bounded(&session->random_state, 200) - 100);
+        floater->defend_offset_y =
+            (int16_t)(tone_rng_bounded(&session->random_state, 200) - 100);
+        floater->movement_state = 8;
+        floater->stop_radius = 0;
+        floater->source_runtime_flags &= ~0x004U;
+        floater->order_progress = 1;
+        return;
+    }
+
+    if ((floater->movement_state == 8 || floater->movement_state == 0) &&
+        floater->order_progress == 1) {
+        if (floater->order_target_floater < 0 ||
+            (unsigned int)floater->order_target_floater >= session->floater_count) {
+            floater->active_order_action = 0;
+            return;
+        }
+        target = &session->floaters[
+            (unsigned int)floater->order_target_floater];
+        if (target->island_index != floater->island_index) {
+            floater->active_order_action = 0;
+            return;
+        }
+        candidate_index = action9_find_floater(
+            session, floater_index, target->x, target->y);
+        if (candidate_index < 0) {
+            if (floater->movement_state == 0 && !floater->has_move_order) {
+                /* The next idle consumer pass starts another random route. */
+                floater->order_progress = 0;
+            }
+            return;
+        }
+        target = &session->floaters[candidate_index];
+        floater->order_target_floater = (int16_t)candidate_index;
+        floater->movement_state = 0x0f;
+        floater->stop_radius = floater_approach_radius(floater);
+        floater->source_runtime_flags |= 0x004U;
+        game_session_set_approach_point(floater, target->x, target->y);
+        floater->has_move_order = 1;
+        floater->order_progress = 2;
+        return;
+    }
+
+    if (floater->movement_state == 0 && floater->order_progress == 2) {
+        floater->movement_state = 6;
+        floater->attack_timer = 0;
+        floater->order_progress = UINT8_MAX;
+    }
+}
+

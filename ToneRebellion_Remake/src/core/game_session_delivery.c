@@ -19,6 +19,54 @@ void game_session_assign_local_resource_tasks(GameSession *session)
             floater->movement_state != 0 || floater->island_index >= session->island_count)
             continue;
 
+        if (floater->source_subtype == 0) {
+            for (slot = 0; slot < GAME_SESSION_MAX_PENDING_EVENTS; ++slot) {
+                GamePendingEvent *event = &session->pending_events[slot];
+                GameRuntimeLocation *source;
+
+                uint8_t target_island;
+                int accepted;
+
+                if (event->active == 0 || event->action_type != 0x0b ||
+                    event->assigned_floater_count != 0 ||
+                    event->player_id != floater->owner_slot ||
+                    event->payload_0a < 0 ||
+                    event->payload_0a >= session->island_count ||
+                    event->payload_0c < 0 ||
+                    (uint16_t)event->payload_0c >=
+                        session->islands[event->payload_0a].location_count)
+                    continue;
+                target_island = (uint8_t)event->payload_0a;
+                source = &session->islands[target_island]
+                    .locations[(uint16_t)event->payload_0c];
+                if (source->charge_staff_task_handle != (int16_t)slot ||
+                    source->source_location_slot_18 < 0) continue;
+                if (target_island == floater->island_index) {
+                    accepted = game_session_order_floater_to_charge_site(
+                        session, floater->owner_slot, target_island,
+                        floater_index, (uint16_t)event->payload_0c);
+                } else {
+                    accepted = game_session_begin_floater_handoff(
+                        session, floater, target_island);
+                    if (accepted) {
+                        floater->source_order_parameter_32 =
+                            (uint16_t)event->payload_0c;
+                        floater->handoff_resume_action = 0;
+                        floater->handoff_resume_state = 11;
+                    }
+                }
+                if (!accepted) continue;
+
+                /* FUN_00422031 admits subtype-0 workers to task 0xb. The
+                   original candidate ranking is unresolved; this local
+                   dispatcher consumes one eligible worker in table order.
+                   Remote assignment uses an existing direct bridge route. */
+                event->assigned_floater_count = 1;
+                break;
+            }
+        }
+        if (floater->movement_state != 0) continue;
+
         for (slot = 0; slot < GAME_SESSION_MAX_PENDING_EVENTS; ++slot) {
             const GamePendingEvent *event = &session->pending_events[slot];
             int source_index;

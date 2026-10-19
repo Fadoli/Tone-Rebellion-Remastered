@@ -50,6 +50,7 @@ static void tick_source_staff_cycle(GameSession *session,
     int32_t difficulty;
     int32_t stock_available;
     unsigned int worker_index;
+    int current_worker_active = 0;
 
     if (source->owner_id < 0 || source->owner_id >= GAME_START_PLAYER_COUNT)
         return;
@@ -171,13 +172,14 @@ static void tick_source_staff_cycle(GameSession *session,
         }
     }
 
-    if (source->barg_progress > 0.0) {
-        int current_worker_active = 0;
+    {
         int16_t current = source->charge_recent_floater;
         if (current >= 0 && (unsigned int)current < session->floater_count)
             current_worker_active =
                 (session->floaters[(unsigned int)current].source_runtime_flags &
                  0x20U) != 0;
+    }
+    if (source->barg_progress > 0.0) {
         if (!current_worker_active) {
             source->barg_progress -= 0.25;
             if (source->barg_progress < 0.0) source->barg_progress = 0.0;
@@ -186,15 +188,15 @@ static void tick_source_staff_cycle(GameSession *session,
 
     if (source->resource_stock[1] <= 9U &&
         source->charge_staff_task_handle >= 0 &&
-        source->charge_recent_floater == -1) {
+        !current_worker_active) {
         (void)game_session_pending_event_release(
             session, (uint8_t)source->charge_staff_task_handle);
         source->charge_staff_task_handle = -1;
     } else if (need_by_level[0] != 0 &&
                source->charge_recent_floater == -1 &&
                source->charge_staff_task_handle == -1 && stock_available) {
-        /* FUN_0045cd75 submits task 0x0b with the source table's island and
-           location header; these are the corresponding runtime coordinates. */
+        /* FUN_0045c325 confirms source-table header words [0]/[1] are the
+           island and location indices used by this task's payload. */
         int task_slot = game_session_pending_event_add(
             session, (int16_t)source->owner_id, (int16_t)island_index, 0x0b,
             (int16_t)location_index, 0, 0);

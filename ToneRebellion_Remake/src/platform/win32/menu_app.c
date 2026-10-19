@@ -171,6 +171,7 @@ static IslandLocationActionControl g_hovered_location_action =
     ISLAND_LOCATION_ACTION_NONE;
 static int g_hovered_repair_control;
 static int g_hovered_onoff_control;
+static int g_hovered_location_grab;
 static int g_hovered_hall_stock = -1;
 static int g_hovered_island_button = -1;
 static int g_hovered_hall_command = -1;

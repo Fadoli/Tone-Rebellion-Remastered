@@ -44,22 +44,22 @@ Evidence: `ev_810f7530a91d83a454c4d310d2142cafe948434cde2b0707fd5847693435b64f`.
 
 The kernel measures Chebyshev distance `max(abs(dx), abs(dy))`. If that value
 is less than four times the selected step, it reduces the step to
-`distance / 4` using integer division. If this becomes zero, the global tick's
-low bit selects a zero- or one-pixel step. It then clamps X and Y deltas
-independently to `[-step, +step]`, updates both coordinates, and reports exact
-arrival only if both match the target. This is axis-clamped motion rather than
-a normalized vector step. The examined code does not establish terrain
-pathfinding or obstacle avoidance. Evidence:
+`(distance + 3) / 4`, rounding up. If this becomes zero, the global tick's low
+bit selects a zero- or one-pixel step; for a positive remaining distance the
+rounded step is at least one. It then clamps X and Y deltas independently to
+`[-step, +step]`, updates both coordinates, and reports exact arrival only if
+both match the target. This is axis-clamped motion rather than a normalized
+vector step. The examined code does not establish terrain pathfinding or
+obstacle avoidance. Evidence:
 `ev_810f7530a91d83a454c4d310d2142cafe948434cde2b0707fd5847693435b64f`,
 `ev_99ac9bec204079134afb4ec773ba173dab2b1a1a87ae06d72f28cad8c8cbfff9`,
 `ev_0c9a83fe313044ec813605a6f5e71760fcbcf78e0fff164432184e30593c562d`.
 
-The low-bit fallback only applies after a positive step has been reduced by
-the near-target division. If the selected effective speed is already zero,
-then `distance < 4 * step` is false for every nonzero distance, the kernel
-leaves `step` at zero, applies zero deltas on both axes, and reports no
-arrival. There is no general minimum-speed fallback: a zero-speed floater
-stalls until its speed context changes. The remake's coordinate kernel
-preserves this distinction, so callers must not silently replace a missing or
-zero stat with speed 1. This follows directly from the same step procedure and
-does not depend on an additional runtime assumption.
+If the selected effective speed is already zero, then `distance < 4 * step` is
+false for every nonzero distance, the kernel leaves `step` at zero, applies
+zero deltas on both axes, and reports no arrival. There is no general
+minimum-speed fallback: a zero-speed floater stalls until its speed context
+changes. The remake's coordinate kernel preserves this distinction, so callers
+must not silently replace a missing or zero stat with speed 1. The port returns
+early when already at the destination; the native low-bit fallback in that
+case cannot change either coordinate.

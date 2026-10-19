@@ -77,6 +77,33 @@ static void handle_click(HWND window, int x, int y)
             }
         }
     } else if (g_menu.screen == SCREEN_ISLAND) {
+        if (location_grab_button_at(x, y) && selected_location_can_be_grabbed()) {
+            if (g_game_session.location_move_active) {
+                (void)game_session_cancel_location_move(&g_game_session,
+                                                        &g_pad_catalog);
+            } else {
+                (void)game_session_begin_location_move(&g_game_session,
+                    &g_pad_catalog, (uint8_t)g_menu.selected_tribe,
+                    (uint8_t)g_menu.selected_map_island,
+                    (uint16_t)g_selected_location);
+            }
+            InvalidateRect(window, NULL, FALSE);
+            return;
+        }
+        if (g_game_session.location_move_active && x >= 0 &&
+            x < LOGICAL_WIDTH && y >= 0 && y < 320) {
+            int target_location = island_location_at(x, y);
+            if (target_location >= 0 && game_session_finish_location_move(
+                    &g_game_session, (uint8_t)g_menu.selected_tribe,
+                    (uint8_t)g_menu.selected_map_island,
+                    (uint16_t)target_location)) {
+                g_selected_location = target_location;
+                g_selected_floater = -1;
+                g_hovered_location = target_location;
+            }
+            InvalidateRect(window, NULL, FALSE);
+            return;
+        }
         if (g_island_panel_mode == WINDOW_ISLAND_PANEL_INVENTORY) {
             const WindowTemplate *inventory_panel = window_catalog_find(
                 &g_window_catalog, "IWInventory", 3);
@@ -340,6 +367,10 @@ static void handle_click(HWND window, int x, int y)
                 }
             } else if (button_index >= 0) {
                 if (button_index == WINDOW_ISLAND_BUTTON_MAP) {
+                    if (g_game_session.location_move_active) {
+                        (void)game_session_cancel_location_move(&g_game_session,
+                                                                &g_pad_catalog);
+                    }
                     g_menu.screen = SCREEN_WORLD_MAP;
                     g_selected_floater = -1;
                     g_selected_location = -1;

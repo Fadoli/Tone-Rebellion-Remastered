@@ -50,6 +50,9 @@ typedef struct GameFloaterStart {
     uint16_t destination_x;
     uint16_t destination_y;
     uint16_t movement_speed;
+    /* FA_DefendFlt state 8 carries a random offset around its live target. */
+    int16_t defend_offset_x;
+    int16_t defend_offset_y;
     /* Action-9 post-arrival stages mirror tick +0x46 and +0x32. The target
        candidate table/policy for non-enemy units is only partly reconstructed. */
     uint8_t order_progress;
@@ -142,6 +145,11 @@ typedef struct GameSession {
     GameGlyphActionRequest glyph_actions[GAME_SESSION_MAX_GLYPH_ACTIONS];
     uint8_t onoff_action_count;
     GameOnOffActionRequest onoff_actions[GAME_SESSION_MAX_ONOFF_ACTIONS];
+    /* The IWLocInfo grab/place flow holds one owned building between clicks. */
+    uint8_t location_move_active;
+    uint8_t location_move_player;
+    uint8_t location_move_source_island;
+    uint16_t location_move_source_index;
     uint16_t build_selection_count;
     GameBuildSelectionRequest build_selections[GAME_SESSION_MAX_BUILD_SELECTIONS];
     uint16_t class0_assignments;

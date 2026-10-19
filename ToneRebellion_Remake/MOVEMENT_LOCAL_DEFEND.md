@@ -32,5 +32,11 @@ eligibility guard `ev_2b7c3a4d07a47624e5bda9eda2a57d60b965635fa529ab925962c1b77d
 state handling `ev_6c3ec9c58f2e2ec6ef837d8737ba3dfece6d35c11a918338523e688a6746c25a`,
 and target resolution `ev_810f7530a91d83a454c4d310d2142cafe948434cde2b0707fd5847693435b64f`.
 
+The remake now exposes this route through `game_session_order_floater_to_defend`.
+It carries the random offset with the live target, clamps the translated point
+to the island bounds, polls for a qualifying candidate during the route, and
+uses the existing state-`0x0f` combat approach after a match. This simulation
+entry point is not connected to a UI or AI task producer yet.
+
 
 Autonomous order selection and wandering are documented in [autonomous floater orders](MOVEMENT_AUTONOMOUS_ORDERS.md).

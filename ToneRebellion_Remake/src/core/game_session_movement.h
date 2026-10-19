@@ -39,6 +39,18 @@ int game_session_order_floater_to_coordinate(GameSession *session,
                                              unsigned int floater_index,
                                              uint16_t x,
                                              uint16_t y);
+/* Schedule the source FA_MergeWith (0x14) follow-up for a local target. */
+int game_session_order_floater_to_merge(GameSession *session,
+                                        uint8_t player_slot,
+                                        uint8_t island_index,
+                                        unsigned int floater_index,
+                                        unsigned int target_floater_index);
+/* Assign FA_DefendFlt (8), which guards a local floater and nearby candidates. */
+int game_session_order_floater_to_defend(GameSession *session,
+                                         uint8_t player_slot,
+                                         uint8_t island_index,
+                                         unsigned int floater_index,
+                                         unsigned int target_floater_index);
 /* Order an unlinked local floater to a player-owned charge source (state 11).
    Repeating the order on that same site requests a state-12 debit. */
 int game_session_order_floater_to_charge_site(GameSession *session,

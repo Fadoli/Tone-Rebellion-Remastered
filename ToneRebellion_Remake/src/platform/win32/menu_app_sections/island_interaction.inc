@@ -190,6 +190,78 @@ static int update_location_action_hover(int x, int y)
     return 1;
 }
 
+static int location_grab_button_rect(RECT *rect)
+{
+    const WindowTemplate *panel;
+    if (rect == NULL || g_menu.screen != SCREEN_ISLAND ||
+        !g_game_session_valid || g_island_panel_mode != WINDOW_ISLAND_PANEL_GENERAL ||
+        !iw_construct_location_control_pane_visible(g_iw_construct_open))
+        return 0;
+    panel = window_catalog_find(&g_window_catalog, "IWLocControl", 3);
+    if (panel == NULL) return 0;
+    rect->left = panel->pane.left + 8;
+    rect->top = panel->pane.bottom - 32;
+    rect->right = rect->left + 104;
+    rect->bottom = rect->top + 24;
+    return 1;
+}
+
+static int location_grab_button_at(int x, int y)
+{
+    RECT rect;
+    return location_grab_button_rect(&rect) && x >= rect.left && x < rect.right &&
+        y >= rect.top && y < rect.bottom;
+}
+
+static int update_location_grab_hover(int x, int y)
+{
+    int hovered = location_grab_button_at(x, y);
+    if (hovered == g_hovered_location_grab) return 0;
+    g_hovered_location_grab = hovered;
+    return 1;
+}
+
+static int selected_location_can_be_grabbed(void)
+{
+    const GameRuntimeIsland *island;
+    const GameRuntimeLocation *location;
+    const GameRuntimeLocation *hall;
+    int32_t costs[GAME_RESOURCE_TYPE_COUNT];
+    unsigned int resource;
+    int32_t item_id;
+    if (g_game_session.location_move_active) return 1;
+    if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
+        g_menu.selected_tribe < 0 ||
+        g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
+        g_menu.selected_map_island < 0 ||
+        g_menu.selected_map_island >= g_game_session.island_count ||
+        g_selected_location < 0) return 0;
+    island = &g_game_session.islands[g_menu.selected_map_island];
+    if (g_selected_location >= island->location_count) return 0;
+    location = &island->locations[g_selected_location];
+    item_id = location->record_value_10 - (int32_t)g_menu.selected_tribe * 16;
+    if (location->owner_id != (int32_t)g_menu.selected_tribe ||
+        item_id < 0x25 || item_id > 0x34 || item_id == 0x28 ||
+        (location->source_flags & 0x90U) != 0) return 0;
+    if ((location->source_value_22 & (uint16_t)(1U << g_menu.selected_tribe)) == 0 ||
+        !game_session_location_move_costs(&g_game_session, &g_pad_catalog,
+            (uint8_t)g_menu.selected_map_island,
+            (uint16_t)g_selected_location, costs)) return 0;
+    if (g_game_session.economy[g_menu.selected_tribe].hall_island_index >=
+            g_game_session.island_count ||
+        g_game_session.economy[g_menu.selected_tribe].hall_location_index >=
+            g_game_session.islands[g_game_session.economy[
+                g_menu.selected_tribe].hall_island_index].location_count) return 0;
+    hall = &g_game_session.islands[g_game_session.economy[
+        g_menu.selected_tribe].hall_island_index].locations[
+        g_game_session.economy[g_menu.selected_tribe].hall_location_index];
+    for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
+        if (costs[resource] < 0 ||
+            (uint32_t)costs[resource] > hall->resource_stock[resource]) return 0;
+    }
+    return 1;
+}
+
 static int selected_hall_player(void)
 {
     unsigned int player;

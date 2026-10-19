@@ -260,6 +260,22 @@ static void clear_cast_site(GameSession *session, GameRuntimeLocation *target)
     int32_t previous_owner = target->owner_id;
     int32_t retained_item = target->record_value_24;
     unsigned int slot;
+    unsigned int task_type;
+
+    if (target->charge_staff_task_handle >= 0 &&
+        target->charge_staff_task_handle < GAME_SESSION_MAX_PENDING_EVENTS) {
+        (void)game_session_pending_event_release(
+            session, (uint8_t)target->charge_staff_task_handle);
+        target->charge_staff_task_handle = -1;
+    }
+    for (task_type = 0; task_type < GAME_RESOURCE_TYPE_COUNT; ++task_type) {
+        int16_t task_slot = target->source_task_slot[task_type];
+        if (task_slot >= 0 && task_slot < GAME_SESSION_MAX_PENDING_EVENTS) {
+            (void)game_session_pending_event_release(session,
+                                                     (uint8_t)task_slot);
+        }
+        target->source_task_slot[task_type] = -1;
+    }
 
     for (slot = 0; slot < 8; ++slot) {
         int16_t floater_index = target->charge_floater_slots[slot];

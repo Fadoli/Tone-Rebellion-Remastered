@@ -3,6 +3,9 @@
 
 #include "game_session_types.h"
 
+/* Return the player's Hall runtime location, or NULL when it is unavailable. */
+GameRuntimeLocation *game_session_player_hall(GameSession *session,
+                                              uint8_t player_slot);
 /* Resource stock fields are attached to each player's initial Hall runtime
    record. Starting values, caps and mutation rules remain to be verified. */
 int game_session_credit_resource(GameSession *session, uint8_t player_slot,
@@ -29,6 +32,20 @@ int game_session_location_move_costs(const GameSession *session,
                                      uint8_t island_index,
                                      uint16_t location_index,
                                      int32_t costs[GAME_RESOURCE_TYPE_COUNT]);
+/* IWLocInfo action 6: begin holding an owned building after paying its move
+   costs, then place it on a visible, free class-0 site. PIT_Object/item 1 is
+   accepted only as a placement target. */
+int game_session_begin_location_move(GameSession *session,
+                                     const PadCatalog *catalog,
+                                     uint8_t player_slot,
+                                     uint8_t island_index,
+                                     uint16_t location_index);
+int game_session_finish_location_move(GameSession *session,
+                                      uint8_t player_slot,
+                                      uint8_t island_index,
+                                      uint16_t location_index);
+int game_session_cancel_location_move(GameSession *session,
+                                      const PadCatalog *catalog);
 /* FUN_0045f755: advance one Hall resource mode modulo three. Returns the new
    raw mode, or -1 for an invalid player/resource. */
 int game_session_cycle_resource_stock_mode(GameSession *session,

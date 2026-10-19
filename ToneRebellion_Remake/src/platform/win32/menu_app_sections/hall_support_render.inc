@@ -2,6 +2,7 @@ static void draw_hall_info_panel(HDC dc, int panel_state)
 {
     const WindowTemplate *panel;
     const char *text = NULL;
+    char hover_text[256];
     int pane_width;
     int pane_height;
     int line_height;
@@ -21,6 +22,46 @@ static void draw_hall_info_panel(HDC dc, int panel_state)
             text = g_glyph_item_info_text[g_hovered_glyph];
         } else if (g_glyph_info_default) {
             text = g_glyph_info_text;
+        }
+    } else if (panel_state == WINDOW_ISLAND_PANEL_GENERAL) {
+        const int hall_player = selected_hall_player();
+        if (hall_player >= 0 && g_hovered_hall_stock >= 0 &&
+            g_hovered_hall_stock < GAME_RESOURCE_TYPE_COUNT) {
+            const unsigned int resource = (unsigned int)g_hovered_hall_stock;
+            const unsigned int mode = g_game_session.economy[hall_player]
+                .stock_mode[resource];
+            const char *resource_name = g_task_category_text[resource];
+            if (resource_name == NULL || resource_name[0] == '\0')
+                resource_name = "RESOURCE";
+            if (mode == 2U) {
+                (void)snprintf(hover_text, sizeof(hover_text),
+                    "%s\nREAPPRO AUTO\nCLIC : CHANGER LE MODE", resource_name);
+            } else {
+                (void)snprintf(hover_text, sizeof(hover_text),
+                    "%s\nMODE %u\nCLIC : CHANGER LE MODE",
+                    resource_name, mode);
+            }
+            text = hover_text;
+        } else {
+            switch (g_hovered_hall_command) {
+            case WINDOW_ISLAND_PANEL_GENERAL:
+                text = "INFORMATIONS GENERALES";
+                break;
+            case WINDOW_ISLAND_PANEL_INVENTORY:
+                text = "RESERVE ET INVENTAIRE";
+                break;
+            case WINDOW_ISLAND_PANEL_GLYPHS:
+                text = "GLYPHES";
+                break;
+            case WINDOW_ISLAND_PANEL_DIPLOMACY:
+                text = "DIPLOMATIE";
+                break;
+            case WINDOW_ISLAND_PANEL_TRADE:
+                text = "COMMERCE";
+                break;
+            default:
+                break;
+            }
         }
     } else {
         return;

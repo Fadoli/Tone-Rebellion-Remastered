@@ -69,6 +69,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 g_hovered_island != -1 || g_hovered_location != -1 ||
                 g_hovered_hall_stock != -1 || g_hovered_island_button != -1 ||
                 g_hovered_hall_command != WINDOW_ISLAND_PANEL_NONE ||
+                g_hovered_location_grab ||
                 action_hover_changed ||
                 inventory_hover_changed || diplomacy_hover_changed) {
                 g_mouse_inside = 0;
@@ -76,6 +77,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                     g_hovered_island != -1 || g_hovered_location != -1 ||
                     g_hovered_hall_stock != -1 || g_hovered_island_button != -1 ||
                     g_hovered_hall_command != WINDOW_ISLAND_PANEL_NONE ||
+                    g_hovered_location_grab ||
                     action_hover_changed ||
                     inventory_hover_changed || diplomacy_hover_changed) {
                     g_hovered_help = -1;
@@ -85,6 +87,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                     g_hovered_hall_stock = -1;
                     g_hovered_island_button = -1;
                     g_hovered_hall_command = WINDOW_ISLAND_PANEL_NONE;
+                    g_hovered_location_grab = 0;
                     g_hovered_location_action = ISLAND_LOCATION_ACTION_NONE;
                     InvalidateRect(window, NULL, FALSE);
                 }
@@ -106,6 +109,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             update_island_location_hover(g_mouse_x, g_mouse_y) |
             update_hall_stock_hover(g_mouse_x, g_mouse_y) |
             update_location_action_hover(g_mouse_x, g_mouse_y) |
+            update_location_grab_hover(g_mouse_x, g_mouse_y) |
             update_island_button_hover(g_mouse_x, g_mouse_y) |
             update_hall_command_hover(g_mouse_x, g_mouse_y) |
             update_inventory_hover(g_mouse_x, g_mouse_y) |
@@ -128,6 +132,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             g_hovered_island != -1 || g_hovered_location != -1 ||
             g_hovered_hall_stock != -1 || g_hovered_island_button != -1 ||
             g_hovered_hall_command != WINDOW_ISLAND_PANEL_NONE ||
+            g_hovered_location_grab ||
             g_hovered_location_action != ISLAND_LOCATION_ACTION_NONE ||
             g_hovered_inventory_item != -1 || g_diplomacy_hover_valid ||
             glyph_hover_changed) {
@@ -142,6 +147,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             g_hovered_hall_stock = -1;
             g_hovered_island_button = -1;
             g_hovered_hall_command = WINDOW_ISLAND_PANEL_NONE;
+            g_hovered_location_grab = 0;
             g_hovered_location_action = ISLAND_LOCATION_ACTION_NONE;
             g_hovered_inventory_item = -1;
             g_diplomacy_hover_valid = 0;
@@ -204,13 +210,38 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             g_menu.selected_map_island < g_game_session.island_count &&
             g_menu.selected_tribe < GAME_START_PLAYER_COUNT &&
             g_game_session.floaters[g_selected_floater].source_subtype != 0) {
-            int clicked_location = island_location_at(x, y);
-            if (clicked_location < 0 ||
-                !game_session_order_floater_to_charge_site(
-                    &g_game_session, g_menu.selected_tribe,
-                    (uint8_t)g_menu.selected_map_island,
-                    (unsigned int)g_selected_floater,
-                    (uint16_t)clicked_location)) {
+            int clicked_floater = game_session_floater_at(&g_game_session,
+                (uint8_t)g_menu.selected_map_island,
+                (uint16_t)(x + g_island_scroll_x), (uint16_t)y);
+            int issued_target_order = 0;
+            if (clicked_floater >= 0 && clicked_floater != g_selected_floater &&
+                g_game_session.floaters[clicked_floater].owner_slot ==
+                    g_menu.selected_tribe) {
+                if ((GetKeyState(VK_SHIFT) & 0x8000) != 0) {
+                    issued_target_order = game_session_order_floater_to_merge(
+                        &g_game_session, g_menu.selected_tribe,
+                        (uint8_t)g_menu.selected_map_island,
+                        (unsigned int)g_selected_floater,
+                        (unsigned int)clicked_floater);
+                } else {
+                    issued_target_order = game_session_order_floater_to_defend(
+                        &g_game_session, g_menu.selected_tribe,
+                        (uint8_t)g_menu.selected_map_island,
+                        (unsigned int)g_selected_floater,
+                        (unsigned int)clicked_floater);
+                }
+            }
+            if (!issued_target_order) {
+                int clicked_location = island_location_at(x, y);
+                if (clicked_location >= 0 &&
+                    game_session_order_floater_to_charge_site(
+                        &g_game_session, g_menu.selected_tribe,
+                        (uint8_t)g_menu.selected_map_island,
+                        (unsigned int)g_selected_floater,
+                        (uint16_t)clicked_location)) {
+                    InvalidateRect(window, NULL, FALSE);
+                    return 0;
+                }
                 (void)game_session_order_floater_to_coordinate(
                     &g_game_session, g_menu.selected_tribe,
                     (uint8_t)g_menu.selected_map_island,
@@ -237,6 +268,10 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 g_menu.screen = SCREEN_MAIN_MENU;
                 InvalidateRect(window, NULL, FALSE);
             } else if (g_menu.screen == SCREEN_ISLAND) {
+                if (g_game_session.location_move_active) {
+                    (void)game_session_cancel_location_move(&g_game_session,
+                                                            &g_pad_catalog);
+                }
                 g_menu.screen = SCREEN_WORLD_MAP;
                 g_hovered_location = -1;
                 InvalidateRect(window, NULL, FALSE);

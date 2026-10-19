@@ -267,9 +267,99 @@ static void game_session_cancel_cast_order(GameFloaterStart *floater)
     floater->order_target_location = -1;
     floater->cast_spell_kind = 0;
     floater->order_progress = 0;
-    floater->source_order_pending = 0;
+    /* FUN_0042219e keeps a newer linked order deferred while FA_Cast owns
+       the tick record; let the next floater poll consume it after the cast. */
     floater->has_move_order = 0;
     floater->source_runtime_flags &= ~0x065U;
+}
+
+static int game_session_order_floater_home(GameSession *session,
+                                           unsigned int floater_index)
+{
+    GameFloaterStart *floater = &session->floaters[floater_index];
+    const GamePlayerEconomy *home;
+
+    if (floater->owner_slot >= GAME_START_PLAYER_COUNT) return 0;
+    home = &session->economy[floater->owner_slot];
+    if (home->hall_island_index >= session->island_count) return 0;
+    floater->has_wander_order = 0;
+    floater->wander_timer = 0;
+    return game_session_order_floater_to_coordinate(
+        session, floater->owner_slot, home->hall_island_index,
+        floater_index, home->hall_x, home->hall_y);
+}
+
+static void game_session_drop_merge_carried_item(GameSession *session,
+                                                 GameFloaterStart *floater)
+{
+    GameRuntimeIsland *island;
+    GameRuntimeLocation *nearest = NULL;
+    int32_t nearest_distance = INT32_MAX;
+    int16_t item_id = floater->carried_resource_code;
+    unsigned int i;
+
+    if (item_id > 4 && item_id < 0x22 &&
+        floater->island_index < session->island_count) {
+        island = &session->islands[floater->island_index];
+        for (i = 0; i < island->location_count; ++i) {
+            GameRuntimeLocation *location = &island->locations[i];
+            int32_t dx;
+            int32_t dy;
+            int32_t distance;
+
+            if (location->renderer_class != 0 || location->owner_id != -1 ||
+                location->record_value_10 != 0) continue;
+            dx = (int32_t)floater->x - location->x;
+            dy = (int32_t)floater->y - location->y;
+            if (dx < 0) dx = -dx;
+            if (dy < 0) dy = -dy;
+            distance = dx > dy ? dx : dy;
+            if (nearest == NULL || distance < nearest_distance) {
+                nearest = location;
+                nearest_distance = distance;
+            }
+        }
+
+        if (nearest != NULL) {
+            /* FUN_004503bd turns an empty neutral record into PIT_Object and
+               stores the carried item ID in its +0x24 value. */
+            nearest->record_value_10 = 1;
+            nearest->record_value_24 = item_id;
+        } else if (floater->owner_slot < GAME_START_PLAYER_COUNT) {
+            ++session->economy[floater->owner_slot]
+                .inventory_count[(unsigned int)(item_id - 5)];
+        }
+    }
+    /* FUN_00425084 clears raw floater +0x18 even when it was not an artifact. */
+    floater->carried_resource_code = 0;
+}
+
+static int game_session_tick_merge_completion(GameSession *session,
+                                              unsigned int floater_index,
+                                              GameFloaterStart *floater)
+{
+    if (floater->movement_state != 0x15) return 0;
+
+    if (floater->order_timer < 50U) ++floater->order_timer;
+    if (floater->order_timer == 25U) {
+        if (floater->owner_slot != 4U) {
+            /* FUN_0041e569 converts the joined floater at tick 25. */
+            floater->source_subtype = 8;
+            floater->attack_level_flags &= 0xfff0U;
+            game_session_drop_merge_carried_item(session, floater);
+        }
+    }
+    if (floater->order_timer < 50U) return 1;
+
+    floater->movement_state = 0;
+    floater->order_timer = 0;
+    floater->order_progress = 0;
+    if (floater->source_subtype == 8 &&
+        game_session_order_floater_home(session, floater_index)) return 1;
+
+    floater->active_order_action = 0;
+    floater->has_move_order = 0;
+    return 1;
 }
 
 void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
@@ -291,6 +381,7 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
         int32_t distance;
 
         if (game_session_tick_floater_charge(session, i)) continue;
+        if (game_session_tick_merge_completion(session, i, floater)) continue;
 
         /* FUN_0041e569 polls FUN_0042219e while idle and once per ten ticks
            while moving. The bridge leaves the linked order pending during
@@ -365,6 +456,8 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
             continue;
         }
 
+        game_session_advance_merge_order(session, i);
+        game_session_advance_defend_order(session, i);
         game_session_advance_action9(session, i);
         game_session_tick_floater_combat(session, i);
         if (game_session_tick_floater_handoff(session, floater)) continue;
@@ -375,6 +468,44 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
 
         if (game_session_tick_floater_wander(session, floater, source_tick))
             continue;
+
+        if (floater->movement_state == 8) {
+            GameFloaterStart *target;
+            int32_t target_x;
+            int32_t target_y;
+
+            if (floater->order_target_floater < 0 ||
+                (unsigned int)floater->order_target_floater >=
+                    session->floater_count) {
+                floater->active_order_action = 0;
+                floater->movement_state = 0;
+                floater->has_move_order = 0;
+                continue;
+            }
+            target = &session->floaters[
+                (unsigned int)floater->order_target_floater];
+            if (target->island_index != floater->island_index) {
+                floater->active_order_action = 0;
+                floater->movement_state = 0;
+                floater->has_move_order = 0;
+                continue;
+            }
+            target_x = (int32_t)target->x + floater->defend_offset_x;
+            target_y = (int32_t)target->y + floater->defend_offset_y;
+            if (target_x < 0) target_x = 0;
+            if (target_x > 0x9ff) target_x = 0x9ff;
+            if (target_y < 0x28) target_y = 0x28;
+            if (target_y > 0x122) target_y = 0x122;
+            floater->destination_x = (uint16_t)target_x;
+            floater->destination_y = (uint16_t)target_y;
+            if (floater->x == floater->destination_x &&
+                floater->y == floater->destination_y) {
+                floater->has_move_order = 0;
+                floater->movement_state = 0;
+                continue;
+            }
+            floater->has_move_order = 1;
+        }
         if (!floater->has_move_order) {
             continue;
         }
@@ -425,7 +556,15 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
         speed_context.subtype = floater->source_subtype;
         speed_context.category_speed_modifier =
             floater->category_speed_modifier;
-        if (floater->movement_state == 9) {
+        if (floater->movement_state == 8 &&
+            floater->order_target_floater >= 0 &&
+            (unsigned int)floater->order_target_floater < session->floater_count) {
+            const GameFloaterStart *target = &session->floaters[
+                (unsigned int)floater->order_target_floater];
+            speed_context.near_target_override =
+                game_session_source_chebyshev_distance(
+                    floater->x, floater->y, target->x, target->y) < 100;
+        } else if (floater->movement_state == 9) {
             int32_t anchor_x =
                 (int32_t)(floater->source_order_coordinate_30 >> 8) * 10;
             int32_t anchor_y =
@@ -538,6 +677,15 @@ int game_session_tick_floater_wander(GameSession *session,
         if (floater->wander_timer == 0) {
             /* The retained wander order selects another point next tick. */
             floater->movement_state = 0;
+            if (floater->active_order_action == 0x14 &&
+                floater->source_subtype == 8) {
+                if (!game_session_order_floater_home(
+                        session, (unsigned int)(floater - session->floaters))) {
+                    floater->active_order_action = 0;
+                    floater->has_wander_order = 0;
+                }
+                return 1;
+            }
         }
     }
     return 1;
@@ -592,6 +740,74 @@ int game_session_order_floater_to_coordinate(GameSession *session,
     }
 
     floater->source_order_pending = 1;
+    return 1;
+}
+
+int game_session_order_floater_to_merge(GameSession *session,
+                                        uint8_t player_slot,
+                                        uint8_t island_index,
+                                        unsigned int floater_index,
+                                        unsigned int target_floater_index)
+{
+    GameFloaterStart *floater;
+    const GameFloaterStart *target;
+
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        island_index >= session->island_count ||
+        floater_index >= session->floater_count ||
+        target_floater_index >= session->floater_count ||
+        floater_index == target_floater_index) return 0;
+    floater = &session->floaters[floater_index];
+    target = &session->floaters[target_floater_index];
+    if (floater->owner_slot != player_slot || floater->source_subtype == 0 ||
+        floater->island_index != island_index || target->island_index != island_index ||
+        floater->active_order_action != 0 || floater->linked_task_slot != -1) {
+        return 0;
+    }
+
+    floater->active_order_action = 0x14;
+    floater->movement_state = 0;
+    floater->order_target_floater = (int16_t)target_floater_index;
+    floater->order_target_location = -1;
+    floater->order_progress = 0;
+    floater->source_order_pending = 0;
+    floater->has_move_order = 0;
+    floater->has_wander_order = 0;
+    floater->wander_timer = 0;
+    return 1;
+}
+
+int game_session_order_floater_to_defend(GameSession *session,
+                                         uint8_t player_slot,
+                                         uint8_t island_index,
+                                         unsigned int floater_index,
+                                         unsigned int target_floater_index)
+{
+    GameFloaterStart *floater;
+    const GameFloaterStart *target;
+
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        island_index >= session->island_count ||
+        floater_index >= session->floater_count ||
+        target_floater_index >= session->floater_count ||
+        floater_index == target_floater_index) return 0;
+    floater = &session->floaters[floater_index];
+    target = &session->floaters[target_floater_index];
+    if (floater->owner_slot != player_slot || floater->source_subtype == 0 ||
+        floater->island_index != island_index || target->island_index != island_index ||
+        floater->active_order_action != 0 || floater->linked_task_slot != -1) {
+        return 0;
+    }
+
+    floater->active_order_action = 8;
+    floater->movement_state = 0;
+    floater->order_target_floater = (int16_t)target_floater_index;
+    floater->order_target_location = -1;
+    floater->order_progress = 0;
+    floater->source_order_pending = 0;
+    floater->has_move_order = 0;
+    floater->has_wander_order = 0;
+    floater->wander_timer = 0;
     return 1;
 }
 

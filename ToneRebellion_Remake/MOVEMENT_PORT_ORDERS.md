@@ -27,7 +27,31 @@ was found; indirect runtime updates remain possible. Other category-pair rules
 still depend on `DAT_00619290`. Both unit and site approaches use the source's 43-unit
 side-offset, then enter state 6 or 7. The bridge
 now preserves the source order while the tick action is `FA_Cast` (`0x13`);
-the remake does not yet produce that action itself.
+the remake also retains a newer coordinate order through cast cleanup so the
+next poll can apply it. This follows `FUN_0042219e` (REA
+`ev_7b65b0885c0f8b591c2f99765a10875a29d00118a7a606dd55e5e6d165f65a7d`). The
+remake does not yet produce the general cast action itself.
+
+The simulation also accepts `FA_MergeWith` (`0x14`) through
+`game_session_order_floater_to_merge`: it follows the target to exact contact
+using state `0x0f`. Subtype 8 then wanders for 60 ticks and returns to its
+owner's Hall. Other subtypes enter state `0x15`, become subtype 8 at tick 25,
+and return to the Hall at tick 50. An artifact carried in raw floater `+0x18`
+is dropped at the nearest free neutral location as a `PIT_Object`, or added to
+the owner's inventory if no location is free. The `join6` visual is not
+modeled. This order entry point is not wired to a user input or
+autonomous task producer yet. The transitions follow
+`FUN_004211bb` (REA `ev_3477c4218f2065db070d4efae8de369bbea8abee71d9fdd735ccbdd92f6b39ba`).
+
+`FA_DefendFlt` (`8`) is also available through
+`game_session_order_floater_to_defend`. It follows the protected floater with
+the source's random offset and boundary clamps, searches for a qualifying
+candidate while moving, and enters the existing state-`0x0f` approach before
+state 6. In the remake, right-clicking a friendly floater issues this order;
+Shift+right-click issues `FA_MergeWith` against that floater. These are local
+input bindings because the original action-mode producer remains unresolved.
+The AI task producer remains unconnected; the candidate search uses the
+currently modeled `FUN_00420991` policy.
 
 The state-9 route now resolves its packed coordinate to a random waypoint with
 the source's bounded offsets and global X/Y limits. Its step falls to 1 when

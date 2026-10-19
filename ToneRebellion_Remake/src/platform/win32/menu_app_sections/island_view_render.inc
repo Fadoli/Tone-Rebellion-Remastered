@@ -284,7 +284,6 @@ static void render_island_view(HDC dc)
     }
 
     draw_hall_panel(dc, hall_player);
-    draw_hall_stock_summary(dc, hall_player, runtime_island);
 
     /* The five Hall command controls are clickable THALL frames from the
        active island palette. Their descriptors also own the hover bounds. */
@@ -322,30 +321,6 @@ static void render_island_view(HDC dc)
             draw_sprite(dc, &g_island_lilmap_art,
                         (uint32_t)g_island_surface_id,
                         mini_map->pane.left, mini_map->pane.top);
-        }
-    }
-
-    /* BC_HallStkB/C/M are the original Hall reserve controls. Their state
-       selects THBUTT frames 1..3; windows.txt assigns hover frame 4. */
-    if (hall_player >= 0 && g_hall_stock_art.frame_count >= 5) {
-        static const char *const stock_control_names[GAME_RESOURCE_TYPE_COUNT] = {
-            "BC_HallStkB", "BC_HallStkC", "BC_HallStkM"
-        };
-        unsigned int resource;
-        for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
-            const WindowTemplate *button = window_catalog_find(
-                &g_window_catalog, stock_control_names[resource], 3);
-            uint32_t frame;
-            if (button == NULL) continue;
-            frame = (uint32_t)button->shape_frame +
-                g_game_session.economy[hall_player].stock_mode[resource];
-            if ((int)resource == g_hovered_hall_stock && button->has_hilite_frame) {
-                frame = (uint32_t)button->hilite_frame;
-            }
-            if (frame < g_hall_stock_art.frame_count) {
-                draw_sprite(dc, &g_hall_stock_art, frame,
-                            button->pane.left, button->pane.top);
-            }
         }
     }
 
@@ -528,6 +503,10 @@ static void render_island_view(HDC dc)
             }
         }
     }
+    /* IWLocInfo's selected-building painter clears and redraws this pane, so
+       render the Hall's economy view after it. */
+    draw_hall_stock_summary(dc, hall_player, runtime_island);
+
     /* FUN_00440567 redraws the six IWLocInfo roster slots after preparing
        them in FUN_0044034e. This prototype has only the initial class-0
        workers, and the selected starting Hall is the only modeled roster
@@ -582,6 +561,35 @@ static void render_island_view(HDC dc)
             }
         }
     }
+    /* IWLocInfo includes these controls in its pane. Draw them after the
+       Hall stock summary, which repaints that pane's background. */
+    if (hall_player >= 0 && g_hall_stock_art.frame_count >= 5) {
+        static const char *const stock_control_names[GAME_RESOURCE_TYPE_COUNT] = {
+            "BC_HallStkB", "BC_HallStkC", "BC_HallStkM"
+        };
+        unsigned int resource;
+        for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
+            const WindowTemplate *button = window_catalog_find(
+                &g_window_catalog, stock_control_names[resource], 3);
+            uint32_t frame;
+            if (button == NULL) continue;
+            frame = (uint32_t)button->shape_frame +
+                g_game_session.economy[hall_player].stock_mode[resource];
+            if (frame < g_hall_stock_art.frame_count) {
+                draw_sprite(dc, &g_hall_stock_art, frame,
+                            button->pane.left, button->pane.top);
+            }
+            /* The highlight is a transparent overlay; keep the active stock
+               mode icon visible underneath it while hovering. */
+            if ((int)resource == g_hovered_hall_stock &&
+                button->has_hilite_frame && button->hilite_frame >= 0 &&
+                (uint32_t)button->hilite_frame < g_hall_stock_art.frame_count) {
+                draw_sprite(dc, &g_hall_stock_art,
+                            (uint32_t)button->hilite_frame,
+                            button->pane.left, button->pane.top);
+            }
+        }
+    }
     draw_location_action_panel(dc);
 }
 
@@ -625,6 +633,42 @@ static void draw_location_action_panel(HDC dc)
         if (selected_repair_button_visible()) {
             draw_control_with_hover_overlay(dc, repair_button,
                 &g_repair_button_art, g_hovered_repair_control);
+        }
+    }
+    if (panel != NULL && selected_location_can_be_grabbed()) {
+        RECT button_rect;
+        HBRUSH button_brush;
+        HBRUSH border_brush;
+        const char *label = g_game_session.location_move_active
+            ? "CANCEL MOVE" : "GRAB BUILDING";
+        if (location_grab_button_rect(&button_rect)) {
+            COLORREF fill = g_hovered_location_grab
+                ? RGB(72, 91, 126) : RGB(43, 57, 84);
+            button_brush = CreateSolidBrush(fill);
+            border_brush = CreateSolidBrush(RGB(168, 190, 224));
+            if (button_brush != NULL) {
+                (void)FillRect(dc, &button_rect, button_brush);
+                DeleteObject(button_brush);
+            }
+            if (border_brush != NULL) {
+                (void)FrameRect(dc, &button_rect, border_brush);
+                DeleteObject(border_brush);
+            }
+            {
+                int text_width = measure_bitmap_text(NULL, label, strlen(label));
+                int text_height = (int)g_bitmap_font.height;
+                draw_bitmap_label(dc, label,
+                    button_rect.left + ((button_rect.right - button_rect.left) -
+                                        text_width) / 2,
+                    button_rect.top + ((button_rect.bottom - button_rect.top) -
+                                       text_height) / 2,
+                    RGB(240, 244, 255));
+            }
+            if (g_game_session.location_move_active) {
+                draw_bitmap_label(dc, "Click a free site to place",
+                    panel->pane.left + 8, panel->pane.top + 5,
+                    RGB(230, 238, 255));
+            }
         }
     }
     button_name = action == ISLAND_LOCATION_ACTION_HALL_MOVE

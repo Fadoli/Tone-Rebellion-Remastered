@@ -59,11 +59,23 @@ therefore requires exact coordinate equality.
 After that approach ends and the task is consumed again, subtype 8 enters state
 `0x0e`; other subtypes enter state `0x15`. State `0x0e` selects a random point
 around the current position and moves with step 1 until exact arrival, then
-counts down its 60-tick timer. State `0x15` resolves to the current position,
-so it does not create another travel target. These are the observed follow-up
-states; their relationship to merge completion is not inferred beyond the
-transition itself. Evidence: order consumption and state writes
+counts down its 60-tick timer before the completion tail routes the unit back
+to its owner's home Hall. State `0x15` increments its timer to 50; for owners
+other than slot 4 it changes the subtype to 8 and resets the low level nibble
+at tick 25, then returns the floater to the home Hall at tick 50. `FUN_00425084`
+also clears raw `+0x18`: it turns the nearest empty neutral location into a
+`PIT_Object` carrying the item ID, or credits that item to its owner's
+inventory if no location is free. The remake now applies this at tick 25.
+Owner slot 4 instead removes the floater at tick 25 through
+`FUN_00467101`, which the remake does not model. The tick-1 `join6` effect is
+visual and is not yet ported. Evidence: order consumption and state writes
 `ev_96f90fdc7951d5fe26fcf0b495de08970ec0e6984d64572c67ff099abac40957`,
+state-15 timing and completion `ev_8578fcc7430b99a9d136eb0b2ff8e2854d7c283d39d2eccf477e4abff89249b4`,
+level reset `ev_d767a1c48244824eca26164035dd87111e3189eacb2ec4bb7139da8871579477`,
+optional object processing `ev_1718e6218fab4ce33e351c6a03c37a58b0302f79b01df5a39d6b37b00d70182f`,
+nearest-distance calculation `ev_ccde6e444b6db96913af9a026e4e92d3a048b91e9c009768d5b536f175d3de7e`,
+object placement `ev_ba8f92a6919e9effc29fe5556388fe31c0f95c6bb6cec3f58b14ccedd642103d`,
+and slot-4 removal `ev_720bed9b952f2e7445d5167173c318f7391052bbb32efc09f2bb9b3ec8791df0`,
 arrival and radius handling
 `ev_6c3ec9c58f2e2ec6ef837d8737ba3dfece6d35c11a918338523e688a6746c25a`,
 destination selection and step behavior

@@ -319,6 +319,11 @@ int game_session_tick_floater_handoff(GameSession *session,
             }
             floater->movement_state = resume_state;
             floater->active_order_action = resume_action;
+        } else if (resume_action == 0 && resume_state == 11 &&
+                   floater->source_order_parameter_32 <
+                       session->islands[floater->island_index].location_count) {
+            floater->movement_state = 11;
+            floater->active_order_action = 0;
         } else {
             floater->movement_state = 9;
             floater->active_order_action = 9;
