@@ -565,8 +565,10 @@ static void render_island_view(HDC dc)
                         ? &g_initial_floater_legs_flipped[floater->type_index]
                         : &g_initial_floater_legs[floater->type_index];
                     if (leg_art->frame_count != 0) {
+                        /* shapeinf.txt assigns worker hover/move to frames 0..15;
+                           later frames belong to pickup, carry, and training. */
                         draw_sprite(dc, leg_art,
-                            g_menu.animation_ticks % leg_art->frame_count,
+                            g_menu.animation_ticks % 16u,
                             info->pane.left + offset_x,
                             info->pane.top + offset_y);
                     }

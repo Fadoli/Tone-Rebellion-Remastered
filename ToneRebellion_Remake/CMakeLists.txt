@@ -26,6 +26,7 @@ add_library(tone_core STATIC
     src/core/game_session_pending_events.c
     src/core/game_session_animation.c
     src/core/game_session_movement.c
+    src/core/game_session_queries.c
     src/core/game_session_action9.c
     src/core/game_session_delivery.c
     src/core/game_session_world_map.c

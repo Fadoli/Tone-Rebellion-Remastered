@@ -220,7 +220,13 @@ static HDC g_sprite_source_dc;
 
 #include "menu_app_sections/island_assets.inc"
 
-#include "menu_app_sections/newgame_text.inc"
+#include "menu_app_sections/newgame_text_interaction.inc"
+
+#include "menu_app_sections/bitmap_text_layout.inc"
+
+#include "menu_app_sections/menu_help_loading.inc"
+
+#include "menu_app_sections/newgame_content_text.inc"
 
 #include "menu_app_sections/save_and_help_resources.inc"
 
@@ -240,6 +246,8 @@ static HDC g_sprite_source_dc;
 
 #include "menu_app_sections/render_dispatch.inc"
 
-#include "menu_app_sections/window_input.inc"
+#include "menu_app_sections/window_interaction.inc"
+
+#include "menu_app_sections/window_proc.inc"
 
 #include "menu_app_sections/content_loading.inc"
