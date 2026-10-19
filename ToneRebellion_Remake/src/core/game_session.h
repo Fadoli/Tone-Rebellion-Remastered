@@ -209,6 +209,12 @@ typedef struct GameFloaterStart {
     uint8_t current_hit_points;
     uint8_t max_hit_points;
     uint8_t attack_strength;
+    /* Floater runtime short +0x0c gates IWLocInfo CHARGE through
+       FUN_004207f2; +0x22 is the mutable charge counter. Initial workers
+       start at -1 and 0 respectively. Assignment and charge ticks are not
+       modeled yet. */
+    int16_t source_link_0c;
+    int16_t charge_current;
     uint16_t x;
     uint16_t y;
     uint16_t destination_x;
@@ -274,6 +280,12 @@ int game_session_initialize(const WorldDefinition *world,
                             const GameSessionConfig *config,
                             GameSession *out,
                             char *error, size_t error_capacity);
+
+/* FUN_0044338b shows CHARGE only when source_link_0c != -1 and obtains its
+   denominator from the floater type/subtype row's +0x08 value. */
+int game_session_floater_charge_values(const GameFloaterStart *floater,
+                                       const FloaterCatalog *catalog,
+                                       int16_t *current, int16_t *maximum);
 
 /* FUN_004459e6 uses payload +0x0a as island and +0x0e as location. Repair
    reads current +0x34 and FUN_00450978 maximum at that target. */

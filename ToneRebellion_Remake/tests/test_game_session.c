@@ -165,6 +165,25 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
                 assert(worker->current_hit_points == 2U + player);
                 assert(worker->max_hit_points == 2U + player);
                 assert(worker->attack_strength == player);
+                assert(worker->source_link_0c == -1);
+                assert(worker->charge_current == 0);
+                {
+                    GameFloaterStart linked_worker = *worker;
+                    int16_t current_charge;
+                    int16_t maximum_charge;
+                    const FloaterStats *stats = floater_catalog_find(
+                        &floater_catalog, worker->type_index,
+                        worker->source_subtype);
+                    assert(!game_session_floater_charge_values(worker,
+                        &floater_catalog, &current_charge, &maximum_charge));
+                    assert(stats != NULL);
+                    linked_worker.source_link_0c = 0;
+                    linked_worker.charge_current = 2;
+                    assert(game_session_floater_charge_values(&linked_worker,
+                        &floater_catalog, &current_charge, &maximum_charge));
+                    assert(current_charge == 2);
+                    assert(maximum_charge == stats->max_attack_points);
+                }
             }
         }
         assert(session.economy[player].hall_island_index == start->island_index);

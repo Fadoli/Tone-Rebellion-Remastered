@@ -5028,6 +5028,9 @@ static void render_island_view(HDC dc)
             {
                 char hit_points_label[24];
                 char strength_label[24];
+                char charge_label[24];
+                int16_t current_charge;
+                int16_t maximum_charge;
                 (void)snprintf(hit_points_label, sizeof(hit_points_label),
                     "HITS %u/%u",
                     (unsigned int)selected_floater->current_hit_points,
@@ -5041,6 +5044,18 @@ static void render_island_view(HDC dc)
                 draw_bitmap_label(dc, strength_label,
                                   info->pane.left + 5, info->pane.top + 33,
                                   RGB(230, 238, 255));
+                /* FUN_0044338b gates CHARGE through FUN_004207f2, which
+                   returns null for floater +0x0c == -1. */
+                if (game_session_floater_charge_values(selected_floater,
+                        &g_floater_catalog, &current_charge, &maximum_charge)) {
+                    (void)snprintf(charge_label, sizeof(charge_label),
+                        "CHARGE %d/%d", (int)current_charge,
+                        (int)maximum_charge);
+                    draw_bitmap_label(dc, charge_label,
+                                      info->pane.left + 5,
+                                      info->pane.top + 43,
+                                      RGB(230, 238, 255));
+                }
             }
 
             /* FUN_0044338b places the selected unit sprite to the right of

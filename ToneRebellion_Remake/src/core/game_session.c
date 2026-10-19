@@ -453,6 +453,8 @@ int game_session_initialize(const WorldDefinition *world,
             floater->current_hit_points = (uint8_t)stats->hit_points;
             floater->max_hit_points = (uint8_t)stats->hit_points;
             floater->attack_strength = (uint8_t)stats->attack_strength;
+            floater->source_link_0c = -1;
+            floater->charge_current = 0;
             floater->x = start->marker_x;
             floater->y = start->marker_y;
             floater->destination_x = start->marker_x;
@@ -921,6 +923,21 @@ unsigned int game_session_count_player_floaters(const GameSession *session,
         if (session->floaters[i].owner_slot == player_slot) ++count;
     }
     return count;
+}
+
+int game_session_floater_charge_values(const GameFloaterStart *floater,
+                                       const FloaterCatalog *catalog,
+                                       int16_t *current, int16_t *maximum)
+{
+    const FloaterStats *stats;
+    if (floater == NULL || catalog == NULL || current == NULL ||
+        maximum == NULL || floater->source_link_0c == -1) return 0;
+    stats = floater_catalog_find(catalog, floater->type_index,
+                                 floater->source_subtype);
+    if (stats == NULL) return 0;
+    *current = floater->charge_current;
+    *maximum = stats->max_attack_points;
+    return 1;
 }
 
 int game_session_workstr_summary(const GameSession *session,

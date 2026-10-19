@@ -67,6 +67,11 @@
 | `analyze_function` | `ev_fd688883d1298751b7b836f120b2f943abe1617bc91b1afc0b81c8323578cacf` | `FUN_0042f150` | Recherche de types de fenêtre et chaînes localisées, dont le diagnostic `gamey.txt`. |
 | `analyze_function` | `ev_a2f6dd8fe47f403c98165ec901d7fc9dac3fe46367845bddaa51759bdfbdbec6` | `FUN_004153b8` | Parseur d’enregistrements de données d’effets. |
 | `analyze_function` | `ev_6ccf11adf4100a01f329d47d35c0c8bd1d7e5c6fcff4d70ee2a0c846e156a876` | `FUN_00454d1f` | Parseur shape-info avec tags d’animation/interaction. |
+| `procedure_pseudo_code` | `ev_d72eed96013f16e8cecbd5772c71935e76feec78b9df2e8af58ccce46c4ada4e` | `FUN_00441d3e` | L'événement 6 d'IWLocInfo valide une source avant `0x48`, ou envoie `0x4a` si un grab est actif. |
+| `procedure_references` | `ev_0fb01505c0a7e326de1d7e85aa13d4df42a1c47415115b384c04cc90f31f9a6d` | thunk `FUN_0045f337` | Six appels résolus depuis les handlers d'île/IWLocInfo et les chemins grab/place; couverture directe des références entrantes. |
+| `procedure_pseudo_code` | `ev_29c00108fecaae10e34c3acd2f038be290b324679da3c2aa13b3a70825e8b4ae` | `FUN_0045f5c5` | Fin du grab : valide le site destination, gère la pose au Hall/retour à l'origine et efface l'état actif en cas de succès. |
+| `procedure_assembly` | `ev_ded193af75b4663591b54cea28c51d70b7d2a0d987a2d7b891ee6f7cacdc8963` | `FUN_0045f5c5` | Confirme les conventions du helper de pose : cible en `ECX`, site source mémorisé en argument. |
+| `procedure_pseudo_code` | `ev_46b3b31c81eecb2bc50884c4458f57e4c8020d7001de0c3ae0260c3a1b1d9185` | `FUN_0045343b` | Un site cible libre de type 0 ou 1 reçoit l'ID/propriétaire et plusieurs champs de la source. |
 | `analyze_function` | `ev_5d60033e6cc433f212a51343e2761e910c21c813cc1727a5c0375a566c73d999` | `FUN_00455833` | Parseur de records `SHAPE` et données associées. |
 | `analyze_function` | `ev_561df3c3edee5a21c16764f7b95d5fa1e14e3a19d3ca83157c30bd51568c31c9` | `FUN_004642a3` | Parseur de tables monde/îles/positions et appels aux helpers `pad`, `floater`, `spells`. |
 | `analyze_function` | `ev_ac313cb8cc73f9c102676395cd14cb97b5b1f9355d074df1e6656ce028d2d36f` | `FUN_0046466f` | Initialisation de quatre slots, sélection du marqueur/site de départ et appels pour créer le pad `0x2a` et quatre floaters; voir `FUNCTION_GUIDE.md` pour les limites d'interprétation. |
