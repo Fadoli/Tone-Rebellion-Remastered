@@ -72,6 +72,19 @@ static int game_session_resolve_cast_destination(
     return 1;
 }
 
+static void game_session_cancel_cast_order(GameFloaterStart *floater)
+{
+    floater->active_order_action = 0;
+    floater->movement_state = 0;
+    floater->order_target_floater = -1;
+    floater->order_target_location = -1;
+    floater->cast_spell_kind = 0;
+    floater->order_progress = 0;
+    floater->source_order_pending = 0;
+    floater->has_move_order = 0;
+    floater->source_runtime_flags &= ~0x065U;
+}
+
 void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
 {
     unsigned int i;
@@ -142,7 +155,8 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
 
         if (floater->active_order_action == 0x13 &&
             floater->movement_state == 0x13) {
-            (void)game_session_resolve_cast_destination(session, floater);
+            if (!game_session_resolve_cast_destination(session, floater))
+                game_session_cancel_cast_order(floater);
             continue;
         }
 
