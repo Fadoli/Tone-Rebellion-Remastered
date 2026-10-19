@@ -145,6 +145,12 @@ unestablished. Evidence:
 `ev_601b55f72156209d4f5c1ae6f9060918a71e3fc3423c72c12074227bdb69a5c6`,
 `ev_400be7fc416e3e48c58ebeae7f1497639f909f0569891b58d5b3cba579bbab2a`.
 
+The four initial workers use categories 0–3, subtype 0 and charge `+0x22 = 0`,
+so this guard returns no stat radius for them; their state-`0x0f`/`0x10`
+arrival radius remains 10 unless their action is `0x14`. Evidence:
+`ev_ac313cb8cc73f9c102676395cd14cb97b5b1f9355d074df1e6656ce028d2d36f`,
+`ev_0ca802ac15043c61c073f6d68546619fc924a4ba10fd4d9f04e203668dc62ed7`.
+
 ### Destination resolution and step size
 
 `FUN_00422d27` starts with the signed-short pair at floater offsets `+0x28`
@@ -185,6 +191,55 @@ pathfinding or obstacle avoidance. Evidence:
 `ev_810f7530a91d83a454c4d310d2142cafe948434cde2b0707fd5847693435b64f`,
 `ev_99ac9bec204079134afb4ec773ba173dab2b1a1a87ae06d72f28cad8c8cbfff9`,
 `ev_0c9a83fe313044ec813605a6f5e71760fcbcf78e0fff164432184e30593c562d`.
+
+### Target source and facing adjustment
+
+`FUN_00423068` resolves the next pixel pair from the runtime state and target
+index. The main coordinate sources observed in its switch-like conditions are:
+
+| Runtime state / family | Coordinate source before anchor adjustment |
+|---|---|
+| `6` or `0x0f` | Current coordinates of the floater indexed by `+0x32`; these are live entity coordinates, so an approach can track a moving target. |
+| `0x10` | Coordinates from the current island's location record indexed by `+0x32`. |
+| `0x0e` | Current floater coordinates plus two bounded offsets in `[-100,99]`; Y is then clamped to `0x28..0x122`. |
+| `9` | The packed target at `+0x32` is expanded by `FUN_0041e427`, then the same two bounded offsets are applied. |
+| `0x15` | The floater's current coordinates; this branch does not introduce a new travel point. |
+
+Other ordinary states select a location record from the current island. State
+`8` follows a separate special case that draws around coordinate origin rather
+than using the selected location coordinates. For entity-target states 6 and
+`0x0f`, the helper compares target X with current X, sets/clears facing flag
+`0x002`, and places the approach point 43 coordinate units on the current
+floater's side of the target unless the action is `FA_MergeWith` (`0x14`).
+Location targets can receive other adjustments based on their raw
+class/type/flags, sprite metrics, and helper results; those conditions remain
+field-based rather than named terrain or collision rules. A final horizontal-bounds check controls whether
+`+0x28/+0x2a` are written. This is target resolution and visual/body spacing,
+not evidence of obstacle avoidance or continuous cross-island movement.
+Evidence: `ev_3dde3e48aa8d5db8b349dce765fef2704415afc59c5392eaecb900882a0f899f`,
+with state consumers in
+`ev_6c3ec9c58f2e2ec6ef837d8737ba3dfece6d35c11a918338523e688a6746c25a` and
+`ev_810f7530a91d83a454c4d310d2142cafe948434cde2b0707fd5847693435b64f`.
+
+States `0x0f` and `0x10` do not use the common movement call in the floater
+tick. Their state handler first compares Chebyshev distance against its
+arrival radius; only while outside that radius does it resolve the destination
+again with `FUN_00423068` and perform one `FUN_00422d27` step. For `0x0f`,
+that refresh reads the target floater's current coordinates, so the approach
+tracks a moving entity and can end without exact coordinate equality. For
+`0x10`, the refresh reads the indexed island-location record. The arrival test
+uses the previously stored destination; when it is already inside the radius,
+the state completes before refreshing the target or taking a step. **Consequence
+of this ordering:** if a target floater moved since its coordinates were last
+resolved, the approach can complete while the floater is within radius of that
+old point, without checking the target's new position on that update. If the
+old point is outside the radius, the handler resolves the target's current
+position and attempts one step. This consequence follows from the observed
+branch ordering; it is not a separately named source rule. This is a
+state-specific approach rule, not general pathfinding. Evidence:
+`ev_6c3ec9c58f2e2ec6ef837d8737ba3dfece6d35c11a918338523e688a6746c25a`,
+`ev_3dde3e48aa8d5db8b349dce765fef2704415afc59c5392eaecb900882a0f899f`,
+`ev_810f7530a91d83a454c4d310d2142cafe948434cde2b0707fd5847693435b64f`.
 
 ### `FA_Move`: local target approach and arrival
 
@@ -264,28 +319,39 @@ record when the link changes. This is the observed bridge between the task
 table and an order executor, not a coordinate assignment by itself. Evidence:
 `ev_c2d3e74dd2e94c30ca9de18f1387bb8d44d32daf432cd179e9d1b8dfc693b4dc`.
 
-### `FA_Wander` execution and retained destination
+### `FA_Wander` destination generation and repeated movement
 
 The periodic reevaluator can assign `FA_Wander` (`14`) with the tribe's home
 island as its target when no task record is selected. The local executor in
 `FUN_004211bb`, switch case `0x0d` (`action - 1`), sets runtime state `0x0e`,
-sets the state timer at `+0x34` to 60, and sets progress `+0x46` to `-1`. This
-branch does not write the movement destination pair at `+0x28/+0x2a` or choose
-a location record.
+sets the state timer at `+0x34` to 60, and sets progress `+0x46` to `-1`. Its
+branch does not write the movement destination pair itself. The executor's
+common tail calls `FUN_00423068` whenever runtime state `+0x2c` is nonzero, so
+the newly entered state resolves a coordinate destination immediately.
+
+For state `0x0e`, `FUN_00423068` starts from the floater's current X/Y. It draws
+two bounded values with `FUN_00467260(200)`, subtracts 100 from each, and adds
+those offsets to current X/Y. Candidate X is first limited against the
+category/subtype X bounds with a 100-unit margin where those table bounds are
+available; candidate Y is clamped to `0x28..0x122`. For state `0x0e`, the
+helper takes the no-location-record path, which adds no extra sprite/stance
+offset. It accepts the candidate only if final X passes the horizontal bounds
+check, then stores the pair at `+0x28/+0x2a`. Facing is updated from the
+candidate's horizontal direction. These are observations of the pseudocode; coordinate units and the
+exact meaning of the table bounds are not fully named. The evidence does not
+establish a uniform distribution, nor that a newly generated coordinate must
+differ from the previous one.
 
 State `0x0e` is allowed through the common movement gate in `FUN_0041e569`.
-`FUN_00422d27` uses the existing `+0x28/+0x2a` pair as its destination and
-uses base step magnitude 1 for this state before range/effect modifiers. The
-timer at `+0x34` counts down only when the coordinate step reports exact
-arrival; this state does not use the radius test documented for states
-`0x0f/0x10`. Thus the evidence proves how the wander action enters a moving
-state and which stored coordinates that state uses, but not where a fresh
-wander destination is chosen. In particular, the consumer alone does not
-support implementing random target selection. The reevaluator's fallback
-home-island value is an island/task target, not by itself proof of a
-coordinate destination. When the timer expires, generic completion clears the
-runtime state but retains the action; the next idle dispatch can enter the
-same executor branch again, still without a new coordinate write. Evidence:
+`FUN_00422d27` consumes the stored `+0x28/+0x2a` destination and uses base step
+magnitude 1 for this state before other speed/effect modifiers. The timer at
+`+0x34` counts down only when the coordinate step reports exact arrival; this
+state does not use the radius test documented for states `0x0f/0x10`. When the
+timer expires, generic completion clears runtime state but retains the action;
+the next idle dispatch can enter the executor branch again, whose common tail
+resolves another destination. The reevaluator's home-island value is still an
+island/task target, while the coordinate destination is generated separately
+by `FUN_00423068`. Evidence:
 `ev_4c7ea2d2c94eba918c2e82e0709966a1d9d2c60e1d2c705361285aceb05e5dea`,
 `ev_96f90fdc7951d5fe26fcf0b495de08970ec0e6984d64572c67ff099abac40957`,
 `ev_6c3ec9c58f2e2ec6ef837d8737ba3dfece6d35c11a918338523e688a6746c25a`,
@@ -465,6 +531,30 @@ loads the requested location from island `+0x40`, location `+0x42`, then checks
 the item parameter `+0x44` with `FUN_004526de`. A failed item check terminates
 the task. Otherwise it selects among three routes:
 
+There is also an upstream task-eligibility gate. During autonomous selection,
+`FUN_0042219e` calls `FUN_00422031` before accepting a task record. For a
+record whose action field `+0x10` is 5, the gate rejects it if the record's
+parameter `+0x12` fails `FUN_004526de`. If the floater's raw `+0x18` field is
+not 1 and `FUN_00452794(parameter, unit)` rejects the parameter, the gate asks
+`FUN_00420dbd(1)` for an available island/site pair and accepts the task only
+if that search returns one. When `+0x18` is 1, or the direct item/site check
+succeeds, this gate does not require that fallback search.
+This connects site availability to whether an autonomous build task is
+assigned, before the route selection below; the meanings of floater `+0x18`
+and task-record population remain unresolved. At field level, `FUN_004526de`
+checks owner/state fields, an owner bit in the floater byte at `+0x22`, and the
+comparison between an owner-table short and the selected item record's `+0x0c`.
+`FUN_00452794` adds a comparison between the floater short at `+0x28` and the
+selected item record's `+0x04`. The gameplay meanings of these table values
+and shorts are not established. Evidence: task validator
+`ev_9d5d129cd6bb5e1095f8136fbde959c47360ad898c94d3104c63add6dcda3bc7`,
+item guard `ev_362f18c1c5d6399f0ca1abb08a88f3f9516320b6a45fd5724a68079716b6da56`,
+site validator `ev_e884123140e558d8678b40fa79da6539532f8441ffe895daabdad5787c8afff7`,
+item-record lookup `ev_f92b05e1bac76d2be3a91b76e6eb420474e1d04db600d49cc8d4a55edf30587d`,
+floater short lookup `ev_83275ff82da670ce74e3ad4a2dfd317b20b7b0f0fd6513a33a0d43be184c89d9`,
+reevaluator `ev_d9f9f466dec9c616930d5fb954437b6cb9c603d687390540a4d8c90cdc2c0eea`,
+and action labels `ev_ca6209d841056d1b69884f43a204d17713c19c2756570da82baaec770609aa1f`.
+
 | Condition | Local route | Arrival behavior |
 |---|---|---|
 | Target location raw field `+0x04` is zero and `FUN_00452794(+0x44, owner)` accepts it | On the target island, enter state `5`, target the requested location through `+0x32`, store item parameter `+0x44` at `+0x30`, and set progress `-1`. If remote, hand off through `FUN_004210a9(+0x40)`. | State `5` uses the location-derived movement destination. On exact arrival it ends the state and calls `FUN_004527ee(+0x30, owner)` when location field `+0x04` is zero. |
@@ -600,18 +690,41 @@ and action consumer `ev_96f90fdc7951d5fe26fcf0b495de08970ec0e6984d64572c67ff099a
 
 A read of the loaded image at `DAT_006183bc` returned 0x500 initialized zero
 bytes, the full 64-record span at stride `0x14`; the `.data` segment is marked
-initialized. Typed incoming references to the action field `+0x10` contain a
-read and address-only references, with no typed write at that exact address.
-This rules out a prefilled task catalog in the inspected image bytes, but it
-does not identify runtime population: a computed destination, bulk copy, or
-unobserved indirect writer may not appear as an exact typed reference. Evidence:
+initialized. The adjacent scan bound `DAT_006188bc` is also zero in the loaded
+image; its sole direct reference is a read in `FUN_0042fa0f`, where it bounds
+the active-task search. Typed incoming references to the action field `+0x10`
+contain a read and address-only references, with no typed write at that exact
+address.
+The live base xrefs cover 19 sites in seven procedures: `FUN_00421ec1`,
+`FUN_00422031`, `FUN_0042219e`, `FUN_0042fa0f`, `FUN_00432c74`,
+`FUN_00445145` and `FUN_004455d1`. Review of their retained bodies found one
+table write:
+`FUN_00421ec1` increments/decrements a slot's short at `+0x04` (the claimant
+count); it reads the other slot fields and copies the action, island, target
+and parameter to the floater. The validator and reevaluator filter slots, the
+Tasks UI searches/enumerates them, and `FUN_00432c74` formats nonempty entries
+in a diagnostic task list. Their retained bodies show reads/address formation,
+not population writes. This rules out a prefilled task catalog in the
+inspected image bytes, but it does not identify runtime population: a computed
+destination, bulk copy, or unobserved indirect writer may not appear as an
+exact typed reference. Evidence:
 image bytes `ev_bc254ddb3b5d4bfc3b423aa3c2a839a6aa1f4f771807016000e59944447f751e`,
 segment initialization `ev_254928ccff2cf0ec576eeddf8c2bba7d672a4d24c5d348d39bb0e17288171961`,
-and field references `ev_50a5fda0ff82969f755c9db1bc3df1f158c35f1c08640ce4cc393b308f55d113`.
+field references `ev_50a5fda0ff82969f755c9db1bc3df1f158c35f1c08640ce4cc393b308f55d113`,
+table-base xrefs `ev_17822ce9cd33c62cee9df591f32253f607cdd2842d06f0999b06c5d99173784a`,
+scan-bound bytes `ev_1a41179b501410302facf114f1b939f69b226dbf2b96f46746236674007b5b1e`,
+scan-bound xref `ev_2386230a22ea08ca9dee702742e0ada6673f3308dff7cb2224d379efb8d5efdc`,
+task-link update `ev_c2d3e74dd2e94c30ca9de18f1387bb8d44d32daf432cd179e9d1b8dfc693b4dc`,
+validator `ev_9d5d129cd6bb5e1095f8136fbde959c47360ad898c94d3104c63add6dcda3bc7`,
+reevaluator `ev_d9f9f466dec9c616930d5fb954437b6cb9c603d687390540a4d8c90cdc2c0eea`,
+Tasks UI `ev_25d048fc082b5ed144709e4886b7748e44943fd30f5e02a0e06addfc60beaec9`,
+task-list formatter `ev_a0e3498f3ed8eb4104bd4b63541e89783f53f63203d538d435ff69c00c824209`,
+and its typed references `ev_9771e1e273408598010b44e9c8a1a5d1e69b98d70114d34de4e8eda7fe6fa8cf`.
 
-The remaining source probe is to trace task-slot population through computed
-or bulk writes and initialization phases; direct field xrefs and initialized
-image bytes do not resolve that producer.
+The remaining source probe is to inspect references and stores across the full
+64-slot range `[0x6183bc, 0x6188bc)`, including computed/bulk writes, then trace
+initialization of the observed count at `DAT_006188bc`. Exact field xrefs and
+initialized image bytes alone do not resolve that producer.
 
 ### Facing and rendered anchor
 
@@ -637,8 +750,9 @@ candidate guard `FUN_00420991` applies class, flags, and level-table tests, but
 does not by itself prove which class numbers correspond to soldier/mage or
 which direct orders each accepts. Source evidence establishes that the cast
 action path assigns order `0x13` to an eligible unit and that the floater tick
-consumes such task state; complete autonomous routes and idle-unit destination
-rules remain TODOs. Soldier/mage direct orders remain disabled
+consumes such task state. The idle fallback and `FA_Wander` coordinate cycle
+are now documented below; the remake has not ported that autonomous cycle.
+Soldier/mage direct orders remain disabled
 until their original callback guard and table initialization are confirmed.
 
 The REA pseudocode establishes that `FUN_00435826` chooses UI action modes
@@ -655,8 +769,9 @@ command is exposed in the remake. The confirmed producer `FUN_0045da80` writes
 `FA_Cast` (`0x13`); it is not evidence of a construction assignment. `FA_Build`
 has a traced consumer and site validator, but its producer and the transitions
 connecting assignment, travel and placement are not yet fully reconstructed.
-Do not model idle workers as random walkers: recover their
-source-selected destinations and stop/arrival conditions first.
+The source-generated wander destination and its stop condition are now
+established for `FA_Wander`; the remake still needs to port the action/timer
+transitions and bounds/anchor resolution before idle workers can use this path.
 
 The current remake also records left/right facing from the destination direction and
 uses horizontally mirrored body and leg sheets while facing left. This follows
@@ -671,10 +786,22 @@ view, which draws a smaller subset of unit states.
 `FUN_0044003d` hit-tests six `IWLocInfo` slots: left-click selects an occupied
 slot (`0x3f`), or emits `0x32` only when the selected record's `+0x18` is not
 `-1`. Right-click emits `0x4d(owner)` for a non-local owner, then always
-`0x3d(1)`. These are message observations, not proven movement effects; no
-evidence links the `IWMove` control to this callback. The remake's four-worker
-roster selection is the supported subset; no move command is exposed.
-Evidence: `ev_dfa9260d630c5590f535d54281a0b8f2c2767e3ca99d4a00ffdd596b3104b7eb`.
+`0x3d(1,1)`. The `0x3d` arm in `FUN_0042fa0f` passes `DAT_005c37e4[1]`, message
+`0x35` and the click parameters `(1,1)` to `FUN_0046c371`. That wrapper rejects
+a negative active-state index (`+0x29f2`); otherwise it indexes the object
+array at `+4 + recipient_index * 0x0c` and invokes that object's vtable slot
+`+4`, passing a value formed from the active-state index and message `0x35`,
+followed by `(1,1)`. The concrete recipient object, its vtable and method body
+remain unresolved, so this path cannot yet be identified as a floater movement
+command. The next static probe is to trace initialization/writes to
+`DAT_005c37e4[1]`, then resolve that object's vtable slot. This path is distinct
+from map-ground message `0x4c`, whose callback and recipient guard are
+unresolved independently. The remake's four-worker roster selection is the
+supported subset; no move command is exposed. Evidence:
+`ev_dfa9260d630c5590f535d54281a0b8f2c2767e3ca99d4a00ffdd596b3104b7eb`,
+`ev_6ac7cc6650dc8a0e9b412c055606948d1c6dbbdd3e6c6df0a7fcc1551764419e`,
+`ev_f8a09cad809f94f6483fa8f6623537024026f2d86fdd3f36b90ed39dbda0bd65`,
+`ev_ed92b375145a0b030776f82d115ccc237230777746be74169b6aac305580d646`.
 
 `FUN_0045f4f5` starts the move context after its eligibility checks; it does
 not issue order 9. `FUN_0045f5c5` ends the context: for target item `0x2a`,
