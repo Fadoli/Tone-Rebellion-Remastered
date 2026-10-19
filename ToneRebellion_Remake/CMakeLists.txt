@@ -21,6 +21,11 @@ add_library(tone_core STATIC
     src/core/world_map.c
     src/core/game_start.c
     src/core/game_session.c
+    src/core/game_session_animation.c
+    src/core/game_session_movement.c
+    src/core/game_session_world_map.c
+    src/core/game_session_economy.c
+    src/core/game_session_events.c
     src/core/game_inventory.c
     src/core/game_trade.c
     src/core/game_diplomacy.c
