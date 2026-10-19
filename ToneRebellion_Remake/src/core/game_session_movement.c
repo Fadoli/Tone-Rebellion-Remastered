@@ -43,10 +43,10 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
                 int32_t anchor_y =
                     (int32_t)(floater->source_order_coordinate_30 & 0xffU) * 10;
 
-                if (floater->type_index != 4U &&
-                    floater->type_index < GAME_FLOATER_CATEGORY_COUNT) {
-                    raw_min_x = island->floater_min_x[floater->type_index];
-                    raw_max_x = island->floater_max_x[floater->type_index];
+                if (floater->owner_slot != 4U &&
+                    floater->owner_slot < GAME_FLOATER_CATEGORY_COUNT) {
+                    raw_min_x = island->floater_min_x[floater->owner_slot];
+                    raw_max_x = island->floater_max_x[floater->owner_slot];
                 }
 
                 floater->active_order_action = 9;
@@ -75,6 +75,7 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
 
         game_session_advance_action9(session, i);
         game_session_tick_floater_combat(session, i);
+        if (game_session_tick_floater_handoff(session, floater)) continue;
         if (floater->active_order_action == 4 && !floater->has_move_order) {
             game_session_advance_local_resource_task(session, floater);
             if (!floater->has_move_order) continue;
@@ -200,11 +201,12 @@ int game_session_tick_floater_wander(GameSession *session,
             return 1;
         }
         island = &session->islands[floater->island_index];
-        /* FUN_00423068 skips the per-island/category table for category 4
+        /* FUN_00423068 skips the per-island/player table for player slot 4
            and keeps its global 0..0x9ff bounds. */
-        if (floater->type_index != 4U) {
-            raw_min_x = island->floater_min_x[floater->type_index];
-            raw_max_x = island->floater_max_x[floater->type_index];
+        if (floater->owner_slot != 4U &&
+            floater->owner_slot < GAME_FLOATER_CATEGORY_COUNT) {
+            raw_min_x = island->floater_min_x[floater->owner_slot];
+            raw_max_x = island->floater_max_x[floater->owner_slot];
         }
         if (!floater_motion_wander_destination(
                 &session->random_state, floater->x, floater->y,
@@ -269,9 +271,7 @@ int game_session_order_floater_to_coordinate(GameSession *session,
     }
 
     floater = &session->floaters[floater_index];
-    if (floater->owner_slot != player_slot ||
-        floater->island_index != island_index ||
-        floater->source_subtype == 0) {
+    if (floater->owner_slot != player_slot || floater->source_subtype == 0) {
         return 0;
     }
 
@@ -285,6 +285,20 @@ int game_session_order_floater_to_coordinate(GameSession *session,
     floater->source_order_coordinate_30 =
         (uint16_t)(((uint16_t)packed_x << 8) | packed_y);
     floater->source_order_parameter_32 = 0;
+    floater->source_order_pending = 0;
+
+    if (floater->island_index != island_index) {
+        floater->active_order_action = 9;
+        if (!game_session_begin_floater_handoff(session, floater,
+                                                island_index)) {
+            floater->source_order_state_2c = 0;
+            floater->source_order_coordinate_30 = 0;
+            floater->active_order_action = 0;
+            return 0;
+        }
+        return 1;
+    }
+
     floater->source_order_pending = 1;
     return 1;
 }

@@ -15,10 +15,10 @@ void game_session_tick_floater_combat(GameSession *session,
 /* Advance the source effect manager before per-floater state updates. */
 void game_session_tick_combat_effects(GameSession *session,
                                      uint32_t source_tick);
-/* FUN_0042fa0f's map-ground mode 0x13 enters FUN_0045d8b2 with runtime state
-   9 and a coordinate packed by FUN_0041e3eb (rounded to 10-pixel units).
-   The remake exposes it only for non-worker floaters, matching the user's
-   source-control constraint. Returns nonzero when the order is accepted. */
+/* Orders a player-controlled worker to a map coordinate. A local destination
+   enters state 9 directly; a remote destination walks to a bridge, transfers
+   to the target island, then resumes the coordinate order. Coordinates use
+   the source's rounded 10-pixel packing. Returns nonzero when accepted. */
 int game_session_order_floater_to_coordinate(GameSession *session,
                                              uint8_t player_slot,
                                              uint8_t island_index,

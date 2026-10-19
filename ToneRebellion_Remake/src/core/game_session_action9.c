@@ -39,9 +39,11 @@ static int action9_find_floater(const GameSession *session,
             category_matches = source_level < 0x65
                 ? candidate->type_index != 4 : candidate->type_index == 4;
         } else {
-            /* Category 4 is always accepted; the other class-pair cases
-               depend on unmodeled DAT_00619290 values. */
-            category_matches = candidate->type_index == 4;
+            /* FUN_00420991 accepts category 4 or a zero in the source/target
+               category matrix. The 5x5 entries read from FLOAT.EXE are all
+               zero, so every modeled category is initially eligible. */
+            category_matches =
+                candidate->type_index < GAME_FLOATER_CATEGORY_COUNT;
         }
         if (index == source_index || candidate->island_index != source->island_index ||
             !category_matches || (candidate->source_runtime_flags & 0x809U) != 0) {

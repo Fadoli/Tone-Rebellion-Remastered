@@ -38,7 +38,6 @@ void game_session_tick_floater_combat(GameSession *session,
                     (uint16_t)floater->order_target_location]);
         }
         game_session_start_attack_effect(session, floater, damage);
-        if (floater->charge_current > 0) --floater->charge_current;
     } else if (floater->attack_timer > floater->attack_period &&
                !floater->attack_effect_active) {
         floater->movement_state = 0;
@@ -67,8 +66,8 @@ static int32_t floater_attack_power(const GameFloaterStart *floater)
         power = 0;
     }
     if (floater->type_index == 4U) {
-        power += level * 3 +
-                 (level * ((floater->attack_level_flags >> 4) & 0x0fU)) / 22;
+        power += level * 3;
+        power += (((floater->attack_level_flags >> 4) & 0x0fU) * power) / 22;
     } else {
         power += level * 2;
     }

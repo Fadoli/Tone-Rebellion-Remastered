@@ -5,6 +5,16 @@
 `game_session_combat_effects.c`. `floater_effect_catalog.c` reads the four
 realm frame ranges from `effects.txt`.
 
+`floater_attack_power` now applies the category-4 level modifier to the
+already accumulated base plus `3 * level`: `power += high_nibble * power / 22`.
+Other categories add `2 * level`. `FUN_0041fde6` reads attack strength from the
+record at `+0x0a` only when `FUN_004207c2` permits it; linked-site bonuses are
+still not represented. Evidence: `ev_6840e9603bc69a881626d117d21f164c420fe3d7683a6a3499a6803031c91b48`,
+`ev_8709314ab4e61c06f9a65200e76f6f026e25e31061938ae192a13265aff6d4b9`,
+`ev_42b992f36684f6ab483de7e785ad784edf29aff2675858dcc62fb8c794f6d1fb`,
+`ev_bfd788316e3cf96fdb381d544548f14e253126f1a73497c331e2b6205d127b3a`,
+`ev_c98a873c8773837cea12a521e802a6556ff976490acd69ff8f2b312c6614ebde`.
+
 On a successful state-6/7 hit, the session reserves one of 32 modeled effect
 slots. The hit's damage selects an IMPACT level as `damage / 2`, capped at 3.
 The effect advances on odd `source_tick` values and finishes after the loaded

@@ -48,6 +48,8 @@ int game_session_pop_onoff_action(GameSession *session,
    subtype 1..3 tasks on OFF. */
 unsigned int game_session_dispatch_onoff_actions(GameSession *session,
                                                  const PadCatalog *catalog);
+/* Recompute runtime active bit 0 using FUN_00453958's observed predicate. */
+unsigned int game_session_recalculate_active_locations(GameSession *session);
 /* FUN_0042fa0f(0x34): retain the observed category-0/type-5 selection packet
    for the active island location. The final synchronized consumer is unknown. */
 int game_session_queue_build_selection(GameSession *session,

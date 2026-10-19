@@ -53,3 +53,22 @@ handoff selector `ev_dd046f002c50d0d9e841af455f3dd8fc8b70d1b11f430f2fa5c0185edc5
 per-floater transition `ev_6c3ec9c58f2e2ec6ef837d8737ba3dfece6d35c11a918338523e688a6746c25a`,
 destination-island lookup `ev_c50cc6e829d1545a0ff5b6cadf8d1248dabad2086db613e1f1ba72423d27b6fb`,
 and coordinate step `ev_810f7530a91d83a454c4d310d2142cafe948434cde2b0707fd5847693435b64f`.
+
+## Remake port
+
+The coordinate-order API now accepts a destination island different from the
+floater's current island. It selects a departure marker using the same
+endpoint-first, nearest-within-6000 rule, walks there, waits 60 ticks, then
+waits 200 ticks when the reciprocal marker is active or 500 when it is not.
+At timer 120 it rechecks the reciprocal marker and otherwise chooses the
+nearest active class-2 marker within 8000 of the packed destination coordinate.
+The floater appears at `(marker.x, marker.y - 30)`, updates island access and
+horizontal bounds on first entry, waits until timer 60, and resumes its
+coordinate order on the destination island. `FUN_00466b09`'s event emission is
+not modeled yet. This port is grounded by REA Evidence
+`ev_c4c31ca182a9de59d1857dd8692b44bb5c634fa49bf26b159390ca12c1670270`
+(`FUN_004210a9`), `ev_8578fcc7430b99a9d136eb0b2ff8e2854d7c283d39d2eccf477e4abff89249b4`
+(`FUN_0041e569`), `ev_a1320147f184399943ce271ba0fbcd2f683878803bd3fc1f71e6ef7ebee5330b`
+(`FUN_00466c08`), `ev_91561184d908c1ab3ed34a431eaf16bd34ca04cc463b048c991fbb44863afe98`
+(`FUN_00420ed9`), and `ev_4846081c4f2118a55d5a3f04ab48748e6d7988dd57dd442b30ef90fdefcf6b3f`
+(`FUN_00466b09`).

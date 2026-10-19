@@ -1,4 +1,5 @@
 #include "game_session.h"
+#include "game_session_events.h"
 
 #include <string.h>
 
@@ -96,4 +97,7 @@ void game_session_dispatch_island_events(GameSession *session)
             }
         }
     }
+    /* FUN_00453958 is a virtual active-state predicate. Keep the modeled
+       active bit current before Hall requests are evaluated this tick. */
+    (void)game_session_recalculate_active_locations(session);
 }

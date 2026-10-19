@@ -62,9 +62,9 @@ typedef struct GameRuntimeLocation {
 
 typedef struct GameRuntimeIsland {
     uint16_t location_count;
-    /* FUN_00423068 reads horizontal wander limits by floater category and
+    /* FUN_00423068 reads horizontal wander limits by player slot and
        island. Zero / 0x9ff retain the source's global fallback on each side;
-       the data loader for the original per-category limits is not modeled. */
+       the data loader for the original per-player limits is not modeled. */
     int32_t floater_min_x[GAME_FLOATER_CATEGORY_COUNT];
     int32_t floater_max_x[GAME_FLOATER_CATEGORY_COUNT];
     /* FUN_00420991 uses DAT_0061fa2e[island] to decide whether a category-4
@@ -72,7 +72,7 @@ typedef struct GameRuntimeIsland {
        loaded image initializes all 15 entries to zero; no direct writer was
        found, though indirect runtime updates remain possible. */
     int16_t source_level;
-    /* FUN_0047117d checks one per-player access dword at island +0x29ac. */
+    /* FUN_00420dbd/FUN_0047117d check player access dwords at island +0x29ac. */
     uint8_t access_mask;
     /* FUN_00465793 message type 3/subtype 0 toggles bit 0 in one raw dword
        per player at island +0x29bc. Its gameplay/display meaning is unknown. */

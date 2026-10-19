@@ -1,4 +1,5 @@
 #include "game_session.h"
+#include "game_session_events.h"
 #include "pad_catalog.h"
 
 #include <string.h>
@@ -47,7 +48,6 @@ static int game_session_recalculate_location_active(GameRuntimeLocation *locatio
     uint32_t current_flags;
     int can_be_active;
 
-    if (location->renderer_class == 2 || location->renderer_class == 3) return 0;
     previous_flags = location->source_flags;
     current_flags = previous_flags & ~1U;
     can_be_active = (previous_flags & 0x90U) == 0 &&
@@ -57,17 +57,28 @@ static int game_session_recalculate_location_active(GameRuntimeLocation *locatio
         ((previous_flags & 0x100U) == 0 || location->source_value_44 < 20) &&
         location->source_value_58 == 0 && location->record_value_10 >= 2;
 
-    if (can_be_active) {
-        if (location->owner_id == 4 ||
-            (location->owner_id >= 0 &&
-             location->owner_id < GAME_START_PLAYER_COUNT &&
-             (location->tribe_visibility_mask &
-              (uint8_t)(1U << (unsigned int)location->owner_id)) != 0)) {
-            current_flags |= 1U;
-        }
-    }
+    if (can_be_active) current_flags |= 1U;
     location->source_flags = current_flags;
     return ((previous_flags ^ current_flags) & 1U) != 0;
+}
+
+unsigned int game_session_recalculate_active_locations(GameSession *session)
+{
+    unsigned int island_index;
+    unsigned int changed = 0;
+
+    if (session == NULL) return 0;
+    for (island_index = 0; island_index < session->island_count; ++island_index) {
+        GameRuntimeIsland *island = &session->islands[island_index];
+        unsigned int location_index;
+
+        for (location_index = 0; location_index < island->location_count;
+             ++location_index) {
+            changed += (unsigned int)game_session_recalculate_location_active(
+                &island->locations[location_index]);
+        }
+    }
+    return changed;
 }
 
 unsigned int game_session_dispatch_onoff_actions(GameSession *session,

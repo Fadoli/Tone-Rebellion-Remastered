@@ -97,6 +97,9 @@ int game_session_initialize_start_players(
             floater->order_resource_code = 0;
             floater->linked_task_slot = -1;
             floater->order_source_location = -1;
+            floater->order_target_island = start->island_index;
+            floater->order_source_island = start->island_index;
+            floater->handoff_departure_location = -1;
             floater->x = start->marker_x;
             floater->y = start->marker_y;
             floater->destination_x = start->marker_x;

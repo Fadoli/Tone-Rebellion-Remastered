@@ -34,7 +34,8 @@ typedef struct GameFloaterStart {
     /* Floater runtime short +0x0c gates IWLocInfo CHARGE through
        FUN_004207f2; +0x22 is the mutable charge counter. Initial workers
        start at -1 and 0 respectively. Assignment and charge ticks are not
-       modeled yet. */
+       modeled yet. The charge maintenance helpers decrement counters on
+       category/source records, not this floater field. */
     int16_t source_link_0c;
     int16_t charge_current;
     uint16_t x;
@@ -49,14 +50,15 @@ typedef struct GameFloaterStart {
     uint8_t active_order_action;
     int16_t order_target_floater;
     int16_t order_target_location;
+    uint8_t order_target_island;
     /* FA_Deliver's action-4 order uses the tick record's +0x18 cargo, +0x34
-       pickup counter and +0x46 subphase. Only local resource codes 1..3 are
-       currently dispatched from Hall refill requests. */
+       pickup counter and +0x46 subphase. Hall refill routes can cross islands. */
     int16_t carried_resource_code;
     int16_t order_resource_code;
     int16_t linked_task_slot;
     uint16_t order_timer;
     int16_t order_source_location;
+    uint8_t order_source_island;
     uint32_t source_runtime_flags;
     /* FUN_00422d27's speed context is resolved before its coordinate step.
        Initial workers start idle and take the fallback FA_Wander route on
@@ -76,6 +78,11 @@ typedef struct GameFloaterStart {
     uint16_t source_order_parameter_32;
     uint8_t source_order_pending;
     uint8_t has_move_order;
+    /* FUN_004210a9's state-0x11 inter-island bridge handoff. */
+    uint8_t handoff_target_island;
+    int16_t handoff_departure_location;
+    uint8_t handoff_resume_action;
+    uint8_t handoff_resume_state;
     /* Idle fallback order FA_Wander (14), runtime state 0x0e and +0x34 timer. */
     uint8_t has_wander_order;
     uint16_t wander_timer;
