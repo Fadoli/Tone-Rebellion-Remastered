@@ -25,6 +25,7 @@ static int game_session_tick_floater_death(GameSession *session,
 {
     GameFloaterStart *floater = &session->floaters[floater_index];
     unsigned int index;
+    unsigned int effect_slot;
 
     if (!game_session_floater_is_active(floater)) return 1;
     if ((floater->source_runtime_flags & 0x008U) == 0) return 0;
@@ -50,7 +51,19 @@ static int game_session_tick_floater_death(GameSession *session,
     floater->active_order_action = 0;
     floater->has_move_order = 0;
     floater->has_wander_order = 0;
+    if (floater->attack_effect_active &&
+        session->active_attack_effect_count != 0) {
+        --session->active_attack_effect_count;
+    }
     floater->attack_effect_active = 0;
+    for (effect_slot = 0; effect_slot < GAME_SESSION_MAX_CAST_EFFECTS;
+         ++effect_slot) {
+        struct GameCastEffectState *effect = &session->cast_effects[effect_slot];
+        if (effect->active == 0 || effect->caster_index != floater_index) continue;
+        effect->active = 0;
+        if (session->active_cast_effect_count != 0)
+            --session->active_cast_effect_count;
+    }
     return 1;
 }
 
