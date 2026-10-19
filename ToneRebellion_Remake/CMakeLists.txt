@@ -6,8 +6,10 @@ include(CTest)
 add_library(tone_core STATIC
     src/data/cob_archive.c
     src/data/font_image.c
+    src/core/bitmap_font_render.c
     src/data/shp_image.c
     src/core/island_haze.c
+    src/core/island_palette_lookup.c
     src/core/island_data.c
     src/core/island_render_rules.c
     src/core/curved_text_layout.c
@@ -74,11 +76,23 @@ if(BUILD_TESTING)
     enable_test_assertions(test_shp_image)
     add_test(NAME shp_image_unit COMMAND test_shp_image)
 
+    add_executable(test_bitmap_font_render tests/test_bitmap_font_render.c)
+    target_link_libraries(test_bitmap_font_render PRIVATE tone_core)
+    target_compile_features(test_bitmap_font_render PRIVATE c_std_11)
+    enable_test_assertions(test_bitmap_font_render)
+    add_test(NAME bitmap_font_render_unit COMMAND test_bitmap_font_render)
+
     add_executable(test_island_render_rules tests/test_island_render_rules.c)
     target_link_libraries(test_island_render_rules PRIVATE tone_core)
     target_compile_features(test_island_render_rules PRIVATE c_std_11)
     enable_test_assertions(test_island_render_rules)
     add_test(NAME island_render_rules_unit COMMAND test_island_render_rules)
+
+    add_executable(test_island_palette_lookup tests/test_island_palette_lookup.c)
+    target_link_libraries(test_island_palette_lookup PRIVATE tone_core)
+    target_compile_features(test_island_palette_lookup PRIVATE c_std_11)
+    enable_test_assertions(test_island_palette_lookup)
+    add_test(NAME island_palette_lookup_unit COMMAND test_island_palette_lookup)
 
     add_executable(test_pad_catalog tests/test_pad_catalog.c)
     target_link_libraries(test_pad_catalog PRIVATE tone_core)
@@ -207,4 +221,8 @@ if(WIN32)
         COMMENT "Updating the ready-to-launch ToneRebellion_Remake.exe"
         VERBATIM
     )
+
+    add_executable(bench_task_text bench/task_text_bench.c)
+    target_link_libraries(bench_task_text PRIVATE tone_core user32 gdi32)
+    target_compile_features(bench_task_text PRIVATE c_std_11)
 endif()

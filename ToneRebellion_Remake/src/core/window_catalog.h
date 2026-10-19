@@ -104,6 +104,11 @@ int32_t window_catalog_control_frame(const WindowTemplate *control,
    -1 when the control has no hover overlay. */
 int32_t window_catalog_control_overlay_frame(const WindowTemplate *control,
                                              int hovered);
+/* Build an ordered draw list that keeps a control's normal frame underneath
+   its hover overlay. Returns 0 for an invalid control, otherwise 1 or 2. */
+size_t window_catalog_control_render_frames(const WindowTemplate *control,
+                                           int hovered,
+                                           int32_t frames[2]);
 
 /* These names and panel numbers mirror FUN_0042f150 / FUN_0042f303 and the
    permanent-button messages dispatched by FUN_0042fa0f. */

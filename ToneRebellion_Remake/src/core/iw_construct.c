@@ -19,6 +19,11 @@ IwConstructClickTarget iw_construct_click_target(int is_open,
     return IW_CONSTRUCT_CLICK_ISLAND;
 }
 
+int iw_construct_location_control_pane_visible(int construct_open)
+{
+    return construct_open == 0;
+}
+
 int iw_construct_site_size(const IslandLocation *site, uint8_t *out_site_size)
 {
     if (out_site_size != NULL) *out_site_size = 0;

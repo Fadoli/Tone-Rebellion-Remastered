@@ -31,6 +31,10 @@ IwConstructClickTarget iw_construct_click_target(int is_open,
                                                  const WindowPane *cycle_pane,
                                                  int32_t x, int32_t y);
 
+/* IWConstructInfo shares the lower-right pane with IWLocControl. When the
+   construction window is open, its selected-item details own that pane. */
+int iw_construct_location_control_pane_visible(int construct_open);
+
 /* Extract the size subtype stored at +0x0c for a constructible island site.
    FUN_00461b3b maps pad/smpad/mdpad/lgpad to subtypes 0/0/1/2. */
 int iw_construct_site_size(const IslandLocation *site, uint8_t *out_site_size);

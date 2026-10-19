@@ -5,8 +5,10 @@
 #include "cob_archive.h"
 #include "building_render.h"
 #include "font_image.h"
+#include "bitmap_font_render.h"
 #include "island_data.h"
 #include "island_haze.h"
+#include "island_palette_lookup.h"
 #include "island_render_rules.h"
 #include "curved_text_layout.h"
 #include "game_music.h"
@@ -114,6 +116,7 @@ static SpriteSheet g_menu_help;
 static COLORREF g_newgame_palette[256];
 static COLORREF g_map_palette[256];
 static COLORREF g_island_palette[256];
+static IslandPaletteLookup g_island_palette_lookup;
 static uint32_t g_random_state;
 static unsigned char *g_button_sound;
 static unsigned char *g_fltbuild_sound;
@@ -203,6 +206,88 @@ static int g_hovered_help = -1;
 static int g_hovered_newgame_text = -1;
 static int g_hovered_island = -1;
 static int g_mouse_inside;
+/* Reused DIB; direct pixel writes occur only while rendering a frame. */
+static DWORD *g_paint_buffer_pixels;
+static HDC g_paint_buffer_dc;
+static HBITMAP g_paint_buffer_bitmap;
+static HGDIOBJ g_paint_buffer_original_bitmap;
+static HDC g_sprite_source_dc;
+
+static HDC get_sprite_source_dc(HDC reference_dc)
+{
+    if (g_sprite_source_dc == NULL && reference_dc != NULL)
+        g_sprite_source_dc = CreateCompatibleDC(reference_dc);
+    return g_sprite_source_dc;
+}
+
+static void destroy_sprite_source_dc(void)
+{
+    if (g_sprite_source_dc != NULL) DeleteDC(g_sprite_source_dc);
+    g_sprite_source_dc = NULL;
+}
+
+static int ensure_paint_buffer(HDC reference_dc)
+{
+    BITMAPINFO info;
+    void *bits = NULL;
+    HDC dc;
+    HBITMAP bitmap;
+    HGDIOBJ original_bitmap;
+    if (g_paint_buffer_dc != NULL && g_paint_buffer_bitmap != NULL &&
+        g_paint_buffer_pixels != NULL) return 1;
+
+    ZeroMemory(&info, sizeof(info));
+    info.bmiHeader.biSize = sizeof(info.bmiHeader);
+    info.bmiHeader.biWidth = LOGICAL_WIDTH;
+    info.bmiHeader.biHeight = -LOGICAL_HEIGHT;
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+    dc = CreateCompatibleDC(reference_dc);
+    if (dc == NULL) return 0;
+    bitmap = CreateDIBSection(reference_dc, &info, DIB_RGB_COLORS,
+                              &bits, NULL, 0);
+    if (bitmap == NULL || bits == NULL) {
+        if (bitmap != NULL) DeleteObject(bitmap);
+        DeleteDC(dc);
+        return 0;
+    }
+    original_bitmap = SelectObject(dc, bitmap);
+    if (original_bitmap == NULL || original_bitmap == HGDI_ERROR) {
+        DeleteObject(bitmap);
+        DeleteDC(dc);
+        return 0;
+    }
+    g_paint_buffer_dc = dc;
+    g_paint_buffer_bitmap = bitmap;
+    g_paint_buffer_original_bitmap = original_bitmap;
+    g_paint_buffer_pixels = (DWORD *)bits;
+    return 1;
+}
+
+static void destroy_paint_buffer(void)
+{
+    if (g_paint_buffer_dc != NULL && g_paint_buffer_original_bitmap != NULL)
+        (void)SelectObject(g_paint_buffer_dc, g_paint_buffer_original_bitmap);
+    if (g_paint_buffer_bitmap != NULL) DeleteObject(g_paint_buffer_bitmap);
+    if (g_paint_buffer_dc != NULL) DeleteDC(g_paint_buffer_dc);
+    g_paint_buffer_pixels = NULL;
+    g_paint_buffer_original_bitmap = NULL;
+    g_paint_buffer_bitmap = NULL;
+    g_paint_buffer_dc = NULL;
+}
+
+static void rebuild_island_palette_lookup(void)
+{
+    uint32_t palette_rgb24[256];
+    unsigned int index;
+    for (index = 0; index < 256U; ++index) {
+        palette_rgb24[index] = (uint32_t)g_island_palette[index] &
+                               UINT32_C(0x00ffffff);
+    }
+    /* Task row highlights use entries 0..254 in the original scan. */
+    island_palette_lookup_build(&g_island_palette_lookup, palette_rgb24, 255U);
+}
 
 static void update_interaction_cursor(void)
 {
@@ -649,14 +734,13 @@ static void draw_sprite(HDC target, const SpriteSheet *sheet, uint32_t frame_ind
     if (sheet == NULL || frame_index >= sheet->frame_count) return;
     frame = &sheet->frames[frame_index];
     if (frame->bitmap == NULL) return;
-    source = CreateCompatibleDC(target);
+    source = get_sprite_source_dc(target);
     if (source == NULL) return;
     previous = SelectObject(source, frame->bitmap);
     (void)AlphaBlend(target, x + frame->x_offset, y + frame->y_offset,
                      frame->width, frame->height, source, 0, 0,
                      frame->width, frame->height, blend);
     SelectObject(source, previous);
-    DeleteDC(source);
 }
 
 static void draw_sprite_scaled(HDC target, const SpriteSheet *sheet, uint32_t frame_index,
@@ -678,13 +762,12 @@ static void draw_sprite_scaled(HDC target, const SpriteSheet *sheet, uint32_t fr
     if (width <= 0 || height <= 0) return;
     offset_x = (int)(((int64_t)frame->x_offset * scale_16_16) >> 16);
     offset_y = (int)(((int64_t)frame->y_offset * scale_16_16) >> 16);
-    source = CreateCompatibleDC(target);
+    source = get_sprite_source_dc(target);
     if (source == NULL) return;
     previous = SelectObject(source, frame->bitmap);
     (void)AlphaBlend(target, x + offset_x, y + offset_y, width, height,
                      source, 0, 0, frame->width, frame->height, blend);
     SelectObject(source, previous);
-    DeleteDC(source);
 }
 
 static void draw_sprite_region(HDC target, const SpriteSheet *sheet, uint32_t frame_index,
@@ -699,13 +782,12 @@ static void draw_sprite_region(HDC target, const SpriteSheet *sheet, uint32_t fr
     frame = &sheet->frames[frame_index];
     if (frame->bitmap == NULL || source_x < 0 || source_y < 0 ||
         source_x + width > frame->width || source_y + height > frame->height) return;
-    source = CreateCompatibleDC(target);
+    source = get_sprite_source_dc(target);
     if (source == NULL) return;
     previous = SelectObject(source, frame->bitmap);
     (void)AlphaBlend(target, destination_x, destination_y, width, height,
                      source, source_x, source_y, width, height, blend);
     SelectObject(source, previous);
-    DeleteDC(source);
 }
 
 static int load_island_surface(int island_id, int map_island_index,
@@ -1156,6 +1238,7 @@ static int load_island_surface(int island_id, int map_island_index,
     build_island_draw_order();
     g_island_haze = haze_candidate;
     memcpy(g_island_palette, palette, sizeof(g_island_palette));
+    rebuild_island_palette_lookup();
     g_island_surface_id = island_id;
     g_island_scroll_x = 0;
     g_selected_location = -1;
@@ -2485,6 +2568,17 @@ static int update_world_map_hover(int x, int y)
 
 static void draw_bitmap_label(HDC dc, const char *text, int x, int y, COLORREF color)
 {
+    if (dc == g_paint_buffer_dc && g_paint_buffer_pixels != NULL) {
+        uint32_t dib_pixel = ((uint32_t)GetRValue(color) << 16) |
+                             ((uint32_t)GetGValue(color) << 8) |
+                             (uint32_t)GetBValue(color);
+        /* Flush preceding GDI blits before changing the DIB memory directly. */
+        (void)GdiFlush();
+        (void)bitmap_font_render_pixels(&g_bitmap_font, text,
+            (uint32_t *)g_paint_buffer_pixels, LOGICAL_WIDTH, LOGICAL_HEIGHT,
+            LOGICAL_WIDTH, x, y, dib_pixel);
+        return;
+    }
     const unsigned char *cursor = (const unsigned char *)text;
     while (*cursor != '\0') {
         uint32_t code = *cursor < g_bitmap_font.glyph_count ? *cursor : (uint32_t)'?';
@@ -2671,6 +2765,39 @@ static int selected_repair_button_visible(void)
         current_hit_points, maximum_hit_points);
 }
 
+static int selected_onoff_button_visible(void)
+{
+    const GameRuntimeIsland *island;
+    const GameRuntimeLocation *location;
+    if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
+        g_menu.selected_map_island < 0 ||
+        g_menu.selected_map_island >= g_game_session.island_count ||
+        g_selected_location < 0) return 0;
+    island = &g_game_session.islands[g_menu.selected_map_island];
+    if (g_selected_location >= island->location_count) return 0;
+    location = &island->locations[g_selected_location];
+    return island_panel_onoff_button_visible(location->record_value_10,
+        location->renderer_class, location->owner_id,
+        g_game_session.config.selected_tribe);
+}
+
+static void draw_control_with_hover_overlay(HDC dc,
+        const WindowTemplate *control, const SpriteSheet *art, int hovered)
+{
+    int32_t frames[2];
+    size_t frame_count = window_catalog_control_render_frames(
+        control, hovered, frames);
+    size_t frame_index;
+    if (control == NULL || art == NULL) return;
+    for (frame_index = 0; frame_index < frame_count; ++frame_index) {
+        if (frames[frame_index] >= 0 &&
+            (uint32_t)frames[frame_index] < art->frame_count) {
+            draw_sprite(dc, art, (uint32_t)frames[frame_index],
+                        control->pane.left, control->pane.top);
+        }
+    }
+}
+
 static int update_location_action_hover(int x, int y)
 {
     const char *const move_names[] = {"IWMove", "IWHallMove"};
@@ -2701,9 +2828,11 @@ static int update_location_action_hover(int x, int y)
                     3, x, y, repair_names,
                     sizeof(repair_names) / sizeof(repair_names[0]));
             }
-            onoff_control = window_catalog_hit_test_names(&g_window_catalog,
-                3, x, y, onoff_names,
-                sizeof(onoff_names) / sizeof(onoff_names[0]));
+            if (selected_onoff_button_visible()) {
+                onoff_control = window_catalog_hit_test_names(&g_window_catalog,
+                    3, x, y, onoff_names,
+                    sizeof(onoff_names) / sizeof(onoff_names[0]));
+            }
         }
     }
     repair_hovered = repair_control != NULL &&
@@ -3285,25 +3414,6 @@ static int hall_resource_task_index(int hall_player, int slot)
     return -1;
 }
 
-static uint8_t nearest_island_palette_index(COLORREF color)
-{
-    unsigned int best_distance = UINT_MAX;
-    unsigned int best_index = 0;
-    unsigned int index;
-    for (index = 0; index < 255U; ++index) {
-        int red = (int)GetRValue(color) - (int)GetRValue(g_island_palette[index]);
-        int green = (int)GetGValue(color) - (int)GetGValue(g_island_palette[index]);
-        int blue = (int)GetBValue(color) - (int)GetBValue(g_island_palette[index]);
-        unsigned int distance = (unsigned int)(red * red + green * green + blue * blue);
-        if (distance < best_distance) {
-            best_distance = distance;
-            best_index = index;
-            if (distance == 0U) break;
-        }
-    }
-    return (uint8_t)best_index;
-}
-
 static void draw_task_row_highlight(HDC dc, const WindowTemplate *panel,
                                     unsigned int visible_rows,
                                     unsigned int visible_index)
@@ -3327,9 +3437,12 @@ static void draw_task_row_highlight(HDC dc, const WindowTemplate *panel,
             (int)sizeof(mask_dib) || mask_dib.dsBm.bmBits == NULL ||
         mask_dib.dsBm.bmBitsPixel != 32 ||
         mask_dib.dsBm.bmWidthBytes < mask_frame->width * 4) return;
+    if (g_paint_buffer_pixels == NULL) return;
     left = panel->pane.left;
     right = panel->pane.right;
     if (right <= left) return;
+    /* Finish GDI drawing into the DIB before reading its bits directly. */
+    (void)GdiFlush();
     for (y = row_top + panel->pane.top; y < row_top + panel->pane.top + row_height; ++y) {
         int mask_y = y - panel->pane.top - mask_frame->y_offset;
         int x;
@@ -3337,6 +3450,7 @@ static void draw_task_row_highlight(HDC dc, const WindowTemplate *panel,
         for (x = left; x < right; ++x) {
             int mask_x = x - panel->pane.left - mask_frame->x_offset;
             const uint32_t *mask_row;
+            DWORD background_pixel;
             COLORREF background;
             uint8_t source_index;
             uint8_t remapped_index;
@@ -3344,13 +3458,26 @@ static void draw_task_row_highlight(HDC dc, const WindowTemplate *panel,
             mask_row = (const uint32_t *)((const unsigned char *)mask_dib.dsBm.bmBits +
                 (size_t)mask_y * (size_t)mask_dib.dsBm.bmWidthBytes);
             if ((mask_row[mask_x] >> 24) == 0U) continue;
-            background = GetPixel(dc, x, y);
-            if (background == CLR_INVALID) continue;
-            source_index = nearest_island_palette_index(background);
+            background_pixel = g_paint_buffer_pixels[(size_t)y * LOGICAL_WIDTH +
+                                                       (size_t)x];
+            background = RGB((background_pixel >> 16) & 0xffU,
+                             (background_pixel >> 8) & 0xffU,
+                             background_pixel & 0xffU);
+            /* Most panel pixels use exact palette colors. Repeated
+               non-palette colors share an exact memoized nearest-color result. */
+            if (!island_palette_lookup_nearest(&g_island_palette_lookup,
+                    (uint32_t)background & UINT32_C(0x00ffffff),
+                    &source_index)) continue;
             remapped_index = island_haze_remap(&g_island_haze, 1, 1, source_index);
-            (void)SetPixelV(dc, x, y, g_island_palette[remapped_index]);
+            {
+                COLORREF color = g_island_palette[remapped_index];
+                g_paint_buffer_pixels[(size_t)y * LOGICAL_WIDTH + (size_t)x] =
+                    0xff000000U | ((DWORD)GetRValue(color) << 16) |
+                    ((DWORD)GetGValue(color) << 8) | (DWORD)GetBValue(color);
+            }
         }
     }
+    (void)GdiFlush();
 }
 
 static void draw_task_stock_gauge(HDC dc, const WindowTemplate *panel,
@@ -4955,10 +5082,9 @@ static void render_island_view(HDC dc)
                                         pane.right, pane.bottom);
                 draw_sprite(dc, &g_temp_hole_art, 1,
                             info->pane.left, info->pane.top);
-                /* FUN_0044338b reads BLDNAME through the per-tribe item
-                   ordinal. Runtime item IDs in this port already include
-                   the tribe's 16-item block, so subtracting PIT_BuildToneProducer
-                   (0x25) selects the matching entry in bldname.txt. */
+                /* Runtime item IDs already include the owner's 16-item block;
+                   subtracting PIT_BuildToneProducer (0x25) gives BLDNAME's
+                   player-specific index. */
                 draw_bitmap_label(dc, g_building_names[name_index],
                                   info->pane.left + 5, info->pane.top + 3,
                                   RGB(230, 238, 255));
@@ -5053,7 +5179,10 @@ static void draw_location_action_panel(HDC dc)
     IslandLocationActionControl action;
     const char *button_name;
 
-    if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
+    /* IWLocControl overlaps IWConstructInfo in windows.txt. Keep the selected
+       construction item's pane visible while the modal build window is open. */
+    if (!iw_construct_location_control_pane_visible(g_iw_construct_open) ||
+        !g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
         g_menu.selected_map_island < 0 ||
         g_menu.selected_map_island >= g_game_session.island_count ||
         g_selected_location < 0) return;
@@ -5071,41 +5200,15 @@ static void draw_location_action_panel(HDC dc)
         const WindowTemplate *onoff_button = window_catalog_find(
             &g_window_catalog, "BC_OnOff", 3);
         repair_button = window_catalog_find(&g_window_catalog, "BC_Repair", 3);
-        if (onoff_button != NULL && onoff_button->shape_frame >= 0) {
-            int hover_frame = window_catalog_control_overlay_frame(
-                onoff_button, g_hovered_onoff_control);
-            if ((uint32_t)onoff_button->shape_frame <
-                    g_building_command_art.frame_count) {
-                /* windows.txt maps BC_OnOff to BLDCMD frames 19/21. */
-                draw_sprite(dc, &g_building_command_art,
-                            (uint32_t)onoff_button->shape_frame,
-                            onoff_button->pane.left, onoff_button->pane.top);
-            }
-            if (g_hovered_onoff_control && hover_frame >= 0 &&
-                hover_frame != onoff_button->shape_frame &&
-                (uint32_t)hover_frame < g_building_command_art.frame_count) {
-                draw_sprite(dc, &g_building_command_art, (uint32_t)hover_frame,
-                            onoff_button->pane.left, onoff_button->pane.top);
-            }
+        /* Keep normal artwork as the first layer: the source highlight frames
+           extend the art but are not substitutes for the button itself. */
+        if (selected_onoff_button_visible()) {
+            draw_control_with_hover_overlay(dc, onoff_button,
+                &g_building_command_art, g_hovered_onoff_control);
         }
-        if (selected_repair_button_visible() && repair_button != NULL &&
-            repair_button->shape_frame >= 0) {
-            int hover_frame = window_catalog_control_overlay_frame(
-                repair_button, g_hovered_repair_control);
-            if ((uint32_t)repair_button->shape_frame <
-                    g_repair_button_art.frame_count) {
-                /* windows.txt and shapes.txt bind BC_Repair to REPAIR.SHP;
-                   its descriptor supplies the normal and highlight frames. */
-                draw_sprite(dc, &g_repair_button_art,
-                            (uint32_t)repair_button->shape_frame,
-                            repair_button->pane.left, repair_button->pane.top);
-            }
-            if (g_hovered_repair_control && hover_frame >= 0 &&
-                hover_frame != repair_button->shape_frame &&
-                (uint32_t)hover_frame < g_repair_button_art.frame_count) {
-                draw_sprite(dc, &g_repair_button_art, (uint32_t)hover_frame,
-                            repair_button->pane.left, repair_button->pane.top);
-            }
+        if (selected_repair_button_visible()) {
+            draw_control_with_hover_overlay(dc, repair_button,
+                &g_repair_button_art, g_hovered_repair_control);
         }
     }
     button_name = action == ISLAND_LOCATION_ACTION_HALL_MOVE
@@ -5260,16 +5363,12 @@ static void paint_window(HWND window)
         int width = client.right - client.left;
         int height = client.bottom - client.top;
         RECT viewport;
-        HDC back = CreateCompatibleDC(screen);
-        HBITMAP bitmap = CreateCompatibleBitmap(screen, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-        HGDIOBJ old_bitmap;
-        if (back == NULL || bitmap == NULL) {
-            if (bitmap != NULL) DeleteObject(bitmap);
-            if (back != NULL) DeleteDC(back);
+        HDC back;
+        if (!ensure_paint_buffer(screen)) {
             EndPaint(window, &paint);
             return;
         }
-        old_bitmap = SelectObject(back, bitmap);
+        back = g_paint_buffer_dc;
         if (g_menu.screen == SCREEN_MAIN_MENU) {
             render_main_menu(back);
         } else if (g_menu.screen == SCREEN_NEW_GAME) {
@@ -5281,6 +5380,7 @@ static void paint_window(HWND window)
         } else {
             render_load_game(back);
         }
+        (void)GdiFlush();
         if (logical_viewport(width, height, &viewport)) {
             /* Clearing the whole client before each StretchBlt exposed a black
                frame on every animated paint. Only clear the letterbox bars. */
@@ -5305,9 +5405,6 @@ static void paint_window(HWND window)
                        viewport.right - viewport.left, viewport.bottom - viewport.top,
                        back, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, SRCCOPY);
         }
-        SelectObject(back, old_bitmap);
-        DeleteObject(bitmap);
-        DeleteDC(back);
     }
     EndPaint(window, &paint);
 }
@@ -5523,8 +5620,10 @@ static void handle_click(HWND window, int x, int y)
                 g_menu.selected_map_island].location_count) {
             static const char *const onoff_names[] = {"BC_OnOff"};
             const WindowTemplate *onoff_control =
-                window_catalog_hit_test_names(&g_window_catalog, 3, x, y,
-                    onoff_names, sizeof(onoff_names) / sizeof(onoff_names[0]));
+                selected_onoff_button_visible()
+                    ? window_catalog_hit_test_names(&g_window_catalog, 3, x, y,
+                        onoff_names, sizeof(onoff_names) / sizeof(onoff_names[0]))
+                    : NULL;
             if (onoff_control != NULL) {
                 /* Message 101/index 0 reaches type-1/subtype-0. Preserve the
                    request, but leave its unknown flow guard/effect untouched. */
@@ -5856,6 +5955,9 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                                                 g_menu.animation_ticks);
                 (void)game_session_update_resource_requests(&g_game_session);
             }
+            /* WM_PAINT redraws the complete island, including world
+               animation. Keep repaint cadence aligned with the 33 ms game
+               tick even when the task panel or construction grid is open. */
             InvalidateRect(window, NULL, FALSE);
         }
         return 0;
@@ -6107,6 +6209,8 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         update_interaction_cursor();
         return 0;
     case WM_DESTROY:
+        destroy_sprite_source_dc();
+        destroy_paint_buffer();
         stop_background_tune();
         PostQuitMessage(0);
         return 0;

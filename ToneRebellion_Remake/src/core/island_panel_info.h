@@ -56,6 +56,10 @@ int island_panel_repair_button_visible(int item_id, int owner_id,
                                        int current_hit_points,
                                        int maximum_hit_points);
 
+/* FUN_0045302a lists BC_OnOff for class-0 sites with owned types 0x25..0x27. */
+int island_panel_onoff_button_visible(int item_id, int renderer_class,
+                                      int owner_id, int current_player_id);
+
 typedef struct IslandPanelSelection {
     int32_t location_index;
     int32_t floater_index;

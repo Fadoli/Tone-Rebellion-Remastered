@@ -142,6 +142,13 @@ static void verify_original_manifest(const char *path)
            window->pane.right == 426 && window->pane.bottom == 461);
     assert(window_catalog_control_frame(window, 0) == 19);
     assert(window_catalog_control_frame(window, 1) == 21);
+    {
+        int32_t draw_frames[2] = {-1, -1};
+        assert(window_catalog_control_render_frames(window, 0, draw_frames) == 1);
+        assert(draw_frames[0] == 19);
+        assert(window_catalog_control_render_frames(window, 1, draw_frames) == 2);
+        assert(draw_frames[0] == 19 && draw_frames[1] == 21);
+    }
     window = window_catalog_hit_test(&catalog, 1, 600, 430);
     assert(window != NULL && strcmp(window->name, "BEGINGAME") == 0);
     window = window_catalog_hit_test(&catalog, 1, 10, 430);
@@ -167,7 +174,9 @@ static void verify_original_manifest(const char *path)
     assert(window->pane.left == 192 && window->pane.top == 368 &&
            window->pane.right == 447 && window->pane.bottom == 471);
     window = window_catalog_find(&catalog, "IWConstructInfo", 3);
-    assert(window != NULL && window->type_id == 0x1c);
+    assert(window != NULL && window->type_id == 0x1c &&
+           window->pane.left == 456 && window->pane.top == 328 &&
+           window->pane.right == 631 && window->pane.bottom == 471);
     window = window_catalog_find(&catalog, "IWTextInfo", 3);
     assert(window != NULL && window->shape_frame == 2 &&
            window->pane.left == 456 && window->pane.top == 328 &&
@@ -176,6 +185,8 @@ static void verify_original_manifest(const char *path)
     assert(window != NULL && window->shape_frame == 7 &&
            window->pane.left == 456 && window->pane.top == 396 &&
            window->pane.right == 631 && window->pane.bottom == 471);
+    /* The construction info pane and location controls share this region;
+       the modal construction view must suppress the latter while open. */
     window = window_catalog_find(&catalog, "IWMove", 3);
     assert(window != NULL && window->mouse_focus == 1 &&
            strcmp(window->shape_id, "THBUTT") == 0 && window->shape_frame == 5 &&
@@ -204,6 +215,13 @@ static void verify_original_manifest(const char *path)
            window->hilite_frame == 11 &&
            window_catalog_control_frame(window, 0) == 0 &&
            window_catalog_control_frame(window, 1) == 11);
+    {
+        int32_t draw_frames[2] = {-1, -1};
+        assert(window_catalog_control_render_frames(window, 0, draw_frames) == 1);
+        assert(draw_frames[0] == 0);
+        assert(window_catalog_control_render_frames(window, 1, draw_frames) == 2);
+        assert(draw_frames[0] == 0 && draw_frames[1] == 11);
+    }
     window = window_catalog_find(&catalog, "IWInventory", 3);
     assert(window != NULL && window->shape_frame == 1 &&
            window->pane.left == 192 && window->pane.top == 368 &&

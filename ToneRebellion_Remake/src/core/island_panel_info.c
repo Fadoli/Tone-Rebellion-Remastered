@@ -37,6 +37,14 @@ int island_panel_repair_button_visible(int item_id, int owner_id,
     return player_item_id >= 0x25 && player_item_id <= 0x34;
 }
 
+int island_panel_onoff_button_visible(int item_id, int renderer_class,
+                                      int owner_id, int current_player_id)
+{
+    return current_player_id >= 0 && current_player_id < GAME_START_PLAYER_COUNT &&
+        renderer_class == 0 && owner_id == current_player_id &&
+        item_id >= 0x25 && item_id <= 0x27;
+}
+
 void island_panel_finish_inventory_target(int *panel_mode,
                                           int *selected_item_id,
                                           int *hovered_item_id,

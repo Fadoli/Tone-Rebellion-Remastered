@@ -2,7 +2,7 @@
 
 Index de lecture rapide : [Inventory et glyphes](island-inventory-glyphs.md), [Trade et diplomatie](island-trade-diplomacy.md). Les notes détaillées ci-dessous sont conservées; consulter d’abord les pages courtes et ouvrir ces détails seulement pour retrouver une preuve.
 
-**Correctifs UI récents :** `IWTasks` prend le joueur actif du `GameSession` pour dessiner, défiler et sélectionner les tâches même sans Hall sélectionné (interprétation de la clé joueur explicite de `FUN_004455d1`). `BC_Repair` suit le garde porté de PV/id/propriétaire décrit dans [la note Repair](island-repair-control.md). Pour On/Off, le cadre normal et son highlight sont rendus en deux passes; la visibilité par type reste inconnue. La zone noire droite du bandeau inférieur n’a pas encore de cause établie. La session REA n’était pas disponible lors de cette modification; aucune nouvelle preuve binaire n’a été collectée.
+**Correctifs UI récents :** `IWTasks` prend le joueur actif du `GameSession` pour dessiner, défiler et sélectionner les tâches même sans Hall sélectionné (interprétation de la clé joueur explicite de `FUN_004455d1`). `BC_Repair` suit son garde de PV/id/propriétaire; `BC_OnOff` est réservé aux sites de classe 0 et types `0x25..0x27` du joueur actif ([preuves](island-onoff-control.md)). Les contrôles conservent la frame normale sous le survol. Le panneau de construction ne laisse plus `IWLocControl` recouvrir son `IWConstructInfo` partagé; les autres états de la colonne droite restent à comparer visuellement.
 
 ## Mise à jour du texte de survol Inventory
 

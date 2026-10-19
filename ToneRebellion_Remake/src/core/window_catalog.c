@@ -388,6 +388,21 @@ int32_t window_catalog_control_overlay_frame(const WindowTemplate *control,
     return control->shape_frame + 1;
 }
 
+size_t window_catalog_control_render_frames(const WindowTemplate *control,
+                                            int hovered,
+                                            int32_t frames[2])
+{
+    int32_t overlay;
+    if (control == NULL || frames == NULL || control->shape_frame < 0) return 0;
+    frames[0] = control->shape_frame;
+    overlay = window_catalog_control_overlay_frame(control, hovered);
+    if (overlay >= 0 && overlay != frames[0]) {
+        frames[1] = overlay;
+        return 2;
+    }
+    return 1;
+}
+
 int window_catalog_hall_panel_mode(const char *control_name)
 {
     if (control_name == NULL) return WINDOW_ISLAND_PANEL_NONE;

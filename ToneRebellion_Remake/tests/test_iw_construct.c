@@ -20,6 +20,8 @@ static void test_click_routing_dismisses_grid_outside_pane(void)
            IW_CONSTRUCT_CLICK_ISLAND);
     assert(iw_construct_click_target(1, &grid, &cycle, 448, 400) ==
            IW_CONSTRUCT_CLICK_ISLAND);
+    assert(iw_construct_location_control_pane_visible(0));
+    assert(!iw_construct_location_control_pane_visible(1));
 }
 
 static void test_hover_click_and_pages(void)
