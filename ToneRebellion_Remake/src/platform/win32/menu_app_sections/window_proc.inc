@@ -37,6 +37,8 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 game_session_tick_item_animations_with_floaters(
                     &g_game_session, &g_building_render_catalog,
                     &g_floater_catalog);
+                game_session_update_construction_tasks(&g_game_session,
+                                                       &g_pad_catalog);
                 game_session_tick_floater_moves(&g_game_session,
                                                 g_menu.animation_ticks);
                 (void)game_session_update_resource_requests(&g_game_session);
@@ -206,6 +208,8 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             x >= 0 && x < LOGICAL_WIDTH && y >= 0 && y < 320 &&
             g_selected_floater >= 0 &&
             g_selected_floater < g_game_session.floater_count &&
+            game_session_floater_is_active(
+                &g_game_session.floaters[g_selected_floater]) &&
             g_menu.selected_map_island >= 0 &&
             g_menu.selected_map_island < g_game_session.island_count &&
             g_menu.selected_tribe < GAME_START_PLAYER_COUNT &&

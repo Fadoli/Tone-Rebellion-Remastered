@@ -1,4 +1,5 @@
 #include "game_session_setup_internal.h"
+#include "iw_construct.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -76,6 +77,7 @@ int game_session_initialize_start_players(
                 return 0;
             }
             floater = &session->floaters[floater_cursor++];
+            floater->is_active = 1;
             floater->island_index = start->island_index;
             floater->type_index = start->floater_type_index;
             floater->source_subtype = 0;
@@ -198,6 +200,12 @@ int game_session_initialize_start_islands(
             state->x = location->x;
             state->y = location->y;
             state->renderer_class = location->renderer_class;
+            state->construction_site_size = UINT8_MAX;
+            {
+                uint8_t site_size;
+                if (iw_construct_site_size(location, &site_size))
+                    state->construction_site_size = site_size;
+            }
         }
     }
 

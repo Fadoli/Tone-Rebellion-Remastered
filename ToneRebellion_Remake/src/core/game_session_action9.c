@@ -32,6 +32,8 @@ static int action9_find_floater(const GameSession *session,
     for (index = 0; index < session->floater_count; ++index) {
         const GameFloaterStart *candidate = &session->floaters[index];
         int category_matches;
+        if (!game_session_floater_is_active(candidate) ||
+            (candidate->source_runtime_flags & 0x008U) != 0) continue;
 
         if (source->type_index == 4) {
             /* DAT_0061fa2e selects non-category-4 candidates below 0x65 and
@@ -173,7 +175,9 @@ void game_session_advance_action9(GameSession *session,
     uint16_t target_y;
     int target_index;
 
-    if (floater->active_order_action == 4 ||
+    if (!game_session_floater_is_active(floater) ||
+        (floater->source_runtime_flags & 0x008U) != 0 ||
+        floater->active_order_action == 4 ||
         floater->source_order_state_2c != 9 || floater->movement_state != 0 ||
         floater->has_move_order) return;
 
@@ -259,7 +263,9 @@ void game_session_advance_merge_order(GameSession *session,
         }
         target = &session->floaters[
             (unsigned int)floater->order_target_floater];
-        if (target == floater || target->island_index != floater->island_index) {
+        if (!game_session_floater_is_active(target) ||
+            (target->source_runtime_flags & 0x008U) != 0 ||
+            target == floater || target->island_index != floater->island_index) {
             floater->active_order_action = 0;
             return;
         }
@@ -330,7 +336,9 @@ void game_session_advance_defend_order(GameSession *session,
         }
         target = &session->floaters[
             (unsigned int)floater->order_target_floater];
-        if (target->island_index != floater->island_index) {
+        if (!game_session_floater_is_active(target) ||
+            (target->source_runtime_flags & 0x008U) != 0 ||
+            target->island_index != floater->island_index) {
             floater->active_order_action = 0;
             return;
         }

@@ -109,6 +109,9 @@ int game_session_construction_task_values(const GameSession *session,
     if ((uint16_t)event->payload_0e >=
         session->islands[event->payload_0a].location_count) return 0;
     location = &session->islands[event->payload_0a].locations[event->payload_0e];
+    if (location->renderer_class != 0 || location->owner_id != -1 ||
+        location->record_value_10 != 0 || location->construction_site_size > 2U)
+        return 0;
     item_id = (int32_t)event->payload_12 + (int32_t)event->player_id * 16;
     if (item_id < 0 || item_id > 100) return 0;
     item = pad_catalog_find(pad_catalog, (uint16_t)item_id);

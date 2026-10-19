@@ -2,6 +2,7 @@
 #define TONE_REBELLION_GAME_SESSION_EVENTS_INCLUDED
 
 #include "game_session_types.h"
+#include "pad_catalog.h"
 
 /* FUN_004455d1 projects active 0x14-byte slots for one player, omits action
    type 0xb, preserves table order, and caps the list at 32. Returns the total
@@ -90,6 +91,9 @@ int game_session_pop_build_selection(GameSession *session,
 /* FUN_00466221 drains the local event queue; category 0 routes through
    FUN_00465793 to FUN_004662b7, which stores type-5 requests as task slots. */
 unsigned int game_session_dispatch_build_selections(GameSession *session);
+/* Advance local CONSTR resource deliveries and place completed buildings. */
+void game_session_update_construction_tasks(GameSession *session,
+                                             const PadCatalog *catalog);
 /* PANIC message 0x3b queues type 3/subtype 0. Parity coalescing retains the
    same state after FUN_00466221 drains the local action queue. */
 int game_session_queue_island_event3_subtype0(GameSession *session,

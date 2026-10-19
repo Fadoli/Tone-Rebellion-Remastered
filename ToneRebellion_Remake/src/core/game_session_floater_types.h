@@ -101,7 +101,16 @@ typedef struct GameFloaterStart {
     uint8_t has_wander_order;
     uint16_t wander_timer;
     uint8_t facing_left;
+    /* Stable slot lifetime: native death cleanup frees a floater record while
+       other records may still keep references to its index. */
+    uint8_t is_active;
 } GameFloaterStart;
+
+static inline int game_session_floater_is_active(
+    const GameFloaterStart *floater)
+{
+    return floater != 0 && floater->is_active != 0;
+}
 
 typedef struct GameSession {
     GameSessionConfig config;

@@ -77,6 +77,8 @@ int game_session_begin_floater_handoff(GameSession *session,
     int departure_index;
 
     if (session == NULL || floater == NULL ||
+        !game_session_floater_is_active(floater) ||
+        (floater->source_runtime_flags & 0x008U) != 0 ||
         floater->island_index >= session->island_count ||
         target_island >= session->island_count ||
         floater->type_index >= GAME_FLOATER_CATEGORY_COUNT) {
@@ -197,8 +199,7 @@ static int find_handoff_arrival(const GameSession *session,
 
 static void cancel_handoff(GameSession *session, GameFloaterStart *floater)
 {
-    if (floater->handoff_resume_action == 4)
-        release_task_claim(session, floater);
+    if (floater->linked_task_slot != -1) release_task_claim(session, floater);
     floater->movement_state = 0;
     floater->has_move_order = 0;
     floater->active_order_action = 0;

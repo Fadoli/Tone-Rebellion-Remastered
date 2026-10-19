@@ -68,6 +68,9 @@ typedef struct GameRuntimeLocation {
     uint16_t production_progress;
     uint16_t animation_rate;
     double barg_progress;
+    /* Construction pads are retained from the island layout so a completed
+       CONSTR task can validate placement without a separate layout lookup. */
+    uint8_t construction_site_size;
     uint8_t renderer_class;
     uint8_t tribe_visibility_mask;
     /* FUN_004669bd sets bit 0 at runtime record +0x1c on both paired

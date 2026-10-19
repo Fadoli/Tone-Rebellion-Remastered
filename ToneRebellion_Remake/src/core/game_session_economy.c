@@ -5,6 +5,13 @@
 #include <string.h>
 
 /* Location resources, Hall stock modes and refill requests. */
+static int location_is_player_hall(const GameRuntimeLocation *location)
+{
+    return location != NULL && location->owner_id >= 0 &&
+        location->owner_id < GAME_START_PLAYER_COUNT &&
+        location->record_value_10 == 0x2a + location->owner_id * 16;
+}
+
 uint8_t game_session_location_display_level(const GameRuntimeLocation *location)
 {
     if (location == NULL) return 0;
@@ -63,7 +70,7 @@ int game_session_consume_location_resource(GameSession *session,
         location->record_value_24 = 0;
         return 1;
     }
-    if (location->record_value_10 == 0x2a) {
+    if (location_is_player_hall(location)) {
         if (resource_code >= 1 && resource_code <= GAME_RESOURCE_TYPE_COUNT) {
             uint16_t *stock = &location->resource_stock[resource_code - 1];
             if (*stock > 0) {
@@ -96,11 +103,11 @@ int game_session_location_resource_available(const GameSession *session,
         location_index >= session->islands[island_index].location_count) return 0;
     location = &session->islands[island_index].locations[location_index];
     if (location->record_value_24 == resource_code) return 1;
-    if (location->record_value_10 == 0x2a &&
+    if (location_is_player_hall(location) &&
         resource_code >= 1 && resource_code <= GAME_RESOURCE_TYPE_COUNT &&
         location->resource_stock[resource_code - 1] > 0) return 1;
     if (location->owner_id >= 0 && location->owner_id < GAME_START_PLAYER_COUNT &&
-        (location->record_value_10 == 0x2a ||
+        (location_is_player_hall(location) ||
          location->source_location_slot_18 != -1) &&
         resource_code >= GAME_INVENTORY_ITEM_FIRST_ID &&
         resource_code < GAME_INVENTORY_ITEM_FIRST_ID + GAME_INVENTORY_ITEM_COUNT &&
@@ -228,6 +235,7 @@ int game_session_finish_location_move(GameSession *session,
     uint16_t old_hall_x = 0;
     uint16_t old_hall_y = 0;
     uint8_t target_class;
+    uint8_t target_site_size;
     int moves_hall;
     GamePlayerEconomy *player_economy;
     if (session == NULL || !session->location_move_active ||
@@ -285,10 +293,12 @@ int game_session_finish_location_move(GameSession *session,
     target_x = target->x;
     target_y = target->y;
     target_class = target->renderer_class;
+    target_site_size = target->construction_site_size;
     *target = moved;
     target->x = target_x;
     target->y = target_y;
     target->renderer_class = target_class;
+    target->construction_site_size = target_site_size;
     if (moves_hall) {
         player_economy->hall_island_index = island_index;
         player_economy->hall_location_index = location_index;
@@ -301,6 +311,7 @@ int game_session_finish_location_move(GameSession *session,
         for (floater_index = 0; floater_index < session->floater_count;
              ++floater_index) {
             GameFloaterStart *floater = &session->floaters[floater_index];
+            if (!game_session_floater_is_active(floater)) continue;
             if (floater->charge_source_island == island_index &&
                 floater->charge_source_location == old_location_index &&
                 floater->source_link_0c == target->source_location_slot_18) {

@@ -165,7 +165,8 @@ static void render_island_view(HDC dc)
             uint32_t leg_frame;
             const SpriteSheet *body_art;
             const SpriteSheet *leg_art;
-            if (floater->island_index != g_menu.selected_map_island ||
+            if (!game_session_floater_is_active(floater) ||
+                floater->island_index != g_menu.selected_map_island ||
                 floater->type_index >= 4) continue;
             floater_x = (int)floater->x - g_island_scroll_x;
             if (floater_x < -64 || floater_x >= LOGICAL_WIDTH + 64) continue;

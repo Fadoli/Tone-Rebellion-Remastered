@@ -299,7 +299,8 @@ static uint8_t collect_initial_worker_roster(unsigned int player,
     for (i = 0; i < g_game_session.floater_count &&
          count < ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT; ++i) {
         const GameFloaterStart *floater = &g_game_session.floaters[i];
-        if (floater->owner_slot != player || floater->type_index >= 4) continue;
+        if (!game_session_floater_is_active(floater) ||
+            floater->owner_slot != player || floater->type_index >= 4) continue;
         indices[count++] = (int)i;
     }
     return count;

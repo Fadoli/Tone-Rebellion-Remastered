@@ -1,6 +1,7 @@
 #include "game_session.h"
 #include "floater_motion.h"
 #include "game_session_delivery.h"
+#include "game_session_delivery_internal.h"
 #include "game_session_action9.h"
 #include "game_session_movement_internal.h"
 #include "tone_rng.h"
@@ -17,6 +18,40 @@ static void game_session_apply_charge_debit(GameFloaterStart *floater,
         (floater->source_runtime_flags & 0x100U) != 0) {
         floater->source_runtime_flags &= ~0x100U;
     }
+}
+
+static int game_session_tick_floater_death(GameSession *session,
+                                           unsigned int floater_index)
+{
+    GameFloaterStart *floater = &session->floaters[floater_index];
+    unsigned int index;
+
+    if (!game_session_floater_is_active(floater)) return 1;
+    if ((floater->source_runtime_flags & 0x008U) == 0) return 0;
+
+    /* FUN_0041e569 increments the death counter and removes the floater after
+       FUN_00425296(8) == 40 ticks. FUN_00467101 then unlinks its source slot,
+       releases its task claim and clears surviving references to its index. */
+    ++floater->source_death_timer;
+    if (floater->source_death_timer <= 40U) return 1;
+
+    release_task_claim(session, floater);
+    (void)game_session_unlink_floater_charge(session, floater_index);
+    for (index = 0; index < session->floater_count; ++index) {
+        GameFloaterStart *other = &session->floaters[index];
+        if (index == floater_index ||
+            !game_session_floater_is_active(other) ||
+            other->order_target_floater != (int16_t)floater_index ||
+            (other->source_runtime_flags & 0x004U) == 0) continue;
+        release_task_claim(session, other);
+    }
+    floater->is_active = 0;
+    floater->movement_state = 0;
+    floater->active_order_action = 0;
+    floater->has_move_order = 0;
+    floater->has_wander_order = 0;
+    floater->attack_effect_active = 0;
+    return 1;
 }
 
 static int game_session_tick_floater_charge(GameSession *session,
@@ -58,8 +93,10 @@ static int game_session_tick_floater_charge(GameSession *session,
     }
 
     if (succeeded) {
+        if (floater->movement_state == 11) floater->linked_task_slot = -1;
         floater->order_timer = 1;
     } else {
+        release_task_claim(session, floater);
         floater->movement_state = 0;
         floater->order_timer = 0;
         floater->has_move_order = 0;
@@ -380,6 +417,7 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
         int32_t dy;
         int32_t distance;
 
+        if (game_session_tick_floater_death(session, i)) continue;
         if (game_session_tick_floater_charge(session, i)) continue;
         if (game_session_tick_merge_completion(session, i, floater)) continue;
 
@@ -711,7 +749,9 @@ int game_session_order_floater_to_coordinate(GameSession *session,
     }
 
     floater = &session->floaters[floater_index];
-    if (floater->owner_slot != player_slot || floater->source_subtype == 0) {
+    if (!game_session_floater_is_active(floater) ||
+        (floater->source_runtime_flags & 0x008U) != 0 ||
+        floater->owner_slot != player_slot || floater->source_subtype == 0) {
         return 0;
     }
 
@@ -759,7 +799,11 @@ int game_session_order_floater_to_merge(GameSession *session,
         floater_index == target_floater_index) return 0;
     floater = &session->floaters[floater_index];
     target = &session->floaters[target_floater_index];
-    if (floater->owner_slot != player_slot || floater->source_subtype == 0 ||
+    if (!game_session_floater_is_active(floater) ||
+        !game_session_floater_is_active(target) ||
+        (floater->source_runtime_flags & 0x008U) != 0 ||
+        (target->source_runtime_flags & 0x008U) != 0 ||
+        floater->owner_slot != player_slot || floater->source_subtype == 0 ||
         floater->island_index != island_index || target->island_index != island_index ||
         floater->active_order_action != 0 || floater->linked_task_slot != -1) {
         return 0;
@@ -793,7 +837,11 @@ int game_session_order_floater_to_defend(GameSession *session,
         floater_index == target_floater_index) return 0;
     floater = &session->floaters[floater_index];
     target = &session->floaters[target_floater_index];
-    if (floater->owner_slot != player_slot || floater->source_subtype == 0 ||
+    if (!game_session_floater_is_active(floater) ||
+        !game_session_floater_is_active(target) ||
+        (floater->source_runtime_flags & 0x008U) != 0 ||
+        (target->source_runtime_flags & 0x008U) != 0 ||
+        floater->owner_slot != player_slot || floater->source_subtype == 0 ||
         floater->island_index != island_index || target->island_index != island_index ||
         floater->active_order_action != 0 || floater->linked_task_slot != -1) {
         return 0;
@@ -828,6 +876,8 @@ int game_session_order_floater_to_charge_site(GameSession *session,
         floater_index >= GAME_SESSION_MAX_FLOATERS) return 0;
     floater = &session->floaters[floater_index];
     island = &session->islands[island_index];
+    if (!game_session_floater_is_active(floater) ||
+        (floater->source_runtime_flags & 0x008U) != 0) return 0;
     if (location_index >= island->location_count ||
         floater->owner_slot != player_slot || floater->island_index != island_index ||
         floater->active_order_action != 0 || floater->linked_task_slot != -1) return 0;

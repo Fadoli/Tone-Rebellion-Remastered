@@ -27,6 +27,8 @@ void game_session_tick_floater_combat(GameSession *session,
 
     if (session == NULL || floater_index >= session->floater_count) return;
     floater = &session->floaters[floater_index];
+    if (!game_session_floater_is_active(floater) ||
+        (floater->source_runtime_flags & 0x008U) != 0) return;
     state = floater->movement_state;
     if (state != GAME_FLOATER_STATE_ATTACK &&
         state != GAME_FLOATER_STATE_ATTACK_SITE) return;
@@ -190,6 +192,10 @@ int32_t game_session_damage_floater(GameSession *session,
     int32_t random_range = power - 1;
     int32_t damage;
 
+    if (!game_session_floater_is_active(attacker) ||
+        !game_session_floater_is_active(target) ||
+        (attacker->source_runtime_flags & 0x008U) != 0 ||
+        (target->source_runtime_flags & 0x008U) != 0) return 0;
     if (!floater_attack_hits(session, attacker, target, power)) return 0;
     if (random_range < 1) random_range = 1;
     damage = (tone_rng_bounded(&session->random_state, random_range) +
@@ -222,6 +228,8 @@ int32_t game_session_damage_site(GameSession *session,
     int32_t damage = tone_rng_bounded(&session->random_state, damage_range) + 1;
     int32_t item_id = target->record_value_10;
 
+    if (!game_session_floater_is_active(attacker) ||
+        (attacker->source_runtime_flags & 0x008U) != 0) return 0;
     if (damage > 6) damage = 6;
     /* FUN_00450817 filters out ordinary building IDs 0x17..0x24 before
        forwarding to FUN_00450847. The helper accepts visible, nonempty sites
@@ -397,7 +405,8 @@ unsigned int game_session_apply_cast_blast(
         int32_t effect_amount = base_amount;
         int32_t remaining_hp;
 
-        if (target_index == caster_index ||
+        if (!game_session_floater_is_active(target) ||
+            target_index == caster_index ||
             target->island_index != caster->island_index ||
             (target->source_runtime_flags & 0x008U) != 0) continue;
         distance = game_session_source_chebyshev_distance(
@@ -643,7 +652,8 @@ void game_session_tick_combat_effects(GameSession *session,
     if (session == NULL || (source_tick & 1U) == 0) return;
     for (i = 0; i < session->floater_count; ++i) {
         GameFloaterStart *floater = &session->floaters[i];
-        if (!floater->attack_effect_active) continue;
+        if (!game_session_floater_is_active(floater) ||
+            !floater->attack_effect_active) continue;
         if (floater->attack_effect_odd_updates_remaining > 0)
             --floater->attack_effect_odd_updates_remaining;
         if (floater->attack_effect_odd_updates_remaining == 0) {

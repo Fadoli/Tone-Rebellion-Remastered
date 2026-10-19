@@ -150,7 +150,9 @@ unsigned int game_session_dispatch_glyph_actions(GameSession *session)
         for (floater_index = 0; floater_index < session->floater_count;
              ++floater_index) {
             GameFloaterStart *floater = &session->floaters[floater_index];
-            if (floater->owner_slot != request.player_slot ||
+            if (!game_session_floater_is_active(floater) ||
+                (floater->source_runtime_flags & 0x008U) != 0 ||
+                floater->owner_slot != request.player_slot ||
                 floater->source_subtype != 8) continue;
 
             floater->active_order_action = 0x13;

@@ -123,7 +123,8 @@ static void draw_diplomacy_panel(HDC dc, const WindowTemplate *panel,
              ++floater_index) {
             const GameFloaterStart *floater =
                 &g_game_session.floaters[floater_index];
-            if (floater->owner_slot < GAME_START_PLAYER_COUNT &&
+            if (game_session_floater_is_active(floater) &&
+                floater->owner_slot < GAME_START_PLAYER_COUNT &&
                 floater->type_index < GAME_START_PLAYER_COUNT &&
                 player_floaters[floater->owner_slot] == NULL) {
                 player_floaters[floater->owner_slot] = floater;

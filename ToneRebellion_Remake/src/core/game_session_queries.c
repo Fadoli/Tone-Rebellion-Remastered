@@ -14,6 +14,8 @@ int game_session_floater_at(const GameSession *session,
     for (i = 0; i < session->floater_count; ++i) {
         const GameFloaterStart *floater = &session->floaters[i];
         int32_t dx;
+        if (!game_session_floater_is_active(floater) ||
+            (floater->source_runtime_flags & 0x008U) != 0) continue;
         int32_t dy;
 
         if (floater->island_index != island_index) continue;
@@ -37,7 +39,8 @@ unsigned int game_session_count_player_floaters(const GameSession *session,
     limit = session->floater_count;
     if (limit > GAME_SESSION_MAX_FLOATERS) limit = GAME_SESSION_MAX_FLOATERS;
     for (i = 0; i < limit; ++i) {
-        if (session->floaters[i].owner_slot == player_slot) ++count;
+        if (game_session_floater_is_active(&session->floaters[i]) &&
+            session->floaters[i].owner_slot == player_slot) ++count;
     }
     return count;
 }
@@ -78,7 +81,8 @@ int game_session_workstr_summary(const GameSession *session,
     if (limit > GAME_SESSION_MAX_FLOATERS) limit = GAME_SESSION_MAX_FLOATERS;
     for (i = 0; i < limit; ++i) {
         const GameFloaterStart *floater = &session->floaters[i];
-        if (floater->type_index != type_index) continue;
+        if (!game_session_floater_is_active(floater) ||
+            floater->type_index != type_index) continue;
         ++type_total;
         if (floater->source_subtype == 0) ++subtype_zero;
     }
