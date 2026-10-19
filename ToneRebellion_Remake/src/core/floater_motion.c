@@ -65,3 +65,31 @@ int floater_motion_step(FloaterPosition *position,
     position->y += dy;
     return position->x == destination.x && position->y == destination.y;
 }
+
+int floater_motion_wander_destination(ToneRng *random_state,
+                                      int32_t current_x,
+                                      int32_t current_y,
+                                      int32_t raw_min_x,
+                                      int32_t raw_max_x,
+                                      FloaterPosition *destination)
+{
+    int32_t min_x = raw_min_x > 0 ? raw_min_x : 0;
+    int32_t max_x = raw_max_x < 0x9ff ? raw_max_x : 0x9ff;
+    int32_t center_x = current_x;
+    int32_t x;
+    int32_t y;
+
+    if (random_state == 0 || destination == 0) return 0;
+
+    if (center_x < min_x + 100) center_x = min_x + 100;
+    if (center_x > max_x - 100) center_x = max_x - 100;
+    x = center_x - 100 + tone_rng_bounded(random_state, 200);
+    y = current_y - 100 + tone_rng_bounded(random_state, 200);
+    if (y < 0x28) y = 0x28;
+    if (y > 0x122) y = 0x122;
+    if (x < min_x || x > max_x) return 0;
+
+    destination->x = x;
+    destination->y = y;
+    return 1;
+}

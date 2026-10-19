@@ -9,7 +9,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-enum { GAME_SESSION_MAX_FLOATERS = GAME_START_PLAYER_COUNT * GAME_START_FLOATERS_PER_PLAYER };
+enum { GAME_SESSION_MAX_FLOATERS = GAME_START_PLAYER_COUNT * GAME_START_FLOATERS_PER_PLAYER,
+       GAME_FLOATER_CATEGORY_COUNT = GAME_START_PLAYER_COUNT + 1 };
 enum { GAME_SESSION_MAX_PENDING_EVENTS = 64, GAME_SESSION_MAX_TASKS = 32 };
 enum { GAME_SESSION_MAX_GLYPH_ACTIONS = 64 };
 enum { GAME_SESSION_MAX_ONOFF_ACTIONS = 64 };
@@ -185,6 +186,11 @@ typedef struct GameRuntimeLocation {
 
 typedef struct GameRuntimeIsland {
     uint16_t location_count;
+    /* FUN_00423068 reads horizontal wander limits by floater category and
+       island. Zero / 0x9ff retain the source's global fallback on each side;
+       the data loader for the original per-category limits is not modeled. */
+    int32_t floater_min_x[GAME_FLOATER_CATEGORY_COUNT];
+    int32_t floater_max_x[GAME_FLOATER_CATEGORY_COUNT];
     /* FUN_0047117d checks one per-player access dword at island +0x29ac. */
     uint8_t access_mask;
     /* FUN_00465793 message type 3/subtype 0 toggles bit 0 in one raw dword
@@ -221,20 +227,25 @@ typedef struct GameFloaterStart {
     uint16_t destination_y;
     uint16_t movement_speed;
     /* FUN_00422d27's speed context is resolved before its coordinate step.
-       Initial workers use state 0; the remaining modifiers stay zero until
-       their runtime sources are modeled by the session. */
+       Initial workers start idle and take the fallback FA_Wander route on
+       their first simulation tick. Remaining modifiers stay zero until their
+       runtime sources are modeled by the session. */
     uint8_t movement_state;
     int16_t category_speed_modifier;
     uint8_t near_target_speed_override;
     uint8_t site_speed_bonus;
     uint16_t stop_radius;
     uint8_t has_move_order;
+    /* Idle fallback order FA_Wander (14), runtime state 0x0e and +0x34 timer. */
+    uint8_t has_wander_order;
+    uint16_t wander_timer;
     uint8_t facing_left;
 } GameFloaterStart;
 
 typedef struct GameSession {
     GameSessionConfig config;
-    /* Shared LCG state after the world-start draws modeled by this port. */
+    /* Shared LCG after modeled world-start draws; simulation randomness
+       advances it, including FA_Wander destination generation. */
     ToneRng random_state;
     uint8_t island_count;
     GameStartSetup player_starts;
@@ -276,7 +287,7 @@ typedef struct GameSession {
  *
  * `home_island_index` represents the unresolved runtime value compared with
  * DAT_006136b0 - 1. `random_state` preserves the LCG after the modeled draws
- * for subsequent realm-music selection. RNG draws before/inside the unported
+ * and is advanced by later simulation draws. RNG draws before/inside the unported
  * 0x17..0x19 loop are outside this model, so this is not whole-startup stream
  * parity.
  */
@@ -357,8 +368,8 @@ int game_session_apply_world_bridge_message(GameSession *session,
 /* Advance the per-location animation fields updated by FUN_00450a71. */
 void game_session_tick_item_animations(GameSession *session,
                                        const struct BuildingRenderCatalog *catalog);
-/* Advance destinations assigned by the simulation using the FUN_00422d27
-   step kernel. Player input must not call this as a worker-order command. */
+/* Advance idle FA_Wander routes and simulation-assigned destinations through
+   the FUN_00422d27 step kernel. Player input must not call this as an order. */
 void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick);
 /* Hit test the visible island's active floaters in session order. The original
    FUN_00435581 uses Chebyshev distance < 0x14 (20) for floater selection. */

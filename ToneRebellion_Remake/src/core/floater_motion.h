@@ -2,6 +2,7 @@
 #define TONE_REBELLION_FLOATER_MOTION_H
 
 #include <stdint.h>
+#include "tone_rng.h"
 
 typedef struct FloaterPosition {
     int32_t x;
@@ -35,5 +36,15 @@ int floater_motion_step(FloaterPosition *position,
                         FloaterPosition destination,
                         uint16_t effective_speed,
                         uint32_t source_tick);
+
+/* Resolve FUN_00423068's state-0x0e random waypoint. Raw horizontal limits
+   are the category/island pair read by the source; zero and 0x9ff select its
+   global fallback limits. The RNG advances twice, including rejected points. */
+int floater_motion_wander_destination(ToneRng *random_state,
+                                      int32_t current_x,
+                                      int32_t current_y,
+                                      int32_t raw_min_x,
+                                      int32_t raw_max_x,
+                                      FloaterPosition *destination);
 
 #endif

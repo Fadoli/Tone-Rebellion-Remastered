@@ -159,10 +159,23 @@ choosing the effective step:
 
 | Runtime state | Target/step handling observed |
 |---|---|
-| `8` | Adds an island-location offset selected through the record at `+0x32`; clamps X to `0..0x9ff` and Y to `0x28..0x122`. If `FUN_00420600` for that location returns below 100, uses step 1 for this update. It also sets or clears facing flag `0x002` according to whether the resolved X target lies left of current X. |
-| `9` | Decodes the packed coordinate at `+0x32` with `FUN_0041e427` (each byte expands to a multiple of 10), then uses step 1 when `FUN_004672a6` between current and decoded target is below 100. |
-| `0x0e` | Forces step 1. |
+| `8` | Adds the live X/Y of the target floater at `+0x32` to the stored `+0x28/+0x2a` offset, then clamps X to `0..0x9ff` and Y to `0x28..0x122`. If `FUN_00420600` reports Chebyshev distance below 100 between the two floaters, selects base step 1 before later modifiers. It also sets or clears facing flag `0x002` from the resolved X target. |
+| `9` | Decodes the packed coordinate at `+0x32` with `FUN_0041e427` (each byte expands to a multiple of 10), then selects base step 1 when `FUN_004672a6` between current and decoded target is below 100. |
+| `0x0e` | Selects base step 1. |
 | Other states | Loads the base speed from stat record `FUN_00464242(category, subtype) + 0x0c`. |
+
+State `9` uses two related but distinct targets. `FUN_00423068` expands the
+packed coordinate and generates a randomized waypoint around it, storing that
+waypoint in `+0x28/+0x2a`; `FUN_00422d27` advances toward this stored pair.
+However, the base-step-1 near-target override compares the floater's current
+coordinates to the expanded packed coordinate itself, using strict Chebyshev
+distance `< 100`. The random waypoint does not participate in that speed
+predicate. A floater can therefore switch to step 1 while still approaching
+the waypoint, or retain its stat speed near the waypoint if it lies outside
+the 100-unit box around the packed anchor. Evidence: destination generation
+`ev_3dde3e48aa8d5db8b349dce765fef2704415afc59c5392eaecb900882a0f899f`,
+coordinate step `ev_810f7530a91d83a454c4d310d2142cafe948434cde2b0707fd5847693435b64f`,
+and Chebyshev helper `ev_d6e45300f5ee5de4ed13ebfa3da2e5198981b6af36bc072d956c795033a50243`.
 
 After that state-specific choice, a subtype-0 unit doubles its step when the
 per-category value at `DAT_00618f5a` is positive. If `FUN_004207f2` reports
@@ -192,6 +205,16 @@ pathfinding or obstacle avoidance. Evidence:
 `ev_99ac9bec204079134afb4ec773ba173dab2b1a1a87ae06d72f28cad8c8cbfff9`,
 `ev_0c9a83fe313044ec813605a6f5e71760fcbcf78e0fff164432184e30593c562d`.
 
+The low-bit fallback only applies after a positive step has been reduced by
+the near-target division. If the selected effective speed is already zero,
+then `distance < 4 * step` is false for every nonzero distance, the kernel
+leaves `step` at zero, applies zero deltas on both axes, and reports no
+arrival. There is no general minimum-speed fallback: a zero-speed floater
+stalls until its speed context changes. The remake's coordinate kernel
+preserves this distinction, so callers must not silently replace a missing or
+zero stat with speed 1. This follows directly from the same step procedure and
+does not depend on an additional runtime assumption.
+
 ### Target source and facing adjustment
 
 `FUN_00423068` resolves the next pixel pair from the runtime state and target
@@ -206,20 +229,44 @@ index. The main coordinate sources observed in its switch-like conditions are:
 | `0x15` | The floater's current coordinates; this branch does not introduce a new travel point. |
 
 Other ordinary states select a location record from the current island. State
-`8` follows a separate special case that draws around coordinate origin rather
-than using the selected location coordinates. For entity-target states 6 and
-`0x0f`, the helper compares target X with current X, sets/clears facing flag
-`0x002`, and places the approach point 43 coordinate units on the current
-floater's side of the target unless the action is `FA_MergeWith` (`0x14`).
+`8` follows a separate special case that draws two offsets around coordinate
+origin rather than using selected location coordinates. `FUN_00423068` stores
+that pair in `+0x28/+0x2a`; on every state-8 step, `FUN_00422d27` adds the
+target floater's current coordinates from `+0x32` before clamping the effective
+destination. The saved pair is not replaced by this translated coordinate, so
+the same offset follows a moving target. The state-8 step-1 predicate compares
+the two entities directly and is independent of that offset waypoint. For
+entity-target states `6`/`0x0f` and location-approach state `0x10`, the helper
+compares target X with current X, sets/clears facing flag `0x002`, and places
+the approach point 43 coordinate units on the floater's side of the target. In
+the entity-target path only, order `FA_MergeWith` (`0x14`) suppresses this
+offset and permits exact-coordinate approach. If target X equals current X,
+the helper leaves the facing flag unchanged but keeps its default 43-unit
+offset, placing the approach point to the left of the target.
 Location targets can receive other adjustments based on their raw
 class/type/flags, sprite metrics, and helper results; those conditions remain
 field-based rather than named terrain or collision rules. A final horizontal-bounds check controls whether
 `+0x28/+0x2a` are written. This is target resolution and visual/body spacing,
 not evidence of obstacle avoidance or continuous cross-island movement.
+In particular, `FA_Move`'s runtime state `1` does not use the 43-unit
+side-offset branch: its initial target is the location record's X/Y, and the
+resolver adds offsets only when raw location `+0x10 == 0x2a` or `+0x18 != -1`.
+Under that guard it requests offset mode 6 from `FUN_00450197`; otherwise the
+offset pair stays zero. The final X-bounds check still gates storing the
+destination. Thus the 43-unit approach geometry applies to entity states
+`6`/`0x0f` and location state `0x10`, not to all orders that travel to a place.
+One vertical adjustment is table-driven: `FUN_0040ad94(parameter)` returns
+zero outside parameter IDs `5..33`, otherwise reads one of 29 shorts from
+`DAT_0049acbe`. The location resolver subtracts this value from destination Y
+in state `0x0d`, in state `4` for raw location class 2, and for raw location
+item IDs 0 or 1. The short table's gameplay meaning is not established, so it
+remains a raw anchor correction rather than a named height or terrain rule.
 Evidence: `ev_3dde3e48aa8d5db8b349dce765fef2704415afc59c5392eaecb900882a0f899f`,
 with state consumers in
 `ev_6c3ec9c58f2e2ec6ef837d8737ba3dfece6d35c11a918338523e688a6746c25a` and
-`ev_810f7530a91d83a454c4d310d2142cafe948434cde2b0707fd5847693435b64f`.
+`ev_810f7530a91d83a454c4d310d2142cafe948434cde2b0707fd5847693435b64f`;
+offset lookup `ev_2051246410a63d4b65ce11be1e28fceb301af46227914716355c6e0125d2722c`;
+parameter-to-short lookup `ev_4586db16c58a3a23f362dc453333b4eb5755cdcdae4773f387b9a5f6b954977a`.
 
 States `0x0f` and `0x10` do not use the common movement call in the floater
 tick. Their state handler first compares Chebyshev distance against its
@@ -271,10 +318,16 @@ and action labels `ev_ca6209d841056d1b69884f43a204d17713c19c2756570da82baaec7706
 
 Action 8 (`FA_DefendFlt`) is case `7`. At progress 0, the consumer enters
 state `8`, copies task target `+0x42` to `+0x32`, clears flag `0x004`, and sets
-progress to 1. State 8 resolves the indexed runtime entity's current
-coordinates and moves toward it. Its state handler can finish early when
-`FUN_004208eb` finds a qualifying candidate; otherwise exact coordinate
-arrival also completes state 8.
+progress to 1. State 8 is a follow approach with a moving offset, not direct
+arrival at the target floater: `FUN_00423068` stores a random `[-100,99]` X/Y
+offset, and each `FUN_00422d27` step adds the target floater's current
+coordinates before applying the world-bound clamps. The same stored offset is
+therefore carried along as the target moves. Effective speed changes to 1
+when the two floaters' direct Chebyshev distance is below 100, regardless of
+their distance from the offset waypoint. Later category/site modifiers can
+still adjust that base value. The state handler can finish early
+when `FUN_004208eb` finds a qualifying candidate; otherwise exact arrival at
+the translated waypoint completes state 8.
 
 While progress is 1, `FUN_004208eb` scans the current-island entity list in
 order. It returns the first candidate accepted by `FUN_00420991` whose
@@ -329,18 +382,38 @@ branch does not write the movement destination pair itself. The executor's
 common tail calls `FUN_00423068` whenever runtime state `+0x2c` is nonzero, so
 the newly entered state resolves a coordinate destination immediately.
 
-For state `0x0e`, `FUN_00423068` starts from the floater's current X/Y. It draws
-two bounded values with `FUN_00467260(200)`, subtracts 100 from each, and adds
-those offsets to current X/Y. Candidate X is first limited against the
-category/subtype X bounds with a 100-unit margin where those table bounds are
-available; candidate Y is clamped to `0x28..0x122`. For state `0x0e`, the
-helper takes the no-location-record path, which adds no extra sprite/stance
-offset. It accepts the candidate only if final X passes the horizontal bounds
-check, then stores the pair at `+0x28/+0x2a`. Facing is updated from the
-candidate's horizontal direction. These are observations of the pseudocode; coordinate units and the
-exact meaning of the table bounds are not fully named. The evidence does not
-establish a uniform distribution, nor that a newly generated coordinate must
-differ from the previous one.
+For state `0x0e`, `FUN_00423068` starts from the floater's current X/Y. It reads
+the floater category's horizontal limits from the current-island record at
+`DAT_005ec620 + category * 8 + islandIndex * 0x29e8`; the lower limit is used only
+when positive and the upper only when below `0x9ff`, otherwise they default to
+`0` and `0x9ff`. Category 4 skips those table reads and keeps the defaults. Before
+adding randomness, the X center is clamped first to at least `minX + 100`, then
+to at most `maxX - 100`. Two calls to `FUN_00467260(200)` then add offsets in
+`[-100,99]` to that X center and the current Y. Y is clamped to
+`0x28..0x122`. State `0x0e` takes the no-location-record path, which adds no
+extra sprite/stance offset. The resolver accepts the candidate only if final X
+is inclusively within the raw limits, then stores the pair at `+0x28/+0x2a`;
+facing is updated from the candidate's horizontal direction. The center clamps
+do not establish that every random candidate is in range when the two 100-unit
+margins overlap; the final bounds check decides acceptance. Coordinate units
+and the table limits' gameplay meaning are not fully named. The evidence does
+not establish a uniform distribution, nor that a newly generated coordinate
+must differ from the previous one. Evidence: resolver
+`ev_d4cd7abeebb8995fafaa9f6766fac6764547a0f499b94fe2e51d82cc3411373a`.
+
+If the final X check fails, the helper returns 0 without writing either
+destination coordinate. On the `FA_Wander` dispatch path, `FUN_004211bb`'s
+common tail checks this return value and cancels the task link through
+`FUN_00421ec1(-1)`. Thus an out-of-bounds random X does not keep an older
+destination as an active route: the coordinate fields may remain stale, but
+that dispatch clears the action/state and does not retry a new random point in
+the same call. The ordinary state-`0x0f`/
+`0x10` arrival handler uses the same resolver-failure return to cancel its
+order. Evidence: destination resolver
+`ev_3dde3e48aa8d5db8b349dce765fef2704415afc59c5392eaecb900882a0f899f`, order
+consumer `ev_96f90fdc7951d5fe26fcf0b495de08970ec0e6984d64572c67ff099abac40957`,
+and state arrival handler
+`ev_6c3ec9c58f2e2ec6ef837d8737ba3dfece6d35c11a918338523e688a6746c25a`.
 
 State `0x0e` is allowed through the common movement gate in `FUN_0041e569`.
 `FUN_00422d27` consumes the stored `+0x28/+0x2a` destination and uses base step
@@ -378,6 +451,21 @@ order selection `ev_4c7ea2d2c94eba918c2e82e0709966a1d9d2c60e1d2c705361285aceb05e
 order consumption `ev_96f90fdc7951d5fe26fcf0b495de08970ec0e6984d64572c67ff099abac40957`,
 movement/arrival `ev_6c3ec9c58f2e2ec6ef837d8737ba3dfece6d35c11a918338523e688a6746c25a`,
 and target resolution/step `ev_810f7530a91d83a454c4d310d2142cafe948434cde2b0707fd5847693435b64f`.
+
+For the moving approach states, the radius test is centered on the stored
+approach point, not necessarily on the target entity's center. In state
+`0x0f`, `FUN_00423068` normally stores an X point 43 units onto the floater's
+side of its target, while the arrival handler compares current coordinates
+with that stored point using the default or stat-derived radius. The resulting
+radius therefore cannot be read as the maximum distance from the target
+center. `FA_MergeWith` is the specific exception: it suppresses the entity
+offset and forces radius zero, so the current step must land exactly on the
+resolved target point (subject to the documented stale-target check ordering).
+State `0x10` uses the same side-offset rule for a location target, with its
+arrival radius measured around that stored location approach point. Evidence:
+destination resolver `ev_3dde3e48aa8d5db8b349dce765fef2704415afc59c5392eaecb900882a0f899f`,
+step and arrival handler `ev_6c3ec9c58f2e2ec6ef837d8737ba3dfece6d35c11a918338523e688a6746c25a`,
+and coordinate kernel `ev_810f7530a91d83a454c4d310d2142cafe948434cde2b0707fd5847693435b64f`.
 
 ### Training and recharge orders: travel to a location record
 
@@ -419,8 +507,16 @@ island is handled by the same cross-island helper.
 
 State `13` is not the special runtime state `0x13` (19 decimal), so its
 coordinate step uses the ordinary location-record route. `FUN_00423068`
-resolves target record `+0x32` and applies the state-`0x0d` body/leg offset;
-`FUN_00422d27` then moves current coordinates toward the stored pixel target.
+resolves target record `+0x32`; in state `0x0d`, it adjusts the raw location
+coordinates to `X = locationX - visualMetric[+0x4a]` and
+`Y = locationY - visualMetric[+0x4c] - FUN_0040ad94(parameter[+0x30])`.
+The two visual metrics are shorts read from the resolved visual record, not
+named dimensions in the available pseudocode. `FUN_0040ad94` contributes zero
+for parameter IDs outside `5..33` and otherwise returns a short from
+`DAT_0049acbe`; the table's semantic meaning remains unknown. After the
+resolver's final X-bounds gate, `FUN_00422d27` moves current coordinates toward
+the stored pixel target. Evidence: resolver `ev_3dde3e48aa8d5db8b349dce765fef2704415afc59c5392eaecb900882a0f899f`;
+table helper `ev_4586db16c58a3a23f362dc453333b4eb5755cdcdae4773f387b9a5f6b954977a`.
 The state handler maps runtime state `13` to case `0x0c`: it reads a result
 through `FUN_004502dc`, cancels the order when that result is zero, and on
 arrival calls `FUN_00452a15` for results in the range `5..33` before completing
@@ -455,6 +551,29 @@ missing or inactive, it selects the nearest eligible class-2 record within
 distance 8000 of an order-dependent reference point. It writes the floater's
 position to that record's `(x, y - 30)`, synchronizes the stored destination
 pair, and changes the floater's current-island field to the target island.
+That fallback reference is selected from the still-stored action and target:
+orders 6 and 8 use the current coordinates of the floater indexed by `+0x42`;
+order 9 decodes the packed coordinate there; other orders use the target
+island's location record at `+0x42`, except order `0x0e`, which retains the
+literal reference `(0x500, 0xa0)`. The fallback scan then considers only
+records whose raw class is 2, whose active flag bit 0 is set, and for which
+`FUN_00420ed9` succeeds, keeping a record only when its Chebyshev distance is
+strictly below the current best (initially 8000). Thus a missing arrival pad
+does not mean “nearest to the floater's departure point” uniformly; the
+reference depends on which order led into the handoff. Evidence: the state
+handler `ev_6c3ec9c58f2e2ec6ef837d8737ba3dfece6d35c11a918338523e688a6746c25a`
+and target-coordinate resolver `ev_810f7530a91d83a454c4d310d2142cafe948434cde2b0707fd5847693435b64f`.
+The preferred-pad check is also repeated across the transfer: at timer 60 the
+lookup scans the target island for the first raw class-2 record whose `+0x36`
+endpoint equals the source island, then the caller rejects it if flag bit 0
+is clear. At timer 120 it repeats that same lookup and active-bit check before
+using the record. If the second lookup no longer qualifies, the distance-based
+fallback runs. This revalidation means the chosen arrival record is not
+guaranteed to be the same record found before the wait. The lookup helper
+itself does not filter on the active bit; that check belongs to the state
+handler. Evidence: `FUN_00466c08` lookup
+`ev_c50cc6e829d1545a0ff5b6cadf8d1248dabad2086db613e1f1ba72423d27b6fb` and
+state handler `ev_6c3ec9c58f2e2ec6ef837d8737ba3dfece6d35c11a918338523e688a6746c25a`.
 The countdown then continues to 60 before the state completes. These are tick
 counts, not verified seconds. The code therefore shows a walk to a local
 handoff site, a timed wait, a discrete position/island change, and a second
@@ -490,6 +609,22 @@ and calls `FUN_004527ee(+0x30, owner)` when the selected location's raw field
 `+0x04` is zero. That validator initializes an item only if its own
 preconditions pass; this connects the delivery order to a location-side
 completion attempt without identifying the delivered object's semantics.
+
+State `3` has two distinct exact-arrival branches, so arrival does not always
+end the route immediately. If the target location's raw `+0x10` equals
+`0x2a`, its `+0x18` is not `-1`, or floater flag bit 0 is set, arrival sets
+floater flag bit 0 and starts timer `+0x34` at 1. The timer increments up to
+`0x14`; on the following update the code may copy raw parameter `+0x30` into
+floater field `+0x18` and call `FUN_00452eac`, subject to the location's raw
+owner `+4` being zero and `FUN_00452c31` accepting the parameter. It clears flag bit 0
+and completes state `3` after that timed branch. In the alternate branch,
+arrival increments the timer and asks `FUN_00452e4d(parameter, timer)`; a
+positive result takes the `FUN_00425084`/`FUN_00452eac` path and completes,
+while a zero result calls `FUN_00452ceb(parameter, owner)` and completes only
+if that also returns zero. These are raw state transitions and helper gates;
+the evidence does not name their gameplay effects. Evidence: state handler
+`ev_6c3ec9c58f2e2ec6ef837d8737ba3dfece6d35c11a918338523e688a6746c25a` and
+order parameters `ev_96f90fdc7951d5fe26fcf0b495de08970ec0e6984d64572c67ff099abac40957`.
 
 `FA_Fetch` is action ID 3, but `FUN_004211bb`'s order-minus-one switch has no
 case `2` in the retained pseudocode. It has no order-specific local target or
@@ -769,9 +904,14 @@ command is exposed in the remake. The confirmed producer `FUN_0045da80` writes
 `FA_Cast` (`0x13`); it is not evidence of a construction assignment. `FA_Build`
 has a traced consumer and site validator, but its producer and the transitions
 connecting assignment, travel and placement are not yet fully reconstructed.
-The source-generated wander destination and its stop condition are now
-established for `FA_Wander`; the remake still needs to port the action/timer
-transitions and bounds/anchor resolution before idle workers can use this path.
+The core tick now gives unlinked initial floaters the `FA_Wander` fallback:
+it generates a state-`0x0e` destination, advances with the shared kernel, waits
+for exact arrival while counting down the 60-tick timer, then selects another
+point. `GameRuntimeIsland` carries the source's category/island X-bound slots;
+they currently retain the source sentinel defaults `0..0x9ff` because their
+runtime table is not initialized from available remake inputs. Thus the route
+cycle is implemented, while nondefault island/category X limits and the
+source task-candidate eligibility scan remain unmodeled.
 
 The current remake also records left/right facing from the destination direction and
 uses horizontally mirrored body and leg sheets while facing left. This follows
@@ -791,17 +931,23 @@ slot (`0x3f`), or emits `0x32` only when the selected record's `+0x18` is not
 a negative active-state index (`+0x29f2`); otherwise it indexes the object
 array at `+4 + recipient_index * 0x0c` and invokes that object's vtable slot
 `+4`, passing a value formed from the active-state index and message `0x35`,
-followed by `(1,1)`. The concrete recipient object, its vtable and method body
-remain unresolved, so this path cannot yet be identified as a floater movement
-command. The next static probe is to trace initialization/writes to
-`DAT_005c37e4[1]`, then resolve that object's vtable slot. This path is distinct
+followed by `(1,1)`. The `ISLEVIEW` pointer is fetched by name from the window
+object registry through `FUN_0046c4a5`; that helper can also return the
+registry slot separately, while `FUN_0046c371` consumes its first argument as
+such a slot. In this call, therefore, `DAT_005c37e4[1]` is used as a recipient
+index, not passed as the recipient object pointer. Its runtime value, the
+registered object's class, vtable and method body remain unresolved, so this
+path cannot yet be identified as a floater movement command. The next static
+probe is to trace initialization/writes to `DAT_005c37e4[1]`, then resolve that
+slot's object and vtable method. This path is distinct
 from map-ground message `0x4c`, whose callback and recipient guard are
 unresolved independently. The remake's four-worker roster selection is the
 supported subset; no move command is exposed. Evidence:
 `ev_dfa9260d630c5590f535d54281a0b8f2c2767e3ca99d4a00ffdd596b3104b7eb`,
 `ev_6ac7cc6650dc8a0e9b412c055606948d1c6dbbdd3e6c6df0a7fcc1551764419e`,
 `ev_f8a09cad809f94f6483fa8f6623537024026f2d86fdd3f36b90ed39dbda0bd65`,
-`ev_ed92b375145a0b030776f82d115ccc237230777746be74169b6aac305580d646`.
+`ev_ed92b375145a0b030776f82d115ccc237230777746be74169b6aac305580d646`,
+and named-window lookup `ev_8ca518262f6e9da0f51b7f516b986760a38b2cc4962b4ea5adf47c2f5b350e01`.
 
 `FUN_0045f4f5` starts the move context after its eligibility checks; it does
 not issue order 9. `FUN_0045f5c5` ends the context: for target item `0x2a`,
