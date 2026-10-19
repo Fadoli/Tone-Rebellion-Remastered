@@ -42,6 +42,8 @@ typedef struct GameRuntimeLocation {
     int16_t charge_floater_slots[8];
     uint16_t charge_floater_count;
     int16_t charge_recent_floater;
+    /* Source staffing row +0x50 task handle; -1 means no queued staff request. */
+    int16_t charge_staff_task_handle;
     /* Raw Hall threshold read by FUN_0045eaa7. */
     int16_t source_capacity_4a;
     /* FUN_004528ca initializes runtime +0x34 from FUN_00450978; repair task

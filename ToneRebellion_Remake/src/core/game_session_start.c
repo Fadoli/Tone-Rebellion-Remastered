@@ -192,6 +192,7 @@ int game_session_initialize_start_islands(
             }
             state->charge_floater_count = 0;
             state->charge_recent_floater = -1;
+            state->charge_staff_task_handle = -1;
             state->record_value_24 = 0;
             state->bridge_neighbor_island = bridge_neighbors[island_index][location_index];
             state->x = location->x;

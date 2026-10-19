@@ -15,8 +15,7 @@ typedef struct GameFloaterStart {
        modeled here. */
     uint8_t current_hit_points;
     uint8_t max_hit_points;
-    /* Mutable raw floater short updated from FUN_00420f28 after source training. */
-    int16_t attack_strength;
+    uint8_t attack_strength;
     /* Raw short +0x08; FUN_004200d2 increments it after a positive attack
        result. Its gameplay meaning is not established yet. */
     uint16_t source_progress_08;

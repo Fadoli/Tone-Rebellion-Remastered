@@ -3,6 +3,27 @@
 #include "building_render.h"
 #include "island_render_rules.h"
 
+static const uint8_t source_staff_target_counts[8][3][3] = {
+    {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+    {{3, 0, 0}, {3, 2, 0}, {3, 2, 1}},
+    {{3, 0, 0}, {3, 2, 0}, {3, 2, 1}},
+    {{3, 0, 0}, {3, 2, 0}, {0, 0, 0}},
+    {{1, 0, 0}, {1, 1, 0}, {1, 1, 1}},
+    {{1, 0, 0}, {1, 1, 0}, {1, 1, 1}},
+    {{1, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+    {{1, 0, 0}, {0, 0, 0}, {0, 0, 0}}
+};
+
+static const int16_t source_staff_level_caps[9] = {0, 2, 2, 1, 2, 2, 0, 0, 0};
+static const int16_t source_staff_threshold_low[9][3] = {
+    {0, 0, 0}, {25, 100, 0}, {30, 120, 0}, {40, -1, 0},
+    {25, 100, 0}, {25, 100, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}
+};
+static const int16_t source_staff_threshold_high[9][3] = {
+    {0, 0, 0}, {75, 200, 0}, {90, 240, 0}, {120, -1, 0},
+    {75, 200, 0}, {75, 200, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}
+};
+
 static int producer_resource_code(const GameRuntimeLocation *state)
 {
     int32_t base_item_id;
@@ -17,16 +38,44 @@ static int producer_resource_code(const GameRuntimeLocation *state)
 
 static void tick_source_staff_cycle(GameSession *session,
                                     GameRuntimeLocation *source,
-                                    const FloaterCatalog *floater_catalog)
+                                    const FloaterCatalog *floater_catalog,
+                                    uint8_t island_index,
+                                    unsigned int location_index)
 {
     unsigned int slot;
     int32_t base_item_id;
+    int16_t existing_by_level[3] = {0, 0, 0};
+    int16_t need_by_level[3];
+    int32_t source_level;
+    int32_t difficulty;
+    int32_t stock_available;
+    unsigned int worker_index;
 
     if (source->owner_id < 0 || source->owner_id >= GAME_START_PLAYER_COUNT)
         return;
     base_item_id = source->record_value_10 - source->owner_id * 16;
     if (base_item_id < 0x2c || base_item_id > 0x32 ||
         (source->source_flags & 0x90U) != 0) return;
+
+    source_level = source->source_capacity_4a;
+    if (source_level < 0) source_level = 0;
+    if (source_level > 2) source_level = 2;
+    difficulty = session->config.difficulty;
+    if (difficulty > 4) difficulty = 4;
+    stock_available = source->resource_stock[1] > 9;
+    for (slot = 0; slot < 8; ++slot) {
+        int16_t index = source->charge_floater_slots[slot];
+        if (index < 0 || (unsigned int)index >= session->floater_count) continue;
+        worker_index = (unsigned int)index;
+        {
+            uint16_t level = session->floaters[worker_index].attack_level_flags & 0x0fU;
+            if (level < 3U) ++existing_by_level[level];
+        }
+    }
+    for (slot = 0; slot < 3; ++slot)
+        need_by_level[slot] = (int16_t)(
+            source_staff_target_counts[base_item_id - 0x2b][source_level][slot] -
+            existing_by_level[slot]);
 
     for (slot = 0; slot < 8; ++slot) {
         int16_t index = source->charge_floater_slots[slot];
@@ -38,7 +87,27 @@ static void tick_source_staff_cycle(GameSession *session,
 
         if (index < 0 || (unsigned int)index >= session->floater_count) continue;
         floater = &session->floaters[(unsigned int)index];
-        if ((floater->source_runtime_flags & 0x20U) == 0) continue;
+        if ((floater->source_runtime_flags & 0x20U) == 0) {
+            int32_t threshold;
+            int32_t weighted_threshold;
+
+            level = (uint16_t)(floater->attack_level_flags & 0x0fU);
+            if (source->charge_recent_floater != -1 ||
+                source->charge_staff_task_handle != -1 ||
+                level >= 2U || level >= source_staff_level_caps[
+                    floater->source_subtype <= 8 ? floater->source_subtype : 0] ||
+                level >= (uint16_t)source_level || need_by_level[level + 1U] == 0 ||
+                !stock_available || floater->source_subtype > 8) continue;
+
+            weighted_threshold = (4 - difficulty) *
+                source_staff_threshold_low[floater->source_subtype][level] +
+                difficulty * source_staff_threshold_high[floater->source_subtype][level];
+            threshold = weighted_threshold / 4;
+            if (threshold <= 0 ||
+                threshold > (int16_t)floater->source_progress_08) continue;
+            source->charge_recent_floater = index;
+            continue;
+        }
 
         /* FUN_0045cd75 adds source +0x32 (initialized to 1 by FUN_004528ca)
            for each linked worker in the active-work branch. */
@@ -82,7 +151,10 @@ static void tick_source_staff_cycle(GameSession *session,
             }
             if (trained_strength > INT16_MAX) trained_strength = INT16_MAX;
             if (trained_strength < INT16_MIN) trained_strength = INT16_MIN;
-            floater->attack_strength = (int16_t)trained_strength;
+            floater->max_attack_points = (int16_t)trained_strength;
+            level = (uint16_t)(floater->attack_level_flags & 0x0fU);
+            if (level > 0 && level <= 3U)
+                --need_by_level[level - 1U];
         }
         /* FUN_0045c82f clears the current worker, then FUN_00421ec1(-1)
            ends its active source action and clears runtime mask 0x65. */
@@ -91,6 +163,12 @@ static void tick_source_staff_cycle(GameSession *session,
         floater->active_order_action = 0;
         floater->has_move_order = 0;
         source->charge_recent_floater = -1;
+        if (source->charge_staff_task_handle >= 0 &&
+            source->charge_staff_task_handle < GAME_SESSION_MAX_PENDING_EVENTS) {
+            (void)game_session_pending_event_release(
+                session, (uint8_t)source->charge_staff_task_handle);
+            source->charge_staff_task_handle = -1;
+        }
     }
 
     if (source->barg_progress > 0.0) {
@@ -104,6 +182,23 @@ static void tick_source_staff_cycle(GameSession *session,
             source->barg_progress -= 0.25;
             if (source->barg_progress < 0.0) source->barg_progress = 0.0;
         }
+    }
+
+    if (source->resource_stock[1] <= 9U &&
+        source->charge_staff_task_handle >= 0 &&
+        source->charge_recent_floater == -1) {
+        (void)game_session_pending_event_release(
+            session, (uint8_t)source->charge_staff_task_handle);
+        source->charge_staff_task_handle = -1;
+    } else if (need_by_level[0] != 0 &&
+               source->charge_recent_floater == -1 &&
+               source->charge_staff_task_handle == -1 && stock_available) {
+        /* FUN_0045cd75 submits task 0x0b with the source table's island and
+           location header; these are the corresponding runtime coordinates. */
+        int task_slot = game_session_pending_event_add(
+            session, (int16_t)source->owner_id, (int16_t)island_index, 0x0b,
+            (int16_t)location_index, 0, 0);
+        if (task_slot >= 0) source->charge_staff_task_handle = (int16_t)task_slot;
     }
 }
 
@@ -135,7 +230,8 @@ void game_session_tick_item_animations_with_floaters(
             }
 
             if (state->renderer_class == 0 && floater_catalog != NULL)
-                tick_source_staff_cycle(session, state, floater_catalog);
+                tick_source_staff_cycle(session, state, floater_catalog,
+                                        (uint8_t)island_index, location_index);
 
             if (state->record_value_10 <= 0 ||
                 state->record_value_10 >= catalog->item_count) continue;
