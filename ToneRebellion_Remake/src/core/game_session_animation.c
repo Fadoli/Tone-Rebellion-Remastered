@@ -15,8 +15,101 @@ static int producer_resource_code(const GameRuntimeLocation *state)
     return 0;
 }
 
-void game_session_tick_item_animations(GameSession *session,
-                                       const struct BuildingRenderCatalog *catalog)
+static void tick_source_staff_cycle(GameSession *session,
+                                    GameRuntimeLocation *source,
+                                    const FloaterCatalog *floater_catalog)
+{
+    unsigned int slot;
+    int32_t base_item_id;
+
+    if (source->owner_id < 0 || source->owner_id >= GAME_START_PLAYER_COUNT)
+        return;
+    base_item_id = source->record_value_10 - source->owner_id * 16;
+    if (base_item_id < 0x2c || base_item_id > 0x32 ||
+        (source->source_flags & 0x90U) != 0) return;
+
+    for (slot = 0; slot < 8; ++slot) {
+        int16_t index = source->charge_floater_slots[slot];
+        GameFloaterStart *floater;
+        const FloaterStats *stats;
+        uint32_t progress;
+        uint32_t increment;
+        uint16_t level;
+
+        if (index < 0 || (unsigned int)index >= session->floater_count) continue;
+        floater = &session->floaters[(unsigned int)index];
+        if ((floater->source_runtime_flags & 0x20U) == 0) continue;
+
+        /* FUN_0045cd75 adds source +0x32 (initialized to 1 by FUN_004528ca)
+           for each linked worker in the active-work branch. */
+        increment = source->animation_rate;
+        if (increment == 0) increment = 1;
+        progress = (uint32_t)source->charge_source_value_30 + increment;
+        if (progress < 251U) {
+            source->charge_source_value_30 = (uint16_t)progress;
+            source->barg_progress = (double)progress / 250.0;
+            continue;
+        }
+
+        /* At 251, FUN_0045cd75 trains subtype 0 to the source class, then
+           advances an already trained floater's low-nibble level. */
+        if (floater->source_subtype == 0) {
+            floater->source_subtype = (uint8_t)(base_item_id - 0x2b);
+            floater->attack_level_flags &= 0xfff0U;
+        } else {
+            level = (uint16_t)(floater->attack_level_flags & 0x0fU);
+            if (level < 5U) ++level;
+            else level = 5U;
+            floater->attack_level_flags = (uint16_t)(
+                (floater->attack_level_flags & 0xfff0U) | level);
+        }
+
+        stats = floater_catalog_find(floater_catalog, floater->type_index,
+                                     floater->source_subtype);
+        if (stats != NULL) {
+            int32_t trained_strength;
+            level = (uint16_t)(floater->attack_level_flags & 0x0fU);
+            floater->charge_current = stats->attack_strength;
+            /* FUN_00420f28 scales max-attack-points with the trained level.
+               Category 4 uses its distinct 7n+10 multiplier. The source's
+               tribe and linked-building bonuses are applied in a later pass. */
+            if (floater->type_index == 4) {
+                trained_strength = (stats->max_attack_points *
+                                    ((int32_t)level * 7 + 10)) / 10;
+            } else {
+                trained_strength = (stats->max_attack_points *
+                                    ((int32_t)level + 2)) / 2;
+            }
+            if (trained_strength > INT16_MAX) trained_strength = INT16_MAX;
+            if (trained_strength < INT16_MIN) trained_strength = INT16_MIN;
+            floater->attack_strength = (int16_t)trained_strength;
+        }
+        /* FUN_0045c82f clears the current worker, then FUN_00421ec1(-1)
+           ends its active source action and clears runtime mask 0x65. */
+        floater->source_runtime_flags &= ~0x65U;
+        floater->movement_state = 0;
+        floater->active_order_action = 0;
+        floater->has_move_order = 0;
+        source->charge_recent_floater = -1;
+    }
+
+    if (source->barg_progress > 0.0) {
+        int current_worker_active = 0;
+        int16_t current = source->charge_recent_floater;
+        if (current >= 0 && (unsigned int)current < session->floater_count)
+            current_worker_active =
+                (session->floaters[(unsigned int)current].source_runtime_flags &
+                 0x20U) != 0;
+        if (!current_worker_active) {
+            source->barg_progress -= 0.25;
+            if (source->barg_progress < 0.0) source->barg_progress = 0.0;
+        }
+    }
+}
+
+void game_session_tick_item_animations_with_floaters(
+    GameSession *session, const struct BuildingRenderCatalog *catalog,
+    const FloaterCatalog *floater_catalog)
 {
     unsigned int island_index;
     if (session == NULL || catalog == NULL) return;
@@ -40,6 +133,9 @@ void game_session_tick_item_animations(GameSession *session,
                     state->record_value_10, state->chug_progress);
                 continue;
             }
+
+            if (state->renderer_class == 0 && floater_catalog != NULL)
+                tick_source_staff_cycle(session, state, floater_catalog);
 
             if (state->record_value_10 <= 0 ||
                 state->record_value_10 >= catalog->item_count) continue;
@@ -126,5 +222,11 @@ void game_session_tick_item_animations(GameSession *session,
             }
         }
     }
+}
+
+void game_session_tick_item_animations(GameSession *session,
+                                       const struct BuildingRenderCatalog *catalog)
+{
+    game_session_tick_item_animations_with_floaters(session, catalog, NULL);
 }
 

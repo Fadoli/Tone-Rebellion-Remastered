@@ -6,6 +6,10 @@
 /* Advance the per-location animation fields updated by FUN_00450a71. */
 void game_session_tick_item_animations(GameSession *session,
                                        const struct BuildingRenderCatalog *catalog);
+/* UI entry point with the source stats needed by completed floater training. */
+void game_session_tick_item_animations_with_floaters(
+    GameSession *session, const struct BuildingRenderCatalog *catalog,
+    const FloaterCatalog *floater_catalog);
 /* Advance idle FA_Wander routes and simulation-assigned destinations through
    the FUN_00422d27 step kernel. Player input must not call this as an order. */
 void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick);

@@ -34,8 +34,9 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 (void)game_session_dispatch_glyph_actions(&g_game_session);
                 (void)game_session_dispatch_onoff_actions(&g_game_session,
                                                           &g_pad_catalog);
-                game_session_tick_item_animations(&g_game_session,
-                                                  &g_building_render_catalog);
+                game_session_tick_item_animations_with_floaters(
+                    &g_game_session, &g_building_render_catalog,
+                    &g_floater_catalog);
                 game_session_tick_floater_moves(&g_game_session,
                                                 g_menu.animation_ticks);
                 (void)game_session_update_resource_requests(&g_game_session);

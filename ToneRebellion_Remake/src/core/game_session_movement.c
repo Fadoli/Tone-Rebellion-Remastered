@@ -63,6 +63,31 @@ static int game_session_tick_floater_charge(GameSession *session,
         floater->movement_state = 0;
         floater->order_timer = 0;
         floater->has_move_order = 0;
+        if (floater->source_link_0c == -1) {
+            /* FUN_0041e569's failure tail assigns FA_MoveTo only to subtypes
+               4 and 8: subtype 4 returns to this source; subtype 8 returns to
+               its home Hall. Other kinds take the ordinary idle path. */
+            if (floater->source_subtype == 4 &&
+                floater->island_index < session->island_count &&
+                floater->source_order_parameter_32 <
+                    session->islands[floater->island_index].location_count) {
+                const GameRuntimeLocation *target =
+                    &session->islands[floater->island_index]
+                         .locations[floater->source_order_parameter_32];
+                (void)game_session_order_floater_to_coordinate(
+                    session, floater->owner_slot, floater->island_index,
+                    floater_index, target->x, target->y);
+            } else if (floater->source_subtype == 8 &&
+                       floater->owner_slot < GAME_START_PLAYER_COUNT) {
+                const GamePlayerEconomy *home =
+                    &session->economy[floater->owner_slot];
+                if (home->hall_island_index < session->island_count) {
+                    (void)game_session_order_floater_to_coordinate(
+                        session, floater->owner_slot, home->hall_island_index,
+                        floater_index, home->hall_x, home->hall_y);
+                }
+            }
+        }
     }
     return 1;
 }
