@@ -1,5 +1,6 @@
 #include "game_session.h"
 #include "game_session_combat_internal.h"
+#include "game_session_action9.h"
 
 #include <stdint.h>
 
@@ -181,6 +182,238 @@ int32_t game_session_damage_site(GameSession *session,
     return damage;
 }
 
+static void clear_cast_site(GameRuntimeLocation *target)
+{
+    int32_t previous_owner = target->owner_id;
+    int32_t retained_item = target->record_value_24;
+
+    /* FUN_00452a15 releases owner/source links and keeps item 1 only for the
+       observed owner-4 pad payload range. Cast validation itself accepts
+       owners 0/1, so those sites normally become empty. */
+    target->owner_id = -1;
+    if (previous_owner == 4 && retained_item > 4 && retained_item < 0x22) {
+        target->record_value_10 = 1;
+    } else {
+        target->record_value_10 = 0;
+        target->record_value_24 = 0;
+    }
+    target->source_location_slot_18 = -1;
+    target->resource_stock[GAME_RESOURCE_BUILD_TONE] = 0;
+    target->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 0;
+    target->resource_stock[GAME_RESOURCE_MAGIC_TONE] = 0;
+}
+
+int32_t game_session_apply_cast_site_effect(GameSession *session,
+                                            uint8_t island_index,
+                                            uint16_t location_index,
+                                            int16_t effect_amount)
+{
+    GameRuntimeLocation *target;
+    int32_t item_id;
+
+    if (session == NULL || island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count) return 0;
+    target = &session->islands[island_index].locations[location_index];
+    if ((target->source_flags & 0x290U) != 0 ||
+        target->record_value_10 == 0 ||
+        (target->owner_id != 0 && target->owner_id != 1)) return 0;
+
+    item_id = target->record_value_10;
+    if (item_id == 1) {
+        int32_t drain = (int32_t)effect_amount * 2;
+        if (target->record_value_24 != 1) return 0;
+        if (drain < (int16_t)target->resource_stock[GAME_RESOURCE_BUILD_TONE]) {
+            target->resource_stock[GAME_RESOURCE_BUILD_TONE] =
+                (uint16_t)((int32_t)target->resource_stock[GAME_RESOURCE_BUILD_TONE] - drain);
+        } else {
+            /* FUN_00452ae7/FUN_00452a15 clear the placed runtime object. Its
+               four engine callbacks and queued type-8 notification are not
+               part of this session model. */
+            clear_cast_site(target);
+        }
+        return 1;
+    }
+
+    {
+        int32_t result = (int32_t)target->source_value_34 - effect_amount;
+        uint16_t result_bits = (uint16_t)result;
+        target->source_value_34 = result_bits <= (uint16_t)INT16_MAX
+            ? (int16_t)result_bits
+            : (int16_t)((int32_t)result_bits - (INT32_C(1) << 16));
+    }
+    if (target->source_value_34 < 1) {
+        if (item_id == 5) {
+            clear_cast_site(target);
+        } else {
+            target->source_flags |= 0x80U;
+            (void)game_session_recalculate_active_locations(session);
+        }
+    }
+    return effect_amount;
+}
+
+unsigned int game_session_apply_cast_blast(
+    GameSession *session, unsigned int caster_index)
+{
+    const GameFloaterStart *caster;
+    const GameRuntimeIsland *island;
+    int32_t level;
+    int32_t radius;
+    int32_t base_amount;
+    unsigned int location_index;
+    unsigned int affected = 0;
+    unsigned int target_index;
+
+    if (session == NULL || caster_index >= session->floater_count) return 0;
+    caster = &session->floaters[caster_index];
+    if (caster->island_index >= session->island_count) return 0;
+    island = &session->islands[caster->island_index];
+
+    /* FUN_004239e9 case 7 scales a 0x11 base by the caster's low-nibble
+       level and applies linear attenuation beyond half of the radius. */
+    level = caster->attack_level_flags & 0x0fU;
+    radius = level * 0x32 + 200;
+    base_amount = level * 5 + 0x11;
+
+    /* FUN_004239e9 also calls FUN_004204bc for every other floater within
+       the blast radius; this hit is direct and does not roll attack chance. */
+    for (target_index = 0; target_index < session->floater_count;
+         ++target_index) {
+        GameFloaterStart *target = &session->floaters[target_index];
+        int32_t distance;
+        int32_t effect_amount = base_amount;
+        int32_t remaining_hp;
+
+        if (target_index == caster_index ||
+            target->island_index != caster->island_index ||
+            (target->source_runtime_flags & 0x008U) != 0) continue;
+        distance = game_session_source_chebyshev_distance(
+            caster->x, caster->y, target->x, target->y);
+        if (distance >= radius) continue;
+        if (radius / 2 < distance) {
+            effect_amount -= ((distance * 2 - radius) * 7) / radius;
+        }
+        remaining_hp = (int32_t)target->current_hit_points - effect_amount;
+        if (remaining_hp < 1) {
+            target->current_hit_points = 0;
+            target->source_runtime_flags |= 0x008U;
+            target->source_death_timer = 0;
+        } else {
+            target->current_hit_points = (uint8_t)remaining_hp;
+        }
+        ++affected;
+    }
+
+    for (location_index = 0; location_index < island->location_count;
+         ++location_index) {
+        const GameRuntimeLocation *target = &island->locations[location_index];
+        int32_t distance = game_session_source_chebyshev_distance(
+            caster->x, caster->y, target->x, target->y);
+        int32_t effect_amount = base_amount;
+
+        /* FUN_00450817 filters item IDs 0x17..0x24 before forwarding to
+           FUN_00450847. */
+        if (distance >= radius ||
+            (target->record_value_10 >= 0x17 && target->record_value_10 <= 0x24)) {
+            continue;
+        }
+        if (radius / 2 < distance) {
+            effect_amount -= ((distance * 2 - radius) * 7) / radius;
+        }
+        if (game_session_apply_cast_site_effect(
+                session, caster->island_index, (uint16_t)location_index,
+                (int16_t)effect_amount) != 0) {
+            ++affected;
+        }
+    }
+    return affected;
+}
+
+unsigned int game_session_resolve_cast_effect_step(
+    GameSession *session, unsigned int caster_index, uint8_t step,
+    int16_t target_location_index)
+{
+    const GameFloaterStart *caster;
+    const GameRuntimeLocation *target;
+
+    if (session == NULL || caster_index >= session->floater_count) return 0;
+    caster = &session->floaters[caster_index];
+    if (step == 7) return game_session_apply_cast_blast(session, caster_index);
+    if (step != 9 || caster->island_index >= session->island_count ||
+        target_location_index < 0 ||
+        (uint16_t)target_location_index >=
+            session->islands[caster->island_index].location_count) return 0;
+
+    target = &session->islands[caster->island_index]
+                  .locations[(uint16_t)target_location_index];
+    if (target->owner_id != 0) return 0;
+    return game_session_apply_cast_site_effect(
+        session, caster->island_index, (uint16_t)target_location_index,
+        target->source_value_34) != 0 ? 1U : 0U;
+}
+
+int game_session_schedule_cast_effect_step(
+    GameSession *session, unsigned int caster_index, uint8_t step,
+    int16_t target_location_index, uint8_t odd_updates_until_impact)
+{
+    unsigned int slot;
+
+    if (session == NULL || caster_index >= session->floater_count ||
+        (step != 7 && step != 9) || odd_updates_until_impact == 0 ||
+        (unsigned int)session->active_cast_effect_count +
+                session->active_attack_effect_count >=
+            GAME_SESSION_MAX_CAST_EFFECTS) {
+        return 0;
+    }
+    if (step == 9) {
+        const GameFloaterStart *caster = &session->floaters[caster_index];
+        if (caster->island_index >= session->island_count ||
+            target_location_index < 0 ||
+            (uint16_t)target_location_index >=
+                session->islands[caster->island_index].location_count ||
+            session->islands[caster->island_index]
+                .locations[(uint16_t)target_location_index].owner_id != 0) {
+            return 0;
+        }
+    } else {
+        target_location_index = -1;
+    }
+
+    for (slot = 0; slot < GAME_SESSION_MAX_CAST_EFFECTS; ++slot) {
+        struct GameCastEffectState *effect = &session->cast_effects[slot];
+        if (effect->active) continue;
+        effect->active = 1;
+        effect->caster_index = (uint8_t)caster_index;
+        effect->step = step;
+        effect->odd_updates_remaining = odd_updates_until_impact;
+        effect->target_location_index = target_location_index;
+        ++session->active_cast_effect_count;
+        return 1;
+    }
+    return 0;
+}
+
+void game_session_tick_cast_effects(GameSession *session,
+                                    uint32_t source_tick)
+{
+    unsigned int slot;
+
+    if (session == NULL || (source_tick & 1U) == 0) return;
+    for (slot = 0; slot < GAME_SESSION_MAX_CAST_EFFECTS; ++slot) {
+        struct GameCastEffectState *effect = &session->cast_effects[slot];
+        if (!effect->active) continue;
+        if (effect->odd_updates_remaining > 0)
+            --effect->odd_updates_remaining;
+        if (effect->odd_updates_remaining != 0) continue;
+        (void)game_session_resolve_cast_effect_step(
+            session, effect->caster_index, effect->step,
+            effect->target_location_index);
+        effect->active = 0;
+        if (session->active_cast_effect_count > 0)
+            --session->active_cast_effect_count;
+    }
+}
+
 #include "game_session.h"
 #include "game_session_combat_internal.h"
 
@@ -192,7 +425,8 @@ void game_session_start_attack_effect(GameSession *session,
     uint8_t frame_count;
 
     if (session == NULL || attacker == NULL || damage <= 0 ||
-        session->active_attack_effect_count >= 32U ||
+        (unsigned int)session->active_attack_effect_count +
+                session->active_cast_effect_count >= 32U ||
         attacker->attack_effect_active) return;
     level = (unsigned int)(damage / 2);
     if (level >= 4U) level = 3U;

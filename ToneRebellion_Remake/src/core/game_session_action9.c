@@ -55,6 +55,15 @@ static int action9_find_floater(const GameSession *session,
     return -1;
 }
 
+static int32_t action9_round_source_float(double value)
+{
+    int32_t whole = (int32_t)value;
+    double fraction = value - whole;
+    if (fraction > 0.5 || (fraction == 0.5 && (whole & 1) != 0)) ++whole;
+    else if (fraction < -0.5 || (fraction == -0.5 && (whole & 1) != 0)) --whole;
+    return whole;
+}
+
 static int action9_find_enemy_site(GameSession *session,
                                    const GameFloaterStart *floater,
                                    uint16_t target_x, uint16_t target_y)
@@ -116,9 +125,10 @@ static int action9_find_enemy_site(GameSession *session,
         for (location_index = 0; location_index < candidate_count; ++location_index) {
             double raw_weight = (double)distance_sum /
                                 (double)candidate_distances[location_index];
-            /* FUN_0041e28e converts each positive bucket with __ftol, which
-               rounds to the nearest integer under the default FP mode. */
-            cumulative += (int32_t)((1000.0 / inverse_weight_sum) * raw_weight + 0.5);
+            /* FUN_0041e28e converts each positive bucket with __ftol; ties
+               follow the source's round-to-nearest-even FP mode. */
+            cumulative += action9_round_source_float(
+                (1000.0 / inverse_weight_sum) * raw_weight);
             if (roll < cumulative) return (int)candidate_indices[location_index];
         }
     }

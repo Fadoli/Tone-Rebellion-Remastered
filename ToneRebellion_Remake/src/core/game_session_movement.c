@@ -3,8 +3,74 @@
 #include "game_session_delivery.h"
 #include "game_session_action9.h"
 #include "game_session_movement_internal.h"
+#include "tone_rng.h"
 
 #include <string.h>
+
+static int game_session_resolve_cast_destination(
+    GameSession *session, GameFloaterStart *floater)
+{
+    static const uint8_t target_modes[23] = {
+        0x01, 0x01, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01,
+        0x04, 0x05, 0x06, 0x01, 0x01, 0x01, 0x00, 0x01,
+        0x05, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01
+    };
+    int32_t target_x = floater->x;
+    int32_t target_y = floater->y;
+    int32_t facing_x;
+    uint8_t mode;
+
+    if (floater->cast_spell_kind >= 23U ||
+        floater->island_index >= session->island_count) return 0;
+    mode = target_modes[floater->cast_spell_kind];
+    if ((mode & 2U) != 0) {
+        if (floater->order_target_floater < 0 ||
+            (unsigned int)floater->order_target_floater >= session->floater_count) {
+            return 0;
+        }
+        target_x = session->floaters[
+            (unsigned int)floater->order_target_floater].x;
+        target_y = session->floaters[
+            (unsigned int)floater->order_target_floater].y;
+    } else if ((mode & 1U) != 0) {
+        const GameRuntimeIsland *island =
+            &session->islands[floater->island_index];
+        if (floater->order_target_location < 0 ||
+            (uint16_t)floater->order_target_location >= island->location_count) {
+            return 0;
+        }
+        target_x = island->locations[
+            (uint16_t)floater->order_target_location].x;
+        target_y = island->locations[
+            (uint16_t)floater->order_target_location].y;
+    }
+    facing_x = target_x;
+    if ((mode & 4U) != 0) {
+        target_x = (int32_t)floater->x - 100 +
+            (int32_t)tone_rng_bounded(&session->random_state, 200);
+        target_y = (int32_t)floater->y - 100 +
+            (int32_t)tone_rng_bounded(&session->random_state, 200);
+        if (target_x < 0x1e) target_x = 0x1e;
+        if (target_x > 0x9e2) target_x = 0x9e2;
+        if (target_y < 0x28) target_y = 0x28;
+        if (target_y > 0x122) target_y = 0x122;
+    }
+
+    floater->facing_left = (uint8_t)(floater->x > (uint16_t)facing_x);
+    if (floater->owner_slot != 4U &&
+        floater->owner_slot < GAME_FLOATER_CATEGORY_COUNT) {
+        const GameRuntimeIsland *island =
+            &session->islands[floater->island_index];
+        int32_t min_x = island->floater_min_x[floater->owner_slot];
+        int32_t max_x = island->floater_max_x[floater->owner_slot];
+        if ((min_x > 0 && target_x < min_x + 0x28) ||
+            (max_x < 0x9ff && target_x > max_x - 0x28)) return 0;
+    }
+
+    floater->destination_x = (uint16_t)target_x;
+    floater->destination_y = (uint16_t)target_y;
+    return 1;
+}
 
 void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
 {
@@ -13,6 +79,7 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
     if (session == NULL) return;
     game_session_assign_local_resource_tasks(session);
     game_session_tick_combat_effects(session, source_tick);
+    game_session_tick_cast_effects(session, source_tick);
     for (i = 0; i < session->floater_count; ++i) {
         GameFloaterStart *floater = &session->floaters[i];
         FloaterPosition position;
@@ -71,6 +138,12 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
                     floater->order_progress = 0;
                 }
             }
+        }
+
+        if (floater->active_order_action == 0x13 &&
+            floater->movement_state == 0x13) {
+            (void)game_session_resolve_cast_destination(session, floater);
+            continue;
         }
 
         game_session_advance_action9(session, i);

@@ -31,6 +31,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 game_session_dispatch_island_events(&g_game_session);
                 (void)game_session_dispatch_trade_requests(&g_game_session);
                 (void)game_session_dispatch_build_selections(&g_game_session);
+                (void)game_session_dispatch_glyph_actions(&g_game_session);
                 (void)game_session_dispatch_onoff_actions(&g_game_session,
                                                           &g_pad_catalog);
                 game_session_tick_item_animations(&g_game_session,

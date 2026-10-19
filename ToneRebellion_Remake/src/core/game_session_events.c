@@ -125,3 +125,50 @@ int game_session_pop_glyph_action(GameSession *session,
            sizeof(session->glyph_actions[session->glyph_action_count]));
     return 1;
 }
+
+unsigned int game_session_dispatch_glyph_actions(GameSession *session)
+{
+    GameGlyphActionRequest request;
+    unsigned int dispatched = 0;
+
+    if (session == NULL) return 0;
+    while (game_session_pop_glyph_action(session, &request)) {
+        unsigned int floater_index;
+
+        if (request.player_slot >= GAME_START_PLAYER_COUNT ||
+            request.island_index >= session->island_count ||
+            request.location_index >=
+                session->islands[request.island_index].location_count ||
+            request.glyph_index >= GAME_GLYPH_COUNT ||
+            (session->economy[request.player_slot].glyph_mask &
+                (uint16_t)(1U << request.glyph_index)) == 0) {
+            continue;
+        }
+
+        /* FUN_0046562b(player, 8) builds the matching floater list in table
+           order; the dispatcher assigns the order to its first entry. */
+        for (floater_index = 0; floater_index < session->floater_count;
+             ++floater_index) {
+            GameFloaterStart *floater = &session->floaters[floater_index];
+            if (floater->owner_slot != request.player_slot ||
+                floater->source_subtype != 8) continue;
+
+            floater->active_order_action = 0x13;
+            floater->order_target_island = request.island_index;
+            floater->order_target_location = (int16_t)request.location_index;
+            floater->order_target_floater = -1;
+            floater->cast_spell_kind = 0x16;
+            floater->movement_state = 0x13;
+            floater->order_progress = UINT8_MAX;
+            floater->source_runtime_flags &= ~0x200U;
+            floater->has_move_order = 0;
+            floater->has_wander_order = 0;
+            floater->wander_timer = 0;
+            session->economy[request.player_slot].selected_glyph_index =
+                request.glyph_index;
+            ++dispatched;
+            break;
+        }
+    }
+    return dispatched;
+}

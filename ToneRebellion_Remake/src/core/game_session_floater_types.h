@@ -51,6 +51,8 @@ typedef struct GameFloaterStart {
     int16_t order_target_floater;
     int16_t order_target_location;
     uint8_t order_target_island;
+    /* FUN_00465793 subtype-3 starts FA_Cast (0x13), glyph spell kind 0x16. */
+    uint8_t cast_spell_kind;
     /* FA_Deliver's action-4 order uses the tick record's +0x18 cargo, +0x34
        pickup counter and +0x46 subphase. Hall refill routes can cross islands. */
     int16_t carried_resource_code;
@@ -99,9 +101,18 @@ typedef struct GameSession {
     GameStartToneDistribution tone_placements;
     GameFloaterStart floaters[GAME_SESSION_MAX_FLOATERS];
     uint8_t floater_count;
-    /* Source effect manager has 32 shared active slots. This tracks modeled
-       state-6/7 impact instances; unrelated visual effects are not included. */
+    /* FUN_0041760b's 32 slots are shared between modeled attack and cast
+       effects; unmodeled visual instances still remain outside this count. */
     uint8_t active_attack_effect_count;
+    /* FUN_0041760b uses the same 32 shared slots for non-attack effects. */
+    struct GameCastEffectState {
+        uint8_t active;
+        uint8_t caster_index;
+        uint8_t step;
+        uint8_t odd_updates_remaining;
+        int16_t target_location_index;
+    } cast_effects[GAME_SESSION_MAX_CAST_EFFECTS];
+    uint8_t active_cast_effect_count;
     GamePlayerEconomy economy[GAME_START_PLAYER_COUNT];
     /* FUN_004662b7's 64-slot deferred-action table, initially zeroed by
        FUN_004637fc. This stores requests only; effect processing is separate. */

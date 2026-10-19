@@ -1,9 +1,8 @@
 # Floater combat
 
-`game_session_combat.c` sequences attack-state timing. Damage rolls are in
-`game_session_combat_damage.c`; the bounded IMPACT lifetime is isolated in
-`game_session_combat_effects.c`. `floater_effect_catalog.c` reads the four
-realm frame ranges from `effects.txt`.
+`game_session_combat.c` contains attack-state timing, hit and damage
+calculation, and bounded IMPACT lifetime. `floater_effect_catalog.c` reads the
+four realm frame ranges from `effects.txt`.
 
 `floater_attack_power` now applies the category-4 level modifier to the
 already accumulated base plus `3 * level`: `power += high_nibble * power / 22`.

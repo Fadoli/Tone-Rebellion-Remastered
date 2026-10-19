@@ -12,6 +12,7 @@
 enum { GAME_SESSION_MAX_FLOATERS = GAME_START_PLAYER_COUNT * GAME_START_FLOATERS_PER_PLAYER,
        GAME_FLOATER_CATEGORY_COUNT = GAME_START_PLAYER_COUNT + 1 };
 enum { GAME_SESSION_MAX_PENDING_EVENTS = 64, GAME_SESSION_MAX_TASKS = 32 };
+enum { GAME_SESSION_MAX_CAST_EFFECTS = 32 };
 enum { GAME_SESSION_MAX_GLYPH_ACTIONS = 64 };
 enum { GAME_SESSION_MAX_ONOFF_ACTIONS = 64 };
 enum { GAME_SESSION_MAX_BUILD_SELECTIONS = 64 };
@@ -44,6 +45,8 @@ typedef struct GamePlayerEconomy {
     uint16_t inventory_count[GAME_INVENTORY_ITEM_COUNT];
     /* FUN_0043dee3 reads the player's 14-bit glyph-ownership mask. */
     uint16_t glyph_mask;
+    /* FUN_00465793 stores the last glyph accepted by the subtype-3 action. */
+    uint8_t selected_glyph_index;
     /* FUN_0045f755 cycles each Hall reserve mode through raw values 0..2;
        FUN_0045eaa7 treats mode 2 as an active fill request. */
     uint8_t stock_mode[GAME_RESOURCE_TYPE_COUNT];
@@ -73,9 +76,9 @@ typedef struct GameDiplomacyRequest {
     uint8_t action;
 } GameDiplomacyRequest;
 
-/* FUN_0042fa0f(0x40) emits category 3/type 3 when a glyph is selected.
-   This outbox preserves the target payload; FUN_00465793's active-record
-   filter (+0 == player, +4 == 8) and resulting runtime order are not simulated. */
+/* FUN_0042fa0f emits category 3/type 3 when a glyph is selected. The island
+   tick dispatches this payload to the first matching player/subtype-8 floater;
+   the later cast animation and impact remain separate. */
 typedef struct GameGlyphActionRequest {
     uint8_t player_slot;
     uint8_t island_index;

@@ -25,9 +25,33 @@ int game_session_queue_inventory_action(GameSession *session,
                                         uint8_t island_index,
                                         uint16_t location_index,
                                         uint8_t item_id);
+/* Applies FUN_00450847 to a resolved FA_Cast target using the effect amount
+   chosen by the cast substep. Also mirrors the known FUN_00452ae7/
+   FUN_00452a15 location reset when the effect consumes the site. */
+int32_t game_session_apply_cast_site_effect(GameSession *session,
+                                            uint8_t island_index,
+                                            uint16_t location_index,
+                                            int16_t effect_amount);
+/* FUN_004239e9 case 7: apply direct distance-scaled damage to nearby floaters
+   and route nearby sites through FUN_00450817. Returns affected targets. */
+unsigned int game_session_apply_cast_blast(GameSession *session,
+                                           unsigned int caster_index);
+/* FUN_004239e9 dispatches the resolved FA_Cast impact: case 7 is the area
+   blast, while case 9 applies FUN_00450847 to the selected location. */
+unsigned int game_session_resolve_cast_effect_step(
+    GameSession *session, unsigned int caster_index, uint8_t step,
+    int16_t target_location_index);
+/* Reserve a source effect slot and resolve case 7/9 after the specified number
+   of odd effect-manager updates. The visual producer supplies the delay. */
+int game_session_schedule_cast_effect_step(
+    GameSession *session, unsigned int caster_index, uint8_t step,
+    int16_t target_location_index, uint8_t odd_updates_until_impact);
+/* FUN_0041760b advances scheduled cast impacts on odd source ticks. */
+void game_session_tick_cast_effects(GameSession *session,
+                                    uint32_t source_tick);
 /* FUN_0042fa0f(0x40) emits category-3/type-3 with player, island, location,
-   and selected glyph. This records the request only; the receiver's active
-   record filter (+0 == player, +4 == 8) and runtime effect remain unmodeled. */
+   and selected glyph. The island dispatcher assigns kind 0x16 to the first
+   matching subtype-8 floater; cast animation and impact timing remain open. */
 int game_session_queue_glyph_action(GameSession *session,
                                     uint8_t player_slot,
                                     uint8_t island_index,
@@ -35,6 +59,9 @@ int game_session_queue_glyph_action(GameSession *session,
                                     uint8_t glyph_index);
 int game_session_pop_glyph_action(GameSession *session,
                                   GameGlyphActionRequest *out);
+/* FUN_00465793 category-3/subtype-3 selects the first player subtype-8
+   floater and assigns its FA_Cast glyph order. */
+unsigned int game_session_dispatch_glyph_actions(GameSession *session);
 /* BC_OnOff's established message route. */
 int game_session_queue_onoff_action(GameSession *session,
                                     uint8_t player_slot,
