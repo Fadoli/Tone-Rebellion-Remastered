@@ -12,4 +12,4 @@ Après la tentative de bascule, `FUN_00453a5f` appelle `FUN_004539e9`, qui recal
 
 **Préconditions non portées :** l'initialisation du budget `DAT_006191f8` reste inconnue; l'association runtime du slot `+0x18` et les champs employés par `FUN_00453958`/`FUN_004539e9` ne sont pas complets dans le modèle.
 
-**Port :** le remake n'affiche, ne survole et ne clique `BC_OnOff` que sur un site de classe 0 contenant un type `0x25..0x27` appartenant au joueur actif. Il met toujours la cible joueur/île/lieu en file; il ne modifie pas le bit ni les tâches liées. Le bit `0x400` est distinct du bit Hall `0x001`.
+**Port :** le remake n'affiche, ne survole et ne clique `BC_OnOff` que sur un site de classe 0 contenant un type `0x25..0x27` appartenant au joueur actif; l'ID runtime est ramené à son type de base en retirant le décalage `owner * 16`. Le tick applique maintenant la branche OFF en effaçant le bit `0x400`. Les clics demandant ON sont consommés sans activer le site tant que `owner.+0x6191f8` n'est pas modélisé. L'annulation des tâches par slot et le recalcul de l'état `0x001` restent à porter. Le bit `0x400` est distinct du bit Hall `0x001`.

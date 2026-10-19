@@ -42,7 +42,7 @@ int island_panel_onoff_button_visible(int item_id, int renderer_class,
 {
     return current_player_id >= 0 && current_player_id < GAME_START_PLAYER_COUNT &&
         renderer_class == 0 && owner_id == current_player_id &&
-        item_id >= 0x25 && item_id <= 0x27;
+        item_id - owner_id * 16 >= 0x25 && item_id - owner_id * 16 <= 0x27;
 }
 
 void island_panel_finish_inventory_target(int *panel_mode,

@@ -867,6 +867,26 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
         int32_t dy;
         int32_t distance;
 
+        /* FUN_0042219e observes a changed linked-record order and transfers
+           +0x28/+0x2c/+0x30/+0x32 into the tick record's island, action,
+           coordinate and parameter fields. FUN_004211bb then consumes action
+           9 as movement state 9 with the packed coordinate target. */
+        if (floater->source_order_pending) {
+            floater->source_order_pending = 0;
+            if (floater->source_order_state_2c == 9 &&
+                floater->source_order_island_28 == floater->island_index) {
+                floater->destination_x =
+                    (uint16_t)(floater->source_order_coordinate_30 >> 8) * 10U;
+                floater->destination_y =
+                    (uint16_t)(floater->source_order_coordinate_30 & 0xffU) * 10U;
+                floater->movement_state = 9;
+                floater->stop_radius = 0;
+                floater->has_wander_order = 0;
+                floater->wander_timer = 0;
+                floater->has_move_order = 1;
+            }
+        }
+
         if (floater->has_move_order && floater->has_wander_order) {
             /* A newly assigned route replaces the idle fallback action. */
             floater->has_wander_order = 0;
@@ -886,8 +906,12 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
                     continue;
                 }
                 island = &session->islands[floater->island_index];
-                raw_min_x = island->floater_min_x[floater->type_index];
-                raw_max_x = island->floater_max_x[floater->type_index];
+                /* FUN_00423068 skips the per-island/category table for
+                   category 4 and keeps its global 0..0x9ff bounds. */
+                if (floater->type_index != 4U) {
+                    raw_min_x = island->floater_min_x[floater->type_index];
+                    raw_max_x = island->floater_max_x[floater->type_index];
+                }
                 if (!floater_motion_wander_destination(
                         &session->random_state, floater->x, floater->y,
                         raw_min_x, raw_max_x, &wander_destination)) {
@@ -976,6 +1000,44 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
         }
 
     }
+}
+
+int game_session_order_floater_to_coordinate(GameSession *session,
+                                             uint8_t player_slot,
+                                             uint8_t island_index,
+                                             unsigned int floater_index,
+                                             uint16_t x,
+                                             uint16_t y)
+{
+    GameFloaterStart *floater;
+    uint8_t packed_x;
+    uint8_t packed_y;
+
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        island_index >= session->island_count ||
+        floater_index >= session->floater_count) {
+        return 0;
+    }
+
+    floater = &session->floaters[floater_index];
+    if (floater->owner_slot != player_slot ||
+        floater->island_index != island_index ||
+        floater->source_subtype == 0) {
+        return 0;
+    }
+
+    /* FUN_0041e3eb computes (coordinate + 5) / 10, then keeps one byte per
+       axis. FUN_0041e427 expands those bytes back to pixels by multiplying
+       each by 10. Coordinates on the island are nonnegative. */
+    packed_x = (uint8_t)(((uint32_t)x + 5U) / 10U);
+    packed_y = (uint8_t)(((uint32_t)y + 5U) / 10U);
+    floater->source_order_state_2c = 9;
+    floater->source_order_island_28 = island_index;
+    floater->source_order_coordinate_30 =
+        (uint16_t)(((uint16_t)packed_x << 8) | packed_y);
+    floater->source_order_parameter_32 = 0;
+    floater->source_order_pending = 1;
+    return 1;
 }
 
 int game_session_floater_at(const GameSession *session,
@@ -1720,6 +1782,44 @@ int game_session_pop_onoff_action(GameSession *session,
     memset(&session->onoff_actions[session->onoff_action_count], 0,
            sizeof(session->onoff_actions[session->onoff_action_count]));
     return 1;
+}
+
+unsigned int game_session_dispatch_onoff_actions(GameSession *session)
+{
+    GameOnOffActionRequest request;
+    unsigned int switched_off = 0;
+
+    if (session == NULL) return 0;
+    while (game_session_pop_onoff_action(session, &request)) {
+        GameRuntimeLocation *location;
+        int base_item_id;
+
+        if (request.player_slot >= GAME_START_PLAYER_COUNT ||
+            request.island_index >= session->island_count ||
+            request.location_index >=
+                session->islands[request.island_index].location_count) {
+            continue;
+        }
+        location = &session->islands[request.island_index]
+                        .locations[request.location_index];
+        base_item_id = location->record_value_10 -
+                       (int)request.player_slot * 16;
+        if (location->renderer_class != 0 ||
+            location->owner_id != request.player_slot ||
+            base_item_id < 0x25 || base_item_id > 0x27) {
+            continue;
+        }
+
+        /* FUN_00453bf6(0) always clears bit 0x400. The inverse path can only
+           set it after comparing maintenance to DAT_006191f8, whose runtime
+           initializer is not reconstructed, so a request to turn ON is a
+           no-op for now. */
+        if ((location->source_flags & 0x400U) != 0) {
+            location->source_flags &= ~0x400U;
+            ++switched_off;
+        }
+    }
+    return switched_off;
 }
 
 int game_session_queue_build_selection(GameSession *session,

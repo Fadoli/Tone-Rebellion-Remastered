@@ -5,9 +5,9 @@ from behavior still needing class/state checks. Ghidra pseudocode is a decompile
 reconstruction, not recovered source; field names and inferred types remain
 provisional. The user has clarified that workers cannot receive direct orders:
 selecting them only shows stats, while soldiers and mages are orderable. The
-remake source and current executable do not expose player-facing worker orders.
-Worker selection remains informational, and soldiers/mages should only become
-orderable after their original class/state gates are verified.
+remake now routes mode `0x13` to state 9 for selected floaters with nonzero
+subtype. That subtype mapping is an implementation gate following the user's
+constraint; the original allowlist and tick-record bridge remain unresolved.
 
 ## Input and destination path
 
@@ -18,12 +18,87 @@ orderable after their original class/state gates are verified.
 | `FUN_00435826` (`0x435826`) | `ev_5fabac375596d1e1457b7649fb698b76bf3f96b23dab00f021e899fcd4d2c1f2` | Hit-tests a floater and island locations. A floater hit emits message `0x3f`; its empty-ground coordinate branch emits message `0x4c` only while UI state bit `0x4` at `+0x178` is active. A location hit follows separate site/location message branches. |
 | `FUN_00420991` (`0x420991`) | `ev_b758701979d34e447f00b2067f67d58c0c58d9b8c28b444e24dfd4a160713da5` | The autonomous task selector calls this candidate guard before ranking candidates. It rejects the current object and records with flag mask `0x809`; for object class 4 it uses a level threshold table at `DAT_0061fa2e`, and for other classes it allows the same class or requires the per-player class value at `DAT_00619290` to be zero. This supports a source class filter but does not identify the table's runtime values as a soldier/mage allowlist. |
 | `FUN_00435826` (`0x435826`) | `ev_29719d9690c28e9b3bb41c88f5ff96ce6cc8f4ad226b062deb47d6a23217879c` | Revalidated click handler: a floater hit emits selection message `0x3f`. The `0x4c` destination order is a separate empty-ground path gated by UI state bit `0x4`; it is not issued by selecting a floater. |
-| `FUN_0043530b` (`0x43530b`) | `ev_5e3fc63f4718af2e8a051c86de5109504655264091ec1257449307a1b02b0952` | Decodes the UI action modes raised by `FUN_00435826`: mode `0x13` sets interaction bit `0x4` and cursor/action id `0x0f` (the only mode in this set that enables the empty-ground `0x4c` path); `0x10` and `0x12` both set bit `0x2` but choose cursor/action ids `3` and `5`; `0x11` sets bit `0x1` and cursor/action id `0x0d` or `0x0b` depending on the two stored targets. This maps the interaction state, but the class-table initialization and recipient guard remain unknown, so it is not enough to enable soldier/mage movement yet. |
+| `FUN_0043530b` (`0x43530b`) | `ev_5e3fc63f4718af2e8a051c86de5109504655264091ec1257449307a1b02b0952` | Decodes the UI action modes raised by `FUN_00435826`: mode `0x13` sets interaction bit `0x4` and cursor/action id `0x0f` (the only mode in this set that enables the empty-ground `0x4c` path); `0x10` and `0x12` both set bit `0x2` but choose cursor/action ids `3` and `5`; `0x11` sets bit `0x1` and cursor/action id `0x0d` or `0x0b` depending on the two stored targets. The table's initialization and class meaning remain unknown. |
+| `FUN_00465793` (`0x465793`) | `ev_b625919fbba21cb67016167d2d318c548f89e6fc5ec6620530ee862c32f1153f` | For type-1 mode `0x13`, requires a selected location index other than `-1` and a non-null record from `FUN_00450385`; then calls `FUN_0045d8b2` with the current island and packed destination. This receiver has no explicit subtype/class test. |
+| `FUN_0045d8b2` (`0x45d8b2`) | `ev_48e296b74e9cc988efac53eea393dc2d694c98d8b5139997953e8da5429d7721` | Stores current island at linked record `+0x28`, state 9 for mode `0x13` at `+0x2c`, packed coordinate at `+0x30`, and zero at `+0x32`. |
+| `FUN_0042219e` (`0x42219e`) | `ev_83d2c58354af7da0f0eac81274ce4acc13b27060e77eb7d82b4ed0f74897a266` | Resolves the linked 100-byte record through `FUN_004207f2`; when its movement fields differ from the tick record and the current task is not `FA_Cast` (`0x13`), copies linked `+0x2c/+0x28/+0x30/+0x32` into tick `+0x3c/+0x40/+0x42/+0x44` and clears progress `+0x46`. |
+| `FUN_004211bb` (`0x4211bb`) | `ev_9cf6e091e5052554584128e5f6d9e26420d03c257fa83061e471eda1b608d689` | Task action 9's first phase selects movement state 9, copies the packed coordinate target into tick `+0x32`, clears flag `0x004`, and advances progress to 1. After arrival, later phases try unit/location follow-up targets. |
 | `FUN_0042970c` (`0x42970c`) | `ev_bcb9a925483956dd92de831e72742c3a6510dbd9a56729b017c9c5223fe5c3a5` | Routes a message according to context field `+0x48`: direct dispatch through `FUN_0046c402`, secondary dispatch through `FUN_0046c1b4`, or a local queue through `FUN_0046c3bc`. |
 | `FUN_0046c402` (`0x46c402`) | `ev_5d7372e111e8a989a1bad601deacda8478942b76678d4c0f95271ab98899581f` | Calls the active-context handler indirectly from callback slots in records with stride `0x130`. Static call references do not resolve the effective handler or its recipient-class guard. |
 | `DAT_00619290` (table read by `FUN_00435826`) | `ev_e6487dc3406aa2d64a6c44227d93003cc5658ee6fb0b6adabc68947b37f039b5`, `ev_e1cf3e5b13ea9e894e109f983d575d93db9494440640c431beeb4115c47f87d1`, `ev_6a58e77526590a24419b4c84ad1ffdeac127494982b6d9aa3a42c30eb9bacc33` | Instruction evidence confirms comparisons against `DAT_00619290 + type*4 + player*0x14a0` while choosing modes `0x10`–`0x13`. These are reads/comparisons; they do not establish table initialization or the semantic class allowlist. |
 | `FUN_0041e3eb` (`0x41e3eb`) | `ev_99ac9bec204079134afb4ec773ba173dab2b1a1a87ae06d72f28cad8c8cbfff9` | Packs each map coordinate as `(coordinate + 5) / 10`, with X in the high byte and Y in the low byte. |
 | `FUN_0041e427` (`0x41e427`) | `ev_0c9a83fe313044ec813605a6f5e71760fcbcf78e0fff164432184e30593c562d` | Expands those bytes to pixel coordinates by multiplying each by 10. |
+
+### `0x4c` coordinate order and its receiver
+
+REA reinspection connects the empty-ground click to the receiver fields. Under
+UI bit `0x4`, `FUN_00435826` packs the clicked world coordinate with
+`FUN_0041e3eb` and emits message `0x4c`. `FUN_0042fa0f` turns that into a
+16-byte type-1 packet: mode at word 2, selected island-location index at word
+4, current island at word 5, and the packed coordinate at word 6. The packet
+is copied into the command queue without rewriting those payload words.
+
+In `FUN_00465793`, mode `0x13` requires a valid selected location and a
+non-null linked record from `FUN_00450385`; it calls `FUN_0045d8b2` with the
+current island and packed coordinate. That setter writes island to linked
+record `+0x28`, state 9 to `+0x2c`, the packed coordinate to `+0x30`, and zero
+to `+0x32`. Mode `0x11` uses the same coordinate setter but writes state 7.
+Modes `0x10`/`0x12` take a separate setter path: `FUN_0045d867` reads word 6
+as an index into the global `0x4c`-stride unit table and writes states 6/8.
+They must not be treated as packed-coordinate destinations.
+
+The remake now exposes state-9 coordinate orders through
+`game_session_order_floater_to_coordinate`: it applies the source's nearest-10
+packing and replaces the idle wander route. The UI adapter uses right-click on
+the island while an eligible non-worker is selected. The non-worker check
+follows the user's class constraint and the remake's subtype field; the binary
+receiver itself has no subtype test, and the UI allowlist table's meaning is
+still unknown.
+
+The linked record is resolved from the selected island record's owner and
+`+0x18` slot; it is not the `0x60`-stride island record itself. The relationship
+to the tick records is now partly established: `FUN_0045c470` adds the tick
+index to the linked record's member list and stores the linked-record index at
+tick `+0x0c`. `FUN_004207f2` resolves that index back to the 100-byte record.
+The tick loop still walks separate `0x4c`-byte records; these are linked by an
+index, not pointer aliases. `FUN_0042219e` is the missing bridge: it resolves
+the linked 100-byte record through `FUN_004207f2`, then, when the source
+movement fields differ and the active tick task is not `FA_Cast`, copies linked
+`+0x2c/+0x28/+0x30/+0x32` into tick `+0x3c/+0x40/+0x42/+0x44` and resets
+progress `+0x46`. `FUN_004211bb` consumes task action 9 by entering movement
+state 9 and copying the packed target to state target `+0x32`. The remake now
+retains the linked-record order fields in `GameFloaterStart`, transfers them
+to the movement state at the next island tick, and expands the packed
+coordinate through the existing movement kernel. The remake's unified record
+does not yet model the source reevaluation cadence, `FA_Cast` suppression, or
+the action-9 follow-up candidate/site phases. Evidence: re-evaluation
+`ev_83d2c58354af7da0f0eac81274ce4acc13b27060e77eb7d82b4ed0f74897a266`,
+task consumption `ev_9cf6e091e5052554584128e5f6d9e26420d03c257fa83061e471eda1b608d689`,
+and per-tick call site `ev_838b98af4b5e94befce77b8cfdb9bdf9236d7b06d07b2827e533bd229c201f60`.
+Evidence: click `ev_240065edaee45f4bdf20ff82a1512927f78528e1582d520091ea959f11b0553c`,
+coordinate packing `ev_3bf0ee7cf769af3d7f196ff7feba294b3f489beddddf1f1dd24044ebc2b66397`,
+packet handler `ev_ed75141a79f1bac30a4ad39dcad68e710e351330bcd3044aa3cb304ef2a796b2`,
+receiver `ev_ca5765ec33347bfca0991a3af5bd70ed8b19b2861f9c7602494131d2f2a11ac3`,
+link resolver `ev_b003c4e2130a4f653012f553ad5cdf8222b961d4c5b48c785fd40fdd3404ada2`,
+and setters `ev_9e9d75f4978b9d45cbc2470a3ad2dd1de8e791f4494b0b8b090b15549e3f388e`,
+`ev_b0d6dc330f48ea769d27f91e3813699594fed3422d909182391884696797306c`.
+The overlapping consumer fields are in `ev_304a6608912493c1b44523c7772bcd6f09494423a083d84ab8d13bf71a9cadd9`;
+the order resolver is `ev_3dacf152875bea4c5b8bb99e56b6957498377adcaad9c7f4859adaa76000677e`,
+and the separate tick-array stride is visible in `ev_30ebdbae3fea9c425e667386d450d79579fcde7a1d8aee5d218f1a6ffd472942`.
+The index/member-list bridge is visible in `FUN_0045c470` (`ev_c01195f2f3ed1ca7a62e0020adf82dd7c073012fa14e8f5f24ab95881aa1d886`),
+its return-side update `FUN_0045c797` (`ev_12285d631e246f730c2af83500f82417af5296d9579ef2026df253a44e5ab8b4`),
+and the tick resolver `FUN_004207f2` (`ev_4ba957496ff2a3530a78301b0817cddc1b012953d1cd526886b077c179347405`).
+The follow-up probe found no allocating or copying behavior in
+`FUN_0040fdab`/`FUN_0040fc15`; the former reads a stream value and the latter
+delegates to a generic reader. `FUN_004393ab` uses that value as an index into
+the 100-byte table but does not construct the records. A separate resolver
+`FUN_0045c3bb` returns the floater record from the island runtime base, which
+is distinct from `DAT_006192b0`. These observations still do not prove there
+is no indirect bridge elsewhere. Evidence: readers
+`ev_79dda344bee3d67d5436056ba79c453924e4f68fe5250e79ae4b33776f77ba56`,
+`ev_eef27ecae291ea2f57b6c8af3658e9d80a4e46bf5db73dd5cb3baae9b9473158`,
+100-byte index use `ev_9c544975a44a06a1d3cefc6f334b2b4b655d367acbd461fcd687ed6c77adc794`,
+and floater resolver `ev_bd91d1af8a9010c3ecab74810610be6676463c93594d69f685adaebf0623a4ee`.
 
 ## Interaction cursor lifecycle
 
@@ -77,14 +152,14 @@ The local original `floater.txt` defines the final field as speed. Each tribe's
 `FUN_00422d27` through `FUN_00464242`; this is only the worker movement
 parameter, not evidence that the player can issue worker move orders.
 
-The remake's session tick now passes each floater's state, subtype, category
+The remake's session tick passes each floater's state, subtype, category
 modifier and already-resolved near-target/site conditions through
 `floater_motion_effective_speed` before calling the coordinate kernel. Initial
-workers start in state 0; category modifiers and conditional overrides remain
-zero until their runtime sources are modeled. The session still lacks the
-source order/state machine and target resolver, so this wires the observed
-speed rules into the existing simulation without establishing a player-issued
-move path.
+workers are constructed in state 0, then the first session tick enters the
+implemented idle `FA_Wander` fallback (state `0x0e`). Category modifiers and
+conditional site/target overrides remain zero until their runtime sources are
+modeled. Other source order/state handlers and their target resolver are still
+outside this tick path; this does not establish a player-issued move path.
 
 ## Tick, state machine, target and arrival detail
 
@@ -381,6 +456,19 @@ sets the state timer at `+0x34` to 60, and sets progress `+0x46` to `-1`. Its
 branch does not write the movement destination pair itself. The executor's
 common tail calls `FUN_00423068` whenever runtime state `+0x2c` is nonzero, so
 the newly entered state resolves a coordinate destination immediately.
+
+This fallback is reachable for the initial unlinked units. `FUN_0041e4e4`
+resets a newly allocated floater's flags `+0x1c` and action `+0x3c` to zero and
+its task link `+0x38` to `-1`; `FUN_00466fe4` uses that reset when allocating
+the starting floaters created by `FUN_0046466f`. On a state-zero tick,
+`FUN_0042219e` performs the regular-unit task scan and, when the order remains
+`FA_Nothing`, assigns `FA_Wander` and an island target. This grounds the
+remake's initial idle-wander path, while the task-slot eligibility and
+selection rules remain outside the port. Evidence: reset
+`ev_a5f6ff6cbb1d9a1b23aa8807337444803e3415de869ec691acf503f150bb3523`,
+allocation `ev_0ca802ac15043c61c073f6d68546619fc924a4ba10fd4d9f04e203668dc62ed7`,
+initial creation `ev_ac313cb8cc73f9c102676395cd14cb97b5b1f9355d074df1e6656ce028d2d36f`,
+and reevaluation `ev_4c7ea2d2c94eba918c2e82e0709966a1d9d2c60e1d2c705361285aceb05e5dea`.
 
 For state `0x0e`, `FUN_00423068` starts from the floater's current X/Y. It reads
 the floater category's horizontal limits from the current-island record at
@@ -875,20 +963,23 @@ full state-dependent anchor adjustment. Evidence:
 
 ## Current port and limits
 
-The player-facing `game_session_order_floater_move` helper and worker
-cargo/order model have been removed. The generic movement kernel remains as a
-simulation primitive; only source-assigned destinations should reach it. A
-floater hit emits selection message `0x3f`; a destination order `0x4c` comes
-from the distinct UI destination mode and is routed through an indirect
-callback. The actual recipient gate remains unresolved. The autonomous
+The generic movement kernel remains the simulation primitive. A floater hit
+emits selection message `0x3f`; destination mode `0x13` emits order `0x4c`.
+The remake now applies that coordinate order in state 9 to a selected
+non-worker and uses right-click as its local input adapter. The binary receiver
+checks the selected-location/link pair but does not test subtype; matching
+subtype nonzero to orderable soldiers/mages follows the user's constraint and
+is an implementation gate, not an observed binary class rule. The autonomous
 candidate guard `FUN_00420991` applies class, flags, and level-table tests, but
 does not by itself prove which class numbers correspond to soldier/mage or
 which direct orders each accepts. Source evidence establishes that the cast
 action path assigns order `0x13` to an eligible unit and that the floater tick
-consumes such task state. The idle fallback and `FA_Wander` coordinate cycle
-are now documented below; the remake has not ported that autonomous cycle.
-Soldier/mage direct orders remain disabled
-until their original callback guard and table initialization are confirmed.
+consumes such task state. The remake ports the `FA_Wander` coordinate/timer
+cycle for its unlinked initial floaters, but it does not yet model the source
+task-candidate scan that decides whether another task should replace wandering.
+The UI mode table remains unresolved. The remake models the linked-record
+transfer at the next tick, but not the source's 10-tick reevaluation cadence,
+`FA_Cast` suppression, or the action-9 follow-up candidate/site phases.
 
 The REA pseudocode establishes that `FUN_00435826` chooses UI action modes
 `0x10`–`0x13` using the player/type table at `DAT_00619290`, and that UI bit
@@ -896,11 +987,11 @@ The REA pseudocode establishes that `FUN_00435826` chooses UI action modes
 in Ghidra instructions, but its initialization and the meaning of its values
 remain unresolved; it must not yet be called a soldier/mage allowlist. The `0x4c`
 message then uses the `+0x48` message-routing mode and an indirect active-context
-callback. The callback's recipient-class guard, obstacle/terrain collision, and
-full unit-state transitions are still unproven. Trace the table owner and
-callback handler before implementing player controls. Worker selection remains
-inspection-only as specified by the user; no worker move
-command is exposed in the remake. The confirmed producer `FUN_0045da80` writes
+callback. The receiver's linked-record guard is confirmed; its subtype gate is
+not. Obstacle/terrain collision and the full source unit-state/tick transition
+remain unproven. Worker selection remains inspection-only as specified by the
+user; the remake rejects subtype 0 orders. The confirmed producer
+`FUN_0045da80` writes
 `FA_Cast` (`0x13`); it is not evidence of a construction assignment. `FA_Build`
 has a traced consumer and site validator, but its producer and the transitions
 connecting assignment, travel and placement are not yet fully reconstructed.

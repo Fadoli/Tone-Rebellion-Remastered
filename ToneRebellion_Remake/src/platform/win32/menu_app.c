@@ -6022,6 +6022,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 game_session_dispatch_island_events(&g_game_session);
                 (void)game_session_dispatch_trade_requests(&g_game_session);
                 (void)game_session_dispatch_build_selections(&g_game_session);
+                (void)game_session_dispatch_onoff_actions(&g_game_session);
                 game_session_tick_item_animations(&g_game_session,
                                                   &g_building_render_catalog);
                 game_session_tick_floater_moves(&g_game_session,
@@ -6160,8 +6161,6 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         return 0;
     }
     case WM_RBUTTONDOWN:
-        /* Right-click was incorrectly exposed as a worker order. The source
-           input mode and class gates are not yet implemented. */
         return 0;
     case WM_RBUTTONUP: {
         RECT client;
@@ -6184,6 +6183,20 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             (viewport.bottom - viewport.top);
         if (adjust_trade_cell(x, y, -1) ||
             click_diplomacy_action(x, y, selected_hall_player())) {
+            InvalidateRect(window, NULL, FALSE);
+        } else if (g_menu.screen == SCREEN_ISLAND && g_game_session_valid &&
+            x >= 0 && x < LOGICAL_WIDTH && y >= 0 && y < 320 &&
+            g_selected_floater >= 0 &&
+            g_selected_floater < g_game_session.floater_count &&
+            g_menu.selected_map_island >= 0 &&
+            g_menu.selected_map_island < g_game_session.island_count &&
+            g_menu.selected_tribe < GAME_START_PLAYER_COUNT &&
+            g_game_session.floaters[g_selected_floater].source_subtype != 0) {
+            (void)game_session_order_floater_to_coordinate(
+                &g_game_session, g_menu.selected_tribe,
+                (uint8_t)g_menu.selected_map_island,
+                (unsigned int)g_selected_floater,
+                (uint16_t)(x + g_island_scroll_x), (uint16_t)y);
             InvalidateRect(window, NULL, FALSE);
         }
         return 0;

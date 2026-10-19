@@ -235,6 +235,14 @@ typedef struct GameFloaterStart {
     uint8_t near_target_speed_override;
     uint8_t site_speed_bonus;
     uint16_t stop_radius;
+    /* FUN_0045d8b2's linked 100-byte record fields. FUN_0042219e copies a
+       changed coordinate order into the separate tick record; this pending
+       flag lets the remake preserve that source boundary before applying it. */
+    uint8_t source_order_state_2c;
+    uint8_t source_order_island_28;
+    uint16_t source_order_coordinate_30;
+    uint16_t source_order_parameter_32;
+    uint8_t source_order_pending;
     uint8_t has_move_order;
     /* Idle fallback order FA_Wander (14), runtime state 0x0e and +0x34 timer. */
     uint8_t has_wander_order;
@@ -371,6 +379,16 @@ void game_session_tick_item_animations(GameSession *session,
 /* Advance idle FA_Wander routes and simulation-assigned destinations through
    the FUN_00422d27 step kernel. Player input must not call this as an order. */
 void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick);
+/* FUN_0042fa0f's map-ground mode 0x13 enters FUN_0045d8b2 with runtime state
+   9 and a coordinate packed by FUN_0041e3eb (rounded to 10-pixel units).
+   The remake exposes it only for non-worker floaters, matching the user's
+   source-control constraint. Returns nonzero when the order is accepted. */
+int game_session_order_floater_to_coordinate(GameSession *session,
+                                             uint8_t player_slot,
+                                             uint8_t island_index,
+                                             unsigned int floater_index,
+                                             uint16_t x,
+                                             uint16_t y);
 /* Hit test the visible island's active floaters in session order. The original
    FUN_00435581 uses Chebyshev distance < 0x14 (20) for floater selection. */
 int game_session_floater_at(const GameSession *session,
@@ -503,14 +521,16 @@ int game_session_queue_glyph_action(GameSession *session,
                                     uint8_t glyph_index);
 int game_session_pop_glyph_action(GameSession *session,
                                   GameGlyphActionRequest *out);
-/* BC_OnOff's established message route. This captures the command only; the
-   source's per-player activation threshold and final bit change are unmodeled. */
+/* BC_OnOff's established message route. */
 int game_session_queue_onoff_action(GameSession *session,
                                     uint8_t player_slot,
                                     uint8_t island_index,
                                     uint16_t location_index);
 int game_session_pop_onoff_action(GameSession *session,
                                   GameOnOffActionRequest *out);
+/* Applies the verified OFF transition (clear bit 0x400). ON remains inactive
+   until the source budget at DAT_006191f8 is modeled. */
+unsigned int game_session_dispatch_onoff_actions(GameSession *session);
 /* FUN_0042fa0f(0x34): retain the observed category-0/type-5 selection packet
    for the active island location. The final synchronized consumer is unknown. */
 int game_session_queue_build_selection(GameSession *session,
