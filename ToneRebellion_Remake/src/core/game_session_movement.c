@@ -20,22 +20,15 @@ static void game_session_apply_charge_debit(GameFloaterStart *floater,
     }
 }
 
-static int game_session_tick_floater_death(GameSession *session,
-                                           unsigned int floater_index)
+static void game_session_remove_floater(GameSession *session,
+                                        unsigned int floater_index)
 {
     GameFloaterStart *floater = &session->floaters[floater_index];
     unsigned int index;
     unsigned int effect_slot;
 
-    if (!game_session_floater_is_active(floater)) return 1;
-    if ((floater->source_runtime_flags & 0x008U) == 0) return 0;
-
-    /* FUN_0041e569 increments the death counter and removes the floater after
-       FUN_00425296(8) == 40 ticks. FUN_00467101 then unlinks its source slot,
-       releases its task claim and clears surviving references to its index. */
-    ++floater->source_death_timer;
-    if (floater->source_death_timer <= 40U) return 1;
-
+    /* FUN_00467101 unlinks the source slot, releases the floater's task claim,
+       and clears target references held by surviving floaters. */
     release_task_claim(session, floater);
     (void)game_session_unlink_floater_charge(session, floater_index);
     for (index = 0; index < session->floater_count; ++index) {
@@ -64,6 +57,21 @@ static int game_session_tick_floater_death(GameSession *session,
         if (session->active_cast_effect_count != 0)
             --session->active_cast_effect_count;
     }
+}
+
+static int game_session_tick_floater_death(GameSession *session,
+                                           unsigned int floater_index)
+{
+    GameFloaterStart *floater = &session->floaters[floater_index];
+
+    if (!game_session_floater_is_active(floater)) return 1;
+    if ((floater->source_runtime_flags & 0x008U) == 0) return 0;
+
+    /* FUN_0041e569 increments the death counter and removes the floater after
+       FUN_00425296(8) == 40 ticks. */
+    ++floater->source_death_timer;
+    if (floater->source_death_timer > 40U)
+        game_session_remove_floater(session, floater_index);
     return 1;
 }
 
@@ -392,12 +400,15 @@ static int game_session_tick_merge_completion(GameSession *session,
 
     if (floater->order_timer < 50U) ++floater->order_timer;
     if (floater->order_timer == 25U) {
-        if (floater->owner_slot != 4U) {
-            /* FUN_0041e569 converts the joined floater at tick 25. */
-            floater->source_subtype = 8;
-            floater->attack_level_flags &= 0xfff0U;
-            game_session_drop_merge_carried_item(session, floater);
+        if (floater->owner_slot == 4U) {
+            /* FUN_0041e569 removes the neutral merged floater at tick 25. */
+            game_session_remove_floater(session, floater_index);
+            return 1;
         }
+        /* Player-owned floaters become subtype 8 at the same transition. */
+        floater->source_subtype = 8;
+        floater->attack_level_flags &= 0xfff0U;
+        game_session_drop_merge_carried_item(session, floater);
     }
     if (floater->order_timer < 50U) return 1;
 
