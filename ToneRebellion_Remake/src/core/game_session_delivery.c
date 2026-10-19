@@ -300,17 +300,29 @@ void game_session_update_construction_tasks(GameSession *session,
         }
     }
 
-    /* One worker at a time prevents multiple in-flight deliveries from
-       overshooting a site's construction cost. */
+    /* Assign workers across the active construction tasks. Each assignment
+       reserves one unit against that site's remaining Build Tone cost, so
+       several floaters can build in parallel without over-delivering. */
     for (floater_index = 0; floater_index < session->floater_count;
          ++floater_index) {
         GameFloaterStart *floater = &session->floaters[floater_index];
         unsigned int task_slot;
+        unsigned int best_task_slot = GAME_SESSION_MAX_PENDING_EVENTS;
+        uint64_t best_progress_numerator = 0;
+        uint64_t best_progress_denominator = 1;
         if (!game_session_floater_is_active(floater) ||
             (floater->source_runtime_flags & 0x008U) != 0) continue;
-        if (floater->active_order_action != 0 || floater->linked_task_slot != -1 ||
+        /* Idle workers normally enter FA_Wander (action/state 9) very soon
+           after island startup. A construction order must be allowed to
+           replace that fallback order, otherwise only workers caught before
+           their first wander tick can ever build. */
+        if ((floater->active_order_action != 0 &&
+             !(floater->active_order_action == 9 &&
+               floater->movement_state == 9)) ||
+            floater->linked_task_slot != -1 ||
             floater->source_link_0c != -1 || floater->type_index == 4 ||
-            floater->source_subtype == 8 || floater->movement_state != 0 ||
+            floater->source_subtype == 8 ||
+            (floater->movement_state != 0 && floater->movement_state != 9) ||
             floater->island_index >= session->island_count ||
             (floater->carried_resource_code != 0 &&
              floater->carried_resource_code != 1)) continue;
@@ -320,29 +332,39 @@ void game_session_update_construction_tasks(GameSession *session,
             GamePendingEvent *event = &session->pending_events[task_slot];
             const GameRuntimeLocation *target;
             const PadCatalogItem *item;
-            uint8_t source_island = floater->island_index;
-            int source_index;
-            unsigned int prior_task;
-            int superseded = 0;
+            uint64_t reserved;
+            uint64_t maximum;
 
-            if (event->assigned_floater_count != 0 ||
-                event->player_id != floater->owner_slot ||
+            if (event->player_id != floater->owner_slot ||
                 !construction_task_details(session, catalog, event,
                                            &target, &item) ||
                 event->payload_0a != floater->island_index ||
                 target->resource_stock[GAME_RESOURCE_BUILD_TONE] >=
                     (uint16_t)item->building_tone_cost) continue;
-            for (prior_task = 0; prior_task < task_slot; ++prior_task) {
-                const GamePendingEvent *prior = &session->pending_events[prior_task];
-                if (prior->active != 0 && prior->action_type == 5 &&
-                    prior->player_id == event->player_id &&
-                    prior->payload_0a == event->payload_0a &&
-                    prior->payload_0e == event->payload_0e) {
-                    superseded = 1;
-                    break;
-                }
+            reserved = target->resource_stock[GAME_RESOURCE_BUILD_TONE] +
+                (uint16_t)event->assigned_floater_count;
+            maximum = (uint16_t)item->building_tone_cost;
+            if (reserved >= maximum) continue;
+
+            /* Pick the least-served task by its projected completion ratio.
+               `assigned_floater_count` includes workers already carrying or
+               collecting a unit, not just material deposited on the site. */
+            if (best_task_slot == GAME_SESSION_MAX_PENDING_EVENTS ||
+                reserved * best_progress_denominator <
+                    best_progress_numerator * maximum) {
+                best_task_slot = task_slot;
+                best_progress_numerator = reserved;
+                best_progress_denominator = maximum;
             }
-            if (superseded) continue;
+        }
+        if (best_task_slot != GAME_SESSION_MAX_PENDING_EVENTS) {
+            GamePendingEvent *event = &session->pending_events[best_task_slot];
+            const GameRuntimeLocation *target;
+            const PadCatalogItem *item;
+            uint8_t source_island = floater->island_index;
+            int source_index;
+            if (!construction_task_details(session, catalog, event,
+                                           &target, &item)) continue;
             if (floater->carried_resource_code == 1) {
                 source_index = -1;
             } else {
@@ -354,7 +376,7 @@ void game_session_update_construction_tasks(GameSession *session,
             ++event->assigned_floater_count;
             floater->active_order_action = 4;
             floater->order_resource_code = 1;
-            floater->linked_task_slot = (int16_t)task_slot;
+            floater->linked_task_slot = (int16_t)best_task_slot;
             floater->order_target_location = event->payload_0e;
             floater->order_target_island = (uint8_t)event->payload_0a;
             floater->order_source_island = source_island;
@@ -382,7 +404,6 @@ void game_session_update_construction_tasks(GameSession *session,
             }
             floater->has_wander_order = 0;
             floater->wander_timer = 0;
-            break;
         }
     }
 }

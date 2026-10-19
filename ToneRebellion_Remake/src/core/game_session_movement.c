@@ -444,6 +444,8 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
         if (game_session_tick_floater_death(session, i)) continue;
         if (game_session_tick_floater_charge(session, i)) continue;
         if (game_session_tick_merge_completion(session, i, floater)) continue;
+        game_session_advance_category4_autonomous_order(session, i);
+        (void)game_session_assign_category4_autonomous_order(session, i);
 
         /* FUN_0041e569 polls FUN_0042219e while idle and once per ten ticks
            while moving. The bridge leaves the linked order pending during
@@ -828,6 +830,7 @@ int game_session_order_floater_to_merge(GameSession *session,
         (floater->source_runtime_flags & 0x008U) != 0 ||
         (target->source_runtime_flags & 0x008U) != 0 ||
         floater->owner_slot != player_slot || floater->source_subtype == 0 ||
+        target->owner_slot != player_slot ||
         floater->island_index != island_index || target->island_index != island_index ||
         floater->active_order_action != 0 || floater->linked_task_slot != -1) {
         return 0;
@@ -866,6 +869,7 @@ int game_session_order_floater_to_defend(GameSession *session,
         (floater->source_runtime_flags & 0x008U) != 0 ||
         (target->source_runtime_flags & 0x008U) != 0 ||
         floater->owner_slot != player_slot || floater->source_subtype == 0 ||
+        target->owner_slot != player_slot ||
         floater->island_index != island_index || target->island_index != island_index ||
         floater->active_order_action != 0 || floater->linked_task_slot != -1) {
         return 0;

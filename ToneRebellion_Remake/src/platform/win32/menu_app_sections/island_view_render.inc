@@ -233,6 +233,22 @@ static void render_island_view(HDC dc)
                                 badge_x, badge_y);
                 }
             }
+            /* Resource code 1 is Build Tone, code 2 Tone Crystal, and code 3
+               Magic Tone. Keep the cargo marker separate from the worker
+               sprite so transport remains visible while the unit is moving. */
+            if (floater->carried_resource_code >= 1 &&
+                floater->carried_resource_code <= GAME_RESOURCE_TYPE_COUNT) {
+                static const SpriteSheet *const carried_art[] = {
+                    &g_bildtone_art, &g_tone_crys_art, &g_magctone_art
+                };
+                const SpriteSheet *cargo_art = carried_art[
+                    (unsigned int)floater->carried_resource_code - 1U];
+                if (cargo_art->frame_count != 0) {
+                    draw_sprite_scaled(dc, cargo_art, 0,
+                                       floater_x - 4, floater_y - 13,
+                                       0x00008000U);
+                }
+            }
         }
     }
     if (focus != NULL) {
@@ -349,6 +365,7 @@ static void render_island_view(HDC dc)
                 char hit_points_label[24];
                 char strength_label[24];
                 char charge_label[24];
+                char carried_label[28];
                 int16_t current_charge;
                 int16_t maximum_charge;
                 (void)snprintf(hit_points_label, sizeof(hit_points_label),
@@ -375,6 +392,29 @@ static void render_island_view(HDC dc)
                                       info->pane.left + 5,
                                       info->pane.top + 43,
                                       RGB(230, 238, 255));
+                }
+                if (selected_floater->carried_resource_code >= 1 &&
+                    selected_floater->carried_resource_code <=
+                        GAME_RESOURCE_TYPE_COUNT) {
+                    static const char *const carried_names[] = {
+                        "BUILD", "CRYSTAL", "MAGIC"
+                    };
+                    static const SpriteSheet *const carried_art[] = {
+                        &g_bildtone_art, &g_tone_crys_art, &g_magctone_art
+                    };
+                    unsigned int resource_index =
+                        (unsigned int)selected_floater->carried_resource_code - 1U;
+                    (void)snprintf(carried_label, sizeof(carried_label),
+                        "CARRY %s", carried_names[resource_index]);
+                    draw_bitmap_label(dc, carried_label,
+                                      info->pane.left + 5,
+                                      info->pane.top + 53,
+                                      RGB(230, 238, 255));
+                    if (carried_art[resource_index]->frame_count != 0) {
+                        draw_sprite_scaled(dc, carried_art[resource_index], 0,
+                            info->pane.right - 27, info->pane.top + 48,
+                            0x00008000U);
+                    }
                 }
             }
 

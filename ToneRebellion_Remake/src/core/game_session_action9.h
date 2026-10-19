@@ -10,5 +10,10 @@ void game_session_advance_merge_order(GameSession *session,
                                      unsigned int floater_index);
 void game_session_advance_defend_order(GameSession *session,
                                        unsigned int floater_index);
+/* FUN_0042219e's autonomous category-4 floater target selection. */
+int game_session_assign_category4_autonomous_order(
+    GameSession *session, unsigned int floater_index);
+void game_session_advance_category4_autonomous_order(
+    GameSession *session, unsigned int floater_index);
 
 #endif

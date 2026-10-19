@@ -81,7 +81,8 @@ static void draw_hall_panel(HDC dc, int hall_player)
                 const char *text;
                 int x;
                 int y;
-            } row_labels[GAME_SESSION_MAX_TASKS];
+            } row_labels[GAME_SESSION_MAX_TASKS * 2];
+            char construction_amount_labels[GAME_SESSION_MAX_TASKS][16];
             size_t row_label_count = 0;
             int visible_rows = task_list_panel != NULL
                 ? (task_list_panel->pane.bottom - task_list_panel->pane.top) / 13
@@ -184,6 +185,33 @@ static void draw_hall_panel(HDC dc, int hall_player)
                         draw_task_repair_gauge(dc, task_list_panel, event,
                                                position.y);
                     } else if (event->action_type == 5) {
+                        int16_t current;
+                        int16_t maximum;
+                        if (game_session_construction_task_values(
+                                &g_game_session, &g_pad_catalog, event,
+                                &current, &maximum) &&
+                            row_label_count <
+                                sizeof(row_labels) / sizeof(row_labels[0])) {
+                            (void)snprintf(construction_amount_labels[
+                                    visible_index],
+                                sizeof(construction_amount_labels[
+                                    visible_index]), "%d/%d", (int)current,
+                                (int)maximum);
+                            row_labels[row_label_count].text =
+                                construction_amount_labels[visible_index];
+                            row_labels[row_label_count].x =
+                                task_list_panel->pane.left + position.label_x + 58;
+                            row_labels[row_label_count].y =
+                                task_list_panel->pane.top + position.y;
+                            ++row_label_count;
+                            if (g_bildtone_art.frame_count != 0) {
+                                draw_sprite_scaled(dc, &g_bildtone_art, 0,
+                                    task_list_panel->pane.left +
+                                        position.resource_icon_x,
+                                    task_list_panel->pane.top + position.y + 2,
+                                    0x00008000U);
+                            }
+                        }
                         draw_task_construction_gauge(dc, task_list_panel, event,
                                                      position.y);
                     }
@@ -279,6 +307,37 @@ static void draw_hall_panel(HDC dc, int hall_player)
                                         task_info_panel->pane.left + 10,
                                         task_info_panel->pane.top + 0x1e,
                                         RGB(185, 205, 220));
+                                }
+                                {
+                                    int16_t current;
+                                    int16_t maximum;
+                                    unsigned int floater_index;
+                                    unsigned int carrying = 0;
+                                    char materials_label[32];
+                                    if (game_session_construction_task_values(
+                                            &g_game_session, &g_pad_catalog,
+                                            selected_event, &current, &maximum)) {
+                                        for (floater_index = 0;
+                                             floater_index <
+                                                g_game_session.floater_count;
+                                             ++floater_index) {
+                                            const GameFloaterStart *floater =
+                                                &g_game_session.floaters[floater_index];
+                                            if (game_session_floater_is_active(floater) &&
+                                                floater->linked_task_slot ==
+                                                    g_selected_task_slot &&
+                                                floater->carried_resource_code == 1)
+                                                ++carrying;
+                                        }
+                                        (void)snprintf(materials_label,
+                                            sizeof(materials_label),
+                                            "BUILD TONE %d/%d +%u",
+                                            (int)current, (int)maximum, carrying);
+                                        draw_bitmap_label(dc, materials_label,
+                                            task_info_panel->pane.left + 8,
+                                            task_info_panel->pane.top + 0x37,
+                                            RGB(185, 205, 220));
+                                    }
                                 }
                                 if (item_id < g_pad_catalog.item_count &&
                                     item_id < PAD_CATALOG_MAX_ITEMS &&

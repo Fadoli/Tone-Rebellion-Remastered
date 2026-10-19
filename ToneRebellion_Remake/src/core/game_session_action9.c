@@ -1,10 +1,13 @@
 #include "game_session.h"
+#include "game_session_action9.h"
 #include "floater_motion.h"
 #include "game_session_delivery.h"
 
 #include <string.h>
 
 /* Floater movement, order execution and selection queries. */
+static uint16_t floater_approach_radius(const GameFloaterStart *floater);
+
 int32_t game_session_source_chebyshev_distance(int32_t x1, int32_t y1,
                                          int32_t x2, int32_t y2)
 {
@@ -17,7 +20,8 @@ int32_t game_session_source_chebyshev_distance(int32_t x1, int32_t y1,
 
 static int action9_find_floater(const GameSession *session,
                                 unsigned int source_index,
-                                uint16_t target_x, uint16_t target_y)
+                                uint16_t target_x, uint16_t target_y,
+                                int32_t max_distance)
 {
     const GameFloaterStart *source = &session->floaters[source_index];
     int source_level = -1;
@@ -52,7 +56,7 @@ static int action9_find_floater(const GameSession *session,
             continue;
         }
         if (game_session_source_chebyshev_distance(candidate->x, candidate->y,
-                                      target_x, target_y) < 250) return (int)index;
+                                      target_x, target_y) < max_distance) return (int)index;
     }
     return -1;
 }
@@ -137,6 +141,178 @@ static int action9_find_enemy_site(GameSession *session,
     return -1;
 }
 
+static int action9_find_category4_site(GameSession *session,
+                                       const GameFloaterStart *floater,
+                                       int32_t max_distance)
+{
+    uint16_t candidate_indices[10];
+    int32_t candidate_distances[10];
+    unsigned int candidate_count = 0;
+    int32_t distance_sum = 0;
+    double inverse_weight_sum = 0.0;
+    int32_t roll;
+    GameRuntimeIsland *island;
+    unsigned int index;
+
+    if (floater->island_index >= session->island_count) return -1;
+    island = &session->islands[floater->island_index];
+    for (index = 0; index < island->location_count; ++index) {
+        const GameRuntimeLocation *location = &island->locations[index];
+        int32_t distance;
+        unsigned int largest_index;
+        unsigned int candidate;
+
+        if (location->renderer_class != 0 || location->owner_id == 4 ||
+            location->record_value_10 < 0x25 ||
+            location->record_value_10 > 0x34 ||
+            location->record_value_10 == 0x2a) continue;
+        distance = game_session_source_chebyshev_distance(
+            floater->x, floater->y, location->x, location->y);
+        if (distance == 0 || distance >= max_distance) continue;
+        if (candidate_count < 10U) {
+            candidate_indices[candidate_count] = (uint16_t)index;
+            candidate_distances[candidate_count] = distance;
+            ++candidate_count;
+            continue;
+        }
+        largest_index = 0;
+        for (candidate = 1; candidate < candidate_count; ++candidate) {
+            if (candidate_distances[candidate] >
+                candidate_distances[largest_index]) largest_index = candidate;
+        }
+        if (distance < candidate_distances[largest_index]) {
+            candidate_indices[largest_index] = (uint16_t)index;
+            candidate_distances[largest_index] = distance;
+        }
+    }
+    if (candidate_count == 0) return -1;
+
+    for (index = 0; index < candidate_count; ++index)
+        distance_sum += candidate_distances[index];
+    for (index = 0; index < candidate_count; ++index)
+        inverse_weight_sum += (double)distance_sum /
+                              (double)candidate_distances[index];
+    roll = tone_rng_bounded(&session->random_state, 1000);
+    {
+        int32_t cumulative = 0;
+        for (index = 0; index < candidate_count; ++index) {
+            double weight = (double)distance_sum /
+                            (double)candidate_distances[index];
+            cumulative += action9_round_source_float(
+                (1000.0 / inverse_weight_sum) * weight);
+            if (roll < cumulative) return (int)candidate_indices[index];
+        }
+    }
+    return -1;
+}
+
+int game_session_assign_category4_autonomous_order(
+    GameSession *session, unsigned int floater_index)
+{
+    GameFloaterStart *floater;
+    int32_t search_distance;
+    int target_floater;
+    int target_location;
+
+    if (session == NULL || floater_index >= session->floater_count) return 0;
+    floater = &session->floaters[floater_index];
+    if (!game_session_floater_is_active(floater) ||
+        (floater->source_runtime_flags & (0x008U | 0x010U)) != 0 ||
+        floater->type_index != 4U || floater->source_subtype == 9U ||
+        (floater->active_order_action != 0 &&
+         floater->active_order_action != 0x0e) ||
+        floater->movement_state != 0 || floater->has_move_order ||
+        floater->island_index >= session->island_count) return 0;
+
+    search_distance = (floater->source_runtime_flags & 0x080U) != 0
+        ? 3000 : 0x96;
+    target_floater = action9_find_floater(
+        session, floater_index, floater->x, floater->y, search_distance);
+    target_location = action9_find_category4_site(
+        session, floater, search_distance);
+    if (target_location >= 0 && target_floater >= 0 &&
+        tone_rng_bounded(&session->random_state, 3U) == 0) {
+        target_location = -1;
+    }
+
+    if (target_location >= 0) {
+        const GameRuntimeLocation *target = &session->islands[
+            floater->island_index].locations[(unsigned int)target_location];
+        floater->active_order_action = 7;
+        floater->order_target_location = (int16_t)target_location;
+        floater->order_target_floater = -1;
+        floater->movement_state = 0x10;
+        floater->stop_radius = floater_approach_radius(floater);
+        game_session_set_approach_point(floater, target->x, target->y);
+    } else if (target_floater >= 0) {
+        const GameFloaterStart *target = &session->floaters[target_floater];
+        floater->active_order_action = 6;
+        floater->order_target_floater = (int16_t)target_floater;
+        floater->order_target_location = -1;
+        floater->movement_state = 0x0f;
+        floater->stop_radius = floater_approach_radius(floater);
+        floater->source_runtime_flags |= 0x004U;
+        game_session_set_approach_point(floater, target->x, target->y);
+    } else {
+        return 0;
+    }
+    floater->order_target_island = floater->island_index;
+    floater->order_timer = 0;
+    floater->order_progress = 1;
+    floater->has_move_order = 1;
+    floater->has_wander_order = 0;
+    floater->wander_timer = 0;
+    return 1;
+}
+
+void game_session_advance_category4_autonomous_order(
+    GameSession *session, unsigned int floater_index)
+{
+    GameFloaterStart *floater;
+
+    if (session == NULL || floater_index >= session->floater_count) return;
+    floater = &session->floaters[floater_index];
+    if (!game_session_floater_is_active(floater) ||
+        (floater->source_runtime_flags & 0x008U) != 0 ||
+        (floater->active_order_action != 6 &&
+         floater->active_order_action != 7)) return;
+
+    if (floater->order_progress == 1 && floater->movement_state == 0 &&
+        !floater->has_move_order) {
+        if (floater->active_order_action == 6 &&
+            (floater->order_target_floater < 0 ||
+             (unsigned int)floater->order_target_floater >=
+                 session->floater_count ||
+             !game_session_floater_is_active(&session->floaters[
+                 (unsigned int)floater->order_target_floater]) ||
+             (session->floaters[(unsigned int)floater->order_target_floater]
+                  .source_runtime_flags & 0x008U) != 0)) {
+            floater->order_progress = 2;
+        } else if (floater->active_order_action == 7 &&
+                   (floater->island_index >= session->island_count ||
+                    floater->order_target_location < 0 ||
+                    (uint16_t)floater->order_target_location >=
+                        session->islands[floater->island_index].location_count)) {
+            floater->order_progress = 2;
+        } else {
+            floater->movement_state = floater->active_order_action;
+            floater->attack_timer = 0;
+            floater->order_progress = 2;
+        }
+        return;
+    }
+    if (floater->order_progress == 2 && floater->movement_state == 0 &&
+        !floater->has_move_order) {
+        floater->active_order_action = 0;
+        floater->order_target_floater = -1;
+        floater->order_target_location = -1;
+        floater->order_progress = 0;
+        floater->source_runtime_flags &= ~0x004U;
+        floater->has_wander_order = 1;
+        floater->wander_timer = 0;
+    }
+}
+
 void game_session_set_approach_point(GameFloaterStart *floater,
                                        int32_t target_x, int32_t target_y)
 {
@@ -211,7 +387,8 @@ void game_session_advance_action9(GameSession *session,
 
     target_x = (uint16_t)(floater->source_order_coordinate_30 >> 8) * 10U;
     target_y = (uint16_t)(floater->source_order_coordinate_30 & 0xffU) * 10U;
-    target_index = action9_find_floater(session, floater_index, target_x, target_y);
+    target_index = action9_find_floater(session, floater_index, target_x, target_y,
+                                        250);
     if (target_index >= 0) {
         GameFloaterStart *target = &session->floaters[target_index];
         floater->order_target_floater = (int16_t)target_index;
@@ -343,7 +520,7 @@ void game_session_advance_defend_order(GameSession *session,
             return;
         }
         candidate_index = action9_find_floater(
-            session, floater_index, target->x, target->y);
+            session, floater_index, target->x, target->y, 250);
         if (candidate_index < 0) {
             if (floater->movement_state == 0 && !floater->has_move_order) {
                 /* The next idle consumer pass starts another random route. */
