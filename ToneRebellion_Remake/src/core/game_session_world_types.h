@@ -1,0 +1,86 @@
+#ifndef TONE_REBELLION_GAME_SESSION_WORLD_TYPES_H
+#define TONE_REBELLION_GAME_SESSION_WORLD_TYPES_H
+
+#include "game_session_base_types.h"
+
+typedef struct GameRuntimeLocation {
+    int32_t record_value_10;
+    int32_t owner_id;
+    /* Source signed short +0x18. FUN_00452c31 requires this != -1 before
+       owner Inventory is available on non-Hall locations; FUN_004528ca sets
+       it for source item IDs 0x2c..0x32. Slot assignment is not yet modeled. */
+    int16_t source_location_slot_18;
+    /* On producer items 0x25/0x26/0x27, FUN_00450a71 stores a pending
+       resource code 1/3/2 here when PROD completes; other classes use the
+       same runtime field for different purposes. */
+    int32_t record_value_24;
+    int32_t bridge_neighbor_island;
+    uint16_t x;
+    uint16_t y;
+    /* Runtime +0x1c bitword. Bit 0x400 is changed by FUN_00453bf6;
+       FUN_0045eaa7 separately checks bit 0x001 for Hall stock requests. */
+    uint32_t source_flags;
+    /* FUN_00453958 reads these runtime shorts at +0x44 and +0x58 when
+       recomputing active bit 0. Their field meanings are not established. */
+    int16_t source_value_44;
+    int16_t source_value_58;
+    /* FUN_0045cbaa clears the three subtype 1..3 links when a site is turned
+       off. -1 means the source has no linked task for that subtype. */
+    int16_t source_task_slot[GAME_RESOURCE_TYPE_COUNT];
+    /* FUN_0041ff2e reads the selected record's word at +0x0a and displays
+       its low nibble plus one as LEVEL. */
+    uint16_t source_level_flags;
+    uint16_t base_progress;
+    /* Three stock values observed in the hall runtime record at +0x28/+0x2a/
+       +0x2c. Ghidra reads them as short fields; exact signedness/caps remain
+       unconfirmed. */
+    uint16_t resource_stock[GAME_RESOURCE_TYPE_COUNT];
+    /* Raw Hall threshold read by FUN_0045eaa7. */
+    int16_t source_capacity_4a;
+    /* FUN_004528ca initializes runtime +0x34 from FUN_00450978; repair task
+       rows later read this mutable short from their target location. */
+    int16_t source_value_34;
+    /* FUN_00452e4d stores the last floater pickup tick it checked for a
+       resource output at runtime +0x36. */
+    int16_t resource_retry_tick_36;
+    /* Producer items 0x25..0x27 use source +0x0c to start PROD after the
+       running object's cadence reaches 20; separate from BASE +0x4a. */
+    uint16_t producer_cadence;
+    uint16_t chug_progress;
+    uint16_t glyph_progress;
+    uint16_t inci_progress;
+    uint16_t construction_progress;
+    uint16_t production_progress;
+    uint16_t animation_rate;
+    double barg_progress;
+    uint8_t renderer_class;
+    uint8_t tribe_visibility_mask;
+    /* FUN_004669bd sets bit 0 at runtime record +0x1c on both paired
+       class-2 bridge objects once the bridge link is established. */
+    uint8_t bridge_constructed;
+} GameRuntimeLocation;
+
+typedef struct GameRuntimeIsland {
+    uint16_t location_count;
+    /* FUN_00423068 reads horizontal wander limits by floater category and
+       island. Zero / 0x9ff retain the source's global fallback on each side;
+       the data loader for the original per-category limits is not modeled. */
+    int32_t floater_min_x[GAME_FLOATER_CATEGORY_COUNT];
+    int32_t floater_max_x[GAME_FLOATER_CATEGORY_COUNT];
+    /* FUN_00420991 uses DAT_0061fa2e[island] to decide whether a category-4
+       floater seeks a different category or another category-4 floater. The
+       loaded image initializes all 15 entries to zero; no direct writer was
+       found, though indirect runtime updates remain possible. */
+    int16_t source_level;
+    /* FUN_0047117d checks one per-player access dword at island +0x29ac. */
+    uint8_t access_mask;
+    /* FUN_00465793 message type 3/subtype 0 toggles bit 0 in one raw dword
+       per player at island +0x29bc. Its gameplay/display meaning is unknown. */
+    uint32_t source_event_state[GAME_START_PLAYER_COUNT];
+    /* Pending type-3/subtype-0 events are represented by parity: each source
+       event only XORs bit 0, so coalescing preserves the post-drain raw word. */
+    uint8_t source_event3_pending_parity[GAME_START_PLAYER_COUNT];
+    GameRuntimeLocation locations[ISLAND_DATA_MAX_LOCATIONS];
+} GameRuntimeIsland;
+
+#endif

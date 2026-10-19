@@ -182,11 +182,13 @@ void game_session_advance_action9(GameSession *session,
     if (floater->order_progress == 2) {
         floater->movement_state = 6;
         floater->order_progress = 1;
+        floater->attack_timer = 0;
         return;
     }
     if (floater->order_progress == 3) {
         floater->movement_state = 7;
         floater->order_progress = 1;
+        floater->attack_timer = 0;
         return;
     }
     if (floater->order_progress != 1) return;

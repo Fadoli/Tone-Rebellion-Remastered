@@ -16,27 +16,39 @@ add_library(tone_core STATIC
     src/core/iw_construct.c
     src/core/pad_catalog.c
     src/core/floater_catalog.c
+    src/core/floater_effect_catalog.c
     src/core/building_render.c
+    src/core/building_render_parser.c
+    src/core/building_render_frames.c
     src/core/window_catalog.c
+    src/core/window_catalog_controls.c
     src/core/world_map.c
     src/core/game_start.c
+    src/core/game_start_tones.c
     src/core/game_session.c
+    src/core/game_session_start.c
     src/core/game_session_buildings.c
     src/core/game_session_layout.c
     src/core/game_session_pending_events.c
     src/core/game_session_animation.c
     src/core/game_session_movement.c
+    src/core/game_session_combat.c
     src/core/game_session_queries.c
     src/core/game_session_action9.c
     src/core/game_session_delivery.c
+    src/core/game_session_delivery_advance.c
     src/core/game_session_world_map.c
     src/core/game_session_economy.c
+    src/core/game_session_trade.c
     src/core/game_session_events.c
+    src/core/game_session_site_events.c
+    src/core/game_session_build_events.c
     src/core/game_inventory.c
     src/core/game_trade.c
     src/core/game_diplomacy.c
     src/core/game_glyph_inventory.c
     src/core/island_panel_info.c
+    src/core/island_panel_info_tasks.c
     src/core/game_music.c
     src/core/floater_motion.c
     src/core/tone_rng.c

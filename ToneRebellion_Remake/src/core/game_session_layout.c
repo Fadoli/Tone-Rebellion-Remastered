@@ -11,59 +11,6 @@ static void set_error(char *error, size_t capacity, const char *message)
     error[capacity - 1] = '\0';
 }
 
-static int is_construction_location(const IslandLocation *location)
-{
-    uint8_t site_size;
-    return iw_construct_site_size(location, &site_size);
-}
-
-static int island_has_typed_construction_sites(const IslandData *source)
-{
-    unsigned int index;
-    for (index = 0; index < source->location_count; ++index) {
-        if (source->locations[index].renderer_class == 0 &&
-            is_construction_location(&source->locations[index])) return 1;
-    }
-    return 0;
-}
-
-static int choose_empty_class0(const IslandData *source,
-                               GameRuntimeIsland *runtime,
-                               ToneRng *rng,
-                               unsigned int *location_index)
-{
-    unsigned int available = 0;
-    unsigned int choice;
-    unsigned int index;
-    int prefer_typed_sites = island_has_typed_construction_sites(source);
-    int selected;
-
-    for (index = 0; index < source->location_count; ++index) {
-        if (source->locations[index].renderer_class == 0 &&
-            (!prefer_typed_sites || is_construction_location(&source->locations[index])) &&
-            runtime->locations[index].owner_id == -1 &&
-            runtime->locations[index].record_value_10 == 0) {
-            ++available;
-        }
-    }
-    if (available == 0) return 0;
-    selected = tone_rng_bounded(rng, (int32_t)available);
-    if (selected < 0 || (unsigned int)selected >= available) return 0;
-    choice = (unsigned int)selected;
-    for (index = 0; index < source->location_count; ++index) {
-        if (source->locations[index].renderer_class != 0 ||
-            (prefer_typed_sites && !is_construction_location(&source->locations[index])) ||
-            runtime->locations[index].owner_id != -1 ||
-            runtime->locations[index].record_value_10 != 0) continue;
-        if (choice == 0) {
-            *location_index = index;
-            return 1;
-        }
-        --choice;
-    }
-    return 0;
-}
-
 int game_session_prepare_runtime_layouts(const WorldDefinition *world,
                                    const IslandData *sources,
                                    IslandData *layouts,
@@ -151,6 +98,65 @@ int game_session_prepare_runtime_layouts(const WorldDefinition *world,
         }
     }
     return 1;
+}
+
+#include "game_session_layout_internal.h"
+
+#include "iw_construct.h"
+
+#include <stdio.h>
+
+static int is_construction_location(const IslandLocation *location)
+{
+    uint8_t site_size;
+    return iw_construct_site_size(location, &site_size);
+}
+
+static int island_has_typed_construction_sites(const IslandData *source)
+{
+    unsigned int index;
+    for (index = 0; index < source->location_count; ++index) {
+        if (source->locations[index].renderer_class == 0 &&
+            is_construction_location(&source->locations[index])) return 1;
+    }
+    return 0;
+}
+
+static int choose_empty_class0(const IslandData *source,
+                               GameRuntimeIsland *runtime,
+                               ToneRng *rng,
+                               unsigned int *location_index)
+{
+    unsigned int available = 0;
+    unsigned int choice;
+    unsigned int index;
+    int prefer_typed_sites = island_has_typed_construction_sites(source);
+    int selected;
+
+    for (index = 0; index < source->location_count; ++index) {
+        if (source->locations[index].renderer_class == 0 &&
+            (!prefer_typed_sites || is_construction_location(&source->locations[index])) &&
+            runtime->locations[index].owner_id == -1 &&
+            runtime->locations[index].record_value_10 == 0) {
+            ++available;
+        }
+    }
+    if (available == 0) return 0;
+    selected = tone_rng_bounded(rng, (int32_t)available);
+    if (selected < 0 || (unsigned int)selected >= available) return 0;
+    choice = (unsigned int)selected;
+    for (index = 0; index < source->location_count; ++index) {
+        if (source->locations[index].renderer_class != 0 ||
+            (prefer_typed_sites && !is_construction_location(&source->locations[index])) ||
+            runtime->locations[index].owner_id != -1 ||
+            runtime->locations[index].record_value_10 != 0) continue;
+        if (choice == 0) {
+            *location_index = index;
+            return 1;
+        }
+        --choice;
+    }
+    return 0;
 }
 
 static int assign_initial_bridge_sites(const WorldDefinition *world,

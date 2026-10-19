@@ -6,6 +6,7 @@
 
 enum { FLOATER_CATALOG_ROW_COUNT = 45 };
 enum { FLOATER_ANIMATION_CATALOG_MAX_ITEMS = 64 };
+enum { FLOATER_IMPACT_REALM_COUNT = 4, FLOATER_IMPACT_LEVEL_COUNT = 4 };
 
 typedef struct FloaterStats {
     char draw_id[9];
@@ -21,6 +22,8 @@ typedef struct FloaterStats {
 
 typedef struct FloaterCatalog {
     FloaterStats rows[FLOATER_CATALOG_ROW_COUNT];
+    uint8_t impact_frame_counts[FLOATER_IMPACT_REALM_COUNT]
+                               [FLOATER_IMPACT_LEVEL_COUNT];
 } FloaterCatalog;
 
 /* Parse the 45 ordered records loaded by FUN_004633a7. */
@@ -33,6 +36,13 @@ int floater_catalog_load(const unsigned char *bytes, size_t length,
 int floater_catalog_load_animations(const unsigned char *bytes, size_t length,
                                     FloaterCatalog *catalog, char *error,
                                     size_t error_capacity);
+
+/* Load the four realm IMPACT lifetimes used by state 6/7 attacks. */
+int floater_catalog_load_impact_effects(const unsigned char *bytes,
+                                        size_t length,
+                                        FloaterCatalog *catalog,
+                                        char *error,
+                                        size_t error_capacity);
 
 /* Mirrors FUN_00464242's row formula; caller supplies its two raw key fields. */
 const FloaterStats *floater_catalog_find(const FloaterCatalog *catalog,

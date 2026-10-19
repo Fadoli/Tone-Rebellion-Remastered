@@ -1,0 +1,12 @@
+#ifndef TONE_REBELLION_GAME_SESSION_MOVEMENT_INTERNAL_H
+#define TONE_REBELLION_GAME_SESSION_MOVEMENT_INTERNAL_H
+
+#include "game_session_types.h"
+
+#include <stdint.h>
+
+int game_session_tick_floater_wander(GameSession *session,
+                                    GameFloaterStart *floater,
+                                    uint32_t source_tick);
+
+#endif

@@ -1,78 +1,4 @@
-#include "game_session_delivery.h"
-
-static int local_refill_source_is_valid(const GameSession *session,
-                                       uint8_t island_index,
-                                       uint16_t location_index,
-                                       int16_t player_id,
-                                       int16_t resource_code)
-{
-    const GameRuntimeIsland *island;
-    int32_t producer_item;
-
-    if (island_index >= session->island_count || resource_code < 1 ||
-        resource_code > GAME_RESOURCE_TYPE_COUNT) return 0;
-    island = &session->islands[island_index];
-    if (location_index >= island->location_count) return 0;
-    producer_item = resource_code == 1 ? 0x25 :
-                    resource_code == 2 ? 0x27 : 0x26;
-    {
-        const GameRuntimeLocation *location = &island->locations[location_index];
-        return location->owner_id == player_id &&
-               location->record_value_10 == producer_item &&
-               (location->source_flags & 1U) != 0;
-    }
-}
-
-static int local_refill_source(const GameSession *session, uint8_t island_index,
-                               int16_t player_id, int16_t resource_code)
-{
-    const GameRuntimeIsland *island;
-    unsigned int location_index;
-
-    if (island_index >= session->island_count ||
-        resource_code < 1 || resource_code > GAME_RESOURCE_TYPE_COUNT) return -1;
-    island = &session->islands[island_index];
-    /* FUN_00452ceb maps resource codes 1/2/3 to producer IDs 0x25/0x27/0x26.
-       The current model does not have the source's per-player/island X bounds
-       or weighted candidate selection, so retain the first eligible local
-       producer in source-location order. */
-    for (location_index = 0; location_index < island->location_count;
-         ++location_index) {
-        if (local_refill_source_is_valid(session, island_index,
-                (uint16_t)location_index, player_id, resource_code)) {
-            return (int)location_index;
-        }
-    }
-    return -1;
-}
-
-static void floater_target_location(GameFloaterStart *floater,
-                                    const GameRuntimeLocation *location,
-                                    uint8_t state)
-{
-    floater->destination_x = location->x;
-    floater->destination_y = location->y;
-    floater->movement_state = state;
-    floater->stop_radius = 0;
-    floater->has_move_order = 1;
-}
-
-static void release_task_claim(GameSession *session, GameFloaterStart *floater)
-{
-    int16_t slot = floater->linked_task_slot;
-    if (slot >= 0 && slot < GAME_SESSION_MAX_PENDING_EVENTS) {
-        GamePendingEvent *event = &session->pending_events[(uint8_t)slot];
-        if (event->active != 0 && event->action_type == 4 &&
-            event->player_id == floater->owner_slot &&
-            event->payload_0a == floater->island_index &&
-            event->payload_0e == floater->order_target_location &&
-            event->payload_12 == floater->order_resource_code &&
-            event->assigned_floater_count > 0) {
-            --event->assigned_floater_count;
-        }
-    }
-    floater->linked_task_slot = -1;
-}
+#include "game_session_delivery_internal.h"
 
 void game_session_assign_local_resource_tasks(GameSession *session)
 {
@@ -275,3 +201,78 @@ void game_session_advance_local_resource_task(GameSession *session,
     floater->source_runtime_flags &= ~1U;
 }
 
+#include "game_session_delivery_internal.h"
+
+int local_refill_source_is_valid(const GameSession *session,
+                                       uint8_t island_index,
+                                       uint16_t location_index,
+                                       int16_t player_id,
+                                       int16_t resource_code)
+{
+    const GameRuntimeIsland *island;
+    int32_t producer_item;
+
+    if (island_index >= session->island_count || resource_code < 1 ||
+        resource_code > GAME_RESOURCE_TYPE_COUNT) return 0;
+    island = &session->islands[island_index];
+    if (location_index >= island->location_count) return 0;
+    producer_item = resource_code == 1 ? 0x25 :
+                    resource_code == 2 ? 0x27 : 0x26;
+    {
+        const GameRuntimeLocation *location = &island->locations[location_index];
+        return location->owner_id == player_id &&
+               location->record_value_10 == producer_item &&
+               (location->source_flags & 1U) != 0;
+    }
+}
+
+int local_refill_source(const GameSession *session, uint8_t island_index,
+                               int16_t player_id, int16_t resource_code)
+{
+    const GameRuntimeIsland *island;
+    unsigned int location_index;
+
+    if (island_index >= session->island_count ||
+        resource_code < 1 || resource_code > GAME_RESOURCE_TYPE_COUNT) return -1;
+    island = &session->islands[island_index];
+    /* FUN_00452ceb maps resource codes 1/2/3 to producer IDs 0x25/0x27/0x26.
+       The current model does not have the source's per-player/island X bounds
+       or weighted candidate selection, so retain the first eligible local
+       producer in source-location order. */
+    for (location_index = 0; location_index < island->location_count;
+         ++location_index) {
+        if (local_refill_source_is_valid(session, island_index,
+                (uint16_t)location_index, player_id, resource_code)) {
+            return (int)location_index;
+        }
+    }
+    return -1;
+}
+
+void floater_target_location(GameFloaterStart *floater,
+                                    const GameRuntimeLocation *location,
+                                    uint8_t state)
+{
+    floater->destination_x = location->x;
+    floater->destination_y = location->y;
+    floater->movement_state = state;
+    floater->stop_radius = 0;
+    floater->has_move_order = 1;
+}
+
+void release_task_claim(GameSession *session, GameFloaterStart *floater)
+{
+    int16_t slot = floater->linked_task_slot;
+    if (slot >= 0 && slot < GAME_SESSION_MAX_PENDING_EVENTS) {
+        GamePendingEvent *event = &session->pending_events[(uint8_t)slot];
+        if (event->active != 0 && event->action_type == 4 &&
+            event->player_id == floater->owner_slot &&
+            event->payload_0a == floater->island_index &&
+            event->payload_0e == floater->order_target_location &&
+            event->payload_12 == floater->order_resource_code &&
+            event->assigned_floater_count > 0) {
+            --event->assigned_floater_count;
+        }
+    }
+    floater->linked_task_slot = -1;
+}

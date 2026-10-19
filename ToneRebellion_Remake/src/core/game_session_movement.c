@@ -2,6 +2,7 @@
 #include "floater_motion.h"
 #include "game_session_delivery.h"
 #include "game_session_action9.h"
+#include "game_session_movement_internal.h"
 
 #include <string.h>
 
@@ -11,13 +12,13 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
 
     if (session == NULL) return;
     game_session_assign_local_resource_tasks(session);
+    game_session_tick_combat_effects(session, source_tick);
     for (i = 0; i < session->floater_count; ++i) {
         GameFloaterStart *floater = &session->floaters[i];
         FloaterPosition position;
         FloaterPosition destination;
         FloaterMotionSpeedContext speed_context;
         uint16_t effective_speed;
-        int arrived;
         int32_t dx;
         int32_t dy;
         int32_t distance;
@@ -73,80 +74,14 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
         }
 
         game_session_advance_action9(session, i);
+        game_session_tick_floater_combat(session, i);
         if (floater->active_order_action == 4 && !floater->has_move_order) {
             game_session_advance_local_resource_task(session, floater);
             if (!floater->has_move_order) continue;
         }
 
-        if (floater->has_move_order && floater->has_wander_order) {
-            /* A newly assigned route replaces the idle fallback action. */
-            floater->has_wander_order = 0;
-            floater->wander_timer = 0;
-            if (floater->movement_state == 0x0e) floater->movement_state = 0;
-        }
-        if (floater->has_wander_order && !floater->has_move_order) {
-            if (floater->movement_state != 0x0e) {
-                FloaterPosition wander_destination;
-                GameRuntimeIsland *island;
-                int32_t raw_min_x = 0;
-                int32_t raw_max_x = 0x9ff;
-
-                if (floater->island_index >= session->island_count ||
-                    floater->type_index >= GAME_FLOATER_CATEGORY_COUNT) {
-                    floater->has_wander_order = 0;
-                    continue;
-                }
-                island = &session->islands[floater->island_index];
-                /* FUN_00423068 skips the per-island/category table for
-                   category 4 and keeps its global 0..0x9ff bounds. */
-                if (floater->type_index != 4U) {
-                    raw_min_x = island->floater_min_x[floater->type_index];
-                    raw_max_x = island->floater_max_x[floater->type_index];
-                }
-                if (!floater_motion_wander_destination(
-                        &session->random_state, floater->x, floater->y,
-                        raw_min_x, raw_max_x, &wander_destination)) {
-                    /* The source cancels FA_Wander when destination resolution
-                       rejects the generated X coordinate. */
-                    floater->has_wander_order = 0;
-                    floater->movement_state = 0;
-                    floater->wander_timer = 0;
-                    continue;
-                }
-                floater->destination_x = (uint16_t)wander_destination.x;
-                floater->destination_y = (uint16_t)wander_destination.y;
-                if (wander_destination.x < floater->x) floater->facing_left = 1;
-                else floater->facing_left = 0;
-                floater->movement_state = 0x0e;
-                floater->wander_timer = 60;
-            }
-
-            position.x = floater->x;
-            position.y = floater->y;
-            destination.x = floater->destination_x;
-            destination.y = floater->destination_y;
-            speed_context.unit_speed = floater->movement_speed;
-            speed_context.state = 0x0e;
-            speed_context.subtype = floater->source_subtype;
-            speed_context.category_speed_modifier =
-                floater->category_speed_modifier;
-            speed_context.near_target_override = 0;
-            speed_context.site_speed_bonus = floater->site_speed_bonus;
-            effective_speed = floater_motion_effective_speed(&speed_context);
-            arrived = floater_motion_step(&position, destination, effective_speed,
-                                          source_tick);
-            floater->x = (uint16_t)position.x;
-            floater->y = (uint16_t)position.y;
-            if (arrived && floater->wander_timer > 0) {
-                --floater->wander_timer;
-                if (floater->wander_timer == 0) {
-                    /* Generic state completion clears runtime state; the
-                       retained wander order selects another point next tick. */
-                    floater->movement_state = 0;
-                }
-            }
+        if (game_session_tick_floater_wander(session, floater, source_tick))
             continue;
-        }
         if (!floater->has_move_order) {
             continue;
         }
@@ -232,6 +167,89 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick)
 
     }
 }
+
+#include "game_session_movement_internal.h"
+#include "floater_motion.h"
+
+int game_session_tick_floater_wander(GameSession *session,
+                                    GameFloaterStart *floater,
+                                    uint32_t source_tick)
+{
+    FloaterPosition position;
+    FloaterPosition destination;
+    FloaterMotionSpeedContext speed_context;
+    uint16_t effective_speed;
+    int arrived;
+
+    if (floater->has_move_order && floater->has_wander_order) {
+        /* A newly assigned route replaces the idle fallback action. */
+        floater->has_wander_order = 0;
+        floater->wander_timer = 0;
+        if (floater->movement_state == 0x0e) floater->movement_state = 0;
+    }
+    if (!floater->has_wander_order || floater->has_move_order) return 0;
+    if (floater->movement_state != 0x0e) {
+        FloaterPosition wander_destination;
+        GameRuntimeIsland *island;
+        int32_t raw_min_x = 0;
+        int32_t raw_max_x = 0x9ff;
+
+        if (floater->island_index >= session->island_count ||
+            floater->type_index >= GAME_FLOATER_CATEGORY_COUNT) {
+            floater->has_wander_order = 0;
+            return 1;
+        }
+        island = &session->islands[floater->island_index];
+        /* FUN_00423068 skips the per-island/category table for category 4
+           and keeps its global 0..0x9ff bounds. */
+        if (floater->type_index != 4U) {
+            raw_min_x = island->floater_min_x[floater->type_index];
+            raw_max_x = island->floater_max_x[floater->type_index];
+        }
+        if (!floater_motion_wander_destination(
+                &session->random_state, floater->x, floater->y,
+                raw_min_x, raw_max_x, &wander_destination)) {
+            /* The source cancels FA_Wander when destination resolution
+               rejects the generated X coordinate. */
+            floater->has_wander_order = 0;
+            floater->movement_state = 0;
+            floater->wander_timer = 0;
+            return 1;
+        }
+        floater->destination_x = (uint16_t)wander_destination.x;
+        floater->destination_y = (uint16_t)wander_destination.y;
+        if (wander_destination.x < floater->x) floater->facing_left = 1;
+        else floater->facing_left = 0;
+        floater->movement_state = 0x0e;
+        floater->wander_timer = 60;
+    }
+
+    position.x = floater->x;
+    position.y = floater->y;
+    destination.x = floater->destination_x;
+    destination.y = floater->destination_y;
+    speed_context.unit_speed = floater->movement_speed;
+    speed_context.state = 0x0e;
+    speed_context.subtype = floater->source_subtype;
+    speed_context.category_speed_modifier = floater->category_speed_modifier;
+    speed_context.near_target_override = 0;
+    speed_context.site_speed_bonus = floater->site_speed_bonus;
+    effective_speed = floater_motion_effective_speed(&speed_context);
+    arrived = floater_motion_step(&position, destination, effective_speed,
+                                  source_tick);
+    floater->x = (uint16_t)position.x;
+    floater->y = (uint16_t)position.y;
+    if (arrived && floater->wander_timer > 0) {
+        --floater->wander_timer;
+        if (floater->wander_timer == 0) {
+            /* The retained wander order selects another point next tick. */
+            floater->movement_state = 0;
+        }
+    }
+    return 1;
+}
+
+#include "game_session.h"
 
 int game_session_order_floater_to_coordinate(GameSession *session,
                                              uint8_t player_slot,
