@@ -292,6 +292,7 @@ static int load_menu_art(char *error, size_t error_capacity)
         const CobMember *button = cob_archive_find(&archive, "data\\button.wav");
         const CobMember *floater_build = cob_archive_find(&archive, "data\\fltbuild.wav");
         const CobMember *leviathan_build = cob_archive_find(&archive, "data\\levbuild.wav");
+        const CobMember *floater_birth = cob_archive_find(&archive, "data\\fltbirth.wav");
         const CobMember *bridge = cob_archive_find(&archive, "data\\bridge.wav");
         if (button != NULL && button->length >= 44) {
             g_button_sound = (unsigned char *)malloc(button->length);
@@ -318,6 +319,15 @@ static int load_menu_art(char *error, size_t error_capacity)
                                          leviathan_build->length, error, error_capacity)) {
                 free(g_levbuild_sound);
                 g_levbuild_sound = NULL;
+            }
+        }
+        if (floater_birth != NULL && floater_birth->length >= 44) {
+            g_fltbirth_sound = (unsigned char *)malloc(floater_birth->length);
+            if (g_fltbirth_sound == NULL ||
+                !cob_archive_read_member(&archive, floater_birth, g_fltbirth_sound,
+                                         floater_birth->length, error, error_capacity)) {
+                free(g_fltbirth_sound);
+                g_fltbirth_sound = NULL;
             }
         }
         if (bridge != NULL && bridge->length >= 44) {
@@ -371,6 +381,8 @@ done:
         g_fltbuild_sound = NULL;
         free(g_levbuild_sound);
         g_levbuild_sound = NULL;
+        free(g_fltbirth_sound);
+        g_fltbirth_sound = NULL;
         free(g_bridge_sound);
         g_bridge_sound = NULL;
     }
@@ -535,6 +547,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free(g_button_sound);
     free(g_fltbuild_sound);
     free(g_levbuild_sound);
+    free(g_fltbirth_sound);
     free(g_bridge_sound);
     free(g_island_height_data);
     return (int)message.wParam;

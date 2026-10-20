@@ -116,6 +116,8 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
     assert(session.config.selected_tribe == 3);
     assert(session.island_count == 5);
     assert(session.floater_count == 16);
+    assert(session.economy[0].source_maintenance_capacity == 30);
+    assert(session.economy[0].source_maintenance_budget == 26);
     assert(session.pending_event_count == 0);
     assert(session.pending_events[0].active == 0);
     assert(session.tone_placements.placement_count == 5);
@@ -478,6 +480,7 @@ int main(void)
     test_construction_assignment_matches_source_candidate_guards();
     test_construction_task_delivers_cost_before_deferred_placement();
     test_tone_maintenance_surplus_tracks_regions_and_workers();
+    test_recruitment_waits_for_surplus_then_creates_animated_worker();
     test_initialized_workers_build_from_queued_selection();
     test_construction_completes_on_native_empty_status_one_site();
     test_cancelled_construction_releases_assigned_floater();

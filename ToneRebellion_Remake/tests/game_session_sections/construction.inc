@@ -553,22 +553,85 @@ static void test_tone_maintenance_surplus_tracks_regions_and_workers(void)
     session.floaters[0].is_active = 1;
     session.floaters[0].type_index = 0;
 
-    /* Five accessible regions produce 2.5 capacity, rounded to even 2;
-       one worker and one active building consume it all. */
+    /* Each accessible Tone region provides 10 gross capacity; the worker and
+       active building consume two. */
     game_session_refresh_player_maintenance_budgets(&session);
-    assert(session.economy[0].source_maintenance_budget == 0);
+    assert(session.economy[0].source_maintenance_capacity == 50);
+    assert(session.economy[0].source_maintenance_budget == 48);
 
-    /* A sixth region raises the rounded capacity from two to three. */
+    /* A sixth region adds ten gross capacity. */
     session.islands[0].locations[5].renderer_class = 1;
     session.islands[0].locations[5].source_value_14 = 0;
     session.islands[0].locations[5].source_value_22 = 1U;
     game_session_refresh_player_maintenance_budgets(&session);
-    assert(session.economy[0].source_maintenance_budget == 1);
+    assert(session.economy[0].source_maintenance_capacity == 60);
+    assert(session.economy[0].source_maintenance_budget == 58);
 
     /* Losing that worker returns its upkeep to the available surplus. */
     session.floaters[0].is_active = 0;
     game_session_refresh_player_maintenance_budgets(&session);
-    assert(session.economy[0].source_maintenance_budget == 2);
+    assert(session.economy[0].source_maintenance_budget == 59);
+}
+
+static void test_recruitment_waits_for_surplus_then_creates_animated_worker(void)
+{
+    WorldDefinition world;
+    IslandData islands[5];
+    GameSessionConfig config = {0};
+    GameSession session;
+    PadCatalog catalog;
+    FloaterCatalog floater_catalog;
+    GameSessionAudioEvent audio_event;
+    unsigned int index;
+    unsigned int worker_count;
+    char error[160];
+
+    make_world(&world, islands);
+    make_pad_catalog(&catalog);
+    make_floater_catalog(&floater_catalog);
+    config.world_index = 1;
+    config.home_island_index = 0;
+    config.random_seed = 1;
+    assert(game_session_initialize(&world, islands, &catalog, &floater_catalog,
+                                   &config, &session, error, sizeof(error)));
+
+    /* Three accessible starting pools provide gross capacity 30. */
+    assert(session.economy[0].source_maintenance_capacity == 30);
+    assert(session.economy[0].source_maintenance_budget == 26);
+    for (index = 0; index < 300; ++index)
+        game_session_tick_floater_moves(&session, index + 1U, &catalog);
+    assert(session.floater_count == 16);
+    assert(session.economy[0].floater_birth_timer == 300U);
+    game_session_tick_floater_moves(&session, 301U, &catalog);
+    assert(session.floater_count == 20);
+
+    worker_count = 0;
+    for (index = 0; index < session.floater_count; ++index) {
+        const GameFloaterStart *floater = &session.floaters[index];
+        if (!floater->is_active || floater->source_subtype != 0) continue;
+        if (floater->owner_slot == 0) ++worker_count;
+        if (index >= 16) {
+            uint8_t owner = floater->owner_slot;
+            assert(owner < GAME_START_PLAYER_COUNT);
+            assert(floater->type_index ==
+                   session.player_starts.players[owner].floater_type_index);
+            assert(floater->current_hit_points ==
+                   session.worker_birth_stats[owner].hit_points);
+            assert(floater->source_runtime_flags == 0x801U);
+            assert(floater->has_wander_order);
+            assert(floater->island_index ==
+                   session.economy[owner].hall_island_index);
+            assert(session.economy[owner].source_maintenance_budget == 25);
+        }
+    }
+    assert(worker_count == 5);
+    for (index = 0; index < GAME_START_PLAYER_COUNT; ++index) {
+        assert(game_session_pop_audio_event(&session, &audio_event));
+        assert(audio_event.kind == GAME_SESSION_AUDIO_FLOATER_BIRTH);
+        assert(audio_event.owner_id >= 0 &&
+               audio_event.owner_id < GAME_START_PLAYER_COUNT);
+    }
+    assert(!game_session_pop_audio_event(&session, &audio_event));
 }
 
 static void test_initialized_workers_build_from_queued_selection(void)
@@ -625,7 +688,7 @@ static void test_initialized_workers_build_from_queued_selection(void)
     item->item_id = 37;
     item->size = 0;
     item->building_tone_cost = 35;
-    item->maintenance_tone_cost = 1;
+    item->maintenance_tone_cost = 27;
     item->hit_points = 17;
     assert(hall->resource_stock[GAME_RESOURCE_BUILD_TONE] >= 35);
     assert(game_session_queue_build_selection(&session, 0,
@@ -637,7 +700,7 @@ static void test_initialized_workers_build_from_queued_selection(void)
     assert(session.pending_events[slot].payload_0a == start->island_index);
     assert(session.pending_events[slot].payload_0e == (int16_t)location_index);
     assert(session.pending_events[slot].payload_12 == 37);
-    assert(session.economy[0].source_maintenance_budget == 0);
+    assert(session.economy[0].source_maintenance_budget == 26);
     assert(session.economy[0].source_maintenance_budget <
            item->maintenance_tone_cost);
     {
@@ -656,10 +719,9 @@ static void test_initialized_workers_build_from_queued_selection(void)
     }
     assert(session.pending_events[slot].assigned_floater_count == 0);
     assert(site->resource_stock[GAME_RESOURCE_BUILD_TONE] == 0);
-    /* The queue entry exists, but its upkeep check blocks dispatch. Once the
-       player has enough maintenance capacity, initialized workers should
-       pick it up and finish the complete pickup/delivery/place cycle. */
-    session.economy[0].source_maintenance_budget = 1;
+    /* The queue entry exists, but its upkeep check blocks dispatch. Lowering
+       its upkeep below the initial net budget makes it eligible. */
+    item->maintenance_tone_cost = 1;
 
     for (worker_index = 0; worker_index < start->floater_count; ++worker_index) {
         const GameFloaterStart *worker = &session.floaters[

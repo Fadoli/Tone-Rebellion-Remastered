@@ -124,6 +124,7 @@ static uint32_t g_random_state;
 static unsigned char *g_button_sound;
 static unsigned char *g_fltbuild_sound;
 static unsigned char *g_levbuild_sound;
+static unsigned char *g_fltbirth_sound;
 static unsigned char *g_bridge_sound;
 static char g_music_directory[MAX_PATH];
 static char g_current_tune[16];

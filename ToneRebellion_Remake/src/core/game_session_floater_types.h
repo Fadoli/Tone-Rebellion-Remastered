@@ -118,8 +118,14 @@ typedef struct GameSession {
     uint8_t island_count;
     GameStartSetup player_starts;
     GameStartToneDistribution tone_placements;
+    /* Baseline type-0 rows used by FUN_00462a87 when recruitment allocates a
+       new worker. Keep them separate from mutable live floater state. */
+    FloaterStats worker_birth_stats[GAME_START_PLAYER_COUNT];
+    uint8_t worker_birth_impact_frame_counts[GAME_START_PLAYER_COUNT][4];
     GameFloaterStart floaters[GAME_SESSION_MAX_FLOATERS];
-    uint8_t floater_count;
+    /* Native floater table reserves 256 records; count is a high-water mark
+       and needs 16 bits to represent a full table. */
+    uint16_t floater_count;
     /* FUN_0041760b's 32 slots are shared between modeled attack and cast
        effects; unmodeled visual instances still remain outside this count. */
     uint8_t active_attack_effect_count;

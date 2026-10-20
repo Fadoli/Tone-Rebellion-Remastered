@@ -247,9 +247,9 @@ void game_session_tick_site_effect_timers(GameSession *session)
 static void game_session_recalculate_player_maintenance_budgets(
     GameSession *session)
 {
-    /* FUN_0045e6d3 converts accessible class-1 region count to maintenance
-       capacity at 0.5 per region, then subtracts active maintenance and each
-       player's floater count. Its x87 __ftol conversion rounds ties to even. */
+    /* FUN_0045e6d3 passes each accessible class-1 count through an x87
+       conversion with factor 0.5, then multiplies by the native 20.0
+       constant: effective gross capacity is 10 per region. */
     int32_t capacities[GAME_START_PLAYER_COUNT] = {0};
     int32_t maintenance[GAME_START_PLAYER_COUNT] = {0};
     int32_t capacity_budget[GAME_START_PLAYER_COUNT] = {0};
@@ -271,11 +271,9 @@ static void game_session_recalculate_player_maintenance_budgets(
     }
 
     for (player_slot = 0; player_slot < GAME_START_PLAYER_COUNT; ++player_slot) {
-        int32_t half_capacity = capacities[player_slot] / 2;
-        /* Match default x87 round-to-nearest-even for .5 values. */
-        if ((capacities[player_slot] & 1) != 0 &&
-            (half_capacity & 1) != 0) ++half_capacity;
-        capacity_budget[player_slot] = half_capacity;
+        capacity_budget[player_slot] = capacities[player_slot] * 10;
+        session->economy[player_slot].source_maintenance_capacity =
+            capacity_budget[player_slot];
 
         uint32_t owned_flag = 0x800U << player_slot;
         for (island_index = 0; island_index < session->island_count;

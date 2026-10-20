@@ -53,6 +53,8 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                             ? g_levbuild_sound : g_fltbuild_sound;
                     } else if (audio_event.kind == GAME_SESSION_AUDIO_BRIDGE) {
                         sound = g_bridge_sound;
+                    } else if (audio_event.kind == GAME_SESSION_AUDIO_FLOATER_BIRTH) {
+                        sound = g_fltbirth_sound;
                     }
                     if (sound != NULL)
                         (void)PlaySoundA((LPCSTR)sound, NULL,

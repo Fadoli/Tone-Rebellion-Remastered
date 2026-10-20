@@ -743,6 +743,169 @@ static int game_session_floater_has_site_speed_bonus(
     }
 }
 
+static int game_session_find_birth_location(const GameSession *session,
+                                            uint8_t player_slot,
+                                            uint8_t island_index)
+{
+    const GameRuntimeIsland *island;
+    const GamePlayerEconomy *economy;
+    int best_location = -1;
+    uint32_t best_distance = UINT32_MAX;
+    unsigned int location_index;
+
+    if (island_index >= session->island_count) return -1;
+    island = &session->islands[island_index];
+    economy = &session->economy[player_slot];
+    for (location_index = 0; location_index < island->location_count;
+         ++location_index) {
+        const GameRuntimeLocation *location = &island->locations[location_index];
+        int32_t dx;
+        int32_t dy;
+        uint32_t distance_x;
+        uint32_t distance_y;
+        uint32_t distance;
+
+        /* FUN_0045e6d3 selects a visible class-1 marker nearest the Hall's
+           anchor. FUN_004532e2 rejects creation targets of other classes. */
+        if (location->renderer_class != 1 ||
+            (location->source_value_22 & (uint16_t)(1U << player_slot)) == 0)
+            continue;
+        dx = (int32_t)location->x - economy->hall_x;
+        dy = (int32_t)location->y - economy->hall_y;
+        distance_x = (uint32_t)(dx < 0 ? -dx : dx);
+        distance_y = (uint32_t)(dy < 0 ? -dy : dy);
+        /* FUN_004672a6 uses the same Chebyshev metric as start-site selection. */
+        distance = distance_x > distance_y ? distance_x : distance_y;
+        if (best_location < 0 || distance < best_distance) {
+            best_location = (int)location_index;
+            best_distance = distance;
+        }
+    }
+    return best_location;
+}
+
+static int game_session_create_recruited_worker(GameSession *session,
+                                                 uint8_t player_slot,
+                                                 uint8_t island_index,
+                                                 uint16_t location_index)
+{
+    const FloaterStats *stats;
+    GameFloaterStart *floater;
+    const GameRuntimeLocation *location;
+    unsigned int floater_index;
+    uint8_t type_index;
+
+    if (player_slot >= GAME_START_PLAYER_COUNT ||
+        island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count)
+        return 0;
+    type_index = session->player_starts.players[player_slot].floater_type_index;
+    stats = &session->worker_birth_stats[player_slot];
+    if (stats == NULL || stats->hit_points < 0 ||
+        stats->hit_points > (int16_t)UINT8_MAX ||
+        stats->attack_strength < 0 ||
+        stats->attack_strength > (int16_t)UINT8_MAX ||
+        stats->movement_speed < 0) return 0;
+
+    for (floater_index = 0; floater_index < GAME_SESSION_MAX_FLOATERS;
+         ++floater_index) {
+        if (floater_index >= session->floater_count ||
+            !game_session_floater_is_active(&session->floaters[floater_index]))
+            break;
+    }
+    if (floater_index == GAME_SESSION_MAX_FLOATERS) return 0;
+
+    location = &session->islands[island_index].locations[location_index];
+    floater = &session->floaters[floater_index];
+    memset(floater, 0, sizeof(*floater));
+    floater->is_active = 1;
+    floater->island_index = island_index;
+    floater->type_index = type_index;
+    floater->source_subtype = 0;
+    floater->owner_slot = player_slot;
+    floater->current_hit_points = (uint8_t)stats->hit_points;
+    floater->max_hit_points = (uint8_t)stats->hit_points;
+    floater->attack_strength = (uint8_t)stats->attack_strength;
+    floater->max_attack_points = stats->max_attack_points;
+    floater->attack_realm = stats->attack_realm;
+    if (stats->attack_realm >= 0 && stats->attack_realm < 4) {
+        memcpy(floater->attack_impact_frame_counts,
+               session->worker_birth_impact_frame_counts[player_slot],
+               sizeof(floater->attack_impact_frame_counts));
+    }
+    floater->attack_range = stats->attack_range;
+    floater->attack_period = stats->attack_period;
+    floater->source_link_0c = -1;
+    floater->charge_source_island = UINT8_MAX;
+    floater->charge_source_location = UINT16_MAX;
+    floater->linked_task_slot = -1;
+    floater->order_source_location = -1;
+    floater->order_target_location = -1;
+    floater->order_target_floater = -1;
+    floater->order_target_island = island_index;
+    floater->order_source_island = island_index;
+    floater->handoff_departure_location = -1;
+    floater->x = location->x;
+    floater->y = location->y;
+    floater->destination_x = location->x;
+    floater->destination_y = location->y;
+    floater->movement_speed = (uint16_t)stats->movement_speed;
+    floater->has_wander_order = 1;
+    /* FUN_004532e2 sets floater +0x1c bits 0x801 after allocation. The normal
+       island renderer then uses the same animated body and walking legs. */
+    floater->source_runtime_flags = 0x801U;
+    if (floater_index >= session->floater_count)
+        session->floater_count = (uint16_t)(floater_index + 1U);
+    game_session_refresh_player_maintenance_budgets(session);
+    (void)game_session_queue_audio_event(
+        session, GAME_SESSION_AUDIO_FLOATER_BIRTH, player_slot);
+    return 1;
+}
+
+static void game_session_tick_floater_recruitment(
+    GameSession *session)
+{
+    unsigned int player_slot;
+
+    for (player_slot = 0; player_slot < GAME_START_PLAYER_COUNT; ++player_slot) {
+        const GamePlayerEconomy *economy = &session->economy[player_slot];
+        uint8_t island_index = economy->hall_island_index;
+        unsigned int floater_index;
+        unsigned int owned_count = 0;
+        unsigned int worker_count = 0;
+        int birth_location;
+
+        if (economy->source_maintenance_capacity < 1 ||
+            island_index >= session->island_count) continue;
+        for (floater_index = 0; floater_index < session->floater_count;
+             ++floater_index) {
+            const GameFloaterStart *floater = &session->floaters[floater_index];
+            if (!game_session_floater_is_active(floater) ||
+                floater->owner_slot != player_slot) continue;
+            ++owned_count;
+            if (floater->source_subtype == 0) ++worker_count;
+        }
+        /* FUN_0045eaa7 gates on positive total count, then compares subtype-0
+           count with floor(gross capacity / 2), not half the current unit
+           count. A class-1 recruiter marker must also be available. */
+        if (owned_count == 0) continue;
+        birth_location = game_session_find_birth_location(
+            session, (uint8_t)player_slot, island_index);
+        if (birth_location < 0) continue;
+        if (economy->source_maintenance_budget > 4 &&
+            worker_count < (unsigned int)economy->source_maintenance_capacity / 2U &&
+            session->economy[player_slot].floater_birth_timer < UINT32_MAX) {
+            ++session->economy[player_slot].floater_birth_timer;
+        }
+        if (session->economy[player_slot].floater_birth_timer > 300U) {
+            (void)game_session_create_recruited_worker(
+                session, (uint8_t)player_slot, island_index,
+                (uint16_t)birth_location);
+            session->economy[player_slot].floater_birth_timer = 0;
+        }
+    }
+}
+
 void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
                                      const PadCatalog *catalog)
 {
@@ -754,6 +917,7 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
     game_session_tick_site_effect_timers(session);
     game_session_tick_combat_effects(session, source_tick);
     game_session_tick_cast_effects(session, source_tick, catalog);
+    game_session_tick_floater_recruitment(session);
     for (i = 0; i < session->floater_count; ++i) {
         GameFloaterStart *floater = &session->floaters[i];
         FloaterPosition position;

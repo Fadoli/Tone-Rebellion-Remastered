@@ -110,7 +110,8 @@ int game_session_recalculate_player_island_visibility(
 void game_session_recalculate_leviathan_island(GameSession *session,
                                                uint8_t island_index);
 void game_session_tick_leviathan_ai(GameSession *session);
-/* Queue/pop source event IDs 2 (build) and 3 (bridge) for the platform audio adapter. */
+/* Queue/pop source event IDs 2 (build), 3 (bridge), and the modeled floater
+   birth event for the platform audio adapter. */
 int game_session_queue_audio_event(GameSession *session, uint8_t kind,
                                    int16_t owner_id);
 int game_session_pop_audio_event(GameSession *session,

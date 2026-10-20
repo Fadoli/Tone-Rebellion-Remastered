@@ -14,7 +14,8 @@ int game_session_queue_audio_event(GameSession *session, uint8_t kind,
     if (session == NULL || session->audio_event_count >=
             GAME_SESSION_MAX_AUDIO_EVENTS ||
         (kind != GAME_SESSION_AUDIO_BUILD &&
-         kind != GAME_SESSION_AUDIO_BRIDGE)) return 0;
+         kind != GAME_SESSION_AUDIO_BRIDGE &&
+         kind != GAME_SESSION_AUDIO_FLOATER_BIRTH)) return 0;
     tail = ((unsigned int)session->audio_event_head +
             session->audio_event_count) % GAME_SESSION_MAX_AUDIO_EVENTS;
     event = &session->audio_events[tail];

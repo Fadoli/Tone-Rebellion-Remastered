@@ -173,6 +173,36 @@ int main(int argc, char **argv)
             return 1;
         }
         {
+            unsigned int player;
+            for (player = 0; player < GAME_START_PLAYER_COUNT; ++player) {
+                const GamePlayerEconomy *economy = &session.economy[player];
+                const GameRuntimeIsland *home =
+                    &session.islands[economy->hall_island_index];
+                unsigned int location_index;
+                unsigned int visible_markers = 0;
+                unsigned int all_markers = 0;
+                for (location_index = 0; location_index < home->location_count;
+                     ++location_index) {
+                    const GameRuntimeLocation *location =
+                        &home->locations[location_index];
+                    if (location->renderer_class != 1) continue;
+                    ++all_markers;
+                    if ((location->source_value_22 & (1U << player)) != 0)
+                        ++visible_markers;
+                }
+                (void)printf("world 0 player %u initial Tone surplus: %d (gross capacity %d)\n",
+                             player,
+                             economy->source_maintenance_budget,
+                             economy->source_maintenance_capacity);
+                (void)printf("  home island %u: %u/%u visible Tone markers\n",
+                             economy->hall_island_index, visible_markers,
+                             all_markers);
+                assert(visible_markers == 1);
+                assert(economy->source_maintenance_capacity == 10);
+                assert(economy->source_maintenance_budget == 6);
+            }
+        }
+        {
             unsigned int floater_index;
             for (floater_index = 0; floater_index < session.floater_count;
                  ++floater_index) {

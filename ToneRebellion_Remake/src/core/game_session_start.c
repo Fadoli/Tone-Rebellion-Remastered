@@ -88,6 +88,14 @@ int game_session_initialize_start_players(
                           "initial floater stats are missing or out of range");
                 return 0;
             }
+            if (unit == 0) {
+                session->worker_birth_stats[island_index] = *stats;
+                if (stats->attack_realm >= 0 && stats->attack_realm < 4) {
+                    memcpy(session->worker_birth_impact_frame_counts[island_index],
+                           floater_catalog->impact_frame_counts[stats->attack_realm],
+                           sizeof(session->worker_birth_impact_frame_counts[island_index]));
+                }
+            }
             floater = &session->floaters[floater_cursor++];
             floater->is_active = 1;
             floater->island_index = start->island_index;
@@ -134,7 +142,7 @@ int game_session_initialize_start_players(
             floater->movement_speed = (uint16_t)stats->movement_speed;
         }
     }
-    session->floater_count = (uint8_t)floater_cursor;
+    session->floater_count = (uint16_t)floater_cursor;
 
     return 1;
 }
