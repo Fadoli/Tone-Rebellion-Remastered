@@ -22,6 +22,22 @@ int island_panel_player_for_mode(int panel_mode, int active_player,
     return selected_hall_player;
 }
 
+int island_panel_location_info_visible(int panel_mode)
+{
+    return panel_mode == WINDOW_ISLAND_PANEL_GENERAL ||
+        panel_mode == WINDOW_ISLAND_PANEL_LOCATION;
+}
+
+int island_panel_location_control_visible(int panel_mode)
+{
+    return panel_mode == WINDOW_ISLAND_PANEL_GENERAL ||
+        panel_mode == WINDOW_ISLAND_PANEL_LOCATION ||
+        panel_mode == WINDOW_ISLAND_PANEL_INVENTORY ||
+        panel_mode == WINDOW_ISLAND_PANEL_GLYPHS ||
+        panel_mode == WINDOW_ISLAND_PANEL_DIPLOMACY ||
+        panel_mode == WINDOW_ISLAND_PANEL_TRADE;
+}
+
 int island_panel_repair_button_visible(int item_id, int owner_id,
                                        int current_player_id,
                                        int current_hit_points,
@@ -179,6 +195,16 @@ int island_panel_info_inventory_detail_index(int info_mode,
     if (info_mode != ISLAND_PANEL_INFO_INVENTORY_DETAIL ||
         hovered_item_id < 5 || hovered_item_id > 33) return -1;
     return hovered_item_id - 5;
+}
+
+int island_panel_info_ground_item_id(int32_t runtime_type,
+                                     int32_t renderer_class,
+                                     int32_t owner_id,
+                                     int32_t object_item_id)
+{
+    if (runtime_type != 1 || renderer_class != 0 || owner_id != -1 ||
+        object_item_id < 5 || object_item_id > 33) return -1;
+    return (int)object_item_id;
 }
 
 #include "island_panel_info.h"

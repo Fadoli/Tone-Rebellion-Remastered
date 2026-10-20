@@ -9,10 +9,22 @@ static void render_island_view(HDC dc)
     int saved_dc;
     uint16_t i;
     const GameRuntimeIsland *runtime_island = NULL;
+    const GameRuntimeLocation *selected_runtime_location = NULL;
+    int selected_ground_item = -1;
 
     if (g_game_session_valid && g_menu.selected_map_island >= 0 &&
         g_menu.selected_map_island < g_game_session.island_count) {
         runtime_island = &g_game_session.islands[g_menu.selected_map_island];
+        if (g_selected_location >= 0 &&
+            g_selected_location < runtime_island->location_count) {
+            selected_runtime_location =
+                &runtime_island->locations[g_selected_location];
+            selected_ground_item = island_panel_info_ground_item_id(
+                selected_runtime_location->record_value_10,
+                selected_runtime_location->renderer_class,
+                selected_runtime_location->owner_id,
+                selected_runtime_location->record_value_24);
+        }
         if (g_selected_floater >= 0 &&
             g_selected_floater < g_game_session.floater_count) {
             const GameFloaterStart *candidate =
@@ -267,6 +279,26 @@ static void render_island_view(HDC dc)
                                        hand_x, hand_y,
                                        0x00008000U);
                 }
+            } else if (floater->carried_resource_code >=
+                           GAME_INVENTORY_ITEM_FIRST_ID &&
+                       floater->carried_resource_code <
+                           GAME_INVENTORY_ITEM_FIRST_ID +
+                               GAME_INVENTORY_ITEM_COUNT &&
+                       (uint32_t)(floater->carried_resource_code -
+                           GAME_INVENTORY_ITEM_FIRST_ID) <
+                               g_inventory_item_art.frame_count &&
+                       body_art->frame_count != 0) {
+                const SpriteFrame *body_frame = &body_art->frames[0];
+                int hand_x = floater_x + body_frame->x_offset +
+                             (floater->facing_left ? -6 : 5);
+                int hand_y = floater_y + body_frame->y_offset - 1;
+                uint32_t item_frame = (uint32_t)(
+                    floater->carried_resource_code -
+                    GAME_INVENTORY_ITEM_FIRST_ID);
+                /* FUN_0042704b resolves PIT_Object cargo through the same
+                   5..33 item range. Show that item in the worker's hand. */
+                draw_sprite_scaled(dc, &g_inventory_item_art, item_frame,
+                                   hand_x, hand_y, 0x00008000U);
             }
         }
     }
@@ -323,7 +355,8 @@ static void render_island_view(HDC dc)
 
     /* The five Hall command controls are clickable THALL frames from the
        active island palette. Their descriptors also own the hover bounds. */
-    if (hall_player >= 0) {
+    if (hall_player >= 0 &&
+        island_panel_location_control_visible(g_island_panel_mode)) {
         static const char *const command_names[] = {
             "BC_GenInfo", "BC_Storage", "BC_Knowledge",
             "BC_Diplomacy", "BC_Trade"
@@ -361,7 +394,53 @@ static void render_island_view(HDC dc)
     }
 
     draw_iw_construct(dc);
-    if (selected_floater != NULL && selected_floater->type_index < 4) {
+    if (selected_ground_item >= 0 &&
+        island_panel_location_info_visible(g_island_panel_mode)) {
+        const WindowTemplate *info = window_catalog_find(
+            &g_window_catalog, "IWLocInfo", 3);
+        if (info != NULL && g_temp_hole_art.frame_count > 1) {
+            RECT pane = {info->pane.left, info->pane.top,
+                         info->pane.right + 1, info->pane.bottom + 1};
+            int saved_info_dc = SaveDC(dc);
+            unsigned int item_frame = (unsigned int)(selected_ground_item -
+                GAME_INVENTORY_ITEM_FIRST_ID);
+            int description_index = selected_ground_item -
+                GAME_INVENTORY_ITEM_FIRST_ID;
+            char item_description[40];
+            size_t description_length = 0;
+            (void)IntersectClipRect(dc, pane.left, pane.top,
+                                    pane.right, pane.bottom);
+            draw_sprite(dc, &g_temp_hole_art, 1,
+                        info->pane.left, info->pane.top);
+            draw_bitmap_label(dc, "OBJET AU SOL",
+                              info->pane.left + 5, info->pane.top + 5,
+                              RGB(230, 238, 255));
+            if (description_index >= 0 &&
+                description_index < GAME_INVENTORY_ITEM_COUNT) {
+                const char *description =
+                    g_inventory_item_info_text[description_index];
+                description_length = strcspn(description, "\r\n");
+                if (description_length >= sizeof(item_description))
+                    description_length = sizeof(item_description) - 1U;
+                if (description_length != 0) {
+                    memcpy(item_description, description, description_length);
+                    item_description[description_length] = '\0';
+                    draw_bitmap_label(dc, item_description,
+                                      info->pane.left + 5,
+                                      info->pane.top + 20,
+                                      RGB(185, 205, 220));
+                }
+            }
+            if (item_frame < g_inventory_item_art.frame_count) {
+                int icon_x = info->pane.right - 38;
+                int icon_y = info->pane.top + 29;
+                draw_sprite_scaled(dc, &g_inventory_item_art, item_frame,
+                                   icon_x, icon_y, 0x00008000U);
+            }
+            if (saved_info_dc != 0) RestoreDC(dc, saved_info_dc);
+        }
+    } else if (selected_floater != NULL && selected_floater->type_index < 4 &&
+        island_panel_location_info_visible(g_island_panel_mode)) {
         const WindowTemplate *info = window_catalog_find(
             &g_window_catalog, "IWLocInfo", 3);
         if (info != NULL && g_temp_hole_art.frame_count > 1) {
@@ -455,6 +534,24 @@ static void render_island_view(HDC dc)
                         draw_sprite_scaled(dc, carried_art[resource_index], 0,
                             hand_x, hand_y, 0x00008000U);
                     }
+                } else if (selected_floater->carried_resource_code >=
+                               GAME_INVENTORY_ITEM_FIRST_ID &&
+                           selected_floater->carried_resource_code <
+                               GAME_INVENTORY_ITEM_FIRST_ID +
+                                   GAME_INVENTORY_ITEM_COUNT &&
+                           (uint32_t)(selected_floater->carried_resource_code -
+                               GAME_INVENTORY_ITEM_FIRST_ID) <
+                                   g_inventory_item_art.frame_count &&
+                           body_art->frame_count != 0) {
+                    const SpriteFrame *body_frame = &body_art->frames[0];
+                    int hand_x = sprite_x + body_frame->x_offset +
+                                 (selected_floater->facing_left ? -6 : 5);
+                    int hand_y = sprite_y + body_frame->y_offset - 1;
+                    uint32_t item_frame = (uint32_t)(
+                        selected_floater->carried_resource_code -
+                        GAME_INVENTORY_ITEM_FIRST_ID);
+                    draw_sprite_scaled(dc, &g_inventory_item_art, item_frame,
+                                       hand_x, hand_y, 0x00008000U);
                 }
                 /* FUN_0044338b enables the info flags around this sprite.
                    FUN_0042003c maps the startup *work row's realm to frames
@@ -513,7 +610,8 @@ static void render_island_view(HDC dc)
             }
             if (saved_info_dc != 0) RestoreDC(dc, saved_info_dc);
         }
-    } else if (runtime_island != NULL && g_selected_location >= 0 &&
+    } else if (island_panel_location_info_visible(g_island_panel_mode) &&
+               runtime_island != NULL && g_selected_location >= 0 &&
                g_selected_location < runtime_island->location_count) {
         const GameRuntimeLocation *selected_location =
             &runtime_island->locations[g_selected_location];
@@ -567,7 +665,9 @@ static void render_island_view(HDC dc)
     }
     /* IWLocInfo's selected-building painter clears and redraws this pane, so
        render the Hall's economy view after it. */
-    draw_hall_stock_summary(dc, hall_player, runtime_island);
+    if (island_panel_location_info_visible(g_island_panel_mode)) {
+        draw_hall_stock_summary(dc, hall_player, runtime_island);
+    }
 
     /* FUN_00440567 redraws the six IWLocInfo roster slots after preparing
        them in FUN_0044034e. This prototype has only the initial class-0
@@ -575,7 +675,8 @@ static void render_island_view(HDC dc)
        context with a source-backed player list. */
     {
         int player = selected_hall_player();
-        if (player >= 0) {
+        if (player >= 0 &&
+            island_panel_location_info_visible(g_island_panel_mode)) {
             const WindowTemplate *info = window_catalog_find(
                 &g_window_catalog, "IWLocInfo", 3);
             int roster[ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT];
@@ -625,7 +726,8 @@ static void render_island_view(HDC dc)
     }
     /* IWLocInfo includes these controls in its pane. Draw them after the
        Hall stock summary, which repaints that pane's background. */
-    if (hall_player >= 0 && g_hall_stock_art.frame_count >= 5) {
+    if (hall_player >= 0 && g_hall_stock_art.frame_count >= 5 &&
+        island_panel_location_info_visible(g_island_panel_mode)) {
         static const char *const stock_control_names[GAME_RESOURCE_TYPE_COUNT] = {
             "BC_HallStkB", "BC_HallStkC", "BC_HallStkM"
         };
@@ -667,7 +769,8 @@ static void draw_location_action_panel(HDC dc)
 
     /* IWLocControl overlaps IWConstructInfo in windows.txt. Keep the selected
        construction item's pane visible while the modal build window is open. */
-    if (!iw_construct_location_control_pane_visible(g_iw_construct_open) ||
+    if (!island_panel_location_control_visible(g_island_panel_mode) ||
+        !iw_construct_location_control_pane_visible(g_iw_construct_open) ||
         !g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
         g_menu.selected_map_island < 0 ||
         g_menu.selected_map_island >= g_game_session.island_count ||

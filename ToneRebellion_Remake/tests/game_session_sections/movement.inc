@@ -45,7 +45,9 @@ static void test_floater_pickup_order_collects_ground_artifact(void)
     floater = &session.floaters[0];
     floater->island_index = 0;
     floater->owner_slot = 2;
-    floater->source_subtype = 1;
+    /* Initial workers are created with subtype 0 and must still be allowed
+       to pick up a ground artifact through the player order. */
+    floater->source_subtype = 0;
     floater->is_active = 1;
     floater->linked_task_slot = -1;
     floater->carried_resource_code = 5;
@@ -66,12 +68,16 @@ static void test_floater_pickup_order_collects_ground_artifact(void)
     for (slot = 0; slot < GAME_RESOURCE_TYPE_COUNT; ++slot)
         object->source_task_slot[slot] = -1;
 
+    assert(game_session_can_order_floater_to_ground_object(&session,
+        2, 0, 0, 0));
     assert(game_session_order_floater_to_ground_object(&session, 2, 0, 0, 0));
     assert(floater->movement_state == 13);
     assert(floater->active_order_action == 0x0d);
     game_session_tick_floater_moves(&session, 1, NULL);
     assert(floater->carried_resource_code == 6);
     assert(object->record_value_10 == 0 && object->record_value_24 == 0);
+    assert(!game_session_can_order_floater_to_ground_object(&session,
+        2, 0, 0, 0));
     assert(session.islands[0].locations[1].record_value_10 == 1);
     assert(session.islands[0].locations[1].record_value_24 == 5);
 }

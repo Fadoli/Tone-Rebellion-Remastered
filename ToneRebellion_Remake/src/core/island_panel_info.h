@@ -49,6 +49,11 @@ typedef enum IslandLocationActionControl {
 int island_panel_player_for_mode(int panel_mode, int active_player,
                                  int selected_hall_player);
 
+/* FUN_0042f303 shows these location windows only in the source panel states
+   that explicitly enable them. */
+int island_panel_location_info_visible(int panel_mode);
+int island_panel_location_control_visible(int panel_mode);
+
 /* The source repair route accepts owned item IDs 0x25..0x34 and checks
    current +0x34 against FUN_00450978's maximum before routing. */
 int island_panel_repair_button_visible(int item_id, int owner_id,
@@ -97,6 +102,11 @@ int island_panel_info_inventory_key(unsigned int item_id,
    Returns its text-array index, or -1 when no item is hovered. */
 int island_panel_info_inventory_detail_index(int info_mode,
                                              int hovered_item_id);
+/* PIT_Object stores its loose inventory item in +0x24. */
+int island_panel_info_ground_item_id(int32_t runtime_type,
+                                     int32_t renderer_class,
+                                     int32_t owner_id,
+                                     int32_t object_item_id);
 
 /* FUN_0042f150 loads CRYPTIC0..20; FUN_00439673 uses these in mode 5. */
 int island_panel_info_cryptic_key(unsigned int cryptic_id,

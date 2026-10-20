@@ -418,22 +418,6 @@ static void draw_hall_stock_summary(HDC dc, int hall_player,
     saved_dc = SaveDC(dc);
     (void)IntersectClipRect(dc, pane.left, pane.top, pane.right, pane.bottom);
     draw_sprite(dc, &g_temp_hole_art, 1, info->pane.left, info->pane.top);
-    {
-        const int32_t item_id = hall->record_value_10;
-        const int32_t name_index = item_id - 0x25;
-        char level_label[24];
-        if (name_index >= 0 && name_index < BUILDING_NAME_COUNT &&
-            g_building_names[name_index][0] != '\0') {
-            draw_bitmap_label(dc, g_building_names[name_index],
-                              info->pane.left + 5, info->pane.top + 3,
-                              RGB(230, 238, 255));
-        }
-        (void)snprintf(level_label, sizeof(level_label), "LEVEL %u",
-            (unsigned int)game_session_location_display_level(hall));
-        draw_bitmap_label(dc, level_label,
-                          info->pane.left + 5, info->pane.top + 18,
-                          RGB(230, 238, 255));
-    }
     for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
         IslandHallResourceRow row;
         char amount[8];
@@ -453,6 +437,7 @@ static void draw_hall_stock_summary(HDC dc, int hall_player,
     {
         char population[96];
         char work_summary[96];
+        char tone_surplus[96];
         unsigned int count;
         unsigned int total;
         unsigned int percentage;
@@ -474,6 +459,13 @@ static void draw_hall_stock_summary(HDC dc, int hall_player,
                                   RGB(230, 238, 255));
             }
         }
+        (void)snprintf(tone_surplus, sizeof(tone_surplus),
+            "%s %ld", g_hall_surplus_label,
+            (long)g_game_session.economy[hall_player].source_maintenance_budget);
+        draw_bitmap_label(dc, tone_surplus,
+                          info->pane.left + 5,
+                          info->pane.top + 4,
+                          RGB(230, 238, 255));
     }
     RestoreDC(dc, saved_dc);
 }

@@ -77,11 +77,13 @@ static void handle_click(HWND window, int x, int y)
             }
         }
     } else if (g_menu.screen == SCREEN_ISLAND) {
-        if (location_grab_button_at(x, y) && selected_location_can_be_grabbed()) {
+        if (location_grab_button_at(x, y) &&
+            (g_game_session.location_move_active ||
+             selected_location_can_be_grabbed())) {
             if (g_game_session.location_move_active) {
                 (void)game_session_cancel_location_move(&g_game_session,
                                                         &g_pad_catalog);
-            } else {
+            } else if (selected_location_can_be_grabbed()) {
                 (void)game_session_begin_location_move(&g_game_session,
                     &g_pad_catalog, (uint8_t)g_menu.selected_tribe,
                     (uint8_t)g_menu.selected_map_island,
@@ -351,7 +353,8 @@ static void handle_click(HWND window, int x, int y)
                 &g_window_catalog, 3, x, y, island_button_names,
                 sizeof(island_button_names) / sizeof(island_button_names[0]));
             int hall_player = selected_hall_player();
-            const WindowTemplate *hall_control = hall_player >= 0
+            const WindowTemplate *hall_control = hall_player >= 0 &&
+                island_panel_location_control_visible(g_island_panel_mode)
                 ? window_catalog_hit_test_names(&g_window_catalog, 3, x, y,
                     hall_command_names,
                     sizeof(hall_command_names) / sizeof(hall_command_names[0]))
@@ -370,8 +373,11 @@ static void handle_click(HWND window, int x, int y)
                     trade_controls, 2) : NULL;
             int button_index = island_control != NULL
                 ? island_button_index(island_control->name) : -1;
-            int stock_control = hall_player >= 0 ? hall_stock_control_at(x, y) : -1;
-            int clicked_roster_floater = hall_player >= 0
+            int stock_control = hall_player >= 0 &&
+                island_panel_location_control_visible(g_island_panel_mode)
+                ? hall_stock_control_at(x, y) : -1;
+            int clicked_roster_floater = hall_player >= 0 &&
+                island_panel_location_info_visible(g_island_panel_mode)
                 ? selected_hall_roster_hit_test(x, y) : -1;
             int hall_panel_mode = hall_control != NULL
                 ? window_catalog_hall_panel_mode(hall_control->name)
@@ -428,6 +434,12 @@ static void handle_click(HWND window, int x, int y)
                             (uint8_t)g_menu.selected_map_island);
                     }
                 }
+            } else if (g_island_panel_mode == WINDOW_ISLAND_PANEL_TASKS ||
+                       g_island_panel_mode == WINDOW_ISLAND_PANEL_EFFECT_DEBUG) {
+                /* FUN_0042f303 hides IWLocInfo/IWLocControl in these states;
+                   consume clicks outside the visible task/effect panels. */
+                InvalidateRect(window, NULL, FALSE);
+                return;
             } else if (hall_panel_mode != WINDOW_ISLAND_PANEL_NONE) {
                 g_iw_construct_open = 0;
                 g_island_panel_mode = hall_panel_mode;
@@ -485,8 +497,29 @@ static void handle_click(HWND window, int x, int y)
                     InvalidateRect(window, NULL, FALSE);
                 } else {
                     int clicked_location = island_location_at(x, y);
-                    g_selected_floater = -1;
-                    if (clicked_location >= 0) {
+                    int clicked_ground_item = 0;
+                    if (clicked_location >= 0 && g_selected_glyph < 0 &&
+                        g_selected_inventory_item < GAME_INVENTORY_ITEM_FIRST_ID) {
+                        const GameRuntimeLocation *location =
+                            &g_game_session.islands[g_menu.selected_map_island]
+                                .locations[clicked_location];
+                        int32_t item_id = location->record_value_10 == 1
+                            ? location->record_value_24 : 0;
+                        clicked_ground_item = location->renderer_class == 0 &&
+                            location->owner_id == -1 &&
+                            item_id >= GAME_INVENTORY_ITEM_FIRST_ID &&
+                            item_id < GAME_INVENTORY_ITEM_FIRST_ID +
+                                GAME_INVENTORY_ITEM_COUNT;
+                    }
+                    if (clicked_ground_item) {
+                        /* Keep the map target selected and the worker active;
+                           a right-click on this object issues the pickup order. */
+                        g_selected_location = clicked_location;
+                        g_hovered_location = -1;
+                    } else {
+                        g_selected_floater = -1;
+                    }
+                    if (clicked_location >= 0 && !clicked_ground_item) {
                         if (g_selected_glyph >= 0 &&
                             g_selected_glyph < GAME_GLYPH_COUNT &&
                             g_game_session_valid &&
@@ -528,7 +561,7 @@ static void handle_click(HWND window, int x, int y)
                             (void)open_iw_construct(clicked_location);
                         }
                         InvalidateRect(window, NULL, FALSE);
-                    } else {
+                    } else if (clicked_location < 0) {
                         g_selected_location = -1;
                         InvalidateRect(window, NULL, FALSE);
                     }

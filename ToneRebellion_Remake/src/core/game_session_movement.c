@@ -1417,14 +1417,12 @@ int game_session_order_floater_to_charge_site(GameSession *session,
     return 1;
 }
 
-int game_session_order_floater_to_ground_object(GameSession *session,
-                                                uint8_t player_slot,
-                                                uint8_t island_index,
-                                                unsigned int floater_index,
-                                                uint16_t location_index)
+int game_session_can_order_floater_to_ground_object(
+    const GameSession *session, uint8_t player_slot, uint8_t island_index,
+    unsigned int floater_index, uint16_t location_index)
 {
-    GameFloaterStart *floater;
     const GameRuntimeIsland *island;
+    const GameFloaterStart *floater;
     const GameRuntimeLocation *target;
     int32_t item_id;
 
@@ -1439,13 +1437,29 @@ int game_session_order_floater_to_ground_object(GameSession *session,
     item_id = target->record_value_10 == 1 ? target->record_value_24 : 0;
     if (!game_session_floater_is_active(floater) ||
         (floater->source_runtime_flags & 0x008U) != 0 ||
-        floater->owner_slot != player_slot || floater->source_subtype == 0 ||
+        floater->owner_slot != player_slot ||
         floater->island_index != island_index ||
         floater->linked_task_slot != -1 ||
         (floater->active_order_action != 0 &&
          floater->active_order_action != 0x0d) ||
         target->renderer_class != 0 || target->owner_id != -1 ||
         item_id < 5 || item_id > 33) return 0;
+    return 1;
+}
+
+int game_session_order_floater_to_ground_object(GameSession *session,
+                                                uint8_t player_slot,
+                                                uint8_t island_index,
+                                                unsigned int floater_index,
+                                                uint16_t location_index)
+{
+    GameFloaterStart *floater;
+    const GameRuntimeLocation *target;
+
+    if (!game_session_can_order_floater_to_ground_object(session, player_slot,
+            island_index, floater_index, location_index)) return 0;
+    floater = &session->floaters[floater_index];
+    target = &session->islands[island_index].locations[location_index];
 
     /* The consumer's arrival path reads the target from +0x32 and expects
        state 13. Action 0x0d is also the task class released by cancellation. */

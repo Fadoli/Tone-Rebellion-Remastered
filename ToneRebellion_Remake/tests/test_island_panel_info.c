@@ -49,6 +49,19 @@ int main(int argc, char **argv)
     assert(island_panel_player_for_mode(WINDOW_ISLAND_PANEL_TASKS, 4, -1) == -1);
     assert(island_panel_player_for_mode(WINDOW_ISLAND_PANEL_GLYPHS, 2, -1) == -1);
     assert(island_panel_player_for_mode(WINDOW_ISLAND_PANEL_GLYPHS, 2, 2) == 2);
+    assert(island_panel_location_info_visible(WINDOW_ISLAND_PANEL_GENERAL));
+    assert(island_panel_location_info_visible(WINDOW_ISLAND_PANEL_LOCATION));
+    assert(!island_panel_location_info_visible(WINDOW_ISLAND_PANEL_TASKS));
+    assert(!island_panel_location_info_visible(WINDOW_ISLAND_PANEL_INVENTORY));
+    assert(island_panel_location_control_visible(WINDOW_ISLAND_PANEL_GENERAL));
+    assert(island_panel_location_control_visible(WINDOW_ISLAND_PANEL_LOCATION));
+    assert(island_panel_location_control_visible(WINDOW_ISLAND_PANEL_INVENTORY));
+    assert(island_panel_location_control_visible(WINDOW_ISLAND_PANEL_GLYPHS));
+    assert(island_panel_location_control_visible(WINDOW_ISLAND_PANEL_DIPLOMACY));
+    assert(island_panel_location_control_visible(WINDOW_ISLAND_PANEL_TRADE));
+    assert(!island_panel_location_control_visible(WINDOW_ISLAND_PANEL_TASKS));
+    assert(!island_panel_location_control_visible(WINDOW_ISLAND_PANEL_EFFECT_DEBUG));
+    assert(!island_panel_location_control_visible(WINDOW_ISLAND_PANEL_CONSTRUCTION));
     assert(island_panel_repair_button_visible(0x25, 0, 0, 9, 10));
     assert(island_panel_repair_button_visible(0x35, 1, 1, 9, 10));
     assert(!island_panel_repair_button_visible(0x25, 0, 0, 10, 10));
@@ -340,6 +353,13 @@ int main(int argc, char **argv)
                ISLAND_PANEL_INFO_INVENTORY_DEFAULT, 12) == -1);
     assert(island_panel_info_inventory_detail_index(
                ISLAND_PANEL_INFO_INVENTORY_DETAIL, 34) == -1);
+    assert(island_panel_info_ground_item_id(1, 0, -1, 5) == 5);
+    assert(island_panel_info_ground_item_id(1, 0, -1, 33) == 33);
+    assert(island_panel_info_ground_item_id(1, 0, -1, 4) == -1);
+    assert(island_panel_info_ground_item_id(1, 0, -1, 34) == -1);
+    assert(island_panel_info_ground_item_id(1, 2, -1, 5) == -1);
+    assert(island_panel_info_ground_item_id(1, 0, 0, 5) == -1);
+    assert(island_panel_info_ground_item_id(2, 0, -1, 5) == -1);
     assert(island_panel_info_extract_entry(plot04, sizeof(plot04) - 1,
                                            "PLOT04", description,
                                            sizeof(description)));

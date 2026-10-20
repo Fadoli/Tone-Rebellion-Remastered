@@ -40,7 +40,7 @@ static void test_hover_click_and_pages(void)
     iw_construct_mouse_move(&state, &pane, 193, 394, items, 7, &event);
     assert(!event.changed && event.message_count == 0);
 
-    iw_construct_mouse_move(&state, &pane, 381, 394, items, 7, &event);
+    iw_construct_mouse_move(&state, &pane, 384, 394, items, 7, &event);
     assert(event.changed && state.hovered_column == 3 && state.hovered_item_id == 40);
     iw_construct_mouse_click(&state, 0, &event);
     assert(event.message_count == 2);
@@ -71,7 +71,7 @@ static void test_bounds_and_info_messages(void)
     assert(!state.cycle_button_visible);
     iw_construct_mouse_move(&state, &pane, 192, 393, items, 4, &event);
     assert(state.hovered_item_id == -1 && event.message_count == 0);
-    iw_construct_mouse_move(&state, &pane, 447, 394, items, 4, &event);
+    iw_construct_mouse_move(&state, &pane, 448, 394, items, 4, &event);
     assert(state.hovered_item_id == -1 && event.message_count == 0);
 
     iw_construct_info_init(&info);
