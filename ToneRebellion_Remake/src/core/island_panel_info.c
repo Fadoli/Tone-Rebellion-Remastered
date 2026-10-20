@@ -223,9 +223,9 @@ int island_panel_info_building_sprite_position(const WindowTemplate *panel,
     width = panel->pane.right - panel->pane.left;
     height = panel->pane.bottom - panel->pane.top;
     if (width <= 0 || height <= 0) return 0;
-    /* FUN_0044338b passes (pane width - 0x32, pane height / 2 + 5)
-       to FUN_0042704b; that renderer's coordinates are pane-local. */
-    *x = panel->pane.left + width - 0x32;
+    /* Center the selected building within IWLocInfo. The previous right-side
+       anchor pushed larger Hall sprites into the population/worker area. */
+    *x = panel->pane.left + width / 2;
     *y = panel->pane.top + height / 2 + 5;
     return 1;
 }

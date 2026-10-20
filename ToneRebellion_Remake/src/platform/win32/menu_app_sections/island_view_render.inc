@@ -591,13 +591,9 @@ static void render_island_view(HDC dc)
             &runtime_island->locations[g_selected_location];
         int32_t raw_item_id = selected_location->record_value_10;
         if (raw_item_id >= 0x25 && raw_item_id < g_pad_catalog.item_count) {
-            char level_label[24];
-            size_t name_index = (size_t)(raw_item_id - 0x25);
             const WindowTemplate *info = window_catalog_find(
                 &g_window_catalog, "IWLocInfo", 3);
-            if (name_index < BUILDING_NAME_COUNT &&
-                g_building_names[name_index][0] != '\0' && info != NULL &&
-                g_temp_hole_art.frame_count > 1) {
+            if (info != NULL && g_temp_hole_art.frame_count > 1) {
                 RECT pane = {info->pane.left, info->pane.top,
                              info->pane.right + 1, info->pane.bottom + 1};
                 int saved_info_dc = SaveDC(dc);
@@ -605,20 +601,6 @@ static void render_island_view(HDC dc)
                                         pane.right, pane.bottom);
                 draw_sprite(dc, &g_temp_hole_art, 1,
                             info->pane.left, info->pane.top);
-                /* Runtime item IDs already include the owner's 16-item block;
-                   subtracting PIT_BuildToneProducer (0x25) gives BLDNAME's
-                   player-specific index. */
-                draw_bitmap_label(dc, g_building_names[name_index],
-                                  info->pane.left + 5, info->pane.top + 3,
-                                  RGB(230, 238, 255));
-                /* FUN_0044338b displays FUN_0041ff2e()+1 for LEVEL;
-                   FUN_0041ff2e reads the selected runtime word at +0x0a,
-                   masked to its low nibble. */
-                (void)snprintf(level_label, sizeof(level_label), "LEVEL %u",
-                    (unsigned int)game_session_location_display_level(selected_location));
-                draw_bitmap_label(dc, level_label,
-                                  info->pane.left + 5, info->pane.top + 18,
-                                  RGB(230, 238, 255));
                 /* The source paints the selected building in IWLocInfo via
                    FUN_0042704b. Reuse the same data-driven BASE/CHUG/etc.
                    layers already used by the island renderer. */
@@ -643,10 +625,9 @@ static void render_island_view(HDC dc)
         draw_hall_stock_summary(dc, hall_player, runtime_island);
     }
 
-    /* FUN_00440567 redraws the six IWLocInfo roster slots after preparing
-       them in FUN_0044034e. This prototype has only the initial class-0
-       workers, and the selected starting Hall is the only modeled roster
-       context with a source-backed player list. */
+    /* Show one representative worker beside the Hall's population summary.
+       The Hall is not a roster container, so don't paint every player worker
+       as if they were attached to this building. */
     {
         int player = selected_hall_player();
         if (player >= 0 &&

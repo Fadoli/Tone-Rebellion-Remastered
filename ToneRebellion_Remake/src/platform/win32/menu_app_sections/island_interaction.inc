@@ -364,9 +364,9 @@ static int selected_hall_player(void)
     return (int)player;
 }
 
-/* The source roster query FUN_0045d7e8 selects entries from the player's
-   list by level. The current session models only the four initial level-0
-   workers, so their owner-list order is the only roster subset we can render. */
+/* The Hall's population indicator uses one representative worker icon. Keep
+   it linked to a real active player worker, without treating the whole
+   owner list as Hall members. */
 static uint8_t collect_initial_worker_roster(unsigned int player,
                                              int indices[ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT])
 {
@@ -381,6 +381,7 @@ static uint8_t collect_initial_worker_roster(unsigned int player,
         if (!game_session_floater_is_active(floater) ||
             floater->owner_slot != player || floater->type_index >= 4) continue;
         indices[count++] = (int)i;
+        break;
     }
     return count;
 }

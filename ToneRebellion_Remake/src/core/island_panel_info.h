@@ -117,8 +117,8 @@ int island_panel_info_cryptic_key(unsigned int cryptic_id,
 IslandLocationActionControl island_panel_location_action_control(
     int32_t item_id, int32_t owner_id, int32_t current_player_id);
 
-/* FUN_0044338b places the selected location sprite inside IWLocInfo using
-   the pane width/height-relative anchor recovered from its draw call. */
+/* Places the selected location sprite at the center of IWLocInfo, away from
+   the Hall's population summary and worker icon. */
 int island_panel_info_building_sprite_position(const WindowTemplate *panel,
                                                int *x, int *y);
 
