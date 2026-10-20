@@ -1,4 +1,5 @@
 #include "game_session.h"
+#include "game_session_delivery.h"
 #include "iw_construct.h"
 #include "building_render.h"
 #include "island_render_rules.h"
@@ -448,6 +449,8 @@ int main(void)
     test_task_projection_matches_source_filter_and_cap();
     test_task_command_dispatch_guards_and_effects();
     test_inventory_action_reserves_source_payload_without_mutation();
+    test_repair_task_repeats_supply_and_heals_after_40_ticks();
+    test_code_five_delivery_starts_bridge_cons_for_its_owner();
     test_source_event3_subtype0_queues_and_toggles_only_player_bit();
     test_glyph_map_click_queues_packet_without_world_effect();
     test_glyph_ownership_mask_is_player_local_and_idempotent();

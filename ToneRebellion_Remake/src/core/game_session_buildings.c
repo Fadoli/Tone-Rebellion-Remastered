@@ -211,8 +211,8 @@ int game_session_place_building(GameSession *session,
         set_error(error, error_capacity, "building has no usable source field +0x34");
         return 0;
     }
-    /* FUN_004528ca stores its owner argument at site +0x14. The existing
-       +0x22 visibility byte survives this initialization in the source. */
+    /* FUN_004528ca stores its owner argument at site +0x14. It clears +0x22
+       only for owner 4 on class 0; the final value is recomputed below. */
     runtime->source_value_14 = player_slot;
     runtime->source_value_32 = 1;
     runtime->source_value_34 = source_value_34_maximum;

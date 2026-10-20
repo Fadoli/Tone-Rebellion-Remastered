@@ -84,6 +84,7 @@ static void test_building_placement_matches_source_runtime_initialization(void)
     assert(runtime->record_value_10 == 76);
     assert(runtime->owner_id == 2);
     assert(runtime->source_value_14 == 2);
+    assert(runtime->source_value_32 == 1);
     assert(runtime->source_location_slot_18 == 0);
     assert(runtime->source_category_slot_60 == 0);
     assert(runtime->source_value_34 == 17);

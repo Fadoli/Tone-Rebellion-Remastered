@@ -72,3 +72,10 @@ by `FUN_00423068`. Evidence:
 `ev_96f90fdc7951d5fe26fcf0b495de08970ec0e6984d64572c67ff099abac40957`,
 `ev_6c3ec9c58f2e2ec6ef837d8737ba3dfece6d35c11a918338523e688a6746c25a`,
 and `ev_810f7530a91d83a454c4d310d2142cafe948434cde2b0707fd5847693435b64f`.
+
+The remake now retains a selected destination until exact arrival, then counts
+down the source's 60-tick state timer before resolving another point. This
+replaces an earlier port that rerolled the destination every tick and stopped
+within a 10-unit radius. The check is covered by
+`test_idle_floater_keeps_wander_target_until_exact_arrival`. Focused REA
+analysis of the destination routine: `ev_2741d19bec9d606cfb11ffb2a7773125ac114d8322c160722e048c6f279d66fb`.

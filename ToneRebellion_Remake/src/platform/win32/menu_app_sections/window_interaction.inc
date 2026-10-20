@@ -250,8 +250,8 @@ static void handle_click(HWND window, int x, int y)
                         onoff_names, sizeof(onoff_names) / sizeof(onoff_names[0]))
                     : NULL;
             if (onoff_control != NULL) {
-                /* Message 101/index 0 reaches type-1/subtype-0. Preserve the
-                   request, but leave its unknown flow guard/effect untouched. */
+                /* Message 101/index 0 reaches type-1/subtype-0; the island
+                   tick applies the observed bit-0x400 toggle and budget gate. */
                 (void)game_session_queue_onoff_action(&g_game_session,
                     (uint8_t)g_menu.selected_tribe,
                     (uint8_t)g_menu.selected_map_island,

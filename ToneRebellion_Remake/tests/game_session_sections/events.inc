@@ -62,22 +62,22 @@ static void test_task_projection_matches_source_filter_and_cap(void)
     assert(game_session_pending_event_add(&session, 2, 0, 0xb, 0, 1, 5) == 1);
     assert(game_session_pending_event_add(&session, 3, 0, 4, 0, 1, 5) == 2);
     assert(game_session_pending_event_add(&session, 2, 0, 13, 0, 1, 5) == 3);
-    for (index = 0; index < 36; ++index) {
+    for (index = 0; index < 60; ++index) {
         assert(game_session_pending_event_add(&session, 2, (int16_t)index,
             4, 0, 1, (int16_t)index) == index + 4);
     }
 
     assert(game_session_collect_task_slots(&session, 2, slots,
-           GAME_SESSION_MAX_TASKS) == GAME_SESSION_MAX_TASKS);
+           GAME_SESSION_MAX_TASKS) == 62);
     assert(slots[0] == 0 && slots[1] == 3);
-    for (index = 0; index < 30; ++index)
+    for (index = 0; index < 60; ++index)
         assert(slots[index + 2] == index + 4);
     assert(game_session_collect_task_slots(&session, 2, short_output, 3) ==
-           GAME_SESSION_MAX_TASKS);
+           62);
     assert(short_output[0] == 0 && short_output[1] == 3 &&
            short_output[2] == 4 && short_output[3] == 0xff);
     assert(game_session_collect_task_slots(&session, 2, NULL, 0) ==
-           GAME_SESSION_MAX_TASKS);
+           62);
     assert(game_session_collect_task_slots(&session, 3, slots,
            GAME_SESSION_MAX_TASKS) == 1);
     assert(slots[0] == 2);
@@ -240,6 +240,212 @@ static void test_inventory_action_reserves_source_payload_without_mutation(void)
     assert(session.pending_event_count == 2);
 }
 
+static void test_repair_task_repeats_supply_and_heals_after_40_ticks(void)
+{
+    GameSession session = {0};
+    PadCatalog catalog = {0};
+    GameRuntimeLocation *target;
+    GameRuntimeLocation *hall;
+    GameFloaterStart *floater;
+    unsigned int tick;
+    unsigned int movement_tick;
+    int slot;
+
+    session.island_count = 1;
+    session.floater_count = 1;
+    session.islands[0].location_count = 2;
+    hall = &session.islands[0].locations[0];
+    hall->renderer_class = 0;
+    hall->record_value_10 = 0x2a;
+    hall->owner_id = 0;
+    hall->resource_stock[GAME_RESOURCE_BUILD_TONE] = 1;
+    hall->x = 80;
+    hall->y = 120;
+    target = &session.islands[0].locations[1];
+    target->renderer_class = 0;
+    target->record_value_10 = 0x25;
+    target->owner_id = 0;
+    target->source_value_34 = 1;
+    target->source_capacity_4a = 0;
+    target->x = 100;
+    target->y = 120;
+    target->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 2;
+
+    catalog.item_count = 0x26;
+    catalog.items[0x25].item_id = 0x25;
+    catalog.items[0x25].hit_points = 3;
+
+    floater = &session.floaters[0];
+    floater->is_active = 1;
+    floater->owner_slot = 0;
+    floater->island_index = 0;
+    floater->type_index = 0;
+    floater->source_link_0c = -1;
+    floater->linked_task_slot = -1;
+    floater->carried_resource_code = 1;
+    floater->movement_speed = 3;
+    floater->x = target->x;
+    floater->y = target->y;
+
+    slot = game_session_pending_event_add(&session, 0, 0, 0x12, 0, 1, 0);
+    assert(slot == 0);
+    game_session_assign_local_resource_tasks(&session, &catalog);
+    assert(floater->active_order_action == 0x12);
+    assert(floater->linked_task_slot == slot);
+    assert(floater->movement_state == 4);
+    assert(session.pending_events[slot].assigned_floater_count == 1);
+
+    game_session_tick_floater_moves(&session, 1, &catalog);
+    assert(target->resource_stock[GAME_RESOURCE_BUILD_TONE] == 1);
+    assert(floater->carried_resource_code == GAME_RESOURCE_NONE);
+    assert(floater->movement_state == 0x12);
+
+    for (tick = 2; tick < 41; ++tick) {
+        game_session_tick_floater_moves(&session, tick, &catalog);
+        assert(target->source_value_34 == 1);
+        assert(session.pending_events[slot].active == 1);
+    }
+    game_session_tick_floater_moves(&session, tick, &catalog);
+
+    assert(target->source_value_34 == 2);
+    assert(target->resource_stock[GAME_RESOURCE_BUILD_TONE] == 0);
+    assert(target->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] == 1);
+    assert(session.pending_events[slot].active == 1);
+    assert(floater->active_order_action == 0x12);
+    assert(floater->linked_task_slot == slot);
+    assert(floater->movement_state == 3);
+
+    /* A partial repair keeps the same task and fetches another Build Tone. */
+    for (movement_tick = tick + 1; movement_tick < tick + 100;
+         ++movement_tick) {
+        game_session_tick_floater_moves(&session, movement_tick, &catalog);
+        if (floater->carried_resource_code == 1 &&
+            floater->movement_state == 4) break;
+    }
+    assert(hall->resource_stock[GAME_RESOURCE_BUILD_TONE] == 0);
+    assert(floater->carried_resource_code == 1);
+    assert(floater->movement_state == 4);
+
+    for (++movement_tick; movement_tick < tick + 200; ++movement_tick) {
+        game_session_tick_floater_moves(&session, movement_tick, &catalog);
+        if (floater->movement_state == 0x12 &&
+            floater->carried_resource_code == GAME_RESOURCE_NONE) break;
+    }
+    assert(target->resource_stock[GAME_RESOURCE_BUILD_TONE] == 1);
+    assert(floater->carried_resource_code == GAME_RESOURCE_NONE);
+    assert(floater->movement_state == 0x12);
+    for (tick = 0; tick < 39; ++tick) {
+        game_session_tick_floater_moves(&session, movement_tick + tick,
+                                        &catalog);
+        assert(target->source_value_34 == 2);
+        assert(session.pending_events[slot].active == 1);
+    }
+    game_session_tick_floater_moves(&session, movement_tick + tick, &catalog);
+
+    assert(target->source_value_34 == 3);
+    assert(target->resource_stock[GAME_RESOURCE_BUILD_TONE] == 0);
+    assert(target->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] == 0);
+    assert(session.pending_events[slot].active == 0);
+    assert(session.pending_event_count == 0);
+    assert(floater->active_order_action == 0);
+    assert(floater->linked_task_slot == -1);
+}
+
+static void test_code_five_delivery_starts_bridge_cons_for_its_owner(void)
+{
+    GameSession session = {0};
+    GameRuntimeLocation *bridge;
+    GameFloaterStart *floater;
+    BuildingRenderCatalog catalog = {0};
+    int slot;
+
+    session.island_count = 2;
+    session.floater_count = 1;
+    session.islands[0].location_count = 2;
+    session.islands[1].location_count = 1;
+    session.world_bridge_count = 1;
+    session.world_bridges[0].island_a = 0;
+    session.world_bridges[0].island_b = 1;
+    session.economy[1].hall_island_index = 0;
+    session.economy[1].hall_location_index = 1;
+    session.economy[1].inventory_count[0] = 1;
+    session.islands[0].floater_max_x[1] = 0x9ff;
+    bridge = &session.islands[0].locations[0];
+    bridge->renderer_class = 2;
+    bridge->record_value_10 = 2;
+    bridge->owner_id = -1;
+    bridge->bridge_neighbor_island = 1;
+    bridge->source_location_slot_18 = -1;
+    bridge->x = 200;
+    bridge->y = 300;
+    session.islands[0].locations[1].record_value_10 = 0x3a;
+    session.islands[0].locations[1].owner_id = 1;
+    session.islands[0].locations[1].source_location_slot_18 = -1;
+    session.islands[0].locations[1].x = 100;
+    session.islands[0].locations[1].y = 120;
+    session.islands[1].locations[0].renderer_class = 2;
+    session.islands[1].locations[0].record_value_10 = 2;
+    session.islands[1].locations[0].owner_id = -1;
+    session.islands[1].locations[0].bridge_neighbor_island = 0;
+
+    catalog.item_count = 3;
+    catalog.items[2].item_id = 2;
+    catalog.items[2].present = 1;
+    catalog.items[2].cons.present = 1;
+    catalog.items[2].cons.fallback_frame = 2;
+    catalog.items[2].prod.present = 1;
+    catalog.items[2].prod.threshold = 2;
+
+    floater = &session.floaters[0];
+    floater->is_active = 1;
+    floater->owner_slot = 1;
+    floater->island_index = 0;
+    floater->type_index = 0;
+    floater->source_subtype = 0;
+    floater->source_link_0c = -1;
+    floater->linked_task_slot = -1;
+    floater->carried_resource_code = 0;
+    floater->x = session.islands[0].locations[1].x - 20;
+    floater->y = session.islands[0].locations[1].y;
+
+    slot = game_session_queue_inventory_action(&session, 1, 0, 0, 5);
+    assert(slot == 0);
+    game_session_assign_local_resource_tasks(&session, NULL);
+    assert(floater->active_order_action == 4);
+    assert(floater->linked_task_slot == slot);
+    assert(floater->movement_state == 3);
+    assert(session.pending_events[slot].assigned_floater_count == 1);
+
+    /* The worker picks code 5 up from its Hall inventory before delivery. */
+    floater->x = session.islands[0].locations[1].x;
+    for (unsigned int tick = 0; tick < 20; ++tick)
+        game_session_advance_local_resource_task(&session, floater);
+    assert(session.economy[1].inventory_count[0] == 0);
+    assert(floater->carried_resource_code == 5);
+    assert(floater->movement_state == 4);
+
+    /* Exact-arrival state 4 reaches the class-2/code-5 helper branch. */
+    floater->x = bridge->x;
+    floater->y = bridge->y;
+    game_session_advance_local_resource_task(&session, floater);
+    assert((bridge->source_flags & 0x004U) != 0);
+    assert(bridge->construction_progress == 0);
+    assert(bridge->resource_stock[GAME_RESOURCE_MAGIC_TONE] == 1);
+    assert(floater->carried_resource_code == 0);
+    assert(floater->active_order_action == 0);
+    assert(floater->owner_slot == 1);
+    assert(bridge->owner_id == -1); /* bridge contributor is stored at +0x2c */
+
+    game_session_tick_item_animations(&session, &catalog);
+    game_session_tick_item_animations(&session, &catalog);
+    game_session_tick_item_animations(&session, &catalog);
+    game_session_tick_item_animations(&session, &catalog);
+    assert(bridge->bridge_constructed == 1);
+    assert(session.islands[1].locations[0].bridge_constructed == 1);
+    assert(game_session_bridge_is_active(&session, 0, 1));
+    assert((session.islands[1].access_mask & (1U << 1)) != 0);
+}
+
 static void test_source_event3_subtype0_queues_and_toggles_only_player_bit(void)
 {
     GameSession session = {0};
@@ -334,23 +540,48 @@ static void test_onoff_action_queues_target_without_changing_location_flags(void
 {
     GameSession session = {0};
     GameOnOffActionRequest request;
+    PadCatalog catalog = {0};
+    GameRuntimeLocation *site;
     unsigned int index;
 
     session.island_count = 1;
     session.islands[0].location_count = 2;
-    session.islands[0].locations[1].source_flags = 0x410;
-    /* FUN_0042fa0f's BC_OnOff message route reaches the type-1/subtype-0
-       receiver. Capture the target, but do not guess the unknown flow gate. */
+    site = &session.islands[0].locations[1];
+    site->renderer_class = 0;
+    site->record_value_10 = 0x45; /* item 0x25 for player 2 */
+    site->owner_id = 2;
+    site->source_value_22 = 1U << 2;
+    site->source_flags = 0x410;
+    catalog.item_count = 0x46;
+    catalog.items[0x45].item_id = 0x45;
+    catalog.items[0x45].maintenance_tone_cost = 0;
+
+    /* The click queues the source message; effects remain deferred to tick. */
     assert(game_session_queue_onoff_action(&session, 2, 0, 1));
     assert(session.onoff_action_count == 1);
     assert(session.onoff_actions[0].player_slot == 2);
     assert(session.onoff_actions[0].island_index == 0);
     assert(session.onoff_actions[0].location_index == 1);
-    assert(session.islands[0].locations[1].source_flags == 0x410);
+    assert(site->source_flags == 0x410);
     assert(game_session_pop_onoff_action(&session, &request));
     assert(request.player_slot == 2 && request.island_index == 0 &&
            request.location_index == 1);
     assert(!game_session_pop_onoff_action(&session, &request));
+    assert(game_session_queue_onoff_action(&session, 2, 0, 1));
+    assert(game_session_dispatch_onoff_actions(&session, &catalog) == 1);
+    assert((site->source_flags & 0x400U) == 0);
+    assert(game_session_queue_onoff_action(&session, 2, 0, 1));
+    assert(game_session_dispatch_onoff_actions(&session, &catalog) == 1);
+    assert((site->source_flags & 0x400U) != 0);
+    assert(game_session_queue_onoff_action(&session, 2, 0, 1));
+    assert(game_session_dispatch_onoff_actions(&session, &catalog) == 1);
+    catalog.items[0x45].maintenance_tone_cost = 1;
+    assert(game_session_queue_onoff_action(&session, 2, 0, 1));
+    assert(game_session_dispatch_onoff_actions(&session, &catalog) == 0);
+    assert((site->source_flags & 0x400U) == 0);
+    assert(game_session_queue_onoff_action(&session, 1, 0, 1));
+    assert(game_session_dispatch_onoff_actions(&session, &catalog) == 0);
+    assert((site->source_flags & 0x400U) == 0);
 
     assert(!game_session_queue_onoff_action(NULL, 0, 0, 0));
     assert(!game_session_queue_onoff_action(&session,

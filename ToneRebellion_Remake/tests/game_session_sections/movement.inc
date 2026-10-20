@@ -54,6 +54,39 @@ static void test_floater_move_state_advances_only_simulation_assigned_destinatio
 
 }
 
+static void test_idle_floater_keeps_wander_target_until_exact_arrival(void)
+{
+    GameSession session = {0};
+    GameFloaterStart *floater;
+    uint16_t target_x;
+    uint16_t target_y;
+
+    session.island_count = 1;
+    session.floater_count = 1;
+    floater = &session.floaters[0];
+    floater->island_index = 0;
+    floater->owner_slot = 0;
+    floater->type_index = 0;
+    floater->is_active = 1;
+    floater->x = 500;
+    floater->y = 500;
+    floater->movement_speed = 3;
+    floater->has_wander_order = 1;
+
+    game_session_tick_floater_moves(&session, 1, NULL);
+    assert(floater->movement_state == 0x0e);
+    assert(floater->wander_timer == 60);
+    target_x = floater->destination_x;
+    target_y = floater->destination_y;
+    assert(floater->x != 500 || floater->y != 500);
+
+    game_session_tick_floater_moves(&session, 2, NULL);
+    assert(floater->destination_x == target_x);
+    assert(floater->destination_y == target_y);
+    assert(floater->movement_state == 0x0e);
+    assert(floater->wander_timer == 60);
+}
+
 static void test_floater_selection_uses_original_hit_radius_and_island(void)
 {
     GameSession session;

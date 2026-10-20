@@ -38,7 +38,8 @@ int game_session_mark_bridge_constructed(GameSession *session,
 int game_session_mark_bridge_constructed_at(GameSession *session,
                                             uint8_t island_index,
                                             uint16_t location_index);
-/* FUN_004669bd acquires the neighbor island for the bridge owner's player. */
+/* FUN_004669bd reads the contributor/faction slot stored at marker +0x2c and
+   acquires the neighbor island for that player. */
 int game_session_acquire_island_access(GameSession *session,
                                        uint8_t player_slot,
                                        uint8_t source_island,

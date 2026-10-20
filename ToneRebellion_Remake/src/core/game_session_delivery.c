@@ -81,7 +81,8 @@ static int delivery_item_code_valid(int16_t item_code)
 static int artifact_delivery_target_valid(const GameSession *session,
                                           const GameFloaterStart *floater,
                                           uint8_t island_index,
-                                          int16_t location_index)
+                                          int16_t location_index,
+                                          int16_t resource_code)
 {
     const GameRuntimeLocation *target;
     int32_t base_item_id;
@@ -91,6 +92,12 @@ static int artifact_delivery_target_valid(const GameSession *session,
         (uint16_t)location_index >= session->islands[island_index].location_count)
         return 0;
     target = &session->islands[island_index].locations[(uint16_t)location_index];
+    if (target->renderer_class == 2) {
+        /* FUN_004503bd accepts carried code 5 at class-2 sites while CONS is
+           idle. Its active-CONS fallback updates an unmodeled counter, so do
+           not assign a duplicate delivery through this path yet. */
+        return resource_code == 5 && (target->source_flags & 0x004U) == 0;
+    }
     if (target->renderer_class != 0) return 0;
     if (target->owner_id == -1 && target->record_value_10 == 0) return 1;
     if (target->owner_id != (int32_t)floater->owner_slot) return 0;
@@ -185,7 +192,8 @@ static int assign_delivery_task_for_floater(GameSession *session,
 
     if (event->payload_12 >= GAME_INVENTORY_ITEM_FIRST_ID &&
         !artifact_delivery_target_valid(session, floater,
-            (uint8_t)event->payload_0a, event->payload_0e)) return 0;
+            (uint8_t)event->payload_0a, event->payload_0e,
+            event->payload_12)) return 0;
     /* One artifact turns one empty target into PIT_Object. Do not let
        concurrent workers reserve duplicate deliveries to that site. */
     if (event->payload_12 >= GAME_INVENTORY_ITEM_FIRST_ID &&
@@ -561,7 +569,17 @@ static void credit_floater_delivery(GameSession *session,
                    session->islands[floater->island_index].location_count) {
         GameRuntimeLocation *target = &session->islands[floater->island_index]
             .locations[(uint16_t)floater->order_target_location];
-        if (target->renderer_class == 0 && target->owner_id == -1 &&
+        if (resource_code == 5 && target->renderer_class == 2 &&
+            (target->source_flags & 0x004U) == 0) {
+            /* FUN_004503bd case 2 stores the actor dword at raw +0x2c, starts
+               CONS and clears +0x40. +0x2c aliases the third stock short in
+               the runtime layout; its meaning on class 2 is not stock. */
+            target->resource_stock[GAME_RESOURCE_MAGIC_TONE] =
+                floater->owner_slot;
+            target->source_flags |= 0x004U;
+            target->construction_progress = 0;
+            floater->carried_resource_code = 0;
+        } else if (target->renderer_class == 0 && target->owner_id == -1 &&
             target->record_value_10 == 0) {
             /* FUN_004503bd turns an empty class-0 record into PIT_Object and
                stores artifact IDs 5..33 in its +0x24 value. */

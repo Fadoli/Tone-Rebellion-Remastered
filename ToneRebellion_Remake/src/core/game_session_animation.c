@@ -327,9 +327,8 @@ void game_session_tick_item_animations_with_floaters(
             }
 
             /* FUN_00450a71 case 2 chains CONS into PROD for an unbuilt class-2
-               bridge marker, then FUN_004669bd activates its paired link when
-               that production animation finishes. The event that starts CONS
-               remains outside the current gameplay input model. */
+               bridge marker, then FUN_004669bd activates its paired link and
+               grants access using the contributor slot stored at raw +0x2c. */
             if (state->renderer_class == 2 && state->record_value_10 == 2 &&
                 (state->source_flags & 1U) == 0) {
                 if (construction_completed) {

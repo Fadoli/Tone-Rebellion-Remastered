@@ -76,6 +76,7 @@ int game_session_mark_bridge_constructed(GameSession *session,
 {
     GameRuntimeLocation *marker_a;
     GameRuntimeLocation *marker_b;
+    uint16_t player_slot;
     int was_constructed;
     if (session == NULL || bridge_count > WORLD_MAP_MAX_BRIDGES ||
         bridge_index >= bridge_count || island_a >= session->island_count ||
@@ -97,10 +98,12 @@ int game_session_mark_bridge_constructed(GameSession *session,
     marker_b->source_flags |= 1U;
     if (!game_session_set_bridge_active(session, bridge_index, bridge_count, 1))
         return 0;
-    if (marker_a->owner_id >= 0 &&
-        marker_a->owner_id < GAME_START_PLAYER_COUNT) {
+    /* FUN_004669bd uses the contributor mType stored at raw site +0x2c by
+       FUN_004503bd; bridge markers do not acquire the ordinary +0x14 owner. */
+    player_slot = marker_a->resource_stock[GAME_RESOURCE_MAGIC_TONE];
+    if (player_slot < GAME_START_PLAYER_COUNT) {
         (void)game_session_acquire_island_access(
-            session, (uint8_t)marker_a->owner_id, island_a, island_b);
+            session, (uint8_t)player_slot, island_a, island_b);
     }
     /* FUN_004669bd refreshes both endpoint islands through FUN_00466c8b. */
     game_session_refresh_player_maintenance_budgets(session);

@@ -1056,8 +1056,7 @@ int game_session_tick_floater_wander(GameSession *session,
         if (wander_destination.x < floater->x) floater->facing_left = 1;
         else if (wander_destination.x > floater->x) floater->facing_left = 0;
         floater->movement_state = 0x0e;
-        floater->wander_timer = floater->active_order_action == 0x14
-            ? 60 : 0;
+        floater->wander_timer = 60;
     }
 
     position.x = floater->x;
@@ -1120,34 +1119,14 @@ int game_session_tick_floater_wander(GameSession *session,
             floater->y = (uint16_t)position.y;
         }
     } else {
-        /* FUN_0041e569 calls FUN_00422d27 before testing the state-0x0e
-           distance. Only after that step does it resolve another FA_Wander
-           destination when the remaining Chebyshev distance exceeds 10. */
-        if (game_session_source_chebyshev_distance(
-                floater->x, floater->y,
-                floater->destination_x, floater->destination_y) <= 10) {
-            floater->movement_state = 0;
-            floater->wander_timer = 0;
-            return 1;
-        }
-        if (!floater_motion_wander_destination(
-                &session->random_state, floater->x, floater->y,
-                raw_min_x, raw_max_x, &wander_destination)) {
-            floater->has_wander_order = 0;
-            floater->movement_state = 0;
-            floater->wander_timer = 0;
-            return 1;
-        }
-        floater->destination_x = (uint16_t)wander_destination.x;
-        floater->destination_y = (uint16_t)wander_destination.y;
-        if (wander_destination.x < floater->x) floater->facing_left = 1;
-        else if (wander_destination.x > floater->x) floater->facing_left = 0;
-    }
-
-    if (arrived && floater->wander_timer > 0) {
-        --floater->wander_timer;
-        if (floater->wander_timer == 0) {
-            floater->movement_state = 0;
+        /* FUN_004211bb keeps the resolved destination while FA_Wander is
+           active. The state timer advances only after exact coordinate
+           arrival; the next destination is selected after that timer ends. */
+        if (arrived && floater->wander_timer > 0) {
+            --floater->wander_timer;
+            if (floater->wander_timer == 0) {
+                floater->movement_state = 0;
+            }
         }
     }
     return 1;
