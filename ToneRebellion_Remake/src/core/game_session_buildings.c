@@ -14,28 +14,28 @@ static void set_error(char *error, size_t capacity, const char *message)
     error[capacity - 1] = '\0';
 }
 
-static int reserve_source_record(const GameSession *session, uint8_t owner,
+static int reserve_source_record(const GameSession *session,
+                                 uint8_t island_index, uint8_t owner,
                                  uint16_t item_id, int16_t *record_index,
                                  int16_t *category_slot)
 {
-    uint8_t used_records[GAME_SOURCE_RECORDS_PER_PLAYER] = {0};
+    uint8_t used_records[GAME_SOURCE_RECORDS_PER_ISLAND] = {0};
     uint8_t used_categories[GAME_SOURCE_SUBSLOTS_PER_ITEM] = {0};
-    unsigned int island_index;
     unsigned int record_candidate;
     unsigned int category_candidate;
 
-    for (island_index = 0; island_index < session->island_count; ++island_index) {
+    {
         const GameRuntimeIsland *island = &session->islands[island_index];
         unsigned int location_index;
         for (location_index = 0; location_index < island->location_count;
              ++location_index) {
             const GameRuntimeLocation *location = &island->locations[location_index];
-            if (location->owner_id != owner) continue;
             if (location->source_location_slot_18 >= 0 &&
-                location->source_location_slot_18 < GAME_SOURCE_RECORDS_PER_PLAYER) {
+                location->source_location_slot_18 < GAME_SOURCE_RECORDS_PER_ISLAND) {
                 used_records[location->source_location_slot_18] = 1;
             }
-            if (location->record_value_10 == item_id &&
+            if (location->owner_id == owner &&
+                location->record_value_10 == item_id &&
                 location->source_category_slot_60 >= 0 &&
                 location->source_category_slot_60 < GAME_SOURCE_SUBSLOTS_PER_ITEM) {
                 used_categories[location->source_category_slot_60] = 1;
@@ -43,16 +43,18 @@ static int reserve_source_record(const GameSession *session, uint8_t owner,
         }
     }
 
-    for (record_candidate = 0; record_candidate < GAME_SOURCE_RECORDS_PER_PLAYER;
+    for (record_candidate = 0; record_candidate < GAME_SOURCE_RECORDS_PER_ISLAND;
          ++record_candidate) {
         if (!used_records[record_candidate]) break;
     }
-    if (record_candidate == GAME_SOURCE_RECORDS_PER_PLAYER) return 0;
+    if (record_candidate == GAME_SOURCE_RECORDS_PER_ISLAND) return 0;
     for (category_candidate = 0; category_candidate < GAME_SOURCE_SUBSLOTS_PER_ITEM;
          ++category_candidate) {
         if (!used_categories[category_candidate]) break;
     }
-    if (category_candidate == GAME_SOURCE_SUBSLOTS_PER_ITEM) return 0;
+    /* FUN_0045ee26 returns the free island source row even when all ten item
+       subslots are occupied; its category field remains initialized to 0. */
+    if (category_candidate == GAME_SOURCE_SUBSLOTS_PER_ITEM) category_candidate = 0;
     *record_index = (int16_t)record_candidate;
     *category_slot = (int16_t)category_candidate;
     return 1;
@@ -184,20 +186,31 @@ int game_session_place_building(GameSession *session,
                   "player maintenance budget is too small for this building");
         return 0;
     }
-    if (base_item_id >= 0x2c && base_item_id <= 0x32 &&
-        !reserve_source_record(session, player_slot, runtime_item_id,
-                               &source_record_index, &source_category_slot)) {
-        set_error(error, error_capacity,
-                  "owner source-record table has no available slot");
-        return 0;
+    if (base_item_id >= 0x2c && base_item_id <= 0x32) {
+        /* FUN_004528ca initializes the building before attempting this
+           allocation, then returns early if the current island's 48-row
+           source table is full.
+           FUN_004527ee ignores that return and still completes the placement. */
+        (void)reserve_source_record(session, island_index, player_slot,
+                                    runtime_item_id,
+                                    &source_record_index, &source_category_slot);
     }
 
     /* FUN_004528ca initializes the runtime fields and flags to 0x410. */
     runtime->record_value_10 = runtime_item_id;
     runtime->owner_id = player_slot;
     runtime->maintenance_tone_cost = item->maintenance_tone_cost;
-    runtime->source_location_slot_18 = source_record_index;
-    runtime->source_category_slot_60 = source_category_slot;
+    if (base_item_id >= 0x2c && base_item_id <= 0x32) {
+        /* A full native source table leaves the prior empty-site value (normally
+           -1) untouched, producing an owned building without a source link. */
+        if (source_record_index >= 0) {
+            runtime->source_location_slot_18 = source_record_index;
+            runtime->source_category_slot_60 = source_category_slot;
+        }
+    } else {
+        runtime->source_location_slot_18 = -1;
+        runtime->source_category_slot_60 = -1;
+    }
     previous_source_capacity = runtime->source_capacity_4a;
     runtime->source_capacity_4a = 0;
     if (!game_session_source_value_34_max(catalog, runtime,

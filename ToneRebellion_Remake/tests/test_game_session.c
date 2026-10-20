@@ -1,4 +1,5 @@
 #include "game_session.h"
+#include "game_session_combat_internal.h"
 #include "game_session_delivery.h"
 #include "iw_construct.h"
 #include "building_render.h"
@@ -438,6 +439,10 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
 int main(void)
 {
     test_session_initializes_player_starts_and_runtime_items();
+    test_building_placement_matches_source_runtime_initialization();
+    test_building_placement_links_every_player_and_source_record();
+    test_full_source_record_table_still_completes_construction();
+    test_source_record_capacity_is_per_island();
     test_hall_resource_ledger_is_safe();
     test_hall_resource_modes_cycle_through_original_three_states();
     test_hall_stock_mode_creates_and_releases_linked_resource_tasks();
@@ -445,11 +450,15 @@ int main(void)
     test_inventory_result_debits_only_after_receiver_success();
     test_location_resource_consumption_matches_source_guards();
     test_location_move_costs_use_pad_tuple_and_runtime_multiplier();
+    test_source_capacity_cycle_uses_base_item_id_for_each_player();
+    test_cast_action_accepts_owner_variant_ids();
+    test_cast_kind_one_applies_area_and_expires_site_state();
     test_pending_event_table_matches_source_slots_and_deduplication();
     test_task_projection_matches_source_filter_and_cap();
     test_task_command_dispatch_guards_and_effects();
     test_inventory_action_reserves_source_payload_without_mutation();
     test_repair_task_repeats_supply_and_heals_after_40_ticks();
+    test_site_damage_filters_player_variant_building_ids();
     test_code_five_delivery_starts_bridge_cons_for_its_owner();
     test_source_event3_subtype0_queues_and_toggles_only_player_bit();
     test_glyph_map_click_queues_packet_without_world_effect();
@@ -462,9 +471,16 @@ int main(void)
     test_active_cons_and_prod_counters_finish_at_source_limits();
     test_producer_cadence_starts_prod_and_waits_for_output_consumption();
     test_initialization_is_transactional_on_bad_world();
-    test_building_placement_matches_source_runtime_initialization();
+    test_player_source_building_keeps_native_id_for_island_state();
+    test_construction_assignment_matches_source_candidate_guards();
+    test_construction_task_delivers_cost_before_deferred_placement();
+    test_construction_completes_on_native_empty_status_one_site();
+    test_cancelled_construction_releases_assigned_floater();
+    test_charge_order_accepts_each_players_source_variant();
+    test_floater_pickup_order_collects_ground_artifact();
     test_floater_move_state_advances_only_simulation_assigned_destinations();
     test_floater_selection_uses_original_hit_radius_and_island();
+    test_initial_worker_accepts_coordinate_move_order();
     test_workstr_counts_subtype_zero_and_truncates_percentage();
     test_location_panel_level_uses_original_low_nibble_plus_one();
     (void)puts("game session unit tests passed");

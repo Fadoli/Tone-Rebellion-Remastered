@@ -1,5 +1,7 @@
 #include "game_session.h"
 #include "game_session_economy_internal.h"
+#include "game_session_events.h"
+#include "game_session_internal.h"
 #include "pad_catalog.h"
 
 #include <string.h>
@@ -237,6 +239,7 @@ int game_session_finish_location_move(GameSession *session,
     uint8_t target_class;
     uint8_t target_site_size;
     int moves_hall;
+    int32_t moved_base_item_id;
     GamePlayerEconomy *player_economy;
     if (session == NULL || !session->location_move_active ||
         player_slot >= GAME_START_PLAYER_COUNT ||
@@ -292,6 +295,7 @@ int game_session_finish_location_move(GameSession *session,
     }
 
     moved = *source;
+    moved_base_item_id = game_session_base_item_id(&moved);
     moved.charge_staff_task_handle = -1;
     for (task_type = 0; task_type < GAME_RESOURCE_TYPE_COUNT; ++task_type)
         moved.source_task_slot[task_type] = -1;
@@ -391,6 +395,11 @@ int game_session_finish_location_move(GameSession *session,
     session->location_move_active = 0;
     (void)game_session_recalculate_location_active_with_visibility(source);
     (void)game_session_recalculate_active_locations(session);
+    if (moved_base_item_id == 0x28) {
+        (void)game_session_recalculate_player_island_visibility(
+            session, island_index, player_slot);
+        game_session_refresh_player_maintenance_budgets(session);
+    }
     return 1;
 }
 

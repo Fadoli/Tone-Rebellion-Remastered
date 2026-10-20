@@ -20,6 +20,22 @@ static inline int game_session_build_target_available(
         (location->source_value_22 & (uint16_t)(1U << player_slot)) != 0;
 }
 
+/* The port keeps owner-specific PAD IDs in record_value_10 for direct
+   catalog/render lookups. Native gameplay predicates read the base +0x10 ID
+   and the owner separately at +0x14. Normalize only player-owned records. */
+static inline int32_t game_session_base_item_id(
+    const GameRuntimeLocation *location)
+{
+    int32_t item_id;
+    if (location == NULL) return -1;
+    item_id = location->record_value_10;
+    if (location->owner_id >= 0 &&
+        location->owner_id < GAME_START_PLAYER_COUNT) {
+        item_id -= location->owner_id * 16;
+    }
+    return item_id;
+}
+
 /* Shared runtime pad maximum used during session setup and building updates. */
 static inline int game_session_source_value_34_max(
     const PadCatalog *catalog, const GameRuntimeLocation *location,

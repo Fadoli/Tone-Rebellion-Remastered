@@ -31,7 +31,7 @@ int game_session_queue_inventory_action(GameSession *session,
                                         uint16_t location_index,
                                         uint8_t item_id);
 /* FUN_004672ef command type 3 cycles the supported player source records
-   through capacity tiers 0..2. The source setter resets +0x48 and marks bit
+   through capacity tiers 0..3. The source setter resets +0x48 and marks bit
    0x20 only when the tier increases. */
 int game_session_cycle_source_capacity(GameSession *session,
                                        uint8_t island_index,
@@ -47,11 +47,14 @@ int32_t game_session_apply_cast_site_effect(GameSession *session,
    and route nearby sites through FUN_00450817. Returns affected targets. */
 unsigned int game_session_apply_cast_blast(GameSession *session,
                                            unsigned int caster_index);
-/* FUN_004239e9 cases 7/9 resolve the blast and selected-site impacts; case
-   0x14 refreshes the island's Leviathan reevaluation; case 0x16 applies the
-   30000 site effect when the item matches the player key. */
+/* FUN_004239e9 cases 1 and 3..9 plus 0x10..0x13 apply reconstructed site
+   state, refill, timer, area-damage, pickup and selected-site effects; case 2
+   restores eligible floater HP; case 0x14 refreshes the island's Leviathan
+   reevaluation; case 0x15 boosts owner subtype-0 floaters; case 0x16 applies
+   its site effect. */
 unsigned int game_session_resolve_cast_effect_step(
-    GameSession *session, unsigned int caster_index, uint8_t step,
+    GameSession *session, const PadCatalog *catalog,
+    unsigned int caster_index, uint8_t step,
     int16_t target_location_index);
 /* Reserve a source effect slot. A positive delay counts odd effect updates;
    case 0x16 with delay 0 runs ASCEND, UPGRADE travel and the FREEZESC impact
@@ -61,7 +64,10 @@ int game_session_schedule_cast_effect_step(
     int16_t target_location_index, uint8_t odd_updates_until_impact);
 /* FUN_0041760b advances scheduled cast impacts on odd source ticks. */
 void game_session_tick_cast_effects(GameSession *session,
-                                    uint32_t source_tick);
+                                    uint32_t source_tick,
+                                    const PadCatalog *catalog);
+/* FUN_0046290d/FUN_00450a71 advance per-site timers and the 0x100/+0x44 state. */
+void game_session_tick_site_effect_timers(GameSession *session);
 /* FUN_0042fa0f(0x40) emits category-3/type-3 with player, island, location,
    and selected glyph. The island dispatcher assigns kind 0x16 to the first
    matching subtype-8 floater; cast animation and impact timing remain open. */
@@ -75,8 +81,7 @@ int game_session_pop_glyph_action(GameSession *session,
 /* FUN_00465793 category-3/subtype-3 selects the first player subtype-8
    floater and assigns its FA_Cast glyph order. */
 unsigned int game_session_dispatch_glyph_actions(GameSession *session);
-/* Queue category-1 subtype 0x15..0x1c spell orders. Dispatch currently
-   resolves only kinds 0x14 and 0x16, whose movement/effects are modeled. */
+/* Queue category-1 subtype 0x15..0x1c spell orders. */
 int game_session_queue_cast_action(GameSession *session,
                                    uint8_t player_slot,
                                    uint8_t island_index,

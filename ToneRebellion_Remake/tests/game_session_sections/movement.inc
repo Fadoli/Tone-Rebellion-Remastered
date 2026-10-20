@@ -1,3 +1,81 @@
+static void test_charge_order_accepts_each_players_source_variant(void)
+{
+    GameSession session = {0};
+    unsigned int player;
+
+    session.island_count = 1;
+    session.floater_count = GAME_START_PLAYER_COUNT;
+    session.islands[0].location_count = GAME_START_PLAYER_COUNT;
+    for (player = 0; player < GAME_START_PLAYER_COUNT; ++player) {
+        GameRuntimeLocation *source = &session.islands[0].locations[player];
+        GameFloaterStart *floater = &session.floaters[player];
+        source->record_value_10 = 0x2c + (int32_t)player * 16;
+        source->owner_id = (int32_t)player;
+        source->source_location_slot_18 = (int16_t)player;
+        floater->island_index = 0;
+        floater->owner_slot = (uint8_t)player;
+        floater->source_subtype = 1;
+        floater->is_active = 1;
+        floater->linked_task_slot = -1;
+        floater->source_link_0c = -1;
+    }
+
+    for (player = 0; player < GAME_START_PLAYER_COUNT; ++player) {
+        GameFloaterStart *floater = &session.floaters[player];
+        assert(game_session_order_floater_to_charge_site(&session,
+            (uint8_t)player, 0, player, (uint16_t)player));
+        assert(floater->movement_state == 11);
+        assert(floater->source_order_parameter_32 == (int32_t)player);
+    }
+}
+
+static void test_floater_pickup_order_collects_ground_artifact(void)
+{
+    GameSession session = {0};
+    GameFloaterStart *floater;
+    GameRuntimeLocation *object;
+    unsigned int slot;
+
+    session.island_count = 1;
+    session.floater_count = 1;
+    session.islands[0].location_count = 2;
+    session.islands[0].locations[1].owner_id = -1;
+    session.islands[0].locations[1].source_value_14 = -1;
+    session.islands[0].locations[1].charge_staff_task_handle = -1;
+    floater = &session.floaters[0];
+    floater->island_index = 0;
+    floater->owner_slot = 2;
+    floater->source_subtype = 1;
+    floater->is_active = 1;
+    floater->linked_task_slot = -1;
+    floater->carried_resource_code = 5;
+    floater->x = 100;
+    floater->y = 100;
+    object = &session.islands[0].locations[0];
+    object->renderer_class = 0;
+    object->owner_id = -1;
+    object->record_value_10 = 1;
+    object->record_value_24 = 6;
+    object->x = 100;
+    object->y = 100;
+    object->charge_staff_task_handle = -1;
+    object->source_location_slot_18 = -1;
+    object->source_category_slot_60 = -1;
+    for (slot = 0; slot < 8; ++slot)
+        object->charge_floater_slots[slot] = -1;
+    for (slot = 0; slot < GAME_RESOURCE_TYPE_COUNT; ++slot)
+        object->source_task_slot[slot] = -1;
+
+    assert(game_session_order_floater_to_ground_object(&session, 2, 0, 0, 0));
+    assert(floater->movement_state == 13);
+    assert(floater->active_order_action == 0x0d);
+    game_session_tick_floater_moves(&session, 1, NULL);
+    assert(floater->carried_resource_code == 6);
+    assert(object->record_value_10 == 0 && object->record_value_24 == 0);
+    assert(session.islands[0].locations[1].record_value_10 == 1);
+    assert(session.islands[0].locations[1].record_value_24 == 5);
+}
+
 static void test_floater_move_state_advances_only_simulation_assigned_destinations(void)
 {
     GameSession session;
@@ -112,6 +190,27 @@ static void test_floater_selection_uses_original_hit_radius_and_island(void)
     assert(game_session_floater_at(&session, 1, 100, 100) == 2);
     assert(game_session_floater_at(&session, 2, 100, 100) == -1);
     assert(game_session_floater_at(NULL, 0, 100, 100) == -1);
+}
+
+static void test_initial_worker_accepts_coordinate_move_order(void)
+{
+    GameSession session = {0};
+    GameFloaterStart *worker;
+
+    session.island_count = 1;
+    session.floater_count = 1;
+    worker = &session.floaters[0];
+    worker->is_active = 1;
+    worker->owner_slot = 2;
+    worker->source_subtype = 0;
+    worker->island_index = 0;
+
+    assert(game_session_order_floater_to_coordinate(
+        &session, 2, 0, 0, 350, 120));
+    assert(worker->source_order_state_2c == 9);
+    assert(worker->source_order_island_28 == 0);
+    assert(worker->source_order_coordinate_30 == (uint16_t)(0x23U << 8 | 0x0cU));
+    assert(worker->source_order_pending == 1);
 }
 
 static void test_workstr_counts_subtype_zero_and_truncates_percentage(void)

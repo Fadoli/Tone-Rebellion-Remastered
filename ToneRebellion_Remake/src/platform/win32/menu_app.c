@@ -99,6 +99,7 @@ static SpriteSheet g_tone_crys_art;
 static SpriteSheet g_magctone_art;
 static SpriteSheet g_hall_stock_art;
 static SpriteSheet g_repair_button_art;
+static SpriteSheet g_upgrade_button_art;
 static SpriteSheet g_building_command_art;
 static SpriteSheet g_inventory_item_art;
 static SpriteSheet g_diplomacy_art;
@@ -172,6 +173,7 @@ static int g_hovered_location = -1;
 static IslandLocationActionControl g_hovered_location_action =
     ISLAND_LOCATION_ACTION_NONE;
 static int g_hovered_repair_control;
+static int g_hovered_upgrade_control;
 static int g_hovered_onoff_control;
 static int g_hovered_location_grab;
 static int g_hovered_hall_stock = -1;

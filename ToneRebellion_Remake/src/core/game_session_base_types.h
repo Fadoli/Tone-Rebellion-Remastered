@@ -11,7 +11,8 @@
 
 enum { GAME_SESSION_MAX_FLOATERS = GAME_START_PLAYER_COUNT * GAME_START_FLOATERS_PER_PLAYER,
        GAME_FLOATER_CATEGORY_COUNT = GAME_START_PLAYER_COUNT + 1 };
-enum { GAME_SOURCE_RECORDS_PER_PLAYER = 48,
+/* FUN_0045ee26 scans 48 rows inside the current island runtime record. */
+enum { GAME_SOURCE_RECORDS_PER_ISLAND = 48,
        GAME_SOURCE_SUBSLOTS_PER_ITEM = 10 };
 enum { GAME_SESSION_MAX_PENDING_EVENTS = 64,
        GAME_SESSION_MAX_TASKS = GAME_SESSION_MAX_PENDING_EVENTS };
@@ -64,6 +65,8 @@ typedef struct GamePlayerEconomy {
     uint16_t inventory_count[GAME_INVENTORY_ITEM_COUNT];
     /* FUN_0043dee3 reads the player's 14-bit glyph-ownership mask. */
     uint16_t glyph_mask;
+    /* FUN_004239e9 kind 0x15 stores the owner's DAT_00618f5a speed timer. */
+    int16_t floater_speed_boost_timer;
     /* FUN_00465793 stores the last glyph accepted by the subtype-3 action. */
     uint8_t selected_glyph_index;
     /* FUN_0045f755 cycles each Hall reserve mode through raw values 0..2;

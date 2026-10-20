@@ -26,6 +26,7 @@ static int load_island_surface(int island_id, int map_island_index,
     SpriteSheet magctone_candidate = {0};
     SpriteSheet hall_stock_candidate = {0};
     SpriteSheet repair_button_candidate = {0};
+    SpriteSheet upgrade_button_candidate = {0};
     SpriteSheet building_command_candidate = {0};
     SpriteSheet inventory_item_candidate = {0};
     SpriteSheet diplomacy_candidate = {0};
@@ -130,6 +131,8 @@ static int load_island_surface(int island_id, int map_island_index,
                            error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\repair.shp", palette,
                            &repair_button_candidate, error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\upgrade.shp", palette,
+                           &upgrade_button_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\trainbut.shp", palette,
                            &building_command_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\alltrigs.shp", palette,
@@ -291,6 +294,7 @@ static int load_island_surface(int island_id, int map_island_index,
         task_priority_candidate.frame_count < 8 ||
         hall_stock_candidate.frame_count < 6 || main_buttons_candidate.frame_count < 8 ||
         repair_button_candidate.frame_count <= 11 ||
+        upgrade_button_candidate.frame_count <= 13 ||
         building_command_candidate.frame_count <= 21 ||
         hall_command_candidate.frame_count < 10 ||
         floater_info_candidate.frame_count < 26 ||
@@ -357,6 +361,7 @@ static int load_island_surface(int island_id, int map_island_index,
     free_sprite_sheet(&g_magctone_art);
     free_sprite_sheet(&g_hall_stock_art);
     free_sprite_sheet(&g_repair_button_art);
+    free_sprite_sheet(&g_upgrade_button_art);
     free_sprite_sheet(&g_building_command_art);
     free_sprite_sheet(&g_inventory_item_art);
     free_sprite_sheet(&g_diplomacy_art);
@@ -431,6 +436,8 @@ static int load_island_surface(int island_id, int map_island_index,
     memset(&hall_stock_candidate, 0, sizeof(hall_stock_candidate));
     g_repair_button_art = repair_button_candidate;
     memset(&repair_button_candidate, 0, sizeof(repair_button_candidate));
+    g_upgrade_button_art = upgrade_button_candidate;
+    memset(&upgrade_button_candidate, 0, sizeof(upgrade_button_candidate));
     g_building_command_art = building_command_candidate;
     memset(&building_command_candidate, 0, sizeof(building_command_candidate));
     g_inventory_item_art = inventory_item_candidate;
@@ -483,6 +490,7 @@ done:
     free_sprite_sheet(&magctone_candidate);
     free_sprite_sheet(&hall_stock_candidate);
     free_sprite_sheet(&repair_button_candidate);
+    free_sprite_sheet(&upgrade_button_candidate);
     free_sprite_sheet(&building_command_candidate);
     free_sprite_sheet(&inventory_item_candidate);
     free_sprite_sheet(&diplomacy_candidate);

@@ -689,12 +689,18 @@ static void draw_location_action_panel(HDC dc)
         };
         const WindowTemplate *onoff_button = window_catalog_find(
             &g_window_catalog, "BC_OnOff", 3);
+        const WindowTemplate *upgrade_button = window_catalog_find(
+            &g_window_catalog, "BC_Upgrade", 3);
         repair_button = window_catalog_find(&g_window_catalog, "BC_Repair", 3);
         /* Keep normal artwork as the first layer: the source highlight frames
            extend the art but are not substitutes for the button itself. */
         if (selected_onoff_button_visible()) {
             draw_control_with_hover_overlay(dc, onoff_button,
                 &g_building_command_art, g_hovered_onoff_control);
+        }
+        if (selected_upgrade_button_visible()) {
+            draw_control_with_hover_overlay(dc, upgrade_button,
+                &g_upgrade_button_art, g_hovered_upgrade_control);
         }
         if (selected_repair_button_visible()) {
             draw_control_with_hover_overlay(dc, repair_button,
@@ -713,7 +719,7 @@ static void draw_location_action_panel(HDC dc)
                     (uint8_t)(0x15U + spell_index));
                 const WindowTemplate *spell_button;
                 uint32_t frame;
-                if (kind != 0x14 && kind != 0x16) continue;
+                if (kind != 8 && kind != 0x14 && kind != 0x16) continue;
                 spell_button = window_catalog_find(&g_window_catalog,
                     spell_names[spell_index], 3);
                 frame = (uint32_t)kind * 2U;

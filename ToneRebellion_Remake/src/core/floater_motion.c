@@ -23,7 +23,7 @@ uint16_t floater_motion_effective_speed(
     }
 
     /* The original stores each adjustment back to a 16-bit unsigned value. */
-    if (context->owner_slot == 0 && context->owner_speed_modifier > 0) {
+    if (context->floater_subtype == 0 && context->owner_speed_modifier > 0) {
         speed = (uint16_t)(speed << 1);
     }
     if (context->site_speed_bonus) {

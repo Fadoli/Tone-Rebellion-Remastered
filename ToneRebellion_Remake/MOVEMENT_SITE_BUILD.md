@@ -48,3 +48,51 @@ location resolution `ev_810f7530a91d83a454c4d310d2142cafe948434cde2b0707fd584769
 item checks `ev_e884123140e558d8678b40fa79da6539532f8441ffe895daabdad5787c8afff7`,
 placement `ev_ff5099639bbdcb8c257ae4e8f690ea98f0ebdf4321753ff832e66ba4dc11d800`,
 and action labels `ev_ca6209d841056d1b69884f43a204d17713c19c2756570da82baaec770609aa1f`.
+
+The deferred `CONSTR` path must preserve the same empty-site states as
+`FUN_004526de`: raw location ID `0` or `1`, with owner `-1` and the player's
+visibility bit. The port previously canceled tasks and rejected Build Tone
+deposits when the raw ID was `1`, even though candidate validation and final
+placement accept that state. This affected bridge-linked placeholder sites
+(`+0x24` carries their link data), so valid tasks could be released early or
+fail to accumulate their cost. Assignment, deposit and completion now retain
+both states; regressions cover a full Build Tone delivery and placement on a
+state-`1` site with the requesting player's owner and runtime PAD ID.
+
+### Placement record initialization
+
+`FUN_004527ee` validates placement, calls `FUN_004528ca(item, owner)`, sets
+flag `0x10`, then recalculates active state. The initializer writes the base
+item ID to `+0x10`, player to `+0x14`, clears stocks `+0x28/+0x2a/+0x2c`, charge
+field `+0x30`, and capacity `+0x4a`, sets `+0x32=1`, computes `+0x34`, and
+assigns source slots `+0x18` for item IDs `0x2c..0x32`. It resets `+0x24` for
+players 0–3, sets flags to `0x410` while preserving unrelated bits, and clears
+`+0x3a..+0x49` with sentinel `+0x3e=-1`. It clears byte `+0x22` only for
+owner 4 on class 0. Thus the constructor itself does not lose the player link
+or a player's visibility mask. The later active-state transition can call
+`FUN_0045e6d3`, which invokes `FUN_00462285` and recomputes visibility; the
+final mask may therefore differ from its pre-placement value. Evidence:
+`FUN_004528ca` `ev_a2bd552345a413d2155b98f6187184743ceeb32673ec2c4ebbb9ad875608d2f5`,
+`FUN_00452fcb` `ev_7878b698c2ea5b2c87d52eb74899740d2d7101fa3967df458c97364cd85384e3`,
+`FUN_004527ee` `ev_197f1ce65ee9546d036cd9bf75c5d7d80316473f55be2b625ca5f33d7fca2ba7`,
+`FUN_00453a5f` `ev_56bf6ecfc372646d2d3fcb0362849d666eecd98bf6f5480bb3a0c2f77daedff4`,
+`FUN_0045e6d3` `ev_0c10f06b048d94a70ea80142f675a05667a0928aeeeecc98e63ace03f8c270ba`,
+and `FUN_00462285` `ev_2bc12365640ce9ddd66153682500e969e470f032e5fe6ce35467ce853b14e16b`.
+
+The remake keeps the owner-specific PAD lookup ID (`base + 16 * owner`) in its
+runtime `record_value_10` for catalog and rendering access. Native gameplay
+predicates use the base ID at `+0x10` and owner at `+0x14`; the port now
+normalizes IDs for source-tier cycling, CHARGE, cast-button eligibility,
+category-4 site selection, and island Leviathan eligibility. The last check
+previously treated player 0's `0x2c..0x2e` sources differently from the same
+buildings owned by players 1–3. This fixes owner-variant IDs being rejected or
+misclassified by base-ID rules. The latter check corresponds to the raw-ID
+comparisons in `FUN_00460460` (`ev_194649b25df937615aa9cd8470539820d14a39966f5c66e6a2fbdf766465741a`).
+Evidence: constructor forwarding
+`ev_a571ddb810f57eb82ddb7110d751957927677498282088ff2bc3d5256611b345`,
+per-player Hall creation
+`ev_55301289f72a4d35e1d0ef2859453ebcf85ca880fd8ceb9c84776069998170d2`,
+source-record allocation
+`ev_058601a76da294207645bc296e6ea0e0cabf80b9850402c8da50ec5476a85f10`, and
+PAD lookup
+`ev_dd62728c87ff6b7e3489db5cf25557b77c8d7290e3eae8806cf999267576755a`.

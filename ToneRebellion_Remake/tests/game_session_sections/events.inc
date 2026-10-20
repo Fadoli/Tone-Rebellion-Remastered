@@ -1,3 +1,142 @@
+static void test_source_capacity_cycle_uses_base_item_id_for_each_player(void)
+{
+    GameSession session = {0};
+    unsigned int player;
+
+    session.island_count = 1;
+    session.islands[0].location_count = GAME_START_PLAYER_COUNT;
+    for (player = 0; player < GAME_START_PLAYER_COUNT; ++player) {
+        GameRuntimeLocation *location = &session.islands[0].locations[player];
+        location->renderer_class = 0;
+        location->owner_id = (int32_t)player;
+        location->record_value_10 = 0x2c + (int32_t)player * 16;
+        location->source_capacity_4a = 0;
+        location->source_flags = 0x410U;
+        location->source_value_48 = 23;
+    }
+
+    for (player = 0; player < GAME_START_PLAYER_COUNT; ++player) {
+        GameRuntimeLocation *location = &session.islands[0].locations[player];
+        unsigned int tier;
+        for (tier = 1; tier <= 3; ++tier) {
+            assert(game_session_cycle_source_capacity(&session, 0,
+                                                       (uint16_t)player));
+            assert(location->source_capacity_4a == (int16_t)tier);
+            assert((location->source_flags & 0x20U) != 0);
+            assert(location->source_value_48 == 0);
+        }
+
+        /* Wrapping 3→0 is a decrease, so the native setter leaves both
+           the upgrade transition bit and cached +0x48 untouched. */
+        location->source_flags &= ~0x20U;
+        location->source_value_48 = 23;
+        assert(game_session_cycle_source_capacity(&session, 0,
+                                                   (uint16_t)player));
+        assert(location->source_capacity_4a == 0);
+        assert((location->source_flags & 0x20U) == 0);
+        assert(location->source_value_48 == 23);
+    }
+}
+
+static void test_cast_action_accepts_owner_variant_ids(void)
+{
+    GameSession session = {0};
+    unsigned int player;
+
+    session.island_count = 1;
+    session.islands[0].location_count = GAME_START_PLAYER_COUNT;
+    for (player = 0; player < GAME_START_PLAYER_COUNT; ++player) {
+        GameRuntimeLocation *location = &session.islands[0].locations[player];
+        location->renderer_class = 0;
+        location->owner_id = (int32_t)player;
+        location->source_location_slot_18 = 0;
+        location->record_value_10 = 0x2f + (int32_t)player * 16;
+        assert(game_session_queue_cast_action(&session, (uint8_t)player,
+            0, (uint16_t)player, 0x15));
+    }
+    assert(session.cast_action_count == GAME_START_PLAYER_COUNT);
+}
+
+static void test_cast_kind_one_applies_area_and_expires_site_state(void)
+{
+    GameSession session = {0};
+    GameFloaterStart *caster;
+    GameRuntimeLocation *inside;
+    GameRuntimeLocation *boundary;
+    GameRuntimeLocation *other_item;
+    GameRuntimeLocation *building;
+    unsigned int tick;
+
+    session.island_count = 1;
+    session.floater_count = 1;
+    session.islands[0].location_count = 5;
+    session.economy[1].hall_island_index = 0;
+    session.economy[1].hall_location_index = 0;
+    session.islands[0].locations[0].record_value_10 = 0x2a + 16;
+    session.islands[0].locations[0].owner_id = 1;
+    session.islands[0].locations[0].resource_stock[GAME_RESOURCE_MAGIC_TONE] = 16;
+    session.islands[0].locations[0].resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 11;
+    caster = &session.floaters[0];
+    caster->is_active = 1;
+    caster->owner_slot = 1;
+    caster->island_index = 0;
+    building = &session.islands[0].locations[4];
+    building->record_value_10 = 0x2f + 16;
+    building->owner_id = 1;
+    building->source_value_14 = 1;
+    building->source_location_slot_18 = 0;
+    building->charge_floater_slots[0] = 0;
+    assert(game_session_queue_cast_action(&session, 1, 0, 4, 0x16));
+    assert(game_session_dispatch_cast_actions(&session) == 1);
+    assert(caster->cast_spell_kind == 1);
+
+    session.islands[0].locations[0].x = 100;
+    session.islands[0].locations[0].y = 100;
+    inside = &session.islands[0].locations[1];
+    inside->record_value_10 = 10;
+    inside->owner_id = 4;
+    inside->source_value_14 = 4;
+    inside->source_location_slot_18 = 0;
+    inside->x = 274; /* distance 174: included in radius 175 */
+    inside->y = 100;
+    boundary = &session.islands[0].locations[2];
+    boundary->record_value_10 = 21;
+    boundary->owner_id = 4;
+    boundary->source_value_14 = 4;
+    boundary->source_location_slot_18 = 0;
+    boundary->x = 275; /* strict boundary: excluded */
+    boundary->y = 100;
+    other_item = &session.islands[0].locations[3];
+    other_item->record_value_10 = 22;
+    other_item->owner_id = 4;
+    other_item->source_value_14 = 4;
+    other_item->source_location_slot_18 = 0;
+    other_item->x = 101;
+    other_item->y = 100;
+
+    assert(game_session_resolve_cast_effect_step(&session, NULL, 0, 1, 0) == 1);
+    assert((caster->source_runtime_flags & 0x200U) != 0);
+    assert((inside->source_flags & 0x100U) != 0);
+    assert(inside->source_value_44 == 0);
+    assert((inside->source_flags & 1U) != 0);
+    assert((boundary->source_flags & 0x100U) == 0);
+    assert((other_item->source_flags & 0x100U) == 0);
+
+    for (tick = 0; tick < 19; ++tick)
+        game_session_tick_site_effect_timers(&session);
+    assert(inside->source_value_44 == 19);
+    assert((inside->source_flags & 1U) != 0);
+    game_session_tick_site_effect_timers(&session);
+    assert(inside->source_value_44 == 20);
+    assert((inside->source_flags & 1U) == 0);
+
+    for (tick = 0; tick < 980; ++tick)
+        game_session_tick_site_effect_timers(&session);
+    assert(inside->source_value_44 == 0);
+    assert((inside->source_flags & 0x100U) == 0);
+    assert((inside->source_flags & 1U) != 0);
+}
+
 static void test_pending_event_table_matches_source_slots_and_deduplication(void)
 {
     GameSession session;
@@ -349,6 +488,27 @@ static void test_repair_task_repeats_supply_and_heals_after_40_ticks(void)
     assert(session.pending_event_count == 0);
     assert(floater->active_order_action == 0);
     assert(floater->linked_task_slot == -1);
+}
+
+static void test_site_damage_filters_player_variant_building_ids(void)
+{
+    GameSession session = {0};
+    GameRuntimeLocation target = {0};
+    GameFloaterStart *attacker;
+
+    session.floater_count = 1;
+    attacker = &session.floaters[0];
+    attacker->is_active = 1;
+    attacker->owner_slot = 1;
+    target.renderer_class = 0;
+    target.record_value_10 = 0x17 + 16;
+    target.owner_id = 1;
+    target.source_value_14 = 1;
+    target.source_value_34 = 10;
+
+    /* The native filter sees base ID 0x17 for every owner. */
+    assert(game_session_damage_site(&session, 0, 0, 0, &target) == 0);
+    assert(target.source_value_34 == 10);
 }
 
 static void test_code_five_delivery_starts_bridge_cons_for_its_owner(void)

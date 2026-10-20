@@ -59,5 +59,13 @@ int game_session_order_floater_to_charge_site(GameSession *session,
                                               uint8_t island_index,
                                               unsigned int floater_index,
                                               uint16_t location_index);
+/* Order an owned floater to pick up a visible PIT_Object on its island.
+   The runtime consumer is observed; the native player-order producer remains
+   unresolved, so this is a remake-side interaction inferred from that state. */
+int game_session_order_floater_to_ground_object(GameSession *session,
+                                                uint8_t player_slot,
+                                                uint8_t island_index,
+                                                unsigned int floater_index,
+                                                uint16_t location_index);
 
 #endif

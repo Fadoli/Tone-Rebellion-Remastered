@@ -161,6 +161,11 @@ int game_session_initialize(const WorldDefinition *world,
         next.islands[island_index].leviathan_wait_timer = -1;
         game_session_recalculate_leviathan_island(&next, (uint8_t)island_index);
     }
+    for (island_index = 0; island_index < GAME_START_PLAYER_COUNT; ++island_index) {
+        const GamePlayerStart *start = &next.player_starts.players[island_index];
+        (void)game_session_recalculate_player_island_visibility(
+            &next, start->island_index, (uint8_t)island_index);
+    }
     game_session_refresh_player_maintenance_budgets(&next);
     *out = next;
     return 1;

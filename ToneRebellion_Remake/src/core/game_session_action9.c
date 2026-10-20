@@ -1,4 +1,5 @@
 #include "game_session.h"
+#include "game_session_internal.h"
 #include "game_session_action9.h"
 #include "floater_motion.h"
 #include "game_session_delivery.h"
@@ -156,13 +157,13 @@ static int action9_find_category4_site(GameSession *session,
     for (index = 0; index < island->location_count; ++index) {
         const GameRuntimeLocation *location = &island->locations[index];
         int32_t distance;
+        int32_t base_item_id = game_session_base_item_id(location);
         unsigned int largest_index;
         unsigned int candidate;
 
         if (location->renderer_class != 0 || location->source_value_14 == 4 ||
-            location->record_value_10 < 0x25 ||
-            location->record_value_10 > 0x34 ||
-            location->record_value_10 == 0x2a) continue;
+            base_item_id < 0x25 || base_item_id > 0x34 ||
+            base_item_id == 0x2a) continue;
         distance = game_session_source_chebyshev_distance(
             floater->x, floater->y, location->x, location->y);
         if (distance == 0 || distance >= max_distance) continue;

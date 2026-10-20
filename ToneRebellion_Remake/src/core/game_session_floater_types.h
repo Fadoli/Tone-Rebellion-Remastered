@@ -34,6 +34,8 @@ typedef struct GameFloaterStart {
     uint8_t attack_impact_frame_counts[4];
     uint8_t attack_effect_active;
     uint8_t attack_effect_odd_updates_remaining;
+    /* Raw floater +0x24: death timer for flag 0x008 and pulse counter for
+       FA_Cast kind 0x13's flag 0x2000. */
     uint16_t source_death_timer;
     /* Floater runtime short +0x0c gates IWLocInfo CHARGE through
        FUN_004207f2; +0x22 is the mutable charge counter. Initial workers
@@ -73,10 +75,8 @@ typedef struct GameFloaterStart {
     uint8_t order_source_island;
     uint32_t source_runtime_flags;
     /* FUN_00422d27's speed context is resolved before its coordinate step.
-       Site bonuses come from the linked source and the owner's glyph mask;
-       owner_speed_modifier remains zero until its global source is modeled. */
+       Site bonuses come from the linked source and the owner's glyph mask. */
     uint8_t movement_state;
-    int16_t owner_speed_modifier;
     uint8_t near_target_speed_override;
     uint16_t stop_radius;
     /* FUN_0045d8b2's linked 100-byte record fields. FUN_0042219e copies a

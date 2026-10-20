@@ -1,6 +1,9 @@
 #include "game_session.h"
 #include "pad_catalog.h"
 
+#include "game_session_economy_internal.h"
+#include "game_session_internal.h"
+
 #include <string.h>
 
 /* Player inventory, item-result and glyph action requests. */
@@ -91,14 +94,17 @@ int game_session_cycle_source_capacity(GameSession *session,
     if (location_index >= island->location_count) return 0;
     location = &island->locations[location_index];
 
-    /* FUN_004672ef case 3 only accepts class-0 item 0x2a and 0x2c..0x30. */
-    if (location->renderer_class != 0 ||
-        (location->record_value_10 != 0x2a &&
-         (location->record_value_10 < 0x2c ||
-          location->record_value_10 > 0x30))) return 0;
+    /* FUN_004672ef checks the native base item at +0x10; the player variant
+       is a catalog lookup detail represented by the port's shifted ID. */
+    {
+        int32_t base_item_id = game_session_base_item_id(location);
+        if (location->renderer_class != 0 ||
+            (base_item_id != 0x2a &&
+             (base_item_id < 0x2c || base_item_id > 0x30))) return 0;
+    }
 
-    next_tier = (int16_t)(location->source_capacity_4a + 1);
-    if (next_tier >= 3 || next_tier < 0) next_tier = 0;
+    next_tier = location->source_capacity_4a >= 0
+        ? (int16_t)((location->source_capacity_4a + 1) & 3) : 0;
 
     /* FUN_00453cba marks the source for its tier-up transition only when the
        new tier is greater, and clears the cached value at +0x48 then. */
@@ -221,6 +227,19 @@ int game_session_cast_kind_for_action(uint8_t owner, uint8_t action_subtype)
     return cast_kinds[owner][action_subtype - 0x15];
 }
 
+/* spells.txt is in native kind order (MagCost and CryCost). FUN_0045da80
+   debits these after it has found a caster; kind 22 is the separate glyph
+   path and has no spell record in the corpus. */
+static const uint8_t cast_magic_costs[22] = {
+    9, 16, 12, 9, 10, 12, 14, 11, 9, 11, 7,
+    33, 28, 34, 36, 22, 27, 35, 39, 43, 59, 46
+};
+
+static const uint8_t cast_crystal_costs[22] = {
+    7, 11, 9, 12, 9, 7, 10, 17, 14, 13, 13,
+    13, 17, 12, 17, 19, 17, 12, 18, 18, 33, 22
+};
+
 int game_session_queue_cast_action(GameSession *session,
                                    uint8_t player_slot,
                                    uint8_t island_index,
@@ -238,8 +257,8 @@ int game_session_queue_cast_action(GameSession *session,
             &session->islands[island_index].locations[location_index];
         if (building->owner_id != player_slot ||
             building->source_location_slot_18 < 0 ||
-            (building->record_value_10 != 0x2f &&
-             building->record_value_10 != 0x30)) return 0;
+            (game_session_base_item_id(building) != 0x2f &&
+             game_session_base_item_id(building) != 0x30)) return 0;
     }
 
     request = &session->cast_actions[session->cast_action_count++];
@@ -261,7 +280,11 @@ unsigned int game_session_dispatch_cast_actions(GameSession *session)
         const GameCastActionRequest request = session->cast_actions[request_index];
         GameRuntimeIsland *building_island;
         GameRuntimeLocation *building;
+        GameRuntimeLocation *hall;
+        GameFloaterStart *caster = NULL;
         uint8_t kind;
+        uint32_t magic_cost;
+        uint32_t crystal_cost;
         unsigned int slot;
         if (request.player_slot >= GAME_START_PLAYER_COUNT ||
             request.island_index >= session->island_count ||
@@ -277,7 +300,13 @@ unsigned int game_session_dispatch_cast_actions(GameSession *session)
         kind = (uint8_t)game_session_cast_kind_for_action(
             (uint8_t)building->source_value_14, request.action_subtype);
         /* These kinds have a reconstructed FA_Cast tick and impact path. */
-        if (kind != 7 && kind != 9 && kind != 0x14 && kind != 0x16) continue;
+        if (!((kind <= 9) || (kind >= 0x10 && kind <= 0x15))) continue;
+
+        magic_cost = cast_magic_costs[kind];
+        crystal_cost = cast_crystal_costs[kind];
+        /* FUN_0045d9c1 applies the glyph-8 discount to magic only. */
+        if ((session->economy[request.player_slot].glyph_mask & 0x0100U) != 0)
+            magic_cost = (magic_cost * 2U) / 3U;
 
         /* FUN_0045d8f4 scans the building's eight floater links in order and
            skips a unit already executing FA_Cast. The source level thresholds
@@ -291,24 +320,38 @@ unsigned int game_session_dispatch_cast_actions(GameSession *session)
             if (!game_session_floater_is_active(floater) ||
                 floater->owner_slot != request.player_slot ||
                 floater->active_order_action == 0x13) continue;
-
-            floater->active_order_action = 0x13;
-            floater->movement_state = 0x13;
-            floater->cast_spell_kind = kind;
-            /* FUN_0042fa0f repeats the selected site's island/location in
-               packet words +0x0e/+0x10 for FUN_0045da80. */
-            floater->order_target_island = request.island_index;
-            floater->order_target_location = (int16_t)request.location_index;
-            floater->order_target_floater = -1;
-            floater->order_progress = UINT8_MAX;
-            floater->order_timer = 0;
-            floater->source_runtime_flags &= ~0x200U;
-            floater->has_move_order = 0;
-            floater->has_wander_order = 0;
-            floater->wander_timer = 0;
-            ++dispatched;
+            caster = floater;
             break;
         }
+        if (caster == NULL) continue;
+
+        /* Native validation and caster selection precede both stock debits.
+           Check together so a failed request cannot spend only one resource. */
+        hall = game_session_player_hall(session, request.player_slot);
+        if (hall == NULL ||
+            hall->resource_stock[GAME_RESOURCE_MAGIC_TONE] < magic_cost ||
+            hall->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] < crystal_cost)
+            continue;
+        hall->resource_stock[GAME_RESOURCE_MAGIC_TONE] =
+            (uint16_t)(hall->resource_stock[GAME_RESOURCE_MAGIC_TONE] - magic_cost);
+        hall->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] =
+            (uint16_t)(hall->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] - crystal_cost);
+
+        caster->active_order_action = 0x13;
+        caster->movement_state = 0x13;
+        caster->cast_spell_kind = kind;
+        /* FUN_0042fa0f repeats the selected site's island/location in
+           packet words +0x0e/+0x10 for FUN_0045da80. */
+        caster->order_target_island = request.island_index;
+        caster->order_target_location = (int16_t)request.location_index;
+        caster->order_target_floater = -1;
+        caster->order_progress = UINT8_MAX;
+        caster->order_timer = 0;
+        caster->source_runtime_flags &= ~0x200U;
+        caster->has_move_order = 0;
+        caster->has_wander_order = 0;
+        caster->wander_timer = 0;
+        ++dispatched;
     }
     memset(session->cast_actions, 0, sizeof(session->cast_actions));
     session->cast_action_count = 0;

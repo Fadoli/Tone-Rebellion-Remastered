@@ -126,8 +126,8 @@ int game_session_initialize_start_players(
             floater->destination_y = start->marker_y;
             floater->order_target_floater = -1;
             floater->order_target_location = -1;
-            /* No task table is modeled yet; these unlinked initial floaters
-               take the source's idle FA_Wander fallback. */
+            /* Initial unlinked floaters start in the native idle-wander
+               fallback; the tick can route them back to their home island. */
             floater->has_wander_order = 1;
             /* FUN_0046466f creates each initial unit with subtype 0;
                FUN_00422d27 reads speed through FUN_00464242 (+0x0c). */

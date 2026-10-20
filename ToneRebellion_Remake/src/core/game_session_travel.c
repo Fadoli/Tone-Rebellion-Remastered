@@ -128,8 +128,8 @@ static int find_handoff_arrival(const GameSession *session,
         return preferred_arrival;
     }
 
-    if (floater->active_order_action == 6 ||
-        floater->active_order_action == 8) {
+    if (floater->handoff_resume_action == 6 ||
+        floater->handoff_resume_action == 8) {
         if (floater->order_target_floater >= 0 &&
             (unsigned int)floater->order_target_floater <
                 session->floater_count) {
@@ -138,12 +138,12 @@ static int find_handoff_arrival(const GameSession *session,
             reference_x = target->x;
             reference_y = target->y;
         }
-    } else if (floater->active_order_action == 9) {
+    } else if (floater->handoff_resume_action == 9) {
         reference_x =
             (int32_t)(floater->source_order_coordinate_30 >> 8) * 10;
         reference_y =
             (int32_t)(floater->source_order_coordinate_30 & 0xffU) * 10;
-    } else if (floater->active_order_action != 0x0e &&
+    } else if (floater->handoff_resume_action != 0x0e &&
                floater->order_target_location >= 0 &&
                (uint16_t)floater->order_target_location <
                    island->location_count) {
@@ -301,6 +301,11 @@ int game_session_tick_floater_handoff(GameSession *session,
                        session->islands[floater->island_index].location_count) {
             floater->movement_state = 11;
             floater->active_order_action = 0;
+        } else if (resume_action == 0x0e) {
+            floater->movement_state = 0;
+            floater->active_order_action = 0x0e;
+            floater->has_wander_order = 1;
+            floater->wander_timer = 0;
         } else {
             floater->movement_state = 9;
             floater->active_order_action = 9;
@@ -310,7 +315,7 @@ int game_session_tick_floater_handoff(GameSession *session,
                 (uint16_t)(floater->source_order_coordinate_30 & 0xffU) * 10U;
         }
         floater->stop_radius = 0;
-        floater->has_move_order = 1;
+        floater->has_move_order = (uint8_t)(resume_action != 0x0e);
     }
     return 1;
 }

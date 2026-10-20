@@ -121,6 +121,30 @@ static int selected_onoff_button_visible(void)
         g_game_session.config.selected_tribe);
 }
 
+static int selected_upgrade_button_visible(void)
+{
+    const GameRuntimeIsland *island;
+    const GameRuntimeLocation *location;
+    int32_t base_item_id;
+
+    if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
+        g_menu.selected_tribe < 0 ||
+        g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
+        g_menu.selected_map_island < 0 ||
+        g_menu.selected_map_island >= g_game_session.island_count ||
+        g_selected_location < 0) return 0;
+    island = &g_game_session.islands[g_menu.selected_map_island];
+    if (g_selected_location >= island->location_count) return 0;
+    location = &island->locations[g_selected_location];
+    if (location->renderer_class != 0 ||
+        location->owner_id != g_menu.selected_tribe ||
+        location->source_value_14 != g_menu.selected_tribe) return 0;
+    base_item_id = location->record_value_10 -
+        (int32_t)g_menu.selected_tribe * 16;
+    return base_item_id == 0x2a ||
+        (base_item_id >= 0x2c && base_item_id <= 0x30);
+}
+
 static int selected_cast_action_at(int x, int y)
 {
     static const char *const spell_names[8] = {
@@ -156,7 +180,8 @@ static int selected_cast_action_at(int x, int y)
             int kind = game_session_cast_kind_for_action(
                 (uint8_t)location->source_value_14,
                 (uint8_t)(0x15U + index));
-            return kind == 7 || kind == 9 || kind == 0x14 || kind == 0x16
+            return kind == 4 || kind == 7 || kind == 8 || kind == 9 ||
+                   kind == 0x14 || kind == 0x16
                 ? (int)(0x15U + index) : -1;
         }
     }
@@ -184,6 +209,7 @@ static int update_location_action_hover(int x, int y)
 {
     const char *const move_names[] = {"IWMove", "IWHallMove"};
     static const char *const repair_names[] = {"BC_Repair"};
+    static const char *const upgrade_names[] = {"BC_Upgrade"};
     static const char *const onoff_names[] = {"BC_OnOff"};
     IslandLocationActionControl action = selected_location_action();
     const char *name = action == ISLAND_LOCATION_ACTION_HALL_MOVE
@@ -195,8 +221,10 @@ static int update_location_action_hover(int x, int y)
         : NULL;
     const GameRuntimeIsland *island = NULL;
     const WindowTemplate *repair_control = NULL;
+    const WindowTemplate *upgrade_control = NULL;
     const WindowTemplate *onoff_control = NULL;
     int repair_hovered = 0;
+    int upgrade_hovered = 0;
     int onoff_hovered = 0;
     if (g_game_session_valid && g_menu.screen == SCREEN_ISLAND &&
         g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL &&
@@ -210,6 +238,11 @@ static int update_location_action_hover(int x, int y)
                     3, x, y, repair_names,
                     sizeof(repair_names) / sizeof(repair_names[0]));
             }
+            if (selected_upgrade_button_visible()) {
+                upgrade_control = window_catalog_hit_test_names(&g_window_catalog,
+                    3, x, y, upgrade_names,
+                    sizeof(upgrade_names) / sizeof(upgrade_names[0]));
+            }
             if (selected_onoff_button_visible()) {
                 onoff_control = window_catalog_hit_test_names(&g_window_catalog,
                     3, x, y, onoff_names,
@@ -219,15 +252,19 @@ static int update_location_action_hover(int x, int y)
     }
     repair_hovered = repair_control != NULL &&
         strcmp(repair_control->name, "BC_Repair") == 0;
+    upgrade_hovered = upgrade_control != NULL &&
+        strcmp(upgrade_control->name, "BC_Upgrade") == 0;
     onoff_hovered = onoff_control != NULL &&
         strcmp(onoff_control->name, "BC_OnOff") == 0;
     IslandLocationActionControl hovered = ISLAND_LOCATION_ACTION_NONE;
     if (control != NULL && strcmp(control->name, name) == 0) hovered = action;
     if (hovered == g_hovered_location_action &&
         repair_hovered == g_hovered_repair_control &&
+        upgrade_hovered == g_hovered_upgrade_control &&
         onoff_hovered == g_hovered_onoff_control) return 0;
     g_hovered_location_action = hovered;
     g_hovered_repair_control = repair_hovered;
+    g_hovered_upgrade_control = upgrade_hovered;
     g_hovered_onoff_control = onoff_hovered;
     return 1;
 }

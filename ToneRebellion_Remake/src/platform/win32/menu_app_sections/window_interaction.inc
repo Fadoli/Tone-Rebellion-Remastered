@@ -259,6 +259,18 @@ static void handle_click(HWND window, int x, int y)
                 InvalidateRect(window, NULL, FALSE);
                 return;
             }
+            static const char *const upgrade_names[] = {"BC_Upgrade"};
+            const WindowTemplate *upgrade_control = selected_upgrade_button_visible()
+                ? window_catalog_hit_test_names(&g_window_catalog, 3, x, y,
+                    upgrade_names,
+                    sizeof(upgrade_names) / sizeof(upgrade_names[0])) : NULL;
+            if (upgrade_control != NULL) {
+                (void)game_session_cycle_source_capacity(&g_game_session,
+                    (uint8_t)g_menu.selected_map_island,
+                    (uint16_t)g_selected_location);
+                InvalidateRect(window, NULL, FALSE);
+                return;
+            }
             static const char *const repair_names[] = {"BC_Repair"};
             const WindowTemplate *repair_control = selected_repair_button_visible()
                 ? window_catalog_hit_test_names(&g_window_catalog, 3, x, y,

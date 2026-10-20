@@ -78,6 +78,9 @@ typedef struct GameRuntimeLocation {
     /* FUN_00452e4d stores the last floater pickup tick it checked for a
        resource output at runtime +0x36. */
     int16_t resource_retry_tick_36;
+    /* FUN_00453b09 writes (floater level + 1) * 1000 at site +0x38;
+       FUN_00450a71 consumes it once per island update. */
+    uint32_t source_effect_timer_38;
     /* Producer items 0x25..0x27 use source +0x0c to start PROD after the
        running object's cadence reaches 20; separate from BASE +0x4a. */
     uint16_t producer_cadence;

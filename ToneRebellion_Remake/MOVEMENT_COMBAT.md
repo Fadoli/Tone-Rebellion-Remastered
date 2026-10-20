@@ -61,3 +61,12 @@ gameplay state. Evidence: `ev_3b605ab12575d2aa283244d68c1b83314a3c4768bef5b1518d
 `ev_194649b25df937615aa9cd8470539820d14a39966f5c66e6a2fbdf766465741a`,
 `ev_0c10f06b048d94a70ea80142f675a05667a0928aeeeecc98e63ace03f8c270ba` and
 `ev_40e57a701dcdfcc8c86be5c2642b1ceba5aee4bcfc77fe9923616cbdf99e14a9`.
+
+The runtime keeps owner-specific PAD lookup IDs, but `FUN_00450817` filters
+base item IDs `0x17..0x24` before site damage. Attack and area-cast filters now
+normalize the ID first, so player slots 1–3 receive the same building immunity
+as slot 0. Regression coverage is in
+`test_site_damage_filters_player_variant_building_ids`. REA confirms the
+native predicate reads `+0x10` directly (`ev_a8441ac6c243be3c67999d9793a76b3cd00d9a3644a10d660bf6e4febfd324d7`);
+Ghidra found no direct callers for this small helper, so its consumer identity
+remains inferred from the existing call-path reconstruction.

@@ -1,6 +1,8 @@
 #include "game_session.h"
 #include "game_session_combat_internal.h"
 #include "game_session_action9.h"
+#include "game_session_events.h"
+#include "game_session_internal.h"
 
 #include <math.h>
 #include <stdint.h>
@@ -262,7 +264,7 @@ int32_t game_session_damage_site(GameSession *session,
     /* FUN_00467260 scales the shared 15-bit RNG by this range, truncates via
        __ftol, adds one, then caps the site damage at six. */
     int32_t damage = tone_rng_bounded(&session->random_state, damage_range) + 1;
-    int32_t item_id = target->record_value_10;
+    int32_t item_id = game_session_base_item_id(target);
 
     if (!game_session_floater_is_active(attacker) ||
         (attacker->source_runtime_flags & 0x008U) != 0) return 0;
@@ -303,6 +305,7 @@ void game_session_clear_cast_site(GameSession *session, uint8_t island_index,
                                   GameRuntimeLocation *target)
 {
     int32_t previous_owner = target->owner_id;
+    int32_t previous_base_item_id = game_session_base_item_id(target);
     int32_t retained_item = target->record_value_24;
     unsigned int slot;
     unsigned int task_type;
@@ -356,6 +359,12 @@ void game_session_clear_cast_site(GameSession *session, uint8_t island_index,
     target->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 0;
     target->resource_stock[GAME_RESOURCE_MAGIC_TONE] = 0;
     (void)game_session_recalculate_active_locations(session);
+    if (previous_base_item_id == 0x28 && previous_owner >= 0 &&
+        previous_owner < GAME_START_PLAYER_COUNT) {
+        (void)game_session_recalculate_player_island_visibility(
+            session, island_index, (uint8_t)previous_owner);
+        game_session_refresh_player_maintenance_budgets(session);
+    }
 }
 
 static int32_t cast_round_to_even(double value)
@@ -417,14 +426,12 @@ int32_t game_session_apply_cast_site_effect(GameSession *session,
     return effect_amount;
 }
 
-unsigned int game_session_apply_cast_blast(
-    GameSession *session, unsigned int caster_index)
+static unsigned int game_session_apply_cast_area_damage(
+    GameSession *session, unsigned int caster_index,
+    int32_t radius, int32_t base_amount)
 {
     GameFloaterStart *caster;
     const GameRuntimeIsland *island;
-    int32_t level;
-    int32_t radius;
-    int32_t base_amount;
     unsigned int location_index;
     unsigned int affected = 0;
     unsigned int target_index;
@@ -434,14 +441,8 @@ unsigned int game_session_apply_cast_blast(
     if (caster->island_index >= session->island_count) return 0;
     island = &session->islands[caster->island_index];
 
-    /* FUN_004239e9 case 7 scales a 0x11 base by the caster's low-nibble
-       level and applies linear attenuation beyond half of the radius. */
-    level = caster->attack_level_flags & 0x0fU;
-    radius = level * 0x32 + 200;
-    base_amount = level * 5 + 0x11;
-
     /* FUN_004239e9 also calls FUN_004204bc for every other floater within
-       the blast radius; this hit is direct and does not roll attack chance. */
+       the cast radius; direct damage does not roll normal attack chance. */
     for (target_index = 0; target_index < session->floater_count;
          ++target_index) {
         GameFloaterStart *target = &session->floaters[target_index];
@@ -473,6 +474,7 @@ unsigned int game_session_apply_cast_blast(
     for (location_index = 0; location_index < island->location_count;
          ++location_index) {
         const GameRuntimeLocation *target = &island->locations[location_index];
+        int32_t base_item_id = game_session_base_item_id(target);
         int32_t distance = game_session_source_chebyshev_distance(
             caster->x, caster->y, target->x, target->y);
         int32_t effect_amount = base_amount;
@@ -480,7 +482,7 @@ unsigned int game_session_apply_cast_blast(
         /* FUN_00450817 filters item IDs 0x17..0x24 before forwarding to
            FUN_00450847. */
         if (distance >= radius ||
-            (target->record_value_10 >= 0x17 && target->record_value_10 <= 0x24)) {
+            (base_item_id >= 0x17 && base_item_id <= 0x24)) {
             continue;
         }
         if (radius / 2 < distance) {
@@ -492,6 +494,28 @@ unsigned int game_session_apply_cast_blast(
             ++affected;
         }
     }
+
+    return affected;
+}
+
+unsigned int game_session_apply_cast_blast(
+    GameSession *session, unsigned int caster_index)
+{
+    GameFloaterStart *caster;
+    int32_t level;
+    int32_t radius;
+    int32_t base_amount;
+    unsigned int affected;
+
+    if (session == NULL || caster_index >= session->floater_count) return 0;
+    caster = &session->floaters[caster_index];
+    if (caster->island_index >= session->island_count) return 0;
+    /* FUN_004239e9 case 7 scales a 0x11 base and radius by caster level. */
+    level = caster->attack_level_flags & 0x0fU;
+    radius = level * 0x32 + 200;
+    base_amount = level * 5 + 0x11;
+    affected = game_session_apply_cast_area_damage(
+        session, caster_index, radius, base_amount);
 
     /* FUN_004239e9 case 7 calls FUN_004204bc with the caster's current HP,
        making the area cast consume its caster as part of the impact. */
@@ -505,7 +529,8 @@ unsigned int game_session_apply_cast_blast(
 }
 
 unsigned int game_session_resolve_cast_effect_step(
-    GameSession *session, unsigned int caster_index, uint8_t step,
+    GameSession *session, const PadCatalog *catalog,
+    unsigned int caster_index, uint8_t step,
     int16_t target_location_index)
 {
     GameFloaterStart *caster;
@@ -513,10 +538,251 @@ unsigned int game_session_resolve_cast_effect_step(
 
     if (session == NULL || caster_index >= session->floater_count) return 0;
     caster = &session->floaters[caster_index];
+    if (step == 0) {
+        unsigned int slot;
+        unsigned int healed = 0;
+        GameRuntimeLocation *source;
+
+        if (caster->cast_spell_kind != 0) return 0;
+        caster->source_runtime_flags |= 0x200U;
+        if (caster->owner_slot >= GAME_START_PLAYER_COUNT ||
+            caster->source_link_0c < 0 ||
+            caster->charge_source_island >= session->island_count ||
+            caster->charge_source_location >=
+                session->islands[caster->charge_source_island].location_count)
+            return 1;
+
+        source = &session->islands[caster->charge_source_island]
+            .locations[caster->charge_source_location];
+        if (source->owner_id != (int32_t)caster->owner_slot ||
+            source->source_location_slot_18 != caster->source_link_0c)
+            return 1;
+
+        /* FUN_004239e9 case 0 follows the caster's +0x18 source record and
+           heals each linked floater by (level + 2) / 4 of its maximum HP. */
+        for (slot = 0; slot < 8; ++slot) {
+            int16_t target_index = source->charge_floater_slots[slot];
+            GameFloaterStart *target;
+            uint32_t maximum;
+            uint32_t restored;
+
+            if (target_index < 0 ||
+                (unsigned int)target_index >= session->floater_count) continue;
+            target = &session->floaters[(unsigned int)target_index];
+            maximum = target->max_hit_points;
+            if (!game_session_floater_is_active(target) || maximum == 0 ||
+                target->current_hit_points >= maximum) continue;
+
+            caster->order_target_floater = target_index;
+            restored = (uint32_t)target->current_hit_points +
+                (((uint32_t)(caster->attack_level_flags & 0x000fU) + 2U) *
+                 maximum >> 2);
+            if (restored > maximum) restored = maximum;
+            target->current_hit_points = (uint8_t)restored;
+            if ((target->source_runtime_flags & 0x908U) == 0) {
+                target->source_runtime_flags |= 0x2000U;
+                target->source_death_timer = 0;
+            }
+            ++healed;
+        }
+        return healed + 1U;
+    }
+    if (step == 1) {
+        GameRuntimeIsland *island;
+        GameRuntimeLocation *target_site;
+        int32_t radius;
+        unsigned int location_index;
+        unsigned int affected = 0;
+
+        if (caster->cast_spell_kind != 1 ||
+            caster->island_index >= session->island_count ||
+            target_location_index < 0 ||
+            (uint16_t)target_location_index >=
+                session->islands[caster->island_index].location_count) return 0;
+        caster->source_runtime_flags |= 0x200U;
+        island = &session->islands[caster->island_index];
+        target_site = &island->locations[(uint16_t)target_location_index];
+        radius = (int32_t)(caster->attack_level_flags & 0x000fU) * 50 + 0xaf;
+        for (location_index = 0; location_index < island->location_count;
+             ++location_index) {
+            GameRuntimeLocation *site = &island->locations[location_index];
+            int32_t dx;
+            int32_t dy;
+
+            /* FUN_004239e9 case 1 accepts raw item IDs 10..21 and uses a
+               strict Chebyshev radius around the selected site's +0x32. */
+            if (site->record_value_10 <= 9 || site->record_value_10 >= 22)
+                continue;
+            dx = (int32_t)site->x - target_site->x;
+            dy = (int32_t)site->y - target_site->y;
+            if (dx < 0) dx = -dx;
+            if (dy < 0) dy = -dy;
+            if ((dx > dy ? dx : dy) >= radius) continue;
+
+            /* FUN_00453ade starts the 0x100/+0x44 site state and immediately
+               recalculates its active bit. */
+            site->source_flags |= 0x100U;
+            site->source_value_44 = 0;
+            ++affected;
+        }
+        if (affected != 0)
+            (void)game_session_recalculate_active_locations(session);
+        return affected;
+    }
+    if (step == 2) {
+        unsigned int floater_index;
+        unsigned int healed = 0;
+        unsigned int limit;
+        uint32_t level;
+
+        if (caster->cast_spell_kind != 2 ||
+            caster->owner_slot >= GAME_START_PLAYER_COUNT) return 0;
+        caster->source_runtime_flags |= 0x200U;
+        level = caster->attack_level_flags & 0x000fU;
+        limit = (level + 1U) * 5U;
+        /* FUN_004239e9 case 2 scans the owner's roster in native slot order,
+           restores subtype-0 floaters to their resolved max HP, and caps the
+           number treated at five times (level + 1). */
+        for (floater_index = 0; floater_index < session->floater_count;
+             ++floater_index) {
+            GameFloaterStart *target = &session->floaters[floater_index];
+            if (!game_session_floater_is_active(target) ||
+                target->owner_slot != caster->owner_slot ||
+                target->source_subtype != 0 ||
+                target->current_hit_points >= target->max_hit_points) continue;
+            target->current_hit_points = target->max_hit_points;
+            if ((target->source_runtime_flags & 0x908U) == 0) {
+                target->source_runtime_flags |= 0x2000U;
+                target->source_death_timer = 0;
+            }
+            ++healed;
+            if (healed >= limit) break;
+        }
+        return healed + 1U;
+    }
+    if (step == 0x11) {
+        GameRuntimeIsland *island;
+        unsigned int location_index;
+        unsigned int affected = 0;
+
+        if (caster->cast_spell_kind != 0x11 ||
+            caster->island_index >= session->island_count) return 0;
+        island = &session->islands[caster->island_index];
+        for (location_index = 0; location_index < island->location_count;
+             ++location_index) {
+            GameRuntimeLocation *site = &island->locations[location_index];
+
+            /* FUN_004239e9 case 0x11 affects every raw item ID 6..9 on the
+               caster's island, without filtering by owner or distance. */
+            if (site->record_value_10 <= 5 || site->record_value_10 >= 10)
+                continue;
+            site->source_flags |= 0x100U;
+            site->source_value_44 = 0;
+            ++affected;
+        }
+        caster->source_runtime_flags |= 0x200U;
+        if (affected != 0)
+            (void)game_session_recalculate_active_locations(session);
+        return affected;
+    }
+    if (step == 0x10) {
+        GameRuntimeLocation *site;
+        if (caster->cast_spell_kind != 0x10 ||
+            caster->island_index >= session->island_count ||
+            target_location_index < 0 ||
+            (uint16_t)target_location_index >=
+                session->islands[caster->island_index].location_count) return 0;
+        caster->source_runtime_flags |= 0x200U;
+        site = &session->islands[caster->island_index]
+                    .locations[(uint16_t)target_location_index];
+        /* FUN_004239e9 case 0x10 forwards the selected type-6..9 site's own
+           +0x34 to FUN_00450847, draining that value and destroying it. */
+        if (site->record_value_10 <= 5 || site->record_value_10 >= 10)
+            return 0;
+        return game_session_apply_cast_site_effect(
+            session, caster->island_index, (uint16_t)target_location_index,
+            site->source_value_34);
+    }
+    if (step == 4 || step == 5 || step == 6) {
+        GameRuntimeLocation *site;
+        uint32_t level;
+        if (caster->cast_spell_kind != step ||
+            caster->island_index >= session->island_count ||
+            target_location_index < 0 ||
+            (uint16_t)target_location_index >=
+                session->islands[caster->island_index].location_count) return 0;
+        site = &session->islands[caster->island_index]
+                    .locations[(uint16_t)target_location_index];
+        level = (uint32_t)(caster->attack_level_flags & 0x000fU);
+        /* FUN_00453b09 is shared by kinds 4..6: set site bit 0x200 and store
+           (level + 1) * 1000 at +0x38; FUN_00450a71 clears it on expiry. */
+        site->source_flags |= 0x200U;
+        site->source_effect_timer_38 = (level + 1U) * 1000U;
+        caster->source_runtime_flags |= 0x200U;
+        return 1;
+    }
     if (step == 7) {
         if (caster->cast_spell_kind != 7) return 0;
         caster->source_runtime_flags |= 0x200U;
         return game_session_apply_cast_blast(session, caster_index);
+    }
+    if (step == 0x12) {
+        unsigned int affected;
+        if (caster->cast_spell_kind != 0x12 ||
+            caster->island_index >= session->island_count) return 0;
+        /* Kind 0x12 uses a fixed 250 Chebyshev radius and base 17 damage;
+           its cast animation is centered on the caster, not the target site. */
+        affected = game_session_apply_cast_area_damage(
+            session, caster_index, 250, 17);
+        caster->source_runtime_flags &= ~0x100U;
+        caster->source_runtime_flags |= 0x200U;
+        return affected;
+    }
+    if (step == 0x13) {
+        GameRuntimeLocation *site;
+        int32_t owner;
+        int16_t record_slot;
+        uint32_t level;
+        unsigned int slot;
+        unsigned int affected = 0;
+
+        if (caster->cast_spell_kind != 0x13 ||
+            caster->island_index >= session->island_count ||
+            target_location_index < 0 ||
+            (uint16_t)target_location_index >=
+                session->islands[caster->island_index].location_count) return 0;
+        caster->source_runtime_flags |= 0x200U;
+        site = &session->islands[caster->island_index]
+                    .locations[(uint16_t)target_location_index];
+        owner = site->source_value_14;
+        record_slot = site->source_location_slot_18;
+        /* FUN_00450385 resolves the selected site's player row and +0x18
+           record. The native code has no bounds checks; keep malformed links
+           from indexing outside the remake's modeled table. */
+        if (owner < 0 || owner >= GAME_START_PLAYER_COUNT ||
+            record_slot < 0 || record_slot >= GAME_SOURCE_RECORDS_PER_ISLAND)
+            return 0;
+
+        level = caster->attack_level_flags & 0x000fU;
+        /* FUN_00453bb6 sets site bit 0x20000 and the shared +0x38 timer. */
+        site->source_flags |= 0x20000U;
+        site->source_effect_timer_38 = level * 500U + 1000U;
+
+        /* FUN_0045d53c pulses each linked floater that is not dying or in
+           either excluded state; +0x24 is shared with the death counter. */
+        for (slot = 0; slot < 8; ++slot) {
+            int16_t floater_index = site->charge_floater_slots[slot];
+            GameFloaterStart *linked;
+            if (floater_index < 0 ||
+                (unsigned int)floater_index >= session->floater_count) continue;
+            linked = &session->floaters[(unsigned int)floater_index];
+            if (!game_session_floater_is_active(linked) ||
+                (linked->source_runtime_flags & 0x908U) != 0) continue;
+            linked->source_runtime_flags |= 0x2000U;
+            linked->source_death_timer = 0;
+            ++affected;
+        }
+        return affected + 1U;
     }
     if (step == 0x14) {
         if (caster->cast_spell_kind != 0x14 ||
@@ -526,6 +792,79 @@ unsigned int game_session_resolve_cast_effect_step(
            after this effect callback and performs that same reevaluation. */
         caster->source_runtime_flags |= 0x200U;
         session->islands[caster->island_index].leviathan_periodic_timer = 0x16;
+        return 1;
+    }
+    if (step == 0x15) {
+        unsigned int floater_index;
+        unsigned int affected = 0;
+        uint32_t level;
+        if (caster->cast_spell_kind != 0x15 ||
+            caster->owner_slot >= GAME_START_PLAYER_COUNT) return 0;
+
+        level = caster->attack_level_flags & 0x000fU;
+        /* FUN_004239e9 stores level*1000+1000 in the owner's speed timer. */
+        session->economy[caster->owner_slot].floater_speed_boost_timer =
+            (int16_t)(level * 1000U + 1000U);
+        /* The native owner query includes all islands; only subtype-0 floaters
+           without the excluded flags receive the temporary pulse. */
+        for (floater_index = 0; floater_index < session->floater_count;
+             ++floater_index) {
+            GameFloaterStart *target = &session->floaters[floater_index];
+            if (!game_session_floater_is_active(target) ||
+                target->owner_slot != caster->owner_slot ||
+                target->source_subtype != 0 ||
+                (target->source_runtime_flags & 0x908U) != 0) continue;
+            target->source_runtime_flags |= 0x2000U;
+            target->source_death_timer = 0;
+            ++affected;
+        }
+        caster->source_runtime_flags |= 0x200U;
+        return affected + 1U;
+    }
+    if (step == 8) {
+        GameRuntimeLocation *pit_object;
+        int32_t item_id;
+        uint16_t *inventory_count;
+        if (caster->cast_spell_kind != 8 ||
+            caster->owner_slot >= GAME_START_PLAYER_COUNT ||
+            caster->island_index >= session->island_count ||
+            target_location_index < 0 ||
+            (uint16_t)target_location_index >=
+                session->islands[caster->island_index].location_count) return 0;
+        caster->source_runtime_flags |= 0x200U;
+        pit_object = &session->islands[caster->island_index]
+                          .locations[(uint16_t)target_location_index];
+        if (pit_object->record_value_10 != 1) return 0;
+        item_id = pit_object->record_value_24;
+        if (item_id < 5 || item_id > 33) return 0;
+
+        /* FUN_0045f075 increments the owner's short counter without a cap. */
+        inventory_count = &session->economy[caster->owner_slot]
+            .inventory_count[(unsigned int)(item_id -
+                GAME_INVENTORY_ITEM_FIRST_ID)];
+        *inventory_count = (uint16_t)(*inventory_count + 1U);
+        game_session_clear_cast_site(session, caster->island_index,
+            (uint16_t)target_location_index, pit_object);
+        return 1;
+    }
+    if (step == 3) {
+        GameRuntimeLocation *site;
+        int32_t base_item_id;
+        int16_t maximum;
+        if (caster->cast_spell_kind != 3 ||
+            caster->island_index >= session->island_count ||
+            target_location_index < 0 ||
+            (uint16_t)target_location_index >=
+                session->islands[caster->island_index].location_count) return 0;
+        caster->source_runtime_flags |= 0x200U;
+        site = &session->islands[caster->island_index]
+                    .locations[(uint16_t)target_location_index];
+        base_item_id = game_session_base_item_id(site);
+        /* FUN_004239e9 restores +0x34 from FUN_00450978 for item IDs
+           0x26..0x34; its exact gameplay label is not established. */
+        if (base_item_id < 0x26 || base_item_id > 0x34 || catalog == NULL ||
+            !game_session_source_value_34_max(catalog, site, &maximum)) return 0;
+        site->source_value_34 = maximum;
         return 1;
     }
     if ((step != 9 && step != 0x16) ||
@@ -561,14 +900,27 @@ int game_session_schedule_cast_effect_step(
     unsigned int slot;
 
     if (session == NULL || caster_index >= session->floater_count ||
-        (step != 7 && step != 9 && step != 0x14 && step != 0x16) ||
+        (step != 0 && step != 1 && step != 2 && step != 3 && step != 4 && step != 5 && step != 6 &&
+         step != 7 && step != 8 && step != 9 &&
+         step != 0x10 &&
+         step != 0x11 && step != 0x12 && step != 0x13 &&
+         step != 0x14 && step != 0x15 && step != 0x16) ||
         (odd_updates_until_impact == 0 && step != 0x16) ||
         (unsigned int)session->active_cast_effect_count +
                 session->active_attack_effect_count >=
             GAME_SESSION_MAX_CAST_EFFECTS) {
         return 0;
     }
-    if (step == 9) {
+    if (step == 1 || step == 3 || step == 4 || step == 5 || step == 6 ||
+        step == 8 || step == 0x10 || step == 0x12 || step == 0x13) {
+        const GameFloaterStart *caster = &session->floaters[caster_index];
+        if (caster->island_index >= session->island_count ||
+            target_location_index < 0 ||
+            (uint16_t)target_location_index >=
+                session->islands[caster->island_index].location_count) {
+            return 0;
+        }
+    } else if (step == 9) {
         const GameFloaterStart *caster = &session->floaters[caster_index];
         if (caster->island_index >= session->island_count ||
             target_location_index < 0 ||
@@ -616,7 +968,8 @@ int game_session_schedule_cast_effect_step(
 }
 
 void game_session_tick_cast_effects(GameSession *session,
-                                    uint32_t source_tick)
+                                    uint32_t source_tick,
+                                    const PadCatalog *catalog)
 {
     unsigned int slot;
 
@@ -683,7 +1036,7 @@ void game_session_tick_cast_effects(GameSession *session,
         }
 
         (void)game_session_resolve_cast_effect_step(
-            session, effect->caster_index, effect->step,
+            session, catalog, effect->caster_index, effect->step,
             effect->target_location_index);
         effect->active = 0;
         if (session->active_cast_effect_count > 0)

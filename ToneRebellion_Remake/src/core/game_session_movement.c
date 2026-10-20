@@ -1,4 +1,5 @@
 #include "game_session.h"
+#include "game_session_internal.h"
 #include "floater_motion.h"
 #include "game_session_delivery.h"
 #include "game_session_delivery_internal.h"
@@ -140,6 +141,31 @@ static int game_session_tick_floater_death(GameSession *session,
     return 1;
 }
 
+static void game_session_tick_floater_cast_pulse(GameFloaterStart *floater)
+{
+    if ((floater->source_runtime_flags & 0x2000U) == 0) return;
+    /* FUN_0041e569 increments +0x24 through 46, then clears 0x2000 on the
+       following update when the old counter is already above 45. */
+    if (floater->source_death_timer <= 45U) {
+        ++floater->source_death_timer;
+    } else {
+        floater->source_runtime_flags &= ~0x2000U;
+    }
+}
+
+static void game_session_tick_player_speed_boosts(GameSession *session)
+{
+    unsigned int player_slot;
+    /* Port-side duration: REA found the native timer's writer and readers,
+       but no direct expiry writer for DAT_00618f5a. */
+    for (player_slot = 0; player_slot < GAME_START_PLAYER_COUNT;
+         ++player_slot) {
+        int16_t *timer =
+            &session->economy[player_slot].floater_speed_boost_timer;
+        if (*timer > 0) --*timer;
+    }
+}
+
 static void game_session_tick_timed_movement_state(GameFloaterStart *floater)
 {
     uint16_t timer;
@@ -150,6 +176,42 @@ static void game_session_tick_timed_movement_state(GameFloaterStart *floater)
     timer = (uint16_t)(floater->order_timer - 1U);
     floater->order_timer = timer;
     if (timer == 0 || timer >= 0x8000U) floater->movement_state = 0;
+}
+
+static void game_session_restore_regular_floater_home_order(
+    GameSession *session, GameFloaterStart *floater)
+{
+    uint8_t home_island;
+
+    if (!game_session_floater_is_active(floater) ||
+        floater->owner_slot >= GAME_START_PLAYER_COUNT ||
+        floater->type_index == 4U ||
+        floater->source_subtype == 8U || floater->source_link_0c != -1 ||
+        (floater->source_runtime_flags & (0x008U | 0x010U)) != 0 ||
+        (floater->active_order_action != 0 &&
+         floater->active_order_action != 0x0e) ||
+        (floater->movement_state != 0 && floater->movement_state != 0x0e) ||
+        floater->has_move_order || floater->linked_task_slot != -1) return;
+
+    home_island = session->economy[floater->owner_slot].hall_island_index;
+    if (home_island >= session->island_count ||
+        (floater->island_index == home_island &&
+         floater->order_target_island == home_island)) return;
+
+    /* FUN_0042219e falls back to FA_Wander targeted at the player's home
+       island when no task row is claimed. The source game remains responsible
+       for choosing the fallback task; this ports its observable home route. */
+    floater->active_order_action = 0x0e;
+    floater->order_target_island = home_island;
+    floater->order_target_floater = -1;
+    floater->order_target_location = -1;
+    floater->order_progress = 0;
+    floater->source_order_state_2c = 0;
+    floater->source_order_pending = 0;
+    floater->has_wander_order = 1;
+    floater->wander_timer = 0;
+    if (floater->island_index != home_island)
+        (void)game_session_begin_floater_handoff(session, floater, home_island);
 }
 
 static int game_session_tick_repair_task(GameSession *session,
@@ -613,6 +675,13 @@ static int game_session_tick_ground_object_pickup(
     }
     floater->movement_state = 0;
     floater->has_move_order = 0;
+    /* FUN_0041e569 sends subtype 8 back to its Hall after a completed
+       non-cast state when the native global order gate is open. The remake
+       reaches this handler only while simulation ticks are advancing. */
+    if (floater->source_subtype == 8U &&
+        floater->active_order_action != 0x13U)
+        (void)game_session_order_floater_home(
+            session, (unsigned int)(floater - session->floaters));
     return 1;
 }
 
@@ -656,7 +725,7 @@ static int game_session_floater_has_site_speed_bonus(
     if (session == NULL || floater == NULL ||
         floater->owner_slot >= GAME_START_PLAYER_COUNT ||
         floater->source_link_0c < 0 ||
-        floater->source_link_0c >= GAME_SOURCE_RECORDS_PER_PLAYER ||
+        floater->source_link_0c >= GAME_SOURCE_RECORDS_PER_ISLAND ||
         floater->charge_source_island >= session->island_count ||
         floater->charge_source_location >=
             session->islands[floater->charge_source_island].location_count) {
@@ -666,9 +735,12 @@ static int game_session_floater_has_site_speed_bonus(
     site = &session->islands[floater->charge_source_island]
                 .locations[floater->charge_source_location];
     glyph_mask = session->economy[floater->owner_slot].glyph_mask;
-    return ((glyph_mask & 0x0008U) != 0 && site->record_value_10 == 0x2c) ||
-           ((glyph_mask & 0x0020U) != 0 && site->record_value_10 == 0x2d) ||
-           ((glyph_mask & 0x0200U) != 0 && site->record_value_10 == 0x2e);
+    {
+        int32_t base_item_id = game_session_base_item_id(site);
+        return ((glyph_mask & 0x0008U) != 0 && base_item_id == 0x2c) ||
+               ((glyph_mask & 0x0020U) != 0 && base_item_id == 0x2d) ||
+               ((glyph_mask & 0x0200U) != 0 && base_item_id == 0x2e);
+    }
 }
 
 void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
@@ -677,9 +749,11 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
     unsigned int i;
 
     if (session == NULL) return;
+    game_session_tick_player_speed_boosts(session);
     game_session_assign_local_resource_tasks(session, catalog);
+    game_session_tick_site_effect_timers(session);
     game_session_tick_combat_effects(session, source_tick);
-    game_session_tick_cast_effects(session, source_tick);
+    game_session_tick_cast_effects(session, source_tick, catalog);
     for (i = 0; i < session->floater_count; ++i) {
         GameFloaterStart *floater = &session->floaters[i];
         FloaterPosition position;
@@ -691,6 +765,7 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
         int32_t distance;
 
         if (game_session_tick_floater_death(session, i)) continue;
+        game_session_tick_floater_cast_pulse(floater);
         if (game_session_tick_ground_object_pickup(session, floater, 0))
             continue;
         if (game_session_tick_repair_task(session, floater, catalog)) continue;
@@ -731,9 +806,22 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
 
         if (floater->active_order_action == 0x13 &&
             floater->movement_state == 0x13 &&
-            (floater->cast_spell_kind == 7 ||
+            (floater->cast_spell_kind == 0 ||
+             floater->cast_spell_kind == 1 ||
+             floater->cast_spell_kind == 2 ||
+             floater->cast_spell_kind == 3 ||
+             floater->cast_spell_kind == 4 ||
+             floater->cast_spell_kind == 5 ||
+             floater->cast_spell_kind == 6 ||
+             floater->cast_spell_kind == 7 ||
+             floater->cast_spell_kind == 8 ||
              floater->cast_spell_kind == 9 ||
+             floater->cast_spell_kind == 0x10 ||
+             floater->cast_spell_kind == 0x11 ||
+             floater->cast_spell_kind == 0x12 ||
+             floater->cast_spell_kind == 0x13 ||
              floater->cast_spell_kind == 0x14 ||
+             floater->cast_spell_kind == 0x15 ||
              floater->cast_spell_kind == 0x16)) {
             static const int16_t cast_ranges[23] = {
                 300, -1, -1, 300, 300, -1, -1, 20,
@@ -751,7 +839,8 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
                            floater->destination_x,
                            floater->destination_y) <= range) {
                 /* FUN_0042383d uses -1 for unlimited range, then starts
-                   FUN_0041660b on the tenth in-range tick. */
+                   FUN_0041660b on the tenth in-range tick. Kind 4 applies its
+                   selected-site flag and timer after the same cast wait. */
                 if (floater->order_timer < 400U) ++floater->order_timer;
                 if (floater->order_timer == 10U) {
                     (void)game_session_schedule_cast_effect_step(
@@ -777,6 +866,8 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
             game_session_advance_local_resource_task(session, floater);
             if (!floater->has_move_order) continue;
         }
+
+        game_session_restore_regular_floater_home_order(session, floater);
 
         if (game_session_tick_floater_wander(session, floater, source_tick))
             continue;
@@ -953,8 +1044,12 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
         destination.y = floater->destination_y;
         speed_context.unit_speed = floater->movement_speed;
         speed_context.owner_slot = floater->owner_slot;
+        speed_context.floater_subtype = floater->source_subtype;
         speed_context.state = floater->movement_state;
-        speed_context.owner_speed_modifier = floater->owner_speed_modifier;
+        speed_context.owner_speed_modifier =
+            floater->owner_slot < GAME_START_PLAYER_COUNT
+                ? session->economy[floater->owner_slot]
+                    .floater_speed_boost_timer : 0;
         if (floater->movement_state == 8 &&
             floater->order_target_floater >= 0 &&
             (unsigned int)floater->order_target_floater < session->floater_count) {
@@ -1065,8 +1160,12 @@ int game_session_tick_floater_wander(GameSession *session,
     destination.y = floater->destination_y;
     speed_context.unit_speed = floater->movement_speed;
     speed_context.owner_slot = floater->owner_slot;
+    speed_context.floater_subtype = floater->source_subtype;
     speed_context.state = 0x0e;
-    speed_context.owner_speed_modifier = floater->owner_speed_modifier;
+    speed_context.owner_speed_modifier =
+        floater->owner_slot < GAME_START_PLAYER_COUNT
+            ? session->economy[floater->owner_slot]
+                .floater_speed_boost_timer : 0;
     speed_context.near_target_override = 0;
     speed_context.site_speed_bonus =
         (uint8_t)game_session_floater_has_site_speed_bonus(session, floater);
@@ -1154,13 +1253,14 @@ int game_session_order_floater_to_coordinate(GameSession *session,
     floater = &session->floaters[floater_index];
     if (!game_session_floater_is_active(floater) ||
         (floater->source_runtime_flags & 0x008U) != 0 ||
-        floater->owner_slot != player_slot || floater->source_subtype == 0) {
+        floater->owner_slot != player_slot) {
         return 0;
     }
 
-    /* FUN_0041e3eb computes (coordinate + 5) / 10, then keeps one byte per
-       axis. FUN_0041e427 expands those bytes back to pixels by multiplying
-       each by 10. Coordinates on the island are nonnegative. */
+    /* FUN_0043530b enables coordinate mode 0x13 without a subtype check;
+       FUN_00435826 sends 0x4c with FUN_0041e3eb's packed destination. That
+       helper rounds each nonnegative coordinate with (coordinate + 5) / 10;
+       FUN_0041e427 expands the bytes back to pixels by multiplying by 10. */
     packed_x = (uint8_t)(((uint32_t)x + 5U) / 10U);
     packed_y = (uint8_t)(((uint32_t)y + 5U) / 10U);
     floater->source_order_state_2c = 9;
@@ -1275,6 +1375,7 @@ int game_session_order_floater_to_charge_site(GameSession *session,
     const GameRuntimeIsland *island;
     const GameRuntimeLocation *source;
     uint8_t charge_state;
+    int32_t base_item_id;
 
     if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
         island_index >= session->island_count ||
@@ -1288,8 +1389,9 @@ int game_session_order_floater_to_charge_site(GameSession *session,
         floater->owner_slot != player_slot || floater->island_index != island_index ||
         floater->active_order_action != 0 || floater->linked_task_slot != -1) return 0;
     source = &island->locations[location_index];
+    base_item_id = game_session_base_item_id(source);
     if (source->owner_id != player_slot ||
-        source->record_value_10 < 0x2c || source->record_value_10 > 0x32 ||
+        base_item_id < 0x2c || base_item_id > 0x32 ||
         source->source_location_slot_18 < 0) return 0;
 
     if (floater->source_link_0c == -1) {
@@ -1309,6 +1411,54 @@ int game_session_order_floater_to_charge_site(GameSession *session,
     floater->stop_radius = 0;
     floater->has_move_order = (uint8_t)(charge_state == 11 &&
         (floater->x != source->x || floater->y != source->y));
+    floater->source_order_pending = 0;
+    floater->has_wander_order = 0;
+    floater->wander_timer = 0;
+    return 1;
+}
+
+int game_session_order_floater_to_ground_object(GameSession *session,
+                                                uint8_t player_slot,
+                                                uint8_t island_index,
+                                                unsigned int floater_index,
+                                                uint16_t location_index)
+{
+    GameFloaterStart *floater;
+    const GameRuntimeIsland *island;
+    const GameRuntimeLocation *target;
+    int32_t item_id;
+
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        island_index >= session->island_count ||
+        floater_index >= session->floater_count ||
+        location_index >= session->islands[island_index].location_count)
+        return 0;
+    floater = &session->floaters[floater_index];
+    island = &session->islands[island_index];
+    target = &island->locations[location_index];
+    item_id = target->record_value_10 == 1 ? target->record_value_24 : 0;
+    if (!game_session_floater_is_active(floater) ||
+        (floater->source_runtime_flags & 0x008U) != 0 ||
+        floater->owner_slot != player_slot || floater->source_subtype == 0 ||
+        floater->island_index != island_index ||
+        floater->linked_task_slot != -1 ||
+        (floater->active_order_action != 0 &&
+         floater->active_order_action != 0x0d) ||
+        target->renderer_class != 0 || target->owner_id != -1 ||
+        item_id < 5 || item_id > 33) return 0;
+
+    /* The consumer's arrival path reads the target from +0x32 and expects
+       state 13. Action 0x0d is also the task class released by cancellation. */
+    floater->active_order_action = 0x0d;
+    floater->movement_state = 13;
+    floater->source_order_parameter_32 = location_index;
+    floater->order_target_location = (int16_t)location_index;
+    floater->order_target_floater = -1;
+    floater->destination_x = target->x;
+    floater->destination_y = target->y;
+    floater->stop_radius = 0;
+    floater->order_timer = 0;
+    floater->has_move_order = 1;
     floater->source_order_pending = 0;
     floater->has_wander_order = 0;
     floater->wander_timer = 0;

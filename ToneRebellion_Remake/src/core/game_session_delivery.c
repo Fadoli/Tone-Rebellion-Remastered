@@ -528,7 +528,8 @@ static int deposit_construction_resource(GameSession *session,
     target = &session->islands[event->payload_0a]
         .locations[(uint16_t)event->payload_0e];
     if (target->renderer_class != 0 || target->owner_id != -1 ||
-        target->record_value_10 != 0 || target->resource_stock[0] == UINT16_MAX)
+        (target->record_value_10 != 0 && target->record_value_10 != 1) ||
+        target->resource_stock[0] == UINT16_MAX)
         return 0;
     ++target->resource_stock[0];
     floater->carried_resource_code = 0;
@@ -627,7 +628,8 @@ void game_session_update_construction_tasks(GameSession *session,
                 session->islands[event->payload_0a].location_count) {
             target = &session->islands[event->payload_0a]
                 .locations[(uint16_t)event->payload_0e];
-            if (target->owner_id != -1 || target->record_value_10 != 0 ||
+            if (target->owner_id != -1 ||
+                (target->record_value_10 != 0 && target->record_value_10 != 1) ||
                 target->construction_site_size > 2U) {
                 /* FUN_00466533 detaches every floater whose active order
                    references this slot before the invalid CONSTR task goes. */
