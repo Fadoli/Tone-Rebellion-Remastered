@@ -4,6 +4,7 @@ Choisir le guide le plus proche du sujet en cours; chaque page separe les observ
 
 - [Taches et construction](island-tasks.md)
 - [Ressources, stocks et production](island-resources.md)
+- [Budget Tone du joueur et champ « Unused »](player-tone-budget.md)
 - [Unites, panneaux de lieu et deplacement](island-units-and-movement.md)
 - [Panneaux d’île](island-panels.md) · [Inventory et glyphes](island-inventory-glyphs.md) · [Trade et diplomatie](island-trade-diplomacy.md)
 

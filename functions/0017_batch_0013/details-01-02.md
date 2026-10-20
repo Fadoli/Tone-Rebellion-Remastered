@@ -22,6 +22,10 @@
 
 - aucune relevée
 
+### Note de correction — calcul du Tone (`+0x3c`) et du surplus (`+0x40`)
+
+Le pseudocode ci-dessous masque le détail déterminant de l'appel x87. L'assemblage complet (`ev_66cb53842ddc917343a561124e9249e2745d1f4c76ffb10bee5033e69d7adcaf`) montre que le code pousse la somme provisoire des régions, puis le double `0.5`; le wrapper `FUN_00477599` transmet à `__fload_withFB` l'adresse `[ESP+0xc]`, qui pointe sur ce second double (`ev_d20fc3935112b81a9ef98f589ee8f878a2b4404d294c41df695efc2b68464cfc`, `ev_8771df301e844f854a07b7090abaef0bbf62aa798b85fd8eaaedd21659068ad4`). L'instruction suivante multiplie par le double à `0x494780`, encodé `0000000000003440` (`20.0`; `ev_5c61a836b4d02046478493f5a15e9727aa1bce237747fd23d47bf6ef3d95000f`), puis `__ftol` et l'écriture à `+0x3c` fixent ce champ à `10`. La somme des régions est donc abandonnée dans ce flux. Le calcul de `+0x40` utilise ce 10 comme plafond après les coûts et la remise `17/20`; voir [la note budget Tone](../../behavior/player-tone-budget.md). Le modèle du remake qui calcule une capacité par région diverge de cette observation machine; cette note ne modifie pas le comportement du remake.
+
 ### Pseudocode Ghidra
 
 ```c

@@ -57,13 +57,14 @@ typedef struct GamePlayerEconomy {
     /* DAT_0061a654 per-player override makes FUN_00462285 expose all
        non-Leviathan sites. No native writer has been identified yet. */
     uint8_t island_visibility_override;
-    /* FUN_00453bf6 compares pad.txt maintenance against player +0x40.
-       FUN_0045e6d3 applies an x87 0.5 conversion then multiplies by 20.0,
-       giving 10 maintenance capacity per accessible class-1 region; it then
-       subtracts active-site upkeep and owned floaters. */
+    /* The remake currently models +0x40 from accessible class-1 regions.
+       Native assembly evidence instead shows FUN_0045e6d3 overwriting +0x3c
+       with 0.5 * 20.0 = 10 before calculating +0x40; see
+       behavior/player-tone-budget.md for this unresolved parity discrepancy. */
     int32_t source_maintenance_budget;
-    /* FUN_0045eaa7 compares subtype-0 worker count against half of the gross
-       +0x3c maintenance capacity, independently of the net surplus at +0x40. */
+    /* FUN_0045eaa7 compares subtype-0 worker count against half of +0x3c.
+       The remake's per-region capacity currently differs from the native
+       writer's observed constant value of 10. */
     int32_t source_maintenance_capacity;
     /* FUN_0045eaa7's per-player +0x8c recruiter delay, in island updates. */
     uint32_t floater_birth_timer;

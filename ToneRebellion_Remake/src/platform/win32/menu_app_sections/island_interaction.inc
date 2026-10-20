@@ -123,26 +123,10 @@ static int selected_onoff_button_visible(void)
 
 static int selected_upgrade_button_visible(void)
 {
-    const GameRuntimeIsland *island;
-    const GameRuntimeLocation *location;
-    int32_t base_item_id;
-
-    if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
-        g_menu.selected_tribe < 0 ||
-        g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
-        g_menu.selected_map_island < 0 ||
-        g_menu.selected_map_island >= g_game_session.island_count ||
-        g_selected_location < 0) return 0;
-    island = &g_game_session.islands[g_menu.selected_map_island];
-    if (g_selected_location >= island->location_count) return 0;
-    location = &island->locations[g_selected_location];
-    if (location->renderer_class != 0 ||
-        location->owner_id != g_menu.selected_tribe ||
-        location->source_value_14 != g_menu.selected_tribe) return 0;
-    base_item_id = location->record_value_10 -
-        (int32_t)g_menu.selected_tribe * 16;
-    return base_item_id == 0x2a ||
-        (base_item_id >= 0x2c && base_item_id <= 0x30);
+    /* Building upgrades are not connected to game-session upgrade state yet.
+       Keep both the button and its hit target hidden until that logic can
+       explicitly report an available upgrade. */
+    return 0;
 }
 
 static int selected_cast_action_at(int x, int y)

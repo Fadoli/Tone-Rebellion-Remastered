@@ -247,9 +247,11 @@ void game_session_tick_site_effect_timers(GameSession *session)
 static void game_session_recalculate_player_maintenance_budgets(
     GameSession *session)
 {
-    /* FUN_0045e6d3 passes each accessible class-1 count through an x87
-       conversion with factor 0.5, then multiplies by the native 20.0
-       constant: effective gross capacity is 10 per region. */
+    /* This remake model currently assigns capacity per accessible region.
+       Native assembly instead passes a region sum and 0.5 to FUN_00477599;
+       its wrapper loads the second double, then multiplies by 20.0, so the
+       observed +0x3c write is 10 regardless of the region sum. Keep this
+       divergence explicit pending a separate parity decision. */
     int32_t capacities[GAME_START_PLAYER_COUNT] = {0};
     int32_t maintenance[GAME_START_PLAYER_COUNT] = {0};
     int32_t capacity_budget[GAME_START_PLAYER_COUNT] = {0};

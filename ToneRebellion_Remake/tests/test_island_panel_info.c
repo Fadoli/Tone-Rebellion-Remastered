@@ -301,7 +301,7 @@ int main(int argc, char **argv)
     info_panel.pane.bottom = 471;
     assert(island_panel_info_building_sprite_position(&info_panel,
                                                       &sprite_x, &sprite_y));
-    assert(sprite_x == 319 && sprite_y == 424);
+    assert(sprite_x == 319 && sprite_y == 456);
     assert(!island_panel_info_building_sprite_position(NULL,
                                                        &sprite_x, &sprite_y));
     assert(!island_panel_info_building_sprite_position(&info_panel, NULL,

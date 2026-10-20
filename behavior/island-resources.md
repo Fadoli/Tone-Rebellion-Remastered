@@ -1,5 +1,7 @@
 # Ressources et stocks du Hall
 
+Le champ joueur `+0x40`, affiché « Unused », est un budget dérivé et recalculé séparément des stocks Hall; voir [Budget de Tone du joueur](player-tone-budget.md) pour le calcul, l'écrivain identifié et les limites de couverture.
+
 ## Observations et port
 
 - `FUN_0043edac` (`iwhall.cpp`) dessine trois catégories nommées `bildtone`, `tonecrys`, `magctone`; les compteurs sont lus aux offsets +0x74/+0x76/+0x78 de l'objet de fenêtre. Evidence `ev_ce422c3de4f4cbea0f4a05e91a4bceeed3f8bd5614b6c565a9389730931e5f1c`.
