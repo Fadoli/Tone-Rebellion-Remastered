@@ -677,11 +677,11 @@ static void test_initialized_workers_build_from_queued_selection(void)
         break;
     }
     assert(site != NULL);
+    assert((site->source_value_22 & 1U) != 0);
 
     /* The UI's construct click queues base item 37, the Build Tone producer.
-       The initialized session supplies real workers and a real Hall; expose
-       this site to player 0 as the normal site-discovery step does. */
-    site->source_value_22 = 1U;
+       The initialized session supplies a visible site, real workers and a
+       real Hall without manually bypassing the normal discovery state. */
     site->source_value_14 = -1;
     site->construction_site_size = 0;
     item = &catalog.items[37];

@@ -417,7 +417,9 @@ static void draw_hall_stock_summary(HDC dc, int hall_player,
     pane.bottom = info->pane.bottom + 1;
     saved_dc = SaveDC(dc);
     (void)IntersectClipRect(dc, pane.left, pane.top, pane.right, pane.bottom);
-    draw_sprite(dc, &g_temp_hole_art, 1, info->pane.left, info->pane.top);
+    /* The selected-location painter has already drawn IWLocInfo's background
+       and the Hall's layered building sprite. Repainting the pane here erased
+       that sprite; only update the economy content on top of it. */
     for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
         IslandHallResourceRow row;
         char amount[8];

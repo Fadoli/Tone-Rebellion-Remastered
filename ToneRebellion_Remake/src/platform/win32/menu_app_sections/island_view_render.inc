@@ -198,7 +198,7 @@ static void render_island_view(HDC dc)
             floater_x = (int)floater->x - g_island_scroll_x;
             if (floater_x < -64 || floater_x >= LOGICAL_WIDTH + 64) continue;
             floater_y = image_top + (int)floater->y;
-            leg_frame = g_menu.animation_ticks % 16u;
+            leg_frame = (g_menu.animation_ticks / 4u) % 16u;
             body_art = floater->facing_left
                            ? &g_initial_floater_bodies_flipped[floater->type_index]
                            : &g_initial_floater_bodies[floater->type_index];
@@ -353,32 +353,6 @@ static void render_island_view(HDC dc)
 
     draw_hall_panel(dc, hall_player);
 
-    /* The five Hall command controls are clickable THALL frames from the
-       active island palette. Their descriptors also own the hover bounds. */
-    if (hall_player >= 0 &&
-        island_panel_location_control_visible(g_island_panel_mode)) {
-        static const char *const command_names[] = {
-            "BC_GenInfo", "BC_Storage", "BC_Knowledge",
-            "BC_Diplomacy", "BC_Trade"
-        };
-        size_t command_index;
-        for (command_index = 0;
-             command_index < sizeof(command_names) / sizeof(command_names[0]);
-             ++command_index) {
-            const WindowTemplate *button = window_catalog_find(
-                &g_window_catalog, command_names[command_index], 3);
-            int frame;
-            if (button == NULL) continue;
-            frame = window_catalog_control_frame(button,
-                window_catalog_hall_panel_mode(button->name) ==
-                    g_hovered_hall_command);
-            if (frame >= 0 && (uint32_t)frame < g_hall_command_art.frame_count) {
-                draw_sprite(dc, &g_hall_command_art, (uint32_t)frame,
-                            button->pane.left, button->pane.top);
-            }
-        }
-    }
-
     /* windows.txt places IWLilMap at (192,328)-(447,359), and shapes.txt
        binds it to the 16-frame LILMAP sheet. The SHP frame is indexed by the
        selected island's existing surface id (the local 15-island corpus uses
@@ -502,7 +476,7 @@ static void render_island_view(HDC dc)
                the text. The island renderer's original base-worker sheets
                supply the same body and animated legs used in the world view. */
             {
-                uint32_t leg_frame = g_menu.animation_ticks % 16u;
+                uint32_t leg_frame = (g_menu.animation_ticks / 4u) % 16u;
                 int sprite_x = info->pane.right - 50;
                 int sprite_y = info->pane.top +
                     (info->pane.bottom - info->pane.top) / 2 + 5;
@@ -710,7 +684,7 @@ static void render_island_view(HDC dc)
                         /* shapeinf.txt assigns worker hover/move to frames 0..15;
                            later frames belong to pickup, carry, and training. */
                         draw_sprite(dc, leg_art,
-                            g_menu.animation_ticks % 16u,
+                            (g_menu.animation_ticks / 4u) % 16u,
                             info->pane.left + offset_x,
                             info->pane.top + offset_y);
                     }
@@ -755,6 +729,33 @@ static void render_island_view(HDC dc)
         }
     }
     draw_location_action_panel(dc);
+
+    /* IWLocControl's backdrop overlaps the Hall command buttons. Draw the
+       THALL button frames last so the selected Hall's five commands remain
+       visible above that panel. */
+    if (hall_player >= 0 &&
+        island_panel_location_control_visible(g_island_panel_mode)) {
+        static const char *const command_names[] = {
+            "BC_GenInfo", "BC_Storage", "BC_Knowledge",
+            "BC_Diplomacy", "BC_Trade"
+        };
+        size_t command_index;
+        for (command_index = 0;
+             command_index < sizeof(command_names) / sizeof(command_names[0]);
+             ++command_index) {
+            const WindowTemplate *button = window_catalog_find(
+                &g_window_catalog, command_names[command_index], 3);
+            int frame;
+            if (button == NULL) continue;
+            frame = window_catalog_control_frame(button,
+                window_catalog_hall_panel_mode(button->name) ==
+                    g_hovered_hall_command);
+            if (frame >= 0 && (uint32_t)frame < g_hall_command_art.frame_count) {
+                draw_sprite(dc, &g_hall_command_art, (uint32_t)frame,
+                            button->pane.left, button->pane.top);
+            }
+        }
+    }
 }
 
 static void draw_location_action_panel(HDC dc)
@@ -766,6 +767,7 @@ static void draw_location_action_panel(HDC dc)
     const WindowTemplate *repair_button;
     IslandLocationActionControl action;
     const char *button_name;
+    const GameRuntimeLocation *selected_location;
 
     /* IWLocControl overlaps IWConstructInfo in windows.txt. Keep the selected
        construction item's pane visible while the modal build window is open. */
@@ -777,11 +779,37 @@ static void draw_location_action_panel(HDC dc)
         g_selected_location < 0) return;
     island = &g_game_session.islands[g_menu.selected_map_island];
     if (g_selected_location >= island->location_count) return;
+    selected_location = &island->locations[g_selected_location];
     panel = window_catalog_find(&g_window_catalog, "IWLocControl", 3);
     if (panel != NULL && panel->shape_frame >= 0 &&
         (uint32_t)panel->shape_frame < g_temp_hole_art.frame_count) {
         draw_sprite(dc, &g_temp_hole_art, (uint32_t)panel->shape_frame,
                     panel->pane.left, panel->pane.top);
+    }
+
+    /* IWTextInfo is the selected-location description pane. The source UI
+       fills it for a selected building; the remake previously left it empty
+       unless a move control was hovered. */
+    if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL &&
+        selected_location->record_value_10 >= 0x25 &&
+        selected_location->record_value_10 < PAD_CATALOG_MAX_ITEMS &&
+        g_building_descriptions[selected_location->record_value_10][0] != '\0') {
+        text_panel = window_catalog_find(&g_window_catalog, "IWTextInfo", 3);
+        if (text_panel != NULL && text_panel->shape_frame >= 0 &&
+            (uint32_t)text_panel->shape_frame < g_temp_hole_art.frame_count) {
+            int pane_width = text_panel->pane.right - text_panel->pane.left;
+            int pane_height = text_panel->pane.bottom - text_panel->pane.top;
+            int line_height = (int)g_bitmap_font.height + 2;
+            int max_lines = line_height > 0
+                ? (pane_height - 0x10) / line_height : 0;
+            draw_sprite(dc, &g_temp_hole_art,
+                        (uint32_t)text_panel->shape_frame,
+                        text_panel->pane.left, text_panel->pane.top);
+            draw_wrapped_bitmap_label(dc,
+                g_building_descriptions[selected_location->record_value_10],
+                text_panel->pane.left + 10, text_panel->pane.top + 0x10,
+                pane_width - 20, max_lines, RGB(230, 238, 255));
+        }
     }
 
     action = selected_location_action();
