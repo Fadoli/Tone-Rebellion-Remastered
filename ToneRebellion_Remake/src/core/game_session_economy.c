@@ -369,7 +369,8 @@ int game_session_finish_location_move(GameSession *session,
     /* FUN_004533fb clears +0x46, sets +0x58, then recomputes the active bit. */
     source->source_value_46 = 0;
     source->source_value_58 = 1;
-    source->producer_cadence = 0;
+    /* FUN_00452a15 and the subsequent placement initializer both leave
+       source +0x0c untouched, so retain this raw cadence across a move. */
     source->base_progress = 0;
     source->chug_progress = 0;
     source->glyph_progress = 0;
@@ -377,7 +378,7 @@ int game_session_finish_location_move(GameSession *session,
     source->construction_progress = 0;
     source->production_progress = 0;
     source->animation_rate = 0;
-    source->barg_progress = 0.0;
+    /* The native clear and constructor also leave source +0x50 untouched. */
     source->bridge_neighbor_island = -1;
     source->tribe_visibility_mask = 0;
     source->bridge_constructed = 0;

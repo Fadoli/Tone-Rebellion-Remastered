@@ -13,5 +13,7 @@ int game_session_begin_floater_handoff(GameSession *session,
                                        uint8_t target_island);
 int game_session_tick_floater_handoff(GameSession *session,
                                       GameFloaterStart *floater);
+void game_session_drop_carried_artifact(GameSession *session,
+                                        GameFloaterStart *floater);
 
 #endif

@@ -175,6 +175,8 @@ int game_session_initialize_start_islands(
             return 0;
         }
         runtime->location_count = source->location_count;
+        runtime->leviathan_marker_shape_id =
+            (int16_t)world->islands[island_index].shape_id;
         runtime->source_level = 0;
         {
             unsigned int category;

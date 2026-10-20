@@ -466,6 +466,9 @@ int main(void)
     test_onoff_action_queues_target_without_changing_location_flags();
     test_build_selection_queues_source_packet_without_placing_item();
     test_construct_click_item_becomes_queued_build_packet();
+    test_inci_animation_uses_source_counter_and_delayed_activation();
+    test_active_item_four_and_twenty_two_counter_stops_at_32();
+    test_class0_item5_spawns_neutral_item_after_difficulty_delay();
     test_item_animation_uses_source_flags_and_per_object_counters();
     test_tone_pool_uses_two_source_counter_sequences();
     test_active_cons_and_prod_counters_finish_at_source_limits();

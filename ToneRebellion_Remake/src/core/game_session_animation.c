@@ -1,8 +1,11 @@
 #include "game_session.h"
 
 #include "building_render.h"
+#include "game_session_internal.h"
 #include "island_render_rules.h"
 #include "game_session_world.h"
+#include "pad_catalog.h"
+#include "tone_rng.h"
 
 static const uint8_t source_staff_target_counts[8][3][3] = {
     {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}},
@@ -25,6 +28,167 @@ static const int16_t source_staff_threshold_high[9][3] = {
     {75, 200, 0}, {75, 200, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}
 };
 
+static int choose_neutral_item5_spawn(GameSession *session,
+                                      unsigned int island_index)
+{
+    static const uint8_t item_ids[12] = {
+        12, 16, 11, 19, 10, 20, 13, 21, 14, 17, 15, 18
+    };
+    int32_t base = 12;
+    int32_t cohort;
+    int32_t island_cohort;
+    int32_t candidate_count;
+    int32_t selection;
+
+    if (session->config.difficulty == 1) base = 10;
+    else if (session->config.difficulty == 0) base = 6;
+    cohort = ((int32_t)session->island_count - 1) >> 2;
+    island_cohort = (int32_t)island_index >> 2;
+    if (cohort == 0) {
+        cohort = 1;
+        island_cohort = 1;
+    }
+    candidate_count = base / 2 + ((base - base / 2) * island_cohort) / cohort;
+    if (candidate_count < 1) candidate_count = 1;
+    if (candidate_count > 12) candidate_count = 12;
+    selection = tone_rng_bounded(&session->random_state, candidate_count);
+    if (selection < 0 || selection >= candidate_count) return -1;
+    return item_ids[selection];
+}
+
+static int choose_class1_item5_spawn(GameSession *session,
+                                     const GameRuntimeIsland *island,
+                                     unsigned int island_index)
+{
+    static const int8_t first_type_by_shape[15] = {
+        0, 1, -1, 3, 2, 0, 2, 1, 1, 3, 3, 1, 2, -1, -1
+    };
+    static const int8_t second_type_by_shape[15] = {
+        -1, 2, 3, 1, 3, 1, 0, 2, 0, 0, 2, 3, 0, -1, -1
+    };
+    uint8_t required_types[4] = {0, 0, 0, 0};
+    uint16_t present_counts[4] = {0, 0, 0, 0};
+    int16_t shape_id = island->leviathan_marker_shape_id;
+    int16_t first_type;
+    int16_t second_type;
+    int candidate_ids[4];
+    int candidate_count = 0;
+    unsigned int index;
+    int selection;
+
+    if (island_index + 1U == session->island_count) {
+        required_types[0] = 1;
+        required_types[1] = 1;
+        required_types[2] = 1;
+        required_types[3] = 1;
+    } else {
+        if (shape_id < 0) shape_id = 0;
+        if (shape_id > 14) shape_id = 14;
+        first_type = first_type_by_shape[shape_id];
+        second_type = second_type_by_shape[shape_id];
+        if (first_type < -1) first_type = -1;
+        if (first_type > 3) first_type = 3;
+        if (second_type < -1) second_type = -1;
+        if (second_type > 3) second_type = 3;
+        if (first_type >= 0) required_types[first_type] = 1;
+        if (second_type >= 0) required_types[second_type] = 1;
+    }
+
+    for (index = 0; index < island->location_count; ++index) {
+        int32_t item_id = island->locations[index].record_value_10;
+        if (item_id > 5 && item_id < 10)
+            ++present_counts[(unsigned int)(item_id - 6)];
+    }
+    for (index = 0; index < 4; ++index) {
+        if (required_types[index] != 0 && present_counts[index] == 0)
+            candidate_ids[candidate_count++] = (int)index;
+    }
+    if (candidate_count == 0) {
+        for (index = 0; index < 4; ++index) {
+            if (required_types[index] != 0)
+                candidate_ids[candidate_count++] = (int)index;
+        }
+    }
+    /* Shape 13 has no configured pair in either native table. The original
+       then indexes an uninitialized stack candidate; use all four types to
+       keep the remaining class-1 item-5 sites playable and deterministic. */
+    if (candidate_count == 0) {
+        candidate_ids[0] = 0;
+        candidate_ids[1] = 1;
+        candidate_ids[2] = 2;
+        candidate_ids[3] = 3;
+        candidate_count = 4;
+    }
+    selection = tone_rng_bounded(&session->random_state, candidate_count);
+    if (selection < 0 || selection >= candidate_count) return -1;
+    return candidate_ids[selection] + 6;
+}
+
+static int tick_item5_spawn(GameSession *session,
+                            const PadCatalog *pad_catalog,
+                            GameRuntimeLocation *state,
+                            unsigned int island_index)
+{
+    int32_t threshold;
+    int32_t next_progress;
+    int32_t spawned_item_id;
+    const PadCatalogItem *item;
+    const GameRuntimeIsland *island;
+
+    if (pad_catalog == NULL || state->renderer_class > 1 ||
+        state->record_value_10 != 5 || island_index >= session->island_count)
+        return 0;
+    threshold = 0x4b0 - (int32_t)session->config.difficulty * 100;
+    next_progress = (int16_t)state->charge_source_value_30 +
+        (int16_t)state->animation_rate;
+    state->charge_source_value_30 = (uint16_t)next_progress;
+    if ((int16_t)state->charge_source_value_30 < threshold) return 0;
+
+    island = &session->islands[island_index];
+    spawned_item_id = state->renderer_class == 1
+        ? choose_class1_item5_spawn(session, island, island_index)
+        : choose_neutral_item5_spawn(session, island_index);
+    if (spawned_item_id < 0) return 0;
+    item = pad_catalog_find(pad_catalog, (uint16_t)spawned_item_id);
+    if (item == NULL) return 0;
+
+    /* FUN_00452859(spawned_item_id, 4) replaces this object in place. */
+    state->record_value_10 = spawned_item_id;
+    state->owner_id = 4;
+    state->source_value_14 = 4;
+    state->source_capacity_4a = 0;
+    state->source_value_32 = 1;
+    if (state->record_value_24 < 5 || state->record_value_24 > 0x21)
+        state->record_value_24 = 0;
+    state->source_flags = (state->source_flags & ~0x0fU) | 0x410U;
+    state->source_value_34 = item->hit_points;
+    state->maintenance_tone_cost = 0;
+    state->resource_stock[GAME_RESOURCE_BUILD_TONE] = 0;
+    state->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 0;
+    state->resource_stock[GAME_RESOURCE_MAGIC_TONE] = 0;
+    state->charge_source_value_30 = 0;
+    state->source_value_3a = 0;
+    state->source_value_3c = 0;
+    state->source_value_3e = -1;
+    state->source_value_40 = 0;
+    state->source_value_42 = 0;
+    state->source_value_44 = 0;
+    state->source_value_46 = 0;
+    state->source_value_48 = 0;
+    state->chug_progress = 0;
+    state->glyph_progress = 0;
+    state->inci_progress = 0;
+    state->construction_progress = 0;
+    state->production_progress = 0;
+    state->animation_rate = 1;
+    if (state->renderer_class == 0)
+        state->source_value_22 &= 0xff00U;
+    state->tribe_visibility_mask = (uint8_t)state->source_value_22;
+    (void)game_session_recalculate_location_active_with_visibility(state);
+    (void)game_session_recalculate_active_locations(session);
+    return 1;
+}
+
 static int producer_resource_code(const GameRuntimeLocation *state)
 {
     int32_t base_item_id;
@@ -35,6 +199,38 @@ static int producer_resource_code(const GameRuntimeLocation *state)
     if (base_item_id == 0x27) return 2; /* P-CRYTON -> Crystal Tone */
     if (base_item_id == 0x26) return 3; /* P-MAGTON -> Magic Tone */
     return 0;
+}
+
+static void tick_inci_animation(GameSession *session,
+                                GameRuntimeLocation *state,
+                                const BuildingRenderItem *item)
+{
+    uint8_t delay;
+    int16_t threshold;
+
+    if (!item->inci.present) return;
+
+    /* FUN_00450a71 stores an inactive sentinel in +0x3e. For delays below
+       100 it rolls delay*delay+1 and starts the INCI phase only on zero. */
+    delay = (uint8_t)item->inci.ticks_per_frame;
+    threshold = (int16_t)item->inci.fallback_frame;
+    if (state->source_value_3e == -1 && delay < 100U) {
+        uint32_t range = (uint32_t)delay * delay + 1U;
+        if (tone_rng_bounded(&session->random_state, (int32_t)range) == 0)
+            state->source_value_3e = 0;
+    } else {
+        if (state->source_value_3e == INT16_MAX)
+            state->source_value_3e = INT16_MIN;
+        else
+            ++state->source_value_3e;
+        if (threshold <= state->source_value_3e)
+            state->source_value_3e = -1;
+    }
+
+    /* Keep the render-facing mirror synchronized while preserving the raw
+       source sentinel, which means the INCI layer is currently inactive. */
+    state->inci_progress = state->source_value_3e < 0
+        ? 0U : (uint16_t)state->source_value_3e;
 }
 
 static void tick_source_staff_cycle(GameSession *session,
@@ -209,7 +405,7 @@ static void tick_source_staff_cycle(GameSession *session,
 
 void game_session_tick_item_animations_with_floaters(
     GameSession *session, const struct BuildingRenderCatalog *catalog,
-    const FloaterCatalog *floater_catalog)
+    const FloaterCatalog *floater_catalog, const PadCatalog *pad_catalog)
 {
     unsigned int island_index;
     if (session == NULL || catalog == NULL) return;
@@ -240,10 +436,27 @@ void game_session_tick_item_animations_with_floaters(
                 tick_source_staff_cycle(session, state, floater_catalog,
                                         (uint8_t)island_index, location_index);
 
+            /* FUN_00450a71 advances raw +0x30 for runtime item IDs 4 and
+               0x16 while active, stopping at 0x20. */
+            if ((state->record_value_10 == 4 ||
+                 state->record_value_10 == 0x16) &&
+                (state->source_flags & 1U) != 0 &&
+                (int16_t)state->charge_source_value_30 < 0x20) {
+                state->charge_source_value_30 = (uint16_t)(
+                    state->charge_source_value_30 + 1U);
+            }
+
+            if (tick_item5_spawn(session, pad_catalog, state,
+                                 island_index)) continue;
+
             if (state->record_value_10 <= 0 ||
                 state->record_value_10 >= catalog->item_count) continue;
             item = building_render_find(catalog, (uint16_t)state->record_value_10);
             if (item == NULL) continue;
+
+            /* INCI (+0x3e) is advanced before the class-specific item switch
+               in FUN_00450a71, independently of CHUG/CONS/PROD handling. */
+            tick_inci_animation(session, state, item);
 
             /* FUN_00450a71 has a separate class-1 path: items 6..9 animate
                their CHUG layer every source tick and wrap at the descriptor
@@ -346,6 +559,6 @@ void game_session_tick_item_animations_with_floaters(
 void game_session_tick_item_animations(GameSession *session,
                                        const struct BuildingRenderCatalog *catalog)
 {
-    game_session_tick_item_animations_with_floaters(session, catalog, NULL);
+    game_session_tick_item_animations_with_floaters(session, catalog, NULL, NULL);
 }
 

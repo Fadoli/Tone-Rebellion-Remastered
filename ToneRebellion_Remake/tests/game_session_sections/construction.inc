@@ -59,6 +59,7 @@ static void test_building_placement_matches_source_runtime_initialization(void)
     runtime->source_value_44 = 12;
     runtime->source_value_46 = 20;
     runtime->source_value_48 = 21;
+    runtime->producer_cadence = 22;
     runtime->source_value_58 = 1;
     runtime->source_value_44 = 12;
     runtime->source_value_58 = 1;
@@ -103,11 +104,11 @@ static void test_building_placement_matches_source_runtime_initialization(void)
     assert(runtime->source_value_44 == 0);
     assert(runtime->source_value_58 == 1); /* native placement leaves +0x58 intact */
     assert(runtime->record_value_24 == 0);
-    assert(runtime->base_progress == 0 && runtime->producer_cadence == 0);
+    assert(runtime->base_progress == 0 && runtime->producer_cadence == 22);
     assert(runtime->chug_progress == 0);
     assert(runtime->glyph_progress == 0 && runtime->inci_progress == 0);
     assert(runtime->construction_progress == 0 && runtime->production_progress == 0);
-    assert(runtime->animation_rate == 1 && runtime->barg_progress == 0.0);
+    assert(runtime->animation_rate == 1 && runtime->barg_progress == 0.75);
 
     runtime->record_value_10 = 0;
     runtime->owner_id = -1;

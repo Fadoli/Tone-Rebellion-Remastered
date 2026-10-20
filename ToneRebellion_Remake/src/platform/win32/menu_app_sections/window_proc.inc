@@ -38,7 +38,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                                                           &g_pad_catalog);
                 game_session_tick_item_animations_with_floaters(
                     &g_game_session, &g_building_render_catalog,
-                    &g_floater_catalog);
+                    &g_floater_catalog, &g_pad_catalog);
                 game_session_update_construction_tasks(&g_game_session,
                                                        &g_pad_catalog);
                 game_session_tick_floater_moves(&g_game_session,

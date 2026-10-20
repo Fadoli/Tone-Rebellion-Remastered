@@ -673,12 +673,106 @@ void game_session_advance_local_resource_task(GameSession *session,
     GameRuntimeIsland *island;
     GameRuntimeLocation *target;
     int16_t code;
+    int recharge_order;
 
-    if ((floater->active_order_action != 4 &&
+    recharge_order = floater->active_order_action == 2 ||
+        floater->active_order_action == 17;
+    if ((floater->active_order_action != 4 && !recharge_order &&
          floater->active_order_action != 0x12) ||
         floater->island_index >= session->island_count ||
         floater->x != floater->destination_x || floater->y != floater->destination_y)
         return;
+
+    if (recharge_order && floater->movement_state == 2) {
+        int special_receiver;
+
+        if (floater->order_target_island != floater->island_index ||
+            floater->order_target_location < 0 ||
+            (uint16_t)floater->order_target_location >=
+                session->islands[floater->island_index].location_count) return;
+        island = &session->islands[floater->island_index];
+        target = &island->locations[(uint16_t)floater->order_target_location];
+        /* FUN_004211bb stores FA_Recharge's requested code in the floater
+           +0x30 word. This field is also used by other states as packed data. */
+        code = (int16_t)floater->source_order_coordinate_30;
+        if (!delivery_item_code_valid(code)) {
+            floater->active_order_action = 0;
+            floater->movement_state = 0;
+            floater->has_move_order = 0;
+            floater->order_timer = 0;
+            floater->source_runtime_flags &= ~1U;
+            floater->has_wander_order = 1;
+            floater->wander_timer = 0;
+            return;
+        }
+
+        /* FUN_0041e569's state-2 case waits at Halls/linked sites, then uses
+           FUN_00452c31/FUN_00452eac to withdraw one requested resource. */
+        special_receiver = target->record_value_10 == 0x2a ||
+            target->source_location_slot_18 != -1 ||
+            (floater->source_runtime_flags & 1U) != 0;
+        if (special_receiver) {
+            if (floater->order_timer == 0) {
+                /* FUN_0041e569 calls FUN_00425084 before starting the 20-tick
+                   Hall/source wait; that helper drops or stores carried items. */
+                game_session_drop_carried_artifact(session, floater);
+                floater->source_runtime_flags |= 1U;
+                floater->order_timer = 1;
+                return;
+            }
+            if (floater->order_timer < 20) {
+                ++floater->order_timer;
+                return;
+            }
+            if (target->renderer_class == 0 &&
+                game_session_location_resource_available(session,
+                    floater->island_index,
+                    (uint16_t)floater->order_target_location, code) &&
+                game_session_consume_location_resource(session,
+                    floater->island_index,
+                    (uint16_t)floater->order_target_location, code)) {
+                floater->carried_resource_code = code;
+            }
+        } else {
+            int available = 0;
+            if (floater->order_timer < INT16_MAX) ++floater->order_timer;
+            if (target->resource_retry_tick_36 <
+                (int16_t)floater->order_timer) {
+                /* FUN_00452e4d clears the source's raw +0x2c before checking
+                   whether the requested output can be consumed this tick. */
+                target->resource_stock[GAME_RESOURCE_MAGIC_TONE] = 0;
+                available = game_session_location_resource_available(session,
+                    floater->island_index,
+                    (uint16_t)floater->order_target_location, code);
+                if (available) {
+                    target->resource_retry_tick_36 = 0;
+                    available = game_session_consume_location_resource(session,
+                        floater->island_index,
+                        (uint16_t)floater->order_target_location, code);
+                } else {
+                    target->resource_retry_tick_36 =
+                        (int16_t)floater->order_timer;
+                }
+            }
+            if (available) {
+                floater->carried_resource_code = code;
+            } else if (local_refill_source_is_valid(session,
+                           floater->island_index,
+                           (uint16_t)floater->order_target_location,
+                           floater->owner_slot, code)) {
+                return;
+            }
+        }
+
+        floater->active_order_action = 0;
+        floater->movement_state = 0;
+        floater->has_move_order = 0;
+        floater->order_timer = 0;
+        floater->source_runtime_flags &= ~1U;
+        floater->has_wander_order = 1;
+        floater->wander_timer = 0;
+        return;
+    }
 
     code = floater->order_resource_code;
     if (floater->movement_state == 3) {

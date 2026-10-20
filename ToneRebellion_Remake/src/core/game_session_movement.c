@@ -567,8 +567,8 @@ static int game_session_order_floater_home(GameSession *session,
         floater_index, home->hall_x, home->hall_y);
 }
 
-static void game_session_drop_carried_artifact(GameSession *session,
-                                               GameFloaterStart *floater)
+void game_session_drop_carried_artifact(GameSession *session,
+                                        GameFloaterStart *floater)
 {
     GameRuntimeIsland *island;
     GameRuntimeLocation *nearest = NULL;

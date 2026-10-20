@@ -248,14 +248,14 @@ int game_session_place_building(GameSession *session,
        1..3. FUN_004527ee re-ORs bit 0x10, already present in 0x410. */
     runtime->source_flags = (runtime->source_flags & ~0x0fU) | 0x410U;
     runtime->base_progress = 0;
-    runtime->producer_cadence = 0;
+    /* FUN_004528ca does not write the modeled +0x0c cadence field. */
     runtime->chug_progress = 0;
     runtime->glyph_progress = 0;
     runtime->inci_progress = 0;
     runtime->construction_progress = 0;
     runtime->production_progress = 0;
     runtime->animation_rate = 1;
-    runtime->barg_progress = 0.0;
+    /* The native initializer leaves BARG's double at +0x50 untouched. */
     (void)game_session_recalculate_active_locations(session);
     game_session_refresh_player_maintenance_budgets(session);
     (void)game_session_queue_audio_event(

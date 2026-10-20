@@ -105,6 +105,9 @@ typedef struct GameRuntimeLocation {
 
 typedef struct GameRuntimeIsland {
     uint16_t location_count;
+    /* FUN_004642a3 retains the fourth data\\worldpos.txt value per island;
+       FUN_004535e4 uses it to choose replacement markers for class-1 item 5. */
+    int16_t leviathan_marker_shape_id;
     /* FUN_00460460's per-island Leviathan planning summary. */
     int16_t leviathan_marker_count;
     int16_t leviathan_remaining_markers;
