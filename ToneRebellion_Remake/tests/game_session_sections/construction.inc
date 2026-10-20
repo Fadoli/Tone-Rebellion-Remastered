@@ -524,6 +524,179 @@ static void test_construction_task_delivers_cost_before_deferred_placement(void)
     assert(floater->carried_resource_code == 0);
 }
 
+static void test_tone_maintenance_surplus_tracks_regions_and_workers(void)
+{
+    GameSession session = {0};
+    unsigned int index;
+
+    session.island_count = 1;
+    session.islands[0].location_count = 5;
+    for (index = 0; index < 5; ++index) {
+        GameRuntimeLocation *region = &session.islands[0].locations[index];
+        region->renderer_class = 1;
+        region->source_value_14 = 0;
+        region->source_value_22 = 1U;
+    }
+    {
+        GameRuntimeLocation *building = &session.islands[0].locations[6];
+        building->renderer_class = 0;
+        building->record_value_10 = 37;
+        building->owner_id = 0;
+        building->source_value_14 = 0;
+        building->source_value_22 = 1U;
+        building->source_location_slot_18 = -1;
+        building->source_flags = 0x400U;
+        building->maintenance_tone_cost = 1;
+    }
+    session.islands[0].location_count = 7;
+    session.floater_count = 1;
+    session.floaters[0].is_active = 1;
+    session.floaters[0].type_index = 0;
+
+    /* Five accessible regions produce 2.5 capacity, rounded to even 2;
+       one worker and one active building consume it all. */
+    game_session_refresh_player_maintenance_budgets(&session);
+    assert(session.economy[0].source_maintenance_budget == 0);
+
+    /* A sixth region raises the rounded capacity from two to three. */
+    session.islands[0].locations[5].renderer_class = 1;
+    session.islands[0].locations[5].source_value_14 = 0;
+    session.islands[0].locations[5].source_value_22 = 1U;
+    game_session_refresh_player_maintenance_budgets(&session);
+    assert(session.economy[0].source_maintenance_budget == 1);
+
+    /* Losing that worker returns its upkeep to the available surplus. */
+    session.floaters[0].is_active = 0;
+    game_session_refresh_player_maintenance_budgets(&session);
+    assert(session.economy[0].source_maintenance_budget == 2);
+}
+
+static void test_initialized_workers_build_from_queued_selection(void)
+{
+    WorldDefinition world;
+    IslandData islands[5];
+    GameSessionConfig config = {0};
+    GameSession session;
+    PadCatalog catalog;
+    FloaterCatalog floater_catalog;
+    GamePlayerStart *start;
+    GameRuntimeIsland *island;
+    GameRuntimeLocation *site = NULL;
+    GameRuntimeLocation *hall;
+    PadCatalogItem *item;
+    char error[160];
+    unsigned int location_index;
+    unsigned int worker_index;
+    unsigned int tick;
+    int observed_assignment = 0;
+    int observed_delivery = 0;
+    int slot;
+
+    make_world(&world, islands);
+    make_pad_catalog(&catalog);
+    make_floater_catalog(&floater_catalog);
+    config.home_island_index = 0;
+    config.selected_tribe = 0;
+    config.random_seed = 1;
+    assert(game_session_initialize(&world, islands, &catalog, &floater_catalog,
+                                   &config, &session, error, sizeof(error)));
+
+    start = &session.player_starts.players[0];
+    island = &session.islands[start->island_index];
+    hall = &island->locations[start->nearest_site_location_index];
+    for (location_index = 0; location_index < island->location_count;
+         ++location_index) {
+        GameRuntimeLocation *candidate = &island->locations[location_index];
+        if (location_index == start->nearest_site_location_index ||
+            candidate->renderer_class != 0 || candidate->record_value_10 != 0)
+            continue;
+        site = candidate;
+        break;
+    }
+    assert(site != NULL);
+
+    /* The UI's construct click queues base item 37, the Build Tone producer.
+       The initialized session supplies real workers and a real Hall; expose
+       this site to player 0 as the normal site-discovery step does. */
+    site->source_value_22 = 1U;
+    site->source_value_14 = -1;
+    site->construction_site_size = 0;
+    item = &catalog.items[37];
+    item->item_id = 37;
+    item->size = 0;
+    item->building_tone_cost = 35;
+    item->maintenance_tone_cost = 1;
+    item->hit_points = 17;
+    assert(hall->resource_stock[GAME_RESOURCE_BUILD_TONE] >= 35);
+    assert(game_session_queue_build_selection(&session, 0,
+        start->island_index, (uint16_t)location_index, 37));
+    assert(game_session_dispatch_build_selections(&session) == 1);
+    slot = 0;
+    assert(session.pending_events[slot].active != 0);
+    assert(session.pending_events[slot].action_type == 5);
+    assert(session.pending_events[slot].payload_0a == start->island_index);
+    assert(session.pending_events[slot].payload_0e == (int16_t)location_index);
+    assert(session.pending_events[slot].payload_12 == 37);
+    assert(session.economy[0].source_maintenance_budget == 0);
+    assert(session.economy[0].source_maintenance_budget <
+           item->maintenance_tone_cost);
+    {
+        int16_t delivered = -1;
+        int16_t required = -1;
+        assert(game_session_construction_task_values(&session, &catalog,
+            &session.pending_events[slot], &delivered, &required));
+        assert(delivered == 0);
+        assert(required == 35);
+    }
+    game_session_assign_local_resource_tasks(&session, &catalog);
+    assert(session.pending_events[slot].assigned_floater_count == 0);
+    for (tick = 1; tick <= 100; ++tick) {
+        game_session_update_construction_tasks(&session, &catalog);
+        game_session_tick_floater_moves(&session, tick, &catalog);
+    }
+    assert(session.pending_events[slot].assigned_floater_count == 0);
+    assert(site->resource_stock[GAME_RESOURCE_BUILD_TONE] == 0);
+    /* The queue entry exists, but its upkeep check blocks dispatch. Once the
+       player has enough maintenance capacity, initialized workers should
+       pick it up and finish the complete pickup/delivery/place cycle. */
+    session.economy[0].source_maintenance_budget = 1;
+
+    for (worker_index = 0; worker_index < start->floater_count; ++worker_index) {
+        const GameFloaterStart *worker = &session.floaters[
+            (unsigned int)(start->floater_type_index *
+                GAME_START_FLOATERS_PER_PLAYER) + worker_index];
+        assert(worker->is_active != 0);
+        assert(worker->owner_slot == 0);
+    }
+
+    /* Match WM_TIMER: task completion is checked before worker movement. */
+    for (tick = 1; tick < 10000 && site->owner_id == -1; ++tick) {
+        game_session_update_construction_tasks(&session, &catalog);
+        game_session_tick_floater_moves(&session, tick, &catalog);
+        if (session.pending_events[slot].assigned_floater_count > 0)
+            observed_assignment = 1;
+        if (site->resource_stock[GAME_RESOURCE_BUILD_TONE] > 0)
+            observed_delivery = 1;
+    }
+
+    assert(tick < 10000);
+    assert(observed_assignment);
+    assert(observed_delivery);
+    assert(site->record_value_10 == 37);
+    assert(site->owner_id == 0);
+    assert(site->source_value_14 == 0);
+    assert(hall->resource_stock[GAME_RESOURCE_BUILD_TONE] == 15);
+    assert(session.pending_event_count == 0);
+    assert(session.pending_events[slot].active == 0);
+    for (worker_index = 0; worker_index < start->floater_count; ++worker_index) {
+        const GameFloaterStart *worker = &session.floaters[
+            (unsigned int)(start->floater_type_index *
+                GAME_START_FLOATERS_PER_PLAYER) + worker_index];
+        assert(worker->active_order_action == 0);
+        assert(worker->linked_task_slot == -1);
+    }
+}
+
 static void test_construction_completes_on_native_empty_status_one_site(void)
 {
     GameSession session = {0};

@@ -57,8 +57,8 @@ typedef struct GamePlayerEconomy {
        non-Leviathan sites. No native writer has been identified yet. */
     uint8_t island_visibility_override;
     /* FUN_00453bf6 compares pad.txt maintenance against player +0x40.
-       FUN_0045e6d3 recomputes it from accessible class-1 regions, active-site
-       maintenance and floater count after the active bit changes. */
+       FUN_0045e6d3 turns accessible class-1 regions into 0.5 maintenance
+       capacity each, then subtracts active-site upkeep and owned floaters. */
     int32_t source_maintenance_budget;
     /* FUN_0043d59b enumerates player-owned inventory counts for item IDs 5..33.
        The UI count table is distinct from resources and island placements. */

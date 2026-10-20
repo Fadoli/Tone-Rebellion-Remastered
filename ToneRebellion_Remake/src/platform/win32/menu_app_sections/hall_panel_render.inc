@@ -222,6 +222,29 @@ static void draw_hall_panel(HDC dc, int hall_player)
                             task_info_panel->pane.top + 0x2b,
                             RGB(185, 205, 220));
                     }
+                    if (selected_event->action_type == 5 && hall_player >= 0 &&
+                        hall_player < GAME_START_PLAYER_COUNT &&
+                        selected_event->payload_12 >= 0x25 &&
+                        selected_event->payload_12 <= 0x34) {
+                        uint16_t building_id = (uint16_t)(
+                            selected_event->payload_12 + hall_player * 16);
+                        const PadCatalogItem *building = pad_catalog_find(
+                            &g_pad_catalog, building_id);
+                        int32_t maintenance_budget = g_game_session
+                            .economy[hall_player].source_maintenance_budget;
+                        if (building != NULL &&
+                            building->maintenance_tone_cost > maintenance_budget) {
+                            char warning[96];
+                            (void)snprintf(warning, sizeof(warning),
+                                "Entretien insuffisant %ld/%d",
+                                (long)maintenance_budget,
+                                (int)building->maintenance_tone_cost);
+                            draw_bitmap_label(dc, warning,
+                                task_info_panel->pane.left + 10,
+                                task_info_panel->pane.top + 0x42,
+                                RGB(245, 190, 96));
+                        }
+                    }
                     /* FUN_004469d6 resolves payload island/site into the
                        runtime location and calls FUN_0040bf98 only when its
                        dword at +4 is zero. GameRuntimeLocation.owner_id maps

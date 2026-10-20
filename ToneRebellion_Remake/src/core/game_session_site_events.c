@@ -247,10 +247,12 @@ void game_session_tick_site_effect_timers(GameSession *session)
 static void game_session_recalculate_player_maintenance_budgets(
     GameSession *session)
 {
-    /* FUN_0045e6d3 sums those per-island marker counts, subtracts active
-       maintenance and each player's floater count, then clamps the result. */
+    /* FUN_0045e6d3 converts accessible class-1 region count to maintenance
+       capacity at 0.5 per region, then subtracts active maintenance and each
+       player's floater count. Its x87 __ftol conversion rounds ties to even. */
     int32_t capacities[GAME_START_PLAYER_COUNT] = {0};
     int32_t maintenance[GAME_START_PLAYER_COUNT] = {0};
+    int32_t capacity_budget[GAME_START_PLAYER_COUNT] = {0};
     unsigned int island_index;
     unsigned int floater_index;
     unsigned int player_slot;
@@ -269,6 +271,12 @@ static void game_session_recalculate_player_maintenance_budgets(
     }
 
     for (player_slot = 0; player_slot < GAME_START_PLAYER_COUNT; ++player_slot) {
+        int32_t half_capacity = capacities[player_slot] / 2;
+        /* Match default x87 round-to-nearest-even for .5 values. */
+        if ((capacities[player_slot] & 1) != 0 &&
+            (half_capacity & 1) != 0) ++half_capacity;
+        capacity_budget[player_slot] = half_capacity;
+
         uint32_t owned_flag = 0x800U << player_slot;
         for (island_index = 0; island_index < session->island_count;
              ++island_index) {
@@ -297,10 +305,10 @@ static void game_session_recalculate_player_maintenance_budgets(
             if (game_session_floater_is_active(floater) &&
                 floater->type_index == player_slot) ++maintenance[player_slot];
         }
-        if (maintenance[player_slot] > capacities[player_slot])
-            maintenance[player_slot] = capacities[player_slot];
+        if (maintenance[player_slot] > capacity_budget[player_slot])
+            maintenance[player_slot] = capacity_budget[player_slot];
         session->economy[player_slot].source_maintenance_budget =
-            capacities[player_slot] - maintenance[player_slot];
+            capacity_budget[player_slot] - maintenance[player_slot];
     }
 }
 

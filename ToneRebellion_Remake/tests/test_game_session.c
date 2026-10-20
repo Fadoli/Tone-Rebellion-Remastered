@@ -477,6 +477,8 @@ int main(void)
     test_player_source_building_keeps_native_id_for_island_state();
     test_construction_assignment_matches_source_candidate_guards();
     test_construction_task_delivers_cost_before_deferred_placement();
+    test_tone_maintenance_surplus_tracks_regions_and_workers();
+    test_initialized_workers_build_from_queued_selection();
     test_construction_completes_on_native_empty_status_one_site();
     test_cancelled_construction_releases_assigned_floater();
     test_charge_order_accepts_each_players_source_variant();
