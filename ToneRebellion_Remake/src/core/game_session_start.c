@@ -30,6 +30,10 @@ int game_session_initialize_start_players(
         /* FUN_0046466f sets island runtime +0x29ac + player*4 for each
            player's assigned starting island; FUN_0047117d reads this flag. */
         runtime->access_mask |= (uint8_t)(1U << island_index);
+        /* FUN_0046466f stores the same Hall-centered X window in the
+           island/player table consumed by FUN_00423068 and FUN_00420a55. */
+        runtime->floater_min_x[island_index] = start->view_left;
+        runtime->floater_max_x[island_index] = start->view_right;
 
         if (location_index >= runtime->location_count ||
             runtime->locations[location_index].record_value_10 != 0) {
@@ -53,6 +57,10 @@ int game_session_initialize_start_players(
            stores the player in site +0x14. */
         runtime->locations[location_index].source_value_14 =
             (int32_t)island_index;
+        /* FUN_004528ca sets +0x32 and FUN_00452fcb restores the +0x3e
+           sentinel for the newly initialized Hall record. */
+        runtime->locations[location_index].source_value_32 = 1;
+        runtime->locations[location_index].source_value_3e = -1;
         /* FUN_0046466f creates the Hall through FUN_004528ca, which clears
            +0x28/+0x2a/+0x2c; startup then sets only +0x28 to 50. */
         runtime->locations[location_index]

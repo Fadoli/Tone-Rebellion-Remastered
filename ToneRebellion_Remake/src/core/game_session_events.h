@@ -17,6 +17,10 @@ size_t game_session_collect_task_slots(const GameSession *session,
 int game_session_dispatch_task_command(GameSession *session, uint8_t slot,
                                        uint8_t subtype,
                                        const GamePendingEvent *expected);
+/* FUN_00460029 releases every modeled task record targeting one island site. */
+unsigned int game_session_cancel_tasks_for_location(GameSession *session,
+                                                    uint8_t island_index,
+                                                    uint16_t location_index);
 /* FUN_0042fa0f(0x40): queue an inventory-use request for a clicked island
    location. Mirrors its class-0 occupied-location rejection and stores the
    source's island/location/item payload; it does not apply the item effect or
@@ -26,6 +30,12 @@ int game_session_queue_inventory_action(GameSession *session,
                                         uint8_t island_index,
                                         uint16_t location_index,
                                         uint8_t item_id);
+/* FUN_004672ef command type 3 cycles the supported player source records
+   through capacity tiers 0..2. The source setter resets +0x48 and marks bit
+   0x20 only when the tier increases. */
+int game_session_cycle_source_capacity(GameSession *session,
+                                       uint8_t island_index,
+                                       uint16_t location_index);
 /* Applies FUN_00450847 to a resolved FA_Cast target using the effect amount
    chosen by the cast substep. Also mirrors the known FUN_00452ae7/
    FUN_00452a15 location reset when the effect consumes the site. */
@@ -38,13 +48,14 @@ int32_t game_session_apply_cast_site_effect(GameSession *session,
 unsigned int game_session_apply_cast_blast(GameSession *session,
                                            unsigned int caster_index);
 /* FUN_004239e9 cases 7/9 resolve the blast and selected-site impacts; case
-   0x16 applies the 30000 site effect when the item matches the player key. */
+   0x14 refreshes the island's Leviathan reevaluation; case 0x16 applies the
+   30000 site effect when the item matches the player key. */
 unsigned int game_session_resolve_cast_effect_step(
     GameSession *session, unsigned int caster_index, uint8_t step,
     int16_t target_location_index);
-/* Reserve a source effect slot. For case 7/9/0x16, a positive delay counts odd
-   effect updates; case 0x16 with delay 0 runs ASCEND, UPGRADE travel and the
-   FREEZESC impact transition from the loaded source descriptors. */
+/* Reserve a source effect slot. A positive delay counts odd effect updates;
+   case 0x16 with delay 0 runs ASCEND, UPGRADE travel and the FREEZESC impact
+   transition from the loaded source descriptors. */
 int game_session_schedule_cast_effect_step(
     GameSession *session, unsigned int caster_index, uint8_t step,
     int16_t target_location_index, uint8_t odd_updates_until_impact);
@@ -64,6 +75,15 @@ int game_session_pop_glyph_action(GameSession *session,
 /* FUN_00465793 category-3/subtype-3 selects the first player subtype-8
    floater and assigns its FA_Cast glyph order. */
 unsigned int game_session_dispatch_glyph_actions(GameSession *session);
+/* Queue category-1 subtype 0x15..0x1c spell orders. Dispatch currently
+   resolves only kinds 0x14 and 0x16, whose movement/effects are modeled. */
+int game_session_queue_cast_action(GameSession *session,
+                                   uint8_t player_slot,
+                                   uint8_t island_index,
+                                   uint16_t location_index,
+                                   uint8_t action_subtype);
+int game_session_cast_kind_for_action(uint8_t owner, uint8_t action_subtype);
+unsigned int game_session_dispatch_cast_actions(GameSession *session);
 /* BC_OnOff's established message route. */
 int game_session_queue_onoff_action(GameSession *session,
                                     uint8_t player_slot,
@@ -79,6 +99,19 @@ unsigned int game_session_dispatch_onoff_actions(GameSession *session,
                                                  const PadCatalog *catalog);
 /* Recompute runtime active bit 0 using FUN_00453958's observed predicate. */
 unsigned int game_session_recalculate_active_locations(GameSession *session);
+/* FUN_00466b09 calls FUN_00462285 for the newly reached island and player. */
+int game_session_recalculate_player_island_visibility(
+    GameSession *session, uint8_t island_index, uint8_t player_slot);
+void game_session_recalculate_leviathan_island(GameSession *session,
+                                               uint8_t island_index);
+void game_session_tick_leviathan_ai(GameSession *session);
+/* Queue/pop source event IDs 2 (build) and 3 (bridge) for the platform audio adapter. */
+int game_session_queue_audio_event(GameSession *session, uint8_t kind,
+                                   int16_t owner_id);
+int game_session_pop_audio_event(GameSession *session,
+                                 GameSessionAudioEvent *out);
+/* Rebuild all player budgets after glyph, ownership, or site state changes. */
+void game_session_refresh_player_maintenance_budgets(GameSession *session);
 /* FUN_004539e9 updates one site's active bit, including its visibility gate. */
 int game_session_recalculate_location_active_with_visibility(
     GameRuntimeLocation *location);

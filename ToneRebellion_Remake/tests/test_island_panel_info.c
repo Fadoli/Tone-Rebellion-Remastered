@@ -56,14 +56,16 @@ int main(int argc, char **argv)
     assert(!island_panel_repair_button_visible(0x24, 0, 0, 9, 10));
     assert(!island_panel_repair_button_visible(0x35, 1, 1, 10, 10));
     assert(island_panel_onoff_button_visible(0x25, 0, 0, 0));
-    assert(island_panel_onoff_button_visible(0x26, 0, 1, 1));
-    assert(island_panel_onoff_button_visible(0x27, 0, 3, 3));
+    /* Runtime item IDs include the owner's 16-item block (FUN_004641de). */
+    assert(island_panel_onoff_button_visible(0x36, 0, 1, 1));
+    assert(island_panel_onoff_button_visible(0x57, 0, 3, 3));
     assert(!island_panel_onoff_button_visible(0x24, 0, 0, 0));
     assert(!island_panel_onoff_button_visible(0x28, 0, 0, 0));
     assert(!island_panel_onoff_button_visible(0x25, 1, 0, 0));
     assert(!island_panel_onoff_button_visible(0x25, 2, 0, 0));
     assert(!island_panel_onoff_button_visible(0x25, 3, 0, 0));
     assert(!island_panel_onoff_button_visible(0x25, 0, 1, 0));
+    assert(!island_panel_onoff_button_visible(0x25, 0, 1, 1));
     assert(!island_panel_onoff_button_visible(0x25, 0, 4, 4));
     assert(!island_panel_onoff_button_visible(0x25, 0, 0, -1));
     assert(island_panel_info_cryptic_key(0, key, sizeof(key)));

@@ -234,6 +234,15 @@ static void handle_click(HWND window, int x, int y)
             g_selected_location >= 0 &&
             g_selected_location < g_game_session.islands[
                 g_menu.selected_map_island].location_count) {
+            int cast_action = selected_cast_action_at(x, y);
+            if (cast_action >= 0) {
+                (void)game_session_queue_cast_action(&g_game_session,
+                    (uint8_t)g_menu.selected_tribe,
+                    (uint8_t)g_menu.selected_map_island,
+                    (uint16_t)g_selected_location, (uint8_t)cast_action);
+                InvalidateRect(window, NULL, FALSE);
+                return;
+            }
             static const char *const onoff_names[] = {"BC_OnOff"};
             const WindowTemplate *onoff_control =
                 selected_onoff_button_visible()
@@ -256,8 +265,12 @@ static void handle_click(HWND window, int x, int y)
                     repair_names,
                     sizeof(repair_names) / sizeof(repair_names[0])) : NULL;
             if (repair_control != NULL) {
-                /* BC_Repair sends message 101 to MASTER, but its downstream
-                   repair effect is unresolved. Consume the button hit. */
+                /* FUN_004337d9 and FUN_004459e6 use +0x0a for island and
+                   +0x0e for location on repair task records. */
+                (void)game_session_pending_event_add(&g_game_session,
+                    (int16_t)g_menu.selected_tribe,
+                    (int16_t)g_menu.selected_map_island,
+                    0x12, 0, (int16_t)g_selected_location, 0);
                 return;
             }
         }

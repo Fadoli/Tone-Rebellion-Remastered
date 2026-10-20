@@ -2,6 +2,7 @@
 
 #include "building_render.h"
 #include "island_render_rules.h"
+#include "game_session_world.h"
 
 static const uint8_t source_staff_target_counts[8][3][3] = {
     {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}},
@@ -141,8 +142,10 @@ static void tick_source_staff_cycle(GameSession *session,
             level = (uint16_t)(floater->attack_level_flags & 0x0fU);
             floater->charge_current = stats->attack_strength;
             /* FUN_00420f28 scales max-attack-points with the trained level.
-               Category 4 uses its distinct 7n+10 multiplier. The source's
-               tribe and linked-building bonuses are applied in a later pass. */
+               Category 4 uses its distinct 7n+10 multiplier. Its tribe and
+               linked-building bonuses require mask bits from DAT_00619242;
+               that table is zero in the loaded image, and no runtime writer
+               is established, so those conditional bonuses remain unmodeled. */
             if (floater->type_index == 4) {
                 trained_strength = (stats->max_attack_points *
                                     ((int32_t)level * 7 + 10)) / 10;
@@ -217,8 +220,10 @@ void game_session_tick_item_animations_with_floaters(
             GameRuntimeLocation *state = &island->locations[location_index];
             const BuildingRenderItem *item;
             uint32_t duration;
+            int construction_completed = 0;
+            int production_completed = 0;
 
-            if (state->renderer_class > 1) continue;
+            if (state->renderer_class > 2) continue;
 
             /* FUN_00450a71 has two POOL-specific class-1 counter sequences.
                ID 0 loops 0..89; ID 5 advances to 125 then restarts at 102.
@@ -285,6 +290,7 @@ void game_session_tick_item_animations_with_floaters(
                 ++state->production_progress;
                 if (limit <= state->production_progress) {
                     state->source_flags &= ~0x002U;
+                    production_completed = 1;
                     /* FUN_00450a71 maps completed producer cycles into the
                        pending output code held in runtime +0x24. */
                     if (state->record_value_24 == 0)
@@ -316,6 +322,22 @@ void game_session_tick_item_animations_with_floaters(
                 if (item->cons.present &&
                     item->cons.fallback_frame <= state->construction_progress) {
                     state->source_flags &= ~0x004U;
+                    construction_completed = 1;
+                }
+            }
+
+            /* FUN_00450a71 case 2 chains CONS into PROD for an unbuilt class-2
+               bridge marker, then FUN_004669bd activates its paired link when
+               that production animation finishes. The event that starts CONS
+               remains outside the current gameplay input model. */
+            if (state->renderer_class == 2 && state->record_value_10 == 2 &&
+                (state->source_flags & 1U) == 0) {
+                if (construction_completed) {
+                    state->source_flags |= 0x002U;
+                    state->production_progress = 0;
+                } else if (production_completed) {
+                    (void)game_session_mark_bridge_constructed_at(
+                        session, (uint8_t)island_index, (uint16_t)location_index);
                 }
             }
         }

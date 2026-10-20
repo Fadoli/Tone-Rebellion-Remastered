@@ -12,6 +12,9 @@ typedef struct GameRuntimeLocation {
     /* Source signed short +0x18. FUN_004528ca stores the owning player's
        100-byte source-record index here for item IDs 0x2c..0x32. */
     int16_t source_location_slot_18;
+    /* Cached pad.txt maintenance cost; lets active-state transitions refresh
+       player budgets without threading the catalog through every tick path. */
+    int16_t maintenance_tone_cost;
     /* Source record +0x60 subslot, assigned 0..9 per item by FUN_0045ee26. */
     int16_t source_category_slot_60;
     /* On producer items 0x25/0x26/0x27, FUN_00450a71 stores a pending
@@ -24,10 +27,15 @@ typedef struct GameRuntimeLocation {
     /* Runtime +0x1c bitword. Bit 0x400 is changed by FUN_00453bf6;
        FUN_0045eaa7 separately checks bit 0x001 for Hall stock requests. */
     uint32_t source_flags;
+    /* FUN_00450847 clears runtime short +0x48 when a non-special site dies. */
+    int16_t source_value_48;
     /* FUN_00453958 reads these runtime shorts at +0x44 and +0x58 when
        recomputing active bit 0. Their field meanings are not established. */
     int16_t source_value_44;
     int16_t source_value_58;
+    /* FUN_00460460 writes a spawn interval to source +0x5a for selected
+       Leviathan marker sites. */
+    uint16_t leviathan_spawn_interval;
     /* FUN_0045cbaa clears the three subtype 1..3 links when a site is turned
        off. -1 means the source has no linked task for that subtype. */
     int16_t source_task_slot[GAME_RESOURCE_TYPE_COUNT];
@@ -41,6 +49,15 @@ typedef struct GameRuntimeLocation {
     uint16_t resource_stock[GAME_RESOURCE_TYPE_COUNT];
     /* FUN_0045c797 clears source short +0x30 after a CHARGE debit. */
     uint16_t charge_source_value_30;
+    /* FUN_004528ca sets source +0x32 to 1 when it initializes an item. */
+    int16_t source_value_32;
+    /* FUN_00452fcb clears +0x3a..+0x49 and restores +0x3e to -1. */
+    int16_t source_value_3a;
+    int16_t source_value_3c;
+    int16_t source_value_3e;
+    int16_t source_value_40;
+    int16_t source_value_42;
+    int16_t source_value_46;
     /* FUN_0045c470's eight floater links and +0x24 count. */
     int16_t charge_floater_slots[8];
     uint16_t charge_floater_count;
@@ -85,6 +102,15 @@ typedef struct GameRuntimeLocation {
 
 typedef struct GameRuntimeIsland {
     uint16_t location_count;
+    /* FUN_00460460's per-island Leviathan planning summary. */
+    int16_t leviathan_marker_count;
+    int16_t leviathan_remaining_markers;
+    int16_t leviathan_site_budget;
+    int16_t leviathan_floater_count;
+    int16_t leviathan_floater_budget;
+    int8_t leviathan_admissible;
+    int32_t leviathan_wait_timer;
+    int16_t leviathan_periodic_timer;
     /* FUN_00423068 reads horizontal wander limits by player slot and
        island. Zero / 0x9ff retain the source's global fallback on each side;
        the data loader for the original per-player limits is not modeled. */

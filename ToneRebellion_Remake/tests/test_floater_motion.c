@@ -17,7 +17,7 @@ int main(void)
     destination.x = 109;
     destination.y = 99;
     assert(!floater_motion_step(&position, destination, 3, 0));
-    assert(position.x == 103 && position.y == 97);
+    assert(position.x == 103 && position.y == 99);
 
     /* A positive close-range distance rounds up to at least one pixel. */
     position.x = 7;

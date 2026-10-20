@@ -62,10 +62,14 @@ endpoint-first, nearest-within-6000 rule, walks there, waits 60 ticks, then
 waits 200 ticks when the reciprocal marker is active or 500 when it is not.
 At timer 120 it rechecks the reciprocal marker and otherwise chooses the
 nearest active class-2 marker within 8000 of the packed destination coordinate.
-The floater appears at `(marker.x, marker.y - 30)`, updates island access and
-horizontal bounds on first entry, waits until timer 60, and resumes its
-coordinate order on the destination island. `FUN_00466b09`'s event emission is
-not modeled yet. This port is grounded by REA Evidence
+Bridge completion now grants the marker owner's access to the neighboring
+island, sets the horizontal bounds around its reciprocal marker and
+recalculates that player's visible locations through `FUN_00462285`, matching
+the `FUN_004669bd` → `FUN_00466b09` path. The floater then appears at
+`(marker.x, marker.y - 30)`, waits until timer 60, and resumes its coordinate
+order on the destination island. The separate island event `0x0c` queued by
+`FUN_00466b09` through `FUN_004655b2` remains unmodeled. This port is
+grounded by REA Evidence
 `ev_c4c31ca182a9de59d1857dd8692b44bb5c634fa49bf26b159390ca12c1670270`
 (`FUN_004210a9`), `ev_8578fcc7430b99a9d136eb0b2ff8e2854d7c283d39d2eccf477e4abff89249b4`
 (`FUN_0041e569`), `ev_a1320147f184399943ce271ba0fbcd2f683878803bd3fc1f71e6ef7ebee5330b`

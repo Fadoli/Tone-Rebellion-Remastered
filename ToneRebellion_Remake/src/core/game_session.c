@@ -4,6 +4,7 @@
 #include "island_render_rules.h"
 #include "pad_catalog.h"
 #include "game_session_internal.h"
+#include "game_session_events.h"
 #include "game_session_setup_internal.h"
 
 #include <stdio.h>
@@ -57,6 +58,9 @@ int game_session_initialize(const WorldDefinition *world,
     memset(&next, 0, sizeof(next));
     next.config = *config;
     next.island_count = world->island_count;
+    next.world_bridge_count = world->bridge_count;
+    memcpy(next.world_bridges, world->bridges,
+           (size_t)world->bridge_count * sizeof(world->bridges[0]));
     if (!game_session_prepare_runtime_layouts(world, islands_by_world_index, runtime_layouts,
                                  bridge_neighbors,
                                  error, error_capacity)) {
@@ -92,8 +96,18 @@ int game_session_initialize(const WorldDefinition *world,
             set_error(error, error_capacity, "tone placement references a missing location");
             return 0;
         }
-        runtime->locations[placement->location_index].record_value_10 = placement->item_id;
-        runtime->locations[placement->location_index].owner_id = placement->owner_id;
+        {
+            GameRuntimeLocation *location =
+                &runtime->locations[placement->location_index];
+            /* FUN_00464b9e creates neutral class-1 marker items through
+               FUN_00452859(item, 4), whose FUN_004528ca initializer stores
+               the same owner at +0x14 and sets +0x32/+0x3e. */
+            location->record_value_10 = placement->item_id;
+            location->owner_id = placement->owner_id;
+            location->source_value_14 = placement->owner_id;
+            location->source_value_32 = 1;
+            location->source_value_3e = -1;
+        }
     }
 
     for (island_index = 0; island_index < world->island_count; ++island_index) {
@@ -118,6 +132,15 @@ int game_session_initialize(const WorldDefinition *world,
         unsigned int location_index;
         for (location_index = 0; location_index < runtime->location_count; ++location_index) {
             GameRuntimeLocation *state = &runtime->locations[location_index];
+            const PadCatalogItem *pad_item = NULL;
+            if (state->record_value_10 > 0 &&
+                state->record_value_10 <= (int32_t)UINT16_MAX &&
+                state->renderer_class <= 1) {
+                pad_item = pad_catalog_find(pad_catalog,
+                    (uint16_t)state->record_value_10);
+            }
+            state->maintenance_tone_cost = pad_item != NULL
+                ? pad_item->maintenance_tone_cost : 0;
             if (state->record_value_10 > 0 && state->renderer_class <= 1) {
                 state->source_flags = 0x410;
                 state->chug_progress = 0;
@@ -134,6 +157,11 @@ int game_session_initialize(const WorldDefinition *world,
         }
     }
 
+    for (island_index = 0; island_index < next.island_count; ++island_index) {
+        next.islands[island_index].leviathan_wait_timer = -1;
+        game_session_recalculate_leviathan_island(&next, (uint8_t)island_index);
+    }
+    game_session_refresh_player_maintenance_budgets(&next);
     *out = next;
     return 1;
 }

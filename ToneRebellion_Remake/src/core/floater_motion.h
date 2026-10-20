@@ -15,9 +15,10 @@ typedef struct FloaterPosition {
    current site item match one of the three source pairs. */
 typedef struct FloaterMotionSpeedContext {
     uint16_t unit_speed;
+    uint8_t owner_slot;
     uint8_t state;
-    uint8_t subtype;
-    int16_t category_speed_modifier;
+    /* Positive DAT_00618f5a entry doubles speed for owner 0. */
+    int16_t owner_speed_modifier;
     uint8_t near_target_override;
     uint8_t site_speed_bonus;
 } FloaterMotionSpeedContext;

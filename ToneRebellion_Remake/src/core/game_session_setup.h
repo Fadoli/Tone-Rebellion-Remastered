@@ -17,8 +17,8 @@ int game_session_floater_charge_values(const GameFloaterStart *floater,
                                        const FloaterCatalog *catalog,
                                        int16_t *current, int16_t *maximum);
 
-/* FUN_004459e6 uses payload +0x0a as island and +0x0e as location. Repair
-   reads current +0x34 and FUN_00450978 maximum at that target. */
+/* FUN_004459e6 reads REPAIR's island at +0x0a and location at +0x0e;
+   repair reads current +0x34 and FUN_00450978 max. */
 int game_session_repair_task_values(const GameSession *session,
                                     const PadCatalog *pad_catalog,
                                     const GamePendingEvent *event,

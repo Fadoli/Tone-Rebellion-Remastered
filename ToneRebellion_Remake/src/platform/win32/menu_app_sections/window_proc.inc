@@ -28,10 +28,12 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 (void)update_world_map_hover(g_mouse_x, g_mouse_y);
             }
             if (g_menu.screen == SCREEN_ISLAND && g_game_session_valid) {
+                GameSessionAudioEvent audio_event;
                 game_session_dispatch_island_events(&g_game_session);
                 (void)game_session_dispatch_trade_requests(&g_game_session);
                 (void)game_session_dispatch_build_selections(&g_game_session);
                 (void)game_session_dispatch_glyph_actions(&g_game_session);
+                (void)game_session_dispatch_cast_actions(&g_game_session);
                 (void)game_session_dispatch_onoff_actions(&g_game_session,
                                                           &g_pad_catalog);
                 game_session_tick_item_animations_with_floaters(
@@ -40,8 +42,22 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 game_session_update_construction_tasks(&g_game_session,
                                                        &g_pad_catalog);
                 game_session_tick_floater_moves(&g_game_session,
-                                                g_menu.animation_ticks);
+                                                g_menu.animation_ticks,
+                                                &g_pad_catalog);
                 (void)game_session_update_resource_requests(&g_game_session);
+                game_session_tick_leviathan_ai(&g_game_session);
+                if (game_session_pop_audio_event(&g_game_session, &audio_event)) {
+                    const unsigned char *sound = NULL;
+                    if (audio_event.kind == GAME_SESSION_AUDIO_BUILD) {
+                        sound = audio_event.owner_id == 4
+                            ? g_levbuild_sound : g_fltbuild_sound;
+                    } else if (audio_event.kind == GAME_SESSION_AUDIO_BRIDGE) {
+                        sound = g_bridge_sound;
+                    }
+                    if (sound != NULL)
+                        (void)PlaySoundA((LPCSTR)sound, NULL,
+                            SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
+                }
             }
             /* Redraw the full animated screen at every 30 Hz simulation tick,
                including while the Tasks panel is open. */

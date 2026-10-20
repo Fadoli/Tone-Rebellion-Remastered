@@ -5,6 +5,38 @@
 
 /* Deferred building-selection and island events. */
 
+int game_session_queue_audio_event(GameSession *session, uint8_t kind,
+                                   int16_t owner_id)
+{
+    unsigned int tail;
+    GameSessionAudioEvent *event;
+
+    if (session == NULL || session->audio_event_count >=
+            GAME_SESSION_MAX_AUDIO_EVENTS ||
+        (kind != GAME_SESSION_AUDIO_BUILD &&
+         kind != GAME_SESSION_AUDIO_BRIDGE)) return 0;
+    tail = ((unsigned int)session->audio_event_head +
+            session->audio_event_count) % GAME_SESSION_MAX_AUDIO_EVENTS;
+    event = &session->audio_events[tail];
+    event->kind = kind;
+    event->owner_id = owner_id;
+    ++session->audio_event_count;
+    return 1;
+}
+
+int game_session_pop_audio_event(GameSession *session,
+                                 GameSessionAudioEvent *out)
+{
+    if (session == NULL || out == NULL || session->audio_event_count == 0)
+        return 0;
+    *out = session->audio_events[session->audio_event_head];
+    session->audio_event_head = (uint8_t)(
+        ((unsigned int)session->audio_event_head + 1U) %
+        GAME_SESSION_MAX_AUDIO_EVENTS);
+    --session->audio_event_count;
+    return 1;
+}
+
 int game_session_queue_build_selection(GameSession *session,
                                       uint8_t player_slot,
                                       uint8_t island_index,

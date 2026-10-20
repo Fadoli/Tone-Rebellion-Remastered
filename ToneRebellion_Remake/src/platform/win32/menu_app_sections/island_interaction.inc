@@ -121,6 +121,48 @@ static int selected_onoff_button_visible(void)
         g_game_session.config.selected_tribe);
 }
 
+static int selected_cast_action_at(int x, int y)
+{
+    static const char *const spell_names[8] = {
+        "BC_Spell1", "BC_Spell2", "BC_Spell3", "BC_Spell4",
+        "BC_Spell5", "BC_Spell6", "BC_Spell7", "BC_Spell8"
+    };
+    const GameRuntimeIsland *island;
+    const GameRuntimeLocation *location;
+    const WindowTemplate *button;
+    unsigned int index;
+
+    if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
+        g_island_panel_mode != WINDOW_ISLAND_PANEL_GENERAL ||
+        g_menu.selected_tribe < 0 ||
+        g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
+        g_menu.selected_map_island < 0 ||
+        g_menu.selected_map_island >= g_game_session.island_count ||
+        g_selected_location < 0) return -1;
+    island = &g_game_session.islands[g_menu.selected_map_island];
+    if ((unsigned int)g_selected_location >= island->location_count) return -1;
+    location = &island->locations[g_selected_location];
+    if (location->renderer_class != 0 ||
+        location->owner_id != g_menu.selected_tribe ||
+        location->source_location_slot_18 < 0 ||
+        (location->record_value_10 != 0x2f &&
+         location->record_value_10 != 0x30)) return -1;
+
+    button = window_catalog_hit_test_names(&g_window_catalog, 3, x, y,
+        spell_names, sizeof(spell_names) / sizeof(spell_names[0]));
+    if (button == NULL) return -1;
+    for (index = 0; index < 8; ++index) {
+        if (strcmp(button->name, spell_names[index]) == 0) {
+            int kind = game_session_cast_kind_for_action(
+                (uint8_t)location->source_value_14,
+                (uint8_t)(0x15U + index));
+            return kind == 7 || kind == 9 || kind == 0x14 || kind == 0x16
+                ? (int)(0x15U + index) : -1;
+        }
+    }
+    return -1;
+}
+
 static void draw_control_with_hover_overlay(HDC dc,
         const WindowTemplate *control, const SpriteSheet *art, int hovered)
 {

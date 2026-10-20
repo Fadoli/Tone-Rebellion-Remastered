@@ -14,7 +14,9 @@ enum { GAME_SESSION_MAX_FLOATERS = GAME_START_PLAYER_COUNT * GAME_START_FLOATERS
 enum { GAME_SOURCE_RECORDS_PER_PLAYER = 48,
        GAME_SOURCE_SUBSLOTS_PER_ITEM = 10 };
 enum { GAME_SESSION_MAX_PENDING_EVENTS = 64, GAME_SESSION_MAX_TASKS = 32 };
+enum { GAME_SESSION_MAX_AUDIO_EVENTS = 128 };
 enum { GAME_SESSION_MAX_CAST_EFFECTS = 32 };
+enum { GAME_SESSION_MAX_CAST_ACTIONS = 64 };
 enum { GAME_SESSION_MAX_GLYPH_ACTIONS = 64 };
 enum { GAME_SESSION_MAX_ONOFF_ACTIONS = 64 };
 enum { GAME_SESSION_MAX_BUILD_SELECTIONS = 64 };
@@ -32,6 +34,16 @@ typedef enum GameResourceType {
     GAME_RESOURCE_MAGIC_TONE = 2
 } GameResourceType;
 
+typedef enum GameSessionAudioEventKind {
+    GAME_SESSION_AUDIO_BUILD = 2,
+    GAME_SESSION_AUDIO_BRIDGE = 3
+} GameSessionAudioEventKind;
+
+typedef struct GameSessionAudioEvent {
+    uint8_t kind;
+    int16_t owner_id;
+} GameSessionAudioEvent;
+
 typedef struct GamePlayerEconomy {
     /* FUN_0046466f assigns one initial hall per player. These indices bind
        the player's resource storage to that runtime hall record. */
@@ -39,8 +51,12 @@ typedef struct GamePlayerEconomy {
     uint16_t hall_location_index;
     uint16_t hall_x;
     uint16_t hall_y;
-    /* FUN_00453bf6 compares pad.txt maintenance against player +0x6191f8.
-       The observed static dword is zero; a runtime writer remains unknown. */
+    /* DAT_0061a654 per-player override makes FUN_00462285 expose all
+       non-Leviathan sites. No native writer has been identified yet. */
+    uint8_t island_visibility_override;
+    /* FUN_00453bf6 compares pad.txt maintenance against player +0x40.
+       FUN_0045e6d3 recomputes it from accessible class-1 regions, active-site
+       maintenance and floater count after the active bit changes. */
     int32_t source_maintenance_budget;
     /* FUN_0043d59b enumerates player-owned inventory counts for item IDs 5..33.
        The UI count table is distinct from resources and island placements. */
@@ -87,6 +103,15 @@ typedef struct GameGlyphActionRequest {
     uint16_t location_index;
     uint8_t glyph_index;
 } GameGlyphActionRequest;
+
+/* FUN_0042fa0f category-1 actions 0x15..0x1c carry the player and repeat
+   the selected site's island/location for FUN_0045da80. */
+typedef struct GameCastActionRequest {
+    uint8_t player_slot;
+    uint8_t action_subtype;
+    uint8_t island_index;
+    uint16_t location_index;
+} GameCastActionRequest;
 
 /* FUN_0042fa0f's BC_OnOff command reaches FUN_00465793 as type-1/subtype-0.
    Keep its target as a request until the island tick dispatches it. */

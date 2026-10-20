@@ -249,8 +249,8 @@ static void render_island_view(HDC dc)
                 }
             }
             /* FUN_0042704b places the resolved resource at the body's +0x25/
-               +0x26 anchor when +0x18 is nonzero. shapeinf's exact hand offsets
-               are unavailable, so attach the half-size sprite beside the body. */
+               +0x26 anchor when +0x18 is nonzero. shapeinf.txt is not yet
+               loaded by the remake, so this uses a provisional hand anchor. */
             if (floater->carried_resource_code >= 1 &&
                 floater->carried_resource_code <= GAME_RESOURCE_TYPE_COUNT) {
                 static const SpriteSheet *const carried_art[] = {
@@ -377,14 +377,19 @@ static void render_island_view(HDC dc)
                IWLocInfo. Initial workers are class 0, level 0, and have the
                four tribe-specific *work rows: 3 hit points and 0 strength.
                FUN_00466fe4 initializes current hits to FUN_00420f28's max. */
-            draw_bitmap_label(dc, "WORKER",
-                              info->pane.left + 5, info->pane.top + 3,
-                              RGB(230, 238, 255));
+            {
+                const char *worker_label = "WORKER";
+                int label_width = measure_bitmap_text(NULL, worker_label,
+                                                       strlen(worker_label));
+                draw_bitmap_label(dc, worker_label,
+                    info->pane.left +
+                        ((info->pane.right - info->pane.left + 1) - label_width) / 2,
+                    info->pane.top + 3, RGB(230, 238, 255));
+            }
             {
                 char hit_points_label[24];
                 char strength_label[24];
                 char charge_label[24];
-                char carried_label[28];
                 int16_t current_charge;
                 int16_t maximum_charge;
                 (void)snprintf(hit_points_label, sizeof(hit_points_label),
@@ -412,29 +417,6 @@ static void render_island_view(HDC dc)
                                       info->pane.top + 43,
                                       RGB(230, 238, 255));
                 }
-                if (selected_floater->carried_resource_code >= 1 &&
-                    selected_floater->carried_resource_code <=
-                        GAME_RESOURCE_TYPE_COUNT) {
-                    static const char *const carried_names[] = {
-                        "BUILD", "CRYSTAL", "MAGIC"
-                    };
-                    static const SpriteSheet *const carried_art[] = {
-                        &g_bildtone_art, &g_tone_crys_art, &g_magctone_art
-                    };
-                    unsigned int resource_index =
-                        (unsigned int)selected_floater->carried_resource_code - 1U;
-                    (void)snprintf(carried_label, sizeof(carried_label),
-                        "CARRY %s", carried_names[resource_index]);
-                    draw_bitmap_label(dc, carried_label,
-                                      info->pane.left + 5,
-                                      info->pane.top + 53,
-                                      RGB(230, 238, 255));
-                    if (carried_art[resource_index]->frame_count != 0) {
-                        draw_sprite_scaled(dc, carried_art[resource_index], 0,
-                            info->pane.right - 27, info->pane.top + 48,
-                            0x00008000U);
-                    }
-                }
             }
 
             /* FUN_0044338b places the selected unit sprite to the right of
@@ -444,7 +426,7 @@ static void render_island_view(HDC dc)
                 uint32_t leg_frame = g_menu.animation_ticks % 16u;
                 int sprite_x = info->pane.right - 50;
                 int sprite_y = info->pane.top +
-                    (info->pane.bottom - info->pane.top) / 2;
+                    (info->pane.bottom - info->pane.top) / 2 + 5;
                 const SpriteSheet *body_art = selected_floater->facing_left
                     ? &g_initial_floater_bodies_flipped[selected_floater->type_index]
                     : &g_initial_floater_bodies[selected_floater->type_index];
@@ -454,6 +436,26 @@ static void render_island_view(HDC dc)
                 const SpriteFrame *body_frame = &body_art->frames[0];
                 draw_sprite(dc, leg_art, leg_frame, sprite_x, sprite_y);
                 draw_sprite(dc, body_art, 0, sprite_x, sprite_y);
+                /* The source draws a carried item as part of FUN_0042704b's
+                   floater sprite, never as a separate CARRY text row. Until
+                   shapeinf.txt hand anchors and carry-frame ranges are loaded,
+                   keep the icon attached to the body's hand area. */
+                if (selected_floater->carried_resource_code >= 1 &&
+                    selected_floater->carried_resource_code <=
+                        GAME_RESOURCE_TYPE_COUNT) {
+                    static const SpriteSheet *const carried_art[] = {
+                        &g_bildtone_art, &g_tone_crys_art, &g_magctone_art
+                    };
+                    unsigned int resource_index =
+                        (unsigned int)selected_floater->carried_resource_code - 1U;
+                    int hand_x = sprite_x + body_frame->x_offset +
+                                 (selected_floater->facing_left ? -6 : 5);
+                    int hand_y = sprite_y + body_frame->y_offset - 1;
+                    if (carried_art[resource_index]->frame_count != 0) {
+                        draw_sprite_scaled(dc, carried_art[resource_index], 0,
+                            hand_x, hand_y, 0x00008000U);
+                    }
+                }
                 /* FUN_0044338b enables the info flags around this sprite.
                    FUN_0042003c maps the startup *work row's realm to frames
                    22..25 and adjusts it from the retained current-location
@@ -681,6 +683,10 @@ static void draw_location_action_panel(HDC dc)
 
     action = selected_location_action();
     if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL) {
+        static const char *const spell_names[8] = {
+            "BC_Spell1", "BC_Spell2", "BC_Spell3", "BC_Spell4",
+            "BC_Spell5", "BC_Spell6", "BC_Spell7", "BC_Spell8"
+        };
         const WindowTemplate *onoff_button = window_catalog_find(
             &g_window_catalog, "BC_OnOff", 3);
         repair_button = window_catalog_find(&g_window_catalog, "BC_Repair", 3);
@@ -693,6 +699,29 @@ static void draw_location_action_panel(HDC dc)
         if (selected_repair_button_visible()) {
             draw_control_with_hover_overlay(dc, repair_button,
                 &g_repair_button_art, g_hovered_repair_control);
+        }
+        if (island->locations[g_selected_location].renderer_class == 0 &&
+            island->locations[g_selected_location].owner_id ==
+                g_menu.selected_tribe &&
+            island->locations[g_selected_location].source_location_slot_18 >= 0 &&
+            (island->locations[g_selected_location].record_value_10 == 0x2f ||
+             island->locations[g_selected_location].record_value_10 == 0x30)) {
+            unsigned int spell_index;
+            for (spell_index = 0; spell_index < 8; ++spell_index) {
+                int kind = game_session_cast_kind_for_action(
+                    (uint8_t)island->locations[g_selected_location].source_value_14,
+                    (uint8_t)(0x15U + spell_index));
+                const WindowTemplate *spell_button;
+                uint32_t frame;
+                if (kind != 0x14 && kind != 0x16) continue;
+                spell_button = window_catalog_find(&g_window_catalog,
+                    spell_names[spell_index], 3);
+                frame = (uint32_t)kind * 2U;
+                if (spell_button != NULL && frame < g_building_command_art.frame_count) {
+                    draw_sprite(dc, &g_building_command_art, frame,
+                                spell_button->pane.left, spell_button->pane.top);
+                }
+            }
         }
     }
     if (panel != NULL && selected_location_can_be_grabbed()) {

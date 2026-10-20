@@ -1,4 +1,5 @@
 #include "game_session.h"
+#include "game_session_events.h"
 
 #include "game_session_internal.h"
 #include "iw_construct.h"
@@ -65,7 +66,7 @@ int game_session_repair_task_values(const GameSession *session,
     if (session == NULL || pad_catalog == NULL || event == NULL ||
         current == NULL || maximum == NULL || event->active == 0 ||
         event->action_type != 0x12 || event->payload_0a < 0 ||
-        event->payload_0e < 0 || event->payload_0a >= session->island_count) return 0;
+        event->payload_0a >= session->island_count || event->payload_0e < 0) return 0;
     return game_session_repair_location_values(session, pad_catalog,
         (uint8_t)event->payload_0a, (uint16_t)event->payload_0e,
         current, maximum);
@@ -129,6 +130,8 @@ int game_session_acquire_glyph(GameSession *session, uint8_t player_slot,
         glyph_index >= GAME_GLYPH_COUNT) return 0;
     session->economy[player_slot].glyph_mask = (uint16_t)(
         session->economy[player_slot].glyph_mask | (uint16_t)(1U << glyph_index));
+    if (glyph_index == 13U)
+        game_session_refresh_player_maintenance_budgets(session);
     return 1;
 }
 
@@ -148,6 +151,7 @@ int game_session_place_building(GameSession *session,
     int16_t source_record_index = -1;
     int16_t source_category_slot = -1;
     int16_t source_value_34_maximum;
+    uint16_t previous_source_capacity;
 
     if (error != NULL && error_capacity != 0) error[0] = '\0';
     if (session == NULL || catalog == NULL || site == NULL || player_slot >= 4 ||
@@ -174,6 +178,12 @@ int game_session_place_building(GameSession *session,
         set_error(error, error_capacity, "building is not allowed on this site");
         return 0;
     }
+    if (item->maintenance_tone_cost >
+        session->economy[player_slot].source_maintenance_budget) {
+        set_error(error, error_capacity,
+                  "player maintenance budget is too small for this building");
+        return 0;
+    }
     if (base_item_id >= 0x2c && base_item_id <= 0x32 &&
         !reserve_source_record(session, player_slot, runtime_item_id,
                                &source_record_index, &source_category_slot)) {
@@ -182,31 +192,47 @@ int game_session_place_building(GameSession *session,
         return 0;
     }
 
-    /* FUN_004528ca sets +0x32 to 1 and flags to 0x410. */
+    /* FUN_004528ca initializes the runtime fields and flags to 0x410. */
     runtime->record_value_10 = runtime_item_id;
     runtime->owner_id = player_slot;
+    runtime->maintenance_tone_cost = item->maintenance_tone_cost;
     runtime->source_location_slot_18 = source_record_index;
     runtime->source_category_slot_60 = source_category_slot;
+    previous_source_capacity = runtime->source_capacity_4a;
+    runtime->source_capacity_4a = 0;
     if (!game_session_source_value_34_max(catalog, runtime,
                                           &source_value_34_maximum)) {
         runtime->record_value_10 = 0;
         runtime->owner_id = -1;
+        runtime->maintenance_tone_cost = 0;
         runtime->source_location_slot_18 = -1;
         runtime->source_category_slot_60 = -1;
+        runtime->source_capacity_4a = previous_source_capacity;
         set_error(error, error_capacity, "building has no usable source field +0x34");
         return 0;
     }
     /* FUN_004528ca stores its owner argument at site +0x14. The existing
        +0x22 visibility byte survives this initialization in the source. */
     runtime->source_value_14 = player_slot;
+    runtime->source_value_32 = 1;
     runtime->source_value_34 = source_value_34_maximum;
-    runtime->source_capacity_4a = 0;
     runtime->record_value_24 = 0;
     runtime->resource_stock[GAME_RESOURCE_BUILD_TONE] = 0;
     runtime->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 0;
     runtime->resource_stock[GAME_RESOURCE_MAGIC_TONE] = 0;
-    /* FUN_00452fcb clears low bits 1..3; FUN_004528ca clears bit 0 and adds
-       0x410 while preserving the site's other runtime flags. */
+    /* FUN_004528ca clears +0x30 directly. FUN_00452fcb clears +0x3a..+0x49
+       for a class-0 site and then restores the +0x3e sentinel. */
+    runtime->charge_source_value_30 = 0;
+    runtime->source_value_3a = 0;
+    runtime->source_value_3c = 0;
+    runtime->source_value_3e = -1;
+    runtime->source_value_40 = 0;
+    runtime->source_value_42 = 0;
+    runtime->source_value_44 = 0;
+    runtime->source_value_46 = 0;
+    runtime->source_value_48 = 0;
+    /* FUN_004528ca clears bit 0 and adds 0x410; FUN_00452fcb clears bits
+       1..3. FUN_004527ee re-ORs bit 0x10, already present in 0x410. */
     runtime->source_flags = (runtime->source_flags & ~0x0fU) | 0x410U;
     runtime->base_progress = 0;
     runtime->producer_cadence = 0;
@@ -217,5 +243,9 @@ int game_session_place_building(GameSession *session,
     runtime->production_progress = 0;
     runtime->animation_rate = 1;
     runtime->barg_progress = 0.0;
+    (void)game_session_recalculate_active_locations(session);
+    game_session_refresh_player_maintenance_budgets(session);
+    (void)game_session_queue_audio_event(
+        session, GAME_SESSION_AUDIO_BUILD, player_slot);
     return 1;
 }

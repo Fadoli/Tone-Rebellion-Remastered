@@ -57,10 +57,11 @@ orders, FA_MergeWith uses a zero stopping radius; the handler's `<=` comparison
 therefore requires exact coordinate equality.
 
 After that approach ends and the task is consumed again, subtype 8 enters state
-`0x0e`; other subtypes enter state `0x15`. State `0x0e` selects a random point
-around the current position and moves with step 1 until exact arrival, then
-counts down its 60-tick timer before the completion tail routes the unit back
-to its owner's home Hall. State `0x15` increments its timer to 50; for owners
+`0x0e`; other subtypes enter state `0x15`. Under `FA_MergeWith`, state `0x0e`
+keeps a random roam active: while the current waypoint is not reached exactly,
+the tick resolves another point around the floater and takes its second
+movement step. It does not use the ordinary `FA_Wander` radius or timer. State
+`0x15` increments its timer to 50; for owners
 other than slot 4 it changes the subtype to 8 and resets the low level nibble
 at tick 25, then returns the floater to the home Hall at tick 50. `FUN_00425084`
 also clears raw `+0x18`: it turns the nearest empty neutral location into a

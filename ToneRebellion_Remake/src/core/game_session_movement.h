@@ -12,7 +12,8 @@ void game_session_tick_item_animations_with_floaters(
     const FloaterCatalog *floater_catalog);
 /* Advance idle FA_Wander routes and simulation-assigned destinations through
    the FUN_00422d27 step kernel. Player input must not call this as an order. */
-void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick);
+void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
+                                     const PadCatalog *catalog);
 /* Port of the state-11/12 CHARGE link operation for a floater at a source. */
 int game_session_link_floater_charge(GameSession *session,
                                      unsigned int floater_index,

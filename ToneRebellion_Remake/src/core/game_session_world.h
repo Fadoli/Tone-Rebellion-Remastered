@@ -33,6 +33,16 @@ int game_session_mark_bridge_constructed(GameSession *session,
                                          uint8_t bridge_count,
                                          uint8_t island_a,
                                          uint8_t island_b);
+/* Resolve a completed class-2 marker through retained WORLDPOS order, then
+   apply FUN_004669bd to that marker and its reciprocal endpoint. */
+int game_session_mark_bridge_constructed_at(GameSession *session,
+                                            uint8_t island_index,
+                                            uint16_t location_index);
+/* FUN_004669bd acquires the neighbor island for the bridge owner's player. */
+int game_session_acquire_island_access(GameSession *session,
+                                       uint8_t player_slot,
+                                       uint8_t source_island,
+                                       uint8_t target_island);
 int game_session_set_bridge_active(GameSession *session,
                                    uint8_t bridge_index,
                                    uint8_t bridge_count,

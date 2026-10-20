@@ -302,29 +302,20 @@ static void draw_task_row_highlight(HDC dc, const WindowTemplate *panel,
 static void draw_task_gauge(HDC dc, const WindowTemplate *panel, int row_y,
                             unsigned int progress_width)
 {
-    const SpriteFrame *gauge_frame;
-    unsigned int interior_width;
-    int interior_height;
+    const unsigned int interior_width = 0x46U - 4U;
     int gauge_x;
     int gauge_y;
     if (panel == NULL || g_task_icon_art.frame_count <= 9U) return;
-    gauge_frame = &g_task_icon_art.frames[9];
-    if (gauge_frame->width <= 4 || gauge_frame->height <= 4) return;
-    /* SHP bounds are inclusive: frame 9 is 71x8 pixels although FUN_004459e6
-       supplies a 70x7 logical span. Use the decoded pixel bounds so the black
-       remainder meets the actual inner border on all four sides. */
-    interior_width = (unsigned int)gauge_frame->width - 4U;
-    interior_height = gauge_frame->height - 4;
+    /* FUN_004459e6 passes a 70x7 track and inset 2 to FUN_004118df. */
     if (progress_width > interior_width) progress_width = interior_width;
-    gauge_x = panel->pane.left + 0xaa + gauge_frame->x_offset;
-    gauge_y = panel->pane.top + row_y + gauge_frame->y_offset;
+    gauge_x = panel->pane.left + 0xaa;
+    gauge_y = panel->pane.top + row_y;
     /* FUN_004118df draws frame 9, then masks the unfilled remainder to the
        right of the filled portion. */
     draw_sprite(dc, &g_task_icon_art, 9U, gauge_x, gauge_y);
     if (progress_width < interior_width) {
         fill_rect(dc, gauge_x + 2 + (int)progress_width, gauge_y + 2,
-                  gauge_x + 2 + (int)interior_width,
-                  gauge_y + 2 + interior_height,
+                  gauge_x + 2 + (int)interior_width, gauge_y + 5,
                   g_island_palette[0]);
     }
 }
@@ -349,8 +340,7 @@ static void draw_task_stock_gauge(HDC dc, const WindowTemplate *panel,
     island = &g_game_session.islands[economy->hall_island_index];
     hall = &island->locations[economy->hall_location_index];
     if (!island_panel_info_stock_gauge_fill(hall->resource_stock[resource],
-            hall->source_capacity_4a,
-            (unsigned int)g_task_icon_art.frames[9].width - 4U,
+            hall->source_capacity_4a, 0x46U - 4U,
             &fill_width)) return;
     draw_task_gauge(dc, panel, row_y, fill_width);
 }
@@ -365,8 +355,7 @@ static void draw_task_repair_gauge(HDC dc, const WindowTemplate *panel,
         g_task_icon_art.frame_count <= 9U ||
         !game_session_repair_task_values(&g_game_session, &g_pad_catalog,
                                          event, &current, &maximum) ||
-        !island_panel_info_task_gauge_fill(current, maximum,
-                                           (unsigned int)g_task_icon_art.frames[9].width - 4U,
+        !island_panel_info_task_gauge_fill(current, maximum, 0x46U - 4U,
                                            &fill_width))
         return;
     draw_task_gauge(dc, panel, row_y, fill_width);
@@ -383,8 +372,7 @@ static void draw_task_construction_gauge(HDC dc, const WindowTemplate *panel,
         g_task_icon_art.frame_count <= 9U ||
         !game_session_construction_task_values(&g_game_session, &g_pad_catalog,
                                                 event, &current, &maximum) ||
-        !island_panel_info_task_gauge_fill(current, maximum,
-                                           (unsigned int)g_task_icon_art.frames[9].width - 4U,
+        !island_panel_info_task_gauge_fill(current, maximum, 0x46U - 4U,
                                            &fill_width))
         return;
     draw_task_gauge(dc, panel, row_y, fill_width);

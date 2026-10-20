@@ -6,7 +6,8 @@
 #include <string.h>
 
 /* Floater movement, order execution and selection queries. */
-static uint16_t floater_approach_radius(const GameFloaterStart *floater);
+uint16_t game_session_floater_approach_radius(
+    const GameFloaterStart *floater);
 
 int32_t game_session_source_chebyshev_distance(int32_t x1, int32_t y1,
                                          int32_t x2, int32_t y2)
@@ -24,15 +25,11 @@ static int action9_find_floater(const GameSession *session,
                                 int32_t max_distance)
 {
     const GameFloaterStart *source = &session->floaters[source_index];
-    int source_level = -1;
     unsigned int index;
 
     /* FUN_00420829 scans the current-island candidate list and accepts the
        first class/flag/distance match. The source table order currently
        follows floater insertion order in this model. */
-    if (source->island_index < session->island_count) {
-        source_level = session->islands[source->island_index].source_level;
-    }
     for (index = 0; index < session->floater_count; ++index) {
         const GameFloaterStart *candidate = &session->floaters[index];
         int category_matches;
@@ -40,10 +37,10 @@ static int action9_find_floater(const GameSession *session,
             (candidate->source_runtime_flags & 0x008U) != 0) continue;
 
         if (source->type_index == 4) {
-            /* DAT_0061fa2e selects non-category-4 candidates below 0x65 and
-               category 4 at or above it. Its loaded-image default is zero. */
-            category_matches = source_level < 0x65
-                ? candidate->type_index != 4 : candidate->type_index == 4;
+            /* FUN_00420991 indexes DAT_0061fa2e by source subtype. All 15
+               loaded-image entries are zero, so category 4 targets other
+               categories; no runtime writer has been established. */
+            category_matches = candidate->type_index != 4;
         } else {
             /* FUN_00420991 accepts category 4 or a zero in the source/target
                category matrix. The 5x5 entries read from FLOAT.EXE are all
@@ -92,7 +89,7 @@ static int action9_find_enemy_site(GameSession *session,
         unsigned int largest_index;
         unsigned int i;
 
-        if (location->renderer_class != 4 || location->owner_id != 4 ||
+        if (location->source_value_14 != 4 ||
             location->record_value_10 >= 0x16 ||
             (location->source_flags & 0x90U) != 0) continue;
         distance = game_session_source_chebyshev_distance(location->x, location->y,
@@ -360,7 +357,7 @@ int game_session_assign_category4_autonomous_order(
         floater->order_target_location = (int16_t)target_location;
         floater->order_target_floater = -1;
         floater->movement_state = 0x10;
-        floater->stop_radius = floater_approach_radius(floater);
+        floater->stop_radius = game_session_floater_approach_radius(floater);
         game_session_set_approach_point(floater, target->x, target->y);
     } else if (target_floater >= 0) {
         const GameFloaterStart *target = &session->floaters[target_floater];
@@ -368,7 +365,7 @@ int game_session_assign_category4_autonomous_order(
         floater->order_target_floater = (int16_t)target_floater;
         floater->order_target_location = -1;
         floater->movement_state = 0x0f;
-        floater->stop_radius = floater_approach_radius(floater);
+        floater->stop_radius = game_session_floater_approach_radius(floater);
         floater->source_runtime_flags |= 0x004U;
         game_session_set_approach_point(floater, target->x, target->y);
     } else {
@@ -452,7 +449,8 @@ void game_session_set_approach_point(GameFloaterStart *floater,
     floater->destination_y = (uint16_t)target_y;
 }
 
-static uint16_t floater_approach_radius(const GameFloaterStart *floater)
+uint16_t game_session_floater_approach_radius(
+    const GameFloaterStart *floater)
 {
     if (floater->type_index == 4U ||
         (floater->source_subtype != 0 && floater->charge_current > 0)) {
@@ -472,8 +470,11 @@ void game_session_advance_action9(GameSession *session,
     if (!game_session_floater_is_active(floater) ||
         (floater->source_runtime_flags & 0x008U) != 0 ||
         floater->active_order_action == 4 ||
-        floater->source_order_state_2c != 9 || floater->movement_state != 0 ||
-        floater->has_move_order) return;
+        floater->source_order_state_2c != 9 ||
+        (floater->movement_state != 0 && floater->movement_state != 9 &&
+         floater->movement_state != 6 && floater->movement_state != 7 &&
+         floater->movement_state != 0x0f &&
+         floater->movement_state != 0x10)) return;
 
     if (floater->order_progress == 0) {
         floater->destination_x =
@@ -502,6 +503,8 @@ void game_session_advance_action9(GameSession *session,
         return;
     }
     if (floater->order_progress != 1) return;
+    if (floater->movement_state == 0x0f || floater->movement_state == 0x10)
+        return;
 
     target_x = (uint16_t)(floater->source_order_coordinate_30 >> 8) * 10U;
     target_y = (uint16_t)(floater->source_order_coordinate_30 & 0xffU) * 10U;
@@ -512,7 +515,7 @@ void game_session_advance_action9(GameSession *session,
         floater->order_target_floater = (int16_t)target_index;
         floater->order_target_location = -1;
         floater->movement_state = 0x0f;
-        floater->stop_radius = floater_approach_radius(floater);
+        floater->stop_radius = game_session_floater_approach_radius(floater);
         floater->source_runtime_flags |= 0x004U;
         game_session_set_approach_point(floater, target->x, target->y);
         floater->has_move_order = 1;
@@ -527,7 +530,7 @@ void game_session_advance_action9(GameSession *session,
         floater->order_target_location = (int16_t)target_index;
         floater->order_target_floater = -1;
         floater->movement_state = 0x10;
-        floater->stop_radius = floater_approach_radius(floater);
+        floater->stop_radius = game_session_floater_approach_radius(floater);
         game_session_set_approach_point(floater, target->x, target->y);
         floater->has_move_order = 1;
         floater->order_progress = 3;
@@ -574,10 +577,10 @@ void game_session_advance_merge_order(GameSession *session,
     } else if (floater->order_progress == 1) {
         floater->order_progress = 2;
         if (floater->source_subtype == 8) {
-            /* FUN_004211bb sends subtype 8 into the existing FA_Wander tick. */
+            /* FA_MergeWith keeps owning the random state-0x0e roam. */
             floater->movement_state = 0;
             floater->has_wander_order = 1;
-            floater->wander_timer = 60;
+            floater->wander_timer = 0;
         } else {
             /* The source's other-subtype terminal state is 0x15. */
             floater->movement_state = 0x15;
@@ -586,6 +589,26 @@ void game_session_advance_merge_order(GameSession *session,
             floater->wander_timer = 0;
         }
     }
+}
+
+static void cancel_defend_order(GameFloaterStart *floater)
+{
+    /* FUN_00421ec1(-1) clears the linked action/state and source flags; clear
+       the port's resolved destination too so a dead target cannot be chased. */
+    floater->active_order_action = 0;
+    floater->movement_state = 0;
+    floater->order_target_floater = -1;
+    floater->defend_target_floater = -1;
+    floater->order_target_location = -1;
+    floater->order_target_island = UINT8_MAX;
+    floater->order_progress = 0;
+    floater->source_order_state_2c = 0;
+    floater->source_order_coordinate_30 = 0;
+    floater->source_order_pending = 0;
+    floater->source_runtime_flags &= ~0x065U;
+    floater->has_move_order = 0;
+    floater->has_wander_order = 1;
+    floater->wander_timer = 0;
 }
 
 void game_session_advance_defend_order(GameSession *session,
@@ -599,57 +622,51 @@ void game_session_advance_defend_order(GameSession *session,
     floater = &session->floaters[floater_index];
     if (floater->active_order_action != 8) return;
 
-    if (floater->movement_state == 0 && floater->order_progress == 0) {
-        if (floater->order_target_floater < 0 ||
-            (unsigned int)floater->order_target_floater >= session->floater_count) {
-            floater->active_order_action = 0;
+    if (floater->order_progress == 0) {
+        if (floater->defend_target_floater < 0 ||
+            (unsigned int)floater->defend_target_floater >= session->floater_count) {
+            cancel_defend_order(floater);
             return;
         }
         target = &session->floaters[
-            (unsigned int)floater->order_target_floater];
+            (unsigned int)floater->defend_target_floater];
         if (target == floater || target->island_index != floater->island_index) {
-            floater->active_order_action = 0;
+            cancel_defend_order(floater);
             return;
         }
-        floater->defend_offset_x =
-            (int16_t)(tone_rng_bounded(&session->random_state, 200) - 100);
-        floater->defend_offset_y =
-            (int16_t)(tone_rng_bounded(&session->random_state, 200) - 100);
+        floater->order_target_floater = floater->defend_target_floater;
         floater->movement_state = 8;
         floater->stop_radius = 0;
         floater->source_runtime_flags &= ~0x004U;
+        floater->has_move_order = 0;
         floater->order_progress = 1;
         return;
     }
 
-    if ((floater->movement_state == 8 || floater->movement_state == 0) &&
-        floater->order_progress == 1) {
-        if (floater->order_target_floater < 0 ||
-            (unsigned int)floater->order_target_floater >= session->floater_count) {
-            floater->active_order_action = 0;
+    if (floater->order_progress == 1) {
+        if (floater->defend_target_floater < 0 ||
+            (unsigned int)floater->defend_target_floater >= session->floater_count) {
+            cancel_defend_order(floater);
             return;
         }
         target = &session->floaters[
-            (unsigned int)floater->order_target_floater];
+            (unsigned int)floater->defend_target_floater];
         if (!game_session_floater_is_active(target) ||
             (target->source_runtime_flags & 0x008U) != 0 ||
             target->island_index != floater->island_index) {
-            floater->active_order_action = 0;
+            cancel_defend_order(floater);
             return;
         }
         candidate_index = action9_find_floater(
             session, floater_index, target->x, target->y, 250);
         if (candidate_index < 0) {
-            if (floater->movement_state == 0 && !floater->has_move_order) {
-                /* The next idle consumer pass starts another random route. */
-                floater->order_progress = 0;
-            }
+            floater->order_progress = 0;
             return;
         }
         target = &session->floaters[candidate_index];
         floater->order_target_floater = (int16_t)candidate_index;
         floater->movement_state = 0x0f;
-        floater->stop_radius = floater_approach_radius(floater);
+        floater->stop_radius = game_session_floater_approach_radius(floater);
         floater->source_runtime_flags |= 0x004U;
         game_session_set_approach_point(floater, target->x, target->y);
         floater->has_move_order = 1;
@@ -657,10 +674,10 @@ void game_session_advance_defend_order(GameSession *session,
         return;
     }
 
-    if (floater->movement_state == 0 && floater->order_progress == 2) {
+    if (floater->order_progress == 2) {
         floater->movement_state = 6;
         floater->attack_timer = 0;
-        floater->order_progress = UINT8_MAX;
+        floater->order_progress = 1;
     }
 }
 

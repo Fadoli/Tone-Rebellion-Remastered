@@ -9,6 +9,7 @@ static void test_floater_move_state_advances_only_simulation_assigned_destinatio
     session.floater_count = 2;
     floater = &session.floaters[0];
     floater->island_index = 0;
+    floater->is_active = 1;
     floater->x = 100;
     floater->y = 100;
     /* The original simulation assigns movement targets through its unit/task
@@ -24,7 +25,7 @@ static void test_floater_move_state_advances_only_simulation_assigned_destinatio
     idle_floater->y = 200;
     idle_x = idle_floater->x;
 
-    game_session_tick_floater_moves(&session, 1);
+    game_session_tick_floater_moves(&session, 1, NULL);
     assert(floater->x == 103 && floater->y == 97);
     assert(!floater->facing_left);
     assert(idle_floater->x == idle_x && !idle_floater->has_move_order);
@@ -34,7 +35,7 @@ static void test_floater_move_state_advances_only_simulation_assigned_destinatio
     floater->movement_speed = 3;
     floater->stop_radius = 10;
     floater->has_move_order = 1;
-    game_session_tick_floater_moves(&session, 2);
+    game_session_tick_floater_moves(&session, 2, NULL);
     assert(floater->x == 103 && floater->y == 97);
     assert(!floater->has_move_order); /* destination is within the stop radius */
     assert(floater->facing_left); /* facing follows target even when stationary */
@@ -43,12 +44,12 @@ static void test_floater_move_state_advances_only_simulation_assigned_destinatio
     floater->destination_y = 97;
     floater->stop_radius = 0;
     floater->has_move_order = 1;
-    game_session_tick_floater_moves(&session, 3);
+    game_session_tick_floater_moves(&session, 3, NULL);
     assert(floater->facing_left);
-    game_session_tick_floater_moves(&session, 4);
-    game_session_tick_floater_moves(&session, 5);
-    game_session_tick_floater_moves(&session, 6);
-    game_session_tick_floater_moves(&session, 7);
+    game_session_tick_floater_moves(&session, 4, NULL);
+    game_session_tick_floater_moves(&session, 5, NULL);
+    game_session_tick_floater_moves(&session, 6, NULL);
+    game_session_tick_floater_moves(&session, 7, NULL);
     assert(floater->x == 100 && floater->y == 97);
 
 }
@@ -63,12 +64,15 @@ static void test_floater_selection_uses_original_hit_radius_and_island(void)
     session.floaters[0].island_index = 0;
     session.floaters[0].x = 100;
     session.floaters[0].y = 100;
+    session.floaters[0].is_active = 1;
     session.floaters[1].island_index = 0;
     session.floaters[1].x = 140;
     session.floaters[1].y = 100;
+    session.floaters[1].is_active = 1;
     session.floaters[2].island_index = 1;
     session.floaters[2].x = 100;
     session.floaters[2].y = 100;
+    session.floaters[2].is_active = 1;
 
     assert(game_session_floater_at(&session, 0, 119, 119) == 0);
     assert(game_session_floater_at(&session, 0, 120, 100) == -1);
@@ -87,12 +91,16 @@ static void test_workstr_counts_subtype_zero_and_truncates_percentage(void)
     memset(&session, 0, sizeof(session));
     session.floater_count = 4;
     session.floaters[0].type_index = 1;
+    session.floaters[0].is_active = 1;
     session.floaters[0].source_subtype = 0;
     session.floaters[1].type_index = 1;
+    session.floaters[1].is_active = 1;
     session.floaters[1].source_subtype = 1;
     session.floaters[2].type_index = 1;
+    session.floaters[2].is_active = 1;
     session.floaters[2].source_subtype = 2;
     session.floaters[3].type_index = 2;
+    session.floaters[3].is_active = 1;
     session.floaters[3].source_subtype = 0;
 
     assert(game_session_workstr_summary(&session, 1,

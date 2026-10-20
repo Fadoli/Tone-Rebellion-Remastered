@@ -40,10 +40,22 @@ d'interaction établie; cette preuve ne dit pas que son objet est ramassé.
    `ev_46b3b31c81eecb2bc50884c4458f57e4c8020d7001de0c3ae0260c3a1b1d9185`).
 
 Le helper de pose copie les champs vers la cible; son corps ne vide pas le site
-source. Les effets de `FUN_004533fb` et les autres mutations indirectes doivent
-être vérifiés avant de qualifier l'opération de déplacement ou de duplication.
-Dans tous les cas, cette séquence ne crédite pas l'inventaire 5–33 et ne prouve
-pas la collecte du `PIT_Object`.
+source. `FUN_004533fb` effectue cependant un nettoyage séparé quand le site a
+un lien source `+0x18`: il libère ses tâches et son handle de staff, puis pose
+`+0x58=1`, `+0x46=0` et recalcule le bit actif. Le nettoyage de l'ancien site
+dans le remake efface maintenant aussi `source_value_46` avant de le laisser vide.
+Le nettoyage natif des champs
+`+0x10` et du propriétaire n'est pas encore relié avec certitude à cette
+séquence; le port vide le site après le transfert et applique maintenant les
+l'annulation des tâches modélisées qui ciblent l'ancienne coordonnée et le
+détachement de leurs floaters avant le transfert. Cette extension réutilise le
+chemin observé `FUN_00460029` → `FUN_00466533` lors d'une libération de site;
+le raccord natif précis dans la transaction grab/place reste à confirmer.
+Cette action ne crédite pas
+l'inventaire 5–33 et ne prouve toujours pas la collecte du `PIT_Object`.
+Evidence REA: `ev_de65e9f21841907f069d4ed90a03330dab6bbc6699fe274eb7fe0e4a9d51a574`,
+`ev_133c7d24c9acca9d04969a9c2f27278f1521f10657d9e7d195fb107668d3cab8` et
+`ev_f91211a8053408a98cbff1cb291dedf16e59bec13ee8ae9dcf11dbb80c34eaa4`.
 
 ## Inconnue restante
 
@@ -80,3 +92,5 @@ les call-sites UI et les transactions grab/place, sans call-site de tick
 floater (`ev_0fb01505c0a7e326de1d7e85aa13d4df42a1c47415115b384c04cc90f31f9a6d`).
 Cette couverture n'exclut pas un autre mécanisme qui lirait directement les
 records de site.
+
+Le consommateur runtime d'état 13 (`FUN_0041e569`, `ev_a22f1c921d2325494e512998fc999d7e222d5c45422f7d52c6d808b30b8feccd`) lit `+0x24` seulement quand la cible est un `PIT_Object` (`ev_8d591588cea4abce308dbbd5f69e34b5c6431010d387034afe228dee1b3385a8`). À l'arrivée, il repose l'artefact déjà porté via `FUN_00425084`, prend l'ID 5–33 et retire le site via `FUN_00452a15`; cette fonction vide le cargo même si ce n'est pas un artefact (`ev_c90fab99fa7691b34572e2c9eba925751fbdf77b63a570c51574e19c416b7e0b`). Sans PIT_Object, il annule la liaison avec `FUN_00421ec1(-1)`, qui décrémente le compteur assigné, libère le slot et efface l'ordre courant (`ev_c2d3e74dd2e94c30ca9de18f1387bb8d44d32daf432cd179e9d1b8dfc693b4dc`). Le remake porte ce consommateur; le producteur de l'état 13 n'est toujours pas identifié.

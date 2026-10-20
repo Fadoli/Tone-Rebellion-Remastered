@@ -10,7 +10,14 @@ int32_t game_session_damage_floater(GameSession *session,
                                     unsigned int target_index);
 int32_t game_session_damage_site(GameSession *session,
                                  unsigned int attacker_index,
+                                 uint8_t island_index,
+                                 uint16_t location_index,
                                  GameRuntimeLocation *target);
+
+void game_session_clear_cast_site(GameSession *session,
+                                  uint8_t island_index,
+                                  uint16_t location_index,
+                                  GameRuntimeLocation *target);
 
 void game_session_start_attack_effect(GameSession *session,
                                      GameFloaterStart *attacker,

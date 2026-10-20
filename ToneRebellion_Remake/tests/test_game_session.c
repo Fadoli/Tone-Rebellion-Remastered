@@ -117,6 +117,18 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
     assert(session.pending_event_count == 0);
     assert(session.pending_events[0].active == 0);
     assert(session.tone_placements.placement_count == 5);
+    for (island_index = 0; island_index < session.tone_placements.placement_count;
+         ++island_index) {
+        const GameStartTonePlacement *placement =
+            &session.tone_placements.placements[island_index];
+        const GameRuntimeLocation *marker = &session.islands[
+            placement->island_index].locations[placement->location_index];
+        assert(marker->record_value_10 == placement->item_id);
+        assert(marker->owner_id == placement->owner_id);
+        assert(marker->source_value_14 == placement->owner_id);
+        assert(marker->source_value_32 == 1);
+        assert(marker->source_value_3e == -1);
+    }
     for (island_index = 0; island_index < session.island_count; ++island_index) {
         for (player = 0; player < GAME_START_PLAYER_COUNT; ++player) {
             assert(session.islands[island_index].source_event_state[player] == 0);
@@ -137,6 +149,9 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
         assert(pad->record_value_10 ==
                GAME_START_INITIAL_PAD_ITEM_ID + (int32_t)player * 16);
         assert(pad->owner_id == (int32_t)player);
+        assert(pad->source_value_14 == (int32_t)player);
+        assert(pad->source_value_32 == 1);
+        assert(pad->source_value_3e == -1);
         assert(pad->source_flags == 0x410);
         assert((pad->source_flags & 0x001U) == 0);
         assert((pad->source_flags & 0x400U) != 0);
@@ -284,7 +299,13 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
         assert(game_session_repair_task_values(&task_session, &task_catalog,
                                               &task, &current, &maximum));
         assert(current == 9 && maximum == 20);
+        target->record_value_10 = 0;
+        target->owner_id = -1;
+        target->source_value_14 = -1;
+        target->source_value_22 = (uint16_t)(1U << 1);
+        target->construction_site_size = 1;
         task.action_type = 5;
+        task.payload_0a = 1;
         task.payload_12 = 0x25;
         assert(game_session_construction_task_values(&task_session, &task_catalog,
                                                     &task, &current, &maximum));

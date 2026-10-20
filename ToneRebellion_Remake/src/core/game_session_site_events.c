@@ -42,24 +42,216 @@ int game_session_pop_onoff_action(GameSession *session,
     return 1;
 }
 
-static int game_session_recalculate_location_active(GameRuntimeLocation *location)
+static int game_session_location_active_predicate(
+    const GameRuntimeLocation *location)
 {
-    uint32_t previous_flags;
-    uint32_t current_flags;
-    int can_be_active;
-
-    previous_flags = location->source_flags;
-    current_flags = previous_flags & ~1U;
-    can_be_active = (previous_flags & 0x90U) == 0 &&
-        ((previous_flags & 0x400U) != 0 ||
+    uint32_t flags = location->source_flags;
+    return (flags & 0x90U) == 0 &&
+        ((flags & 0x400U) != 0 ||
          location->source_location_slot_18 != -1 ||
          location->renderer_class == 1) &&
-        ((previous_flags & 0x100U) == 0 || location->source_value_44 < 20) &&
+        ((flags & 0x100U) == 0 || location->source_value_44 < 20) &&
         location->source_value_58 == 0 && location->record_value_10 >= 2;
+}
 
-    if (can_be_active) current_flags |= 1U;
+static int game_session_recalculate_location_active(GameRuntimeLocation *location)
+{
+    uint32_t previous_flags = location->source_flags;
+    uint32_t current_flags = previous_flags & ~1U;
+
+    if (game_session_location_active_predicate(location)) current_flags |= 1U;
     location->source_flags = current_flags;
     return ((previous_flags ^ current_flags) & 1U) != 0;
+}
+
+static int visibility_x_is_spanned(int32_t x, const int32_t *span_min,
+                                   const int32_t *span_max, unsigned int count)
+{
+    unsigned int i;
+    for (i = 0; i < count; ++i) {
+        if (span_min[i] <= x && x <= span_max[i]) return 1;
+    }
+    return 0;
+}
+
+static void add_visibility_span(int32_t low, int32_t high,
+                                int32_t *span_min, int32_t *span_max,
+                                unsigned int *count)
+{
+    unsigned int i;
+    if (low < 0) low = 0;
+    if (high > 0x9ff) high = 0x9ff;
+    for (i = 0; i < *count; ++i) {
+        if ((low < span_min[i] && span_min[i] <= high) ||
+            (span_max[i] < high && low <= span_max[i])) {
+            if (low < span_min[i]) span_min[i] = low;
+            if (span_max[i] < high) span_max[i] = high;
+            return;
+        }
+    }
+    if (*count < 32U) {
+        span_min[*count] = low;
+        span_max[*count] = high;
+        ++*count;
+    }
+}
+
+static int recalculate_island_visibility_for_player(
+    const GameSession *session, GameRuntimeIsland *island,
+    uint8_t player_slot)
+{
+    /* FUN_00462285 grows visible x spans from class-1 markers, constructed
+       bridges, and active owned item 0x28 sites, then writes +0x22 masks. */
+    uint8_t visible[ISLAND_DATA_MAX_LOCATIONS] = {0};
+    int32_t span_min[32];
+    int32_t span_max[32];
+    unsigned int span_count = 0;
+    unsigned int index;
+    unsigned int capacity = 0;
+    uint32_t player_bit = 1U << player_slot;
+    int expanded;
+
+    if (session->economy[player_slot].island_visibility_override != 0) {
+        for (index = 0; index < island->location_count; ++index) {
+            GameRuntimeLocation *location = &island->locations[index];
+            if (location->source_value_14 == 4)
+                location->source_value_22 &= (uint16_t)~player_bit;
+            else
+                location->source_value_22 |= (uint16_t)player_bit;
+            (void)game_session_recalculate_location_active_with_visibility(location);
+        }
+        return 10;
+    }
+
+    do {
+        expanded = 0;
+        for (index = 0; index < island->location_count; ++index) {
+            GameRuntimeLocation *location = &island->locations[index];
+            int connects = 0;
+            int radius = 0;
+
+            if (visible[index] != 0 || location->source_value_14 == 4) continue;
+            if (location->renderer_class == 1) {
+                connects = (location->source_value_22 & player_bit) != 0 ||
+                    visibility_x_is_spanned(location->x, span_min,
+                                            span_max, span_count);
+                radius = 150;
+            } else if (location->renderer_class == 2) {
+                connects = (location->source_flags & 1U) != 0;
+                radius = 100;
+            } else if (location->renderer_class == 0 &&
+                       (location->source_value_14 == player_slot ||
+                        (location->source_flags & (0x800U << player_slot)) != 0) &&
+                       location->record_value_10 == 0x28 &&
+                       game_session_location_active_predicate(location) &&
+                       visibility_x_is_spanned(location->x, span_min,
+                                               span_max, span_count)) {
+                connects = 1;
+                radius = 300;
+            }
+            if (!connects) continue;
+            visible[index] = 1;
+            add_visibility_span((int32_t)location->x - radius,
+                                (int32_t)location->x + radius,
+                                span_min, span_max, &span_count);
+            if (location->renderer_class == 1) ++capacity;
+            expanded = 1;
+        }
+    } while (expanded != 0);
+
+    for (index = 0; index < island->location_count; ++index) {
+        GameRuntimeLocation *location = &island->locations[index];
+        if (visible[index] == 0 && location->renderer_class == 0 &&
+            location->source_value_14 != 4 &&
+            visibility_x_is_spanned(location->x, span_min,
+                                    span_max, span_count)) {
+            visible[index] = 1;
+        }
+        if (visible[index] != 0) location->source_value_22 |= (uint16_t)player_bit;
+        else location->source_value_22 &= (uint16_t)~player_bit;
+        (void)game_session_recalculate_location_active_with_visibility(location);
+    }
+    return (int)capacity;
+}
+
+int game_session_recalculate_player_island_visibility(
+    GameSession *session, uint8_t island_index, uint8_t player_slot)
+{
+    GameRuntimeIsland *island;
+
+    if (session == NULL || island_index >= session->island_count ||
+        player_slot >= GAME_START_PLAYER_COUNT ||
+        session->islands[island_index].location_count >
+            ISLAND_DATA_MAX_LOCATIONS) return 0;
+    island = &session->islands[island_index];
+    return recalculate_island_visibility_for_player(session, island,
+                                                    player_slot);
+}
+
+static void game_session_recalculate_player_maintenance_budgets(
+    GameSession *session)
+{
+    /* FUN_0045e6d3 sums those per-island marker counts, subtracts active
+       maintenance and each player's floater count, then clamps the result. */
+    int32_t capacities[GAME_START_PLAYER_COUNT] = {0};
+    int32_t maintenance[GAME_START_PLAYER_COUNT] = {0};
+    unsigned int island_index;
+    unsigned int floater_index;
+    unsigned int player_slot;
+
+    /* First finish all players' visibility updates so each budget observes
+       the final active bits for every island. */
+    for (player_slot = 0; player_slot < GAME_START_PLAYER_COUNT; ++player_slot) {
+        for (island_index = 0; island_index < session->island_count;
+             ++island_index) {
+            GameRuntimeIsland *island = &session->islands[island_index];
+            if (island->location_count > ISLAND_DATA_MAX_LOCATIONS) continue;
+            capacities[player_slot] +=
+                recalculate_island_visibility_for_player(
+                    session, island, (uint8_t)player_slot);
+        }
+    }
+
+    for (player_slot = 0; player_slot < GAME_START_PLAYER_COUNT; ++player_slot) {
+        uint32_t owned_flag = 0x800U << player_slot;
+        for (island_index = 0; island_index < session->island_count;
+             ++island_index) {
+            const GameRuntimeIsland *island = &session->islands[island_index];
+            unsigned int location_index;
+            if (island->location_count > ISLAND_DATA_MAX_LOCATIONS) continue;
+            for (location_index = 0; location_index < island->location_count;
+                 ++location_index) {
+                const GameRuntimeLocation *location =
+                    &island->locations[location_index];
+                if (location->renderer_class != 0 ||
+                    location->record_value_10 == 0 ||
+                    (location->source_flags & 1U) == 0 ||
+                    (location->source_value_14 != (int32_t)player_slot &&
+                     (location->source_flags & owned_flag) == 0)) continue;
+                maintenance[player_slot] += location->maintenance_tone_cost;
+            }
+        }
+        /* FUN_0045e6d3 discounts site maintenance by 15% when the player's
+           glyph-ownership mask at +0x8a contains bit 13 (0x2000). */
+        if ((session->economy[player_slot].glyph_mask & 0x2000U) != 0)
+            maintenance[player_slot] = (maintenance[player_slot] * 0x11) / 0x14;
+        for (floater_index = 0; floater_index < session->floater_count;
+             ++floater_index) {
+            const GameFloaterStart *floater = &session->floaters[floater_index];
+            if (game_session_floater_is_active(floater) &&
+                floater->type_index == player_slot) ++maintenance[player_slot];
+        }
+        if (maintenance[player_slot] > capacities[player_slot])
+            maintenance[player_slot] = capacities[player_slot];
+        session->economy[player_slot].source_maintenance_budget =
+            capacities[player_slot] - maintenance[player_slot];
+    }
+}
+
+void game_session_refresh_player_maintenance_budgets(GameSession *session)
+{
+    if (session != NULL)
+        game_session_recalculate_player_maintenance_budgets(session);
 }
 
 int game_session_recalculate_location_active_with_visibility(
@@ -77,6 +269,157 @@ int game_session_recalculate_location_active_with_visibility(
         return (previous_flags & 1U) != 0;
     }
     return game_session_recalculate_location_active(location);
+}
+
+void game_session_recalculate_leviathan_island(GameSession *session,
+                                               uint8_t island_index)
+{
+    static const int16_t baseline_tables[3][4][6] = {
+        {{2, 2, 2, 2, 2, 2}, {3, 3, 3, 4, 4, 5},
+         {3, 4, 4, 5, 5, 7}, {4, 5, 5, 6, 7, 8}},
+        {{2, 3, 4, 4, 4, 5}, {4, 4, 5, 6, 7, 8},
+         {5, 6, 7, 9, 10, 11}, {7, 9, 11, 12, 13, 14}},
+        {{2, 3, 4, 4, 4, 5}, {4, 4, 5, 7, 9, 10},
+         {5, 7, 9, 14, 16, 17}, {7, 9, 13, 17, 21, 23}}
+    };
+    GameRuntimeIsland *island;
+    int16_t marker_locations[6];
+    int marker_limit = 0;
+    int class0_leviathan_sites = 0;
+    int marker_count = 0;
+    int floater_count = 0;
+    int admissible = 1;
+    int has_leviathan_order = 0;
+    int difficulty;
+    int island_tier;
+    int baseline_table;
+    int previous_admissible;
+    unsigned int index;
+
+    if (session == NULL || island_index >= session->island_count) return;
+    island = &session->islands[island_index];
+    if (island->location_count > ISLAND_DATA_MAX_LOCATIONS) return;
+    previous_admissible = island->leviathan_admissible;
+    difficulty = session->config.difficulty;
+    if (difficulty < 0) difficulty = 0;
+    if (difficulty > 3) difficulty = 3;
+    island_tier = island_index / 4;
+    if (island_tier > difficulty) island_tier = difficulty;
+
+    for (index = 0; index < island->location_count; ++index) {
+        const GameRuntimeLocation *location = &island->locations[index];
+        int item_id = location->record_value_10;
+        int owner = location->source_value_14;
+        if (location->renderer_class == 1 && marker_limit < 6) {
+            ++marker_limit;
+            if (owner == 4) marker_locations[marker_count++] = (int16_t)index;
+        } else if (location->renderer_class == 0 && owner == 4) {
+            ++class0_leviathan_sites;
+        } else if (owner == -1 ||
+                   ((item_id != 0x2a || owner < 0 || owner >= GAME_START_PLAYER_COUNT) &&
+                    (item_id < 0x2c || item_id > 0x2e))) {
+            if (owner != -1 && item_id > 0x24 && item_id < 0x36 &&
+                owner >= 0 && owner < GAME_START_PLAYER_COUNT) {
+                admissible = 0;
+            }
+        } else {
+            admissible = 0;
+            has_leviathan_order = 1;
+        }
+    }
+
+    for (index = 0; index < session->floater_count; ++index) {
+        const GameFloaterStart *floater = &session->floaters[index];
+        if (game_session_floater_is_active(floater) &&
+            floater->island_index == island_index && floater->type_index == 4 &&
+            floater->source_subtype != 9) ++floater_count;
+    }
+
+    island->leviathan_marker_count = (int16_t)marker_count;
+    island->leviathan_remaining_markers = (int16_t)(marker_limit - marker_count);
+    island->leviathan_site_budget = marker_count != 0
+        ? (int16_t)((marker_count * (island_tier * 2 + 4)) -
+                    class0_leviathan_sites)
+        : 0;
+    if (island->leviathan_site_budget < 0) island->leviathan_site_budget = 0;
+    island->leviathan_floater_count = (int16_t)floater_count;
+    island->leviathan_admissible = (int8_t)admissible;
+    if (previous_admissible != 0 && admissible == 0)
+        island->leviathan_wait_timer = -1;
+    baseline_table = admissible ? 0 : (has_leviathan_order ? 2 : 1);
+    if (marker_count != 0) {
+        island->leviathan_floater_budget = (int16_t)
+            (baseline_tables[baseline_table][difficulty][marker_count - 1] -
+             floater_count);
+        {
+            int interval = ((island_tier + difficulty) * 2 + 10) / marker_count;
+            if (island->leviathan_remaining_markers == 0 &&
+                island->leviathan_site_budget == 0 &&
+                island->leviathan_floater_budget == 0) interval = 0;
+            for (index = 0; index < (unsigned int)marker_count; ++index) {
+                GameRuntimeLocation *location = &island->locations[marker_locations[index]];
+                location->leviathan_spawn_interval =
+                    location->record_value_10 == 5 ? 1 : (uint16_t)interval;
+            }
+        }
+    }
+}
+
+void game_session_tick_leviathan_ai(GameSession *session)
+{
+    unsigned int island_index;
+    if (session == NULL) return;
+    for (island_index = 0; island_index < session->island_count; ++island_index) {
+        GameRuntimeIsland *island = &session->islands[island_index];
+        int floater_count = 0;
+        unsigned int floater_index;
+        if (island->location_count > ISLAND_DATA_MAX_LOCATIONS) continue;
+        if (island->leviathan_periodic_timer != 0) {
+            --island->leviathan_periodic_timer;
+            if (island->leviathan_periodic_timer < 2) {
+                island->leviathan_periodic_timer = 0x834;
+            } else if (island->leviathan_periodic_timer > 0x32 &&
+                       island->leviathan_periodic_timer < 100) {
+                island->leviathan_periodic_timer = 0;
+            }
+        }
+        if (island->leviathan_admissible == 0) {
+            if (island->leviathan_wait_timer < 0) {
+                island->leviathan_wait_timer =
+                    tone_rng_bounded(&session->random_state, 0x960) + 0x4b0;
+            } else if (island->leviathan_wait_timer == 0) {
+                int difficulty = session->config.difficulty;
+                int island_tier = (int)island_index / 4;
+                int threshold;
+                int selected = 0;
+                if (difficulty > 3) difficulty = 3;
+                if (island_tier > difficulty) island_tier = difficulty;
+                threshold = (island_tier + 2 + difficulty) / 2;
+                threshold += tone_rng_bounded(&session->random_state, threshold);
+                for (floater_index = 0;
+                     floater_index < session->floater_count; ++floater_index) {
+                    GameFloaterStart *floater = &session->floaters[floater_index];
+                    if (!game_session_floater_is_active(floater) ||
+                        floater->island_index != island_index ||
+                        floater->type_index != 4 || floater->source_subtype == 9)
+                        continue;
+                    floater->source_runtime_flags |= 0x80U;
+                    if (++selected >= threshold) break;
+                }
+                island->leviathan_wait_timer = -1;
+            } else {
+                for (floater_index = 0;
+                     floater_index < session->floater_count; ++floater_index) {
+                    const GameFloaterStart *floater = &session->floaters[floater_index];
+                    if (game_session_floater_is_active(floater) &&
+                        floater->island_index == island_index &&
+                        floater->type_index == 4 && floater->source_subtype != 9)
+                        ++floater_count;
+                }
+                if (floater_count > 2) --island->leviathan_wait_timer;
+            }
+        }
+    }
 }
 
 unsigned int game_session_recalculate_active_locations(GameSession *session)
@@ -97,7 +440,10 @@ unsigned int game_session_recalculate_active_locations(GameSession *session)
                 game_session_recalculate_location_active_with_visibility(
                     &island->locations[location_index]);
         }
+        game_session_recalculate_leviathan_island(session, (uint8_t)island_index);
     }
+    if (changed != 0)
+        game_session_recalculate_player_maintenance_budgets(session);
     return changed;
 }
 
@@ -132,6 +478,11 @@ unsigned int game_session_dispatch_onoff_actions(GameSession *session,
             continue;
         }
 
+        /* FUN_00453bf6 compares ON against the current +0x40 player balance.
+           The source recomputes that balance when a site's active bit changes;
+           refresh before evaluating this request as well so a new session has
+           the same derived budget before its first toggle. */
+        game_session_recalculate_player_maintenance_budgets(session);
         was_enabled = (location->source_flags & 0x400U) != 0;
         if ((location->source_flags & 0x400U) != 0) {
             location->source_flags &= ~0x400U;
@@ -164,6 +515,9 @@ unsigned int game_session_dispatch_onoff_actions(GameSession *session,
            gates the active bit by the site's +0x22 owner visibility mask. */
         active_flag_changed =
             game_session_recalculate_location_active_with_visibility(location);
+        if (active_flag_changed) {
+            game_session_recalculate_player_maintenance_budgets(session);
+        }
         if (was_enabled != ((location->source_flags & 0x400U) != 0) ||
             active_flag_changed) ++changed;
     }

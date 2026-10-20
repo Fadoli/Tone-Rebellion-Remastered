@@ -2,6 +2,7 @@
 
 #include "game_session_action9.h"
 #include "game_session_delivery_internal.h"
+#include "game_session_events.h"
 
 static int location_inside_floater_bounds(const GameRuntimeIsland *island,
                                           uint8_t player_slot,
@@ -106,31 +107,6 @@ int game_session_begin_floater_handoff(GameSession *session,
     floater->has_wander_order = 0;
     floater->wander_timer = 0;
     return 1;
-}
-
-static void prepare_handoff_arrival(GameSession *session,
-                                    const GameFloaterStart *floater,
-                                    int preferred_arrival)
-{
-    GameRuntimeIsland *island =
-        &session->islands[floater->handoff_target_island];
-    uint8_t player_slot = floater->owner_slot;
-    uint8_t player_bit;
-
-    /* FUN_00466b09 exposes a newly reached island and initializes that
-       player's horizontal movement window around its reciprocal bridge. */
-    if (player_slot >= GAME_FLOATER_CATEGORY_COUNT) return;
-    player_bit = (uint8_t)(1U << player_slot);
-    if ((island->access_mask & player_bit) != 0) return;
-    island->access_mask |= player_bit;
-    if (preferred_arrival >= 0 &&
-        (unsigned int)preferred_arrival < island->location_count) {
-        int32_t min_x = (int32_t)island->locations[preferred_arrival].x - 0x140;
-        if (min_x < 0) min_x = 0;
-        if (min_x > 0x780) min_x = 0x780;
-        island->floater_min_x[player_slot] = min_x;
-        island->floater_max_x[player_slot] = min_x + 0x27f;
-    }
 }
 
 static int find_handoff_arrival(const GameSession *session,
@@ -251,7 +227,6 @@ int game_session_tick_floater_handoff(GameSession *session,
     if (floater->order_timer == 60) {
         preferred_arrival = find_linked_bridge(
             session, floater->handoff_target_island, floater->island_index);
-        prepare_handoff_arrival(session, floater, preferred_arrival);
         if (preferred_arrival >= 0 &&
             (unsigned int)preferred_arrival <
                 session->islands[floater->handoff_target_island].location_count &&
@@ -298,7 +273,8 @@ int game_session_tick_floater_handoff(GameSession *session,
         uint8_t resume_state = floater->handoff_resume_state;
         floater->order_timer = 0;
         floater->handoff_departure_location = -1;
-        if (resume_action == 4 && (resume_state == 3 || resume_state == 4)) {
+        if ((resume_action == 4 || resume_action == 0x12) &&
+            (resume_state == 3 || resume_state == 4)) {
             uint8_t destination_island = resume_state == 3
                 ? floater->order_source_island : floater->order_target_island;
             int16_t destination_location = resume_state == 3

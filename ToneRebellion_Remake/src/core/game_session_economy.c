@@ -254,6 +254,11 @@ int game_session_finish_location_move(GameSession *session,
     if (!location_move_source_valid(source, player_slot) ||
         !location_move_target_valid(target, player_slot)) return 0;
     player_economy = &session->economy[player_slot];
+    /* FUN_00452a15 clears the source site through FUN_00460029, which also
+       cancels pending tasks and detaches workers targeting the old location. */
+    (void)game_session_cancel_tasks_for_location(session,
+        session->location_move_source_island,
+        session->location_move_source_index);
     moves_hall = player_economy->hall_island_index ==
                      session->location_move_source_island &&
                  player_economy->hall_location_index ==
@@ -338,6 +343,8 @@ int game_session_finish_location_move(GameSession *session,
        remake applies the user-facing move operation and leaves an empty site. */
     source->record_value_10 = 0;
     source->owner_id = -1;
+    source->source_value_14 = -1;
+    source->maintenance_tone_cost = 0;
     source->source_location_slot_18 = -1;
     source->source_category_slot_60 = -1;
     source->record_value_24 = 0;
@@ -355,7 +362,9 @@ int game_session_finish_location_move(GameSession *session,
     source->source_progress_08 = 0;
     source->source_level_flags = 0;
     source->source_value_44 = 0;
-    source->source_value_58 = 0;
+    /* FUN_004533fb clears +0x46, sets +0x58, then recomputes the active bit. */
+    source->source_value_46 = 0;
+    source->source_value_58 = 1;
     source->producer_cadence = 0;
     source->base_progress = 0;
     source->chug_progress = 0;
@@ -380,6 +389,7 @@ int game_session_finish_location_move(GameSession *session,
     source->charge_floater_slots[6] = -1;
     source->charge_floater_slots[7] = -1;
     session->location_move_active = 0;
+    (void)game_session_recalculate_location_active_with_visibility(source);
     (void)game_session_recalculate_active_locations(session);
     return 1;
 }

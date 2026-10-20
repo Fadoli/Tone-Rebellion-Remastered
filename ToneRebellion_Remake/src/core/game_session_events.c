@@ -78,6 +78,38 @@ int game_session_queue_inventory_action(GameSession *session,
         (int16_t)island_index, 4, 0, (int16_t)location_index, (int16_t)item_id);
 }
 
+int game_session_cycle_source_capacity(GameSession *session,
+                                       uint8_t island_index,
+                                       uint16_t location_index)
+{
+    GameRuntimeIsland *island;
+    GameRuntimeLocation *location;
+    int16_t next_tier;
+
+    if (session == NULL || island_index >= session->island_count) return 0;
+    island = &session->islands[island_index];
+    if (location_index >= island->location_count) return 0;
+    location = &island->locations[location_index];
+
+    /* FUN_004672ef case 3 only accepts class-0 item 0x2a and 0x2c..0x30. */
+    if (location->renderer_class != 0 ||
+        (location->record_value_10 != 0x2a &&
+         (location->record_value_10 < 0x2c ||
+          location->record_value_10 > 0x30))) return 0;
+
+    next_tier = (int16_t)(location->source_capacity_4a + 1);
+    if (next_tier >= 3 || next_tier < 0) next_tier = 0;
+
+    /* FUN_00453cba marks the source for its tier-up transition only when the
+       new tier is greater, and clears the cached value at +0x48 then. */
+    if (next_tier > location->source_capacity_4a) {
+        location->source_flags |= 0x20U;
+        location->source_value_48 = 0;
+    }
+    location->source_capacity_4a = next_tier;
+    return 1;
+}
+
 int game_session_queue_glyph_action(GameSession *session,
                                     uint8_t player_slot,
                                     uint8_t island_index,
@@ -173,5 +205,112 @@ unsigned int game_session_dispatch_glyph_actions(GameSession *session)
             break;
         }
     }
+    return dispatched;
+}
+
+int game_session_cast_kind_for_action(uint8_t owner, uint8_t action_subtype)
+{
+    static const uint8_t cast_kinds[4][8] = {
+        {4, 7, 9, 10, 11, 12, 14, 20},
+        {0, 1, 8, 15, 13, 14, 18, 21},
+        {1, 4, 5, 17, 12, 16, 20, 19},
+        {0, 2, 3, 6, 11, 13, 16, 21}
+    };
+    if (owner >= 4 || action_subtype < 0x15 || action_subtype > 0x1c)
+        return -1;
+    return cast_kinds[owner][action_subtype - 0x15];
+}
+
+int game_session_queue_cast_action(GameSession *session,
+                                   uint8_t player_slot,
+                                   uint8_t island_index,
+                                   uint16_t location_index,
+                                   uint8_t action_subtype)
+{
+    GameCastActionRequest *request;
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count ||
+        action_subtype < 0x15 || action_subtype > 0x1c ||
+        session->cast_action_count >= GAME_SESSION_MAX_CAST_ACTIONS) return 0;
+    {
+        const GameRuntimeLocation *building =
+            &session->islands[island_index].locations[location_index];
+        if (building->owner_id != player_slot ||
+            building->source_location_slot_18 < 0 ||
+            (building->record_value_10 != 0x2f &&
+             building->record_value_10 != 0x30)) return 0;
+    }
+
+    request = &session->cast_actions[session->cast_action_count++];
+    request->player_slot = player_slot;
+    request->action_subtype = action_subtype;
+    request->island_index = island_index;
+    request->location_index = location_index;
+    return 1;
+}
+
+unsigned int game_session_dispatch_cast_actions(GameSession *session)
+{
+    unsigned int dispatched = 0;
+    unsigned int request_index;
+    if (session == NULL) return 0;
+
+    for (request_index = 0; request_index < session->cast_action_count;
+         ++request_index) {
+        const GameCastActionRequest request = session->cast_actions[request_index];
+        GameRuntimeIsland *building_island;
+        GameRuntimeLocation *building;
+        uint8_t kind;
+        unsigned int slot;
+        if (request.player_slot >= GAME_START_PLAYER_COUNT ||
+            request.island_index >= session->island_count ||
+            request.location_index >=
+                session->islands[request.island_index].location_count)
+            continue;
+
+        building_island = &session->islands[request.island_index];
+        building = &building_island->locations[request.location_index];
+        if (building->owner_id != request.player_slot ||
+            building->source_value_14 < 0 || building->source_value_14 >= 4)
+            continue;
+        kind = (uint8_t)game_session_cast_kind_for_action(
+            (uint8_t)building->source_value_14, request.action_subtype);
+        /* These kinds have a reconstructed FA_Cast tick and impact path. */
+        if (kind != 7 && kind != 9 && kind != 0x14 && kind != 0x16) continue;
+
+        /* FUN_0045d8f4 scans the building's eight floater links in order and
+           skips a unit already executing FA_Cast. The source level thresholds
+           are held in an unresolved table; the image values are zero. */
+        for (slot = 0; slot < 8; ++slot) {
+            int16_t linked = building->charge_floater_slots[slot];
+            GameFloaterStart *floater;
+            if (linked < 0 || (unsigned int)linked >= session->floater_count)
+                continue;
+            floater = &session->floaters[(unsigned int)linked];
+            if (!game_session_floater_is_active(floater) ||
+                floater->owner_slot != request.player_slot ||
+                floater->active_order_action == 0x13) continue;
+
+            floater->active_order_action = 0x13;
+            floater->movement_state = 0x13;
+            floater->cast_spell_kind = kind;
+            /* FUN_0042fa0f repeats the selected site's island/location in
+               packet words +0x0e/+0x10 for FUN_0045da80. */
+            floater->order_target_island = request.island_index;
+            floater->order_target_location = (int16_t)request.location_index;
+            floater->order_target_floater = -1;
+            floater->order_progress = UINT8_MAX;
+            floater->order_timer = 0;
+            floater->source_runtime_flags &= ~0x200U;
+            floater->has_move_order = 0;
+            floater->has_wander_order = 0;
+            floater->wander_timer = 0;
+            ++dispatched;
+            break;
+        }
+    }
+    memset(session->cast_actions, 0, sizeof(session->cast_actions));
+    session->cast_action_count = 0;
     return dispatched;
 }

@@ -50,9 +50,9 @@ typedef struct GameFloaterStart {
     uint16_t destination_x;
     uint16_t destination_y;
     uint16_t movement_speed;
-    /* FA_DefendFlt state 8 carries a random offset around its live target. */
-    int16_t defend_offset_x;
-    int16_t defend_offset_y;
+    /* FA_DefendFlt keeps its protected floater separate from the current
+       combat target resolved into order_target_floater. */
+    int16_t defend_target_floater;
     /* Action-9 post-arrival stages mirror tick +0x46 and +0x32. The target
        candidate table/policy for non-enemy units is only partly reconstructed. */
     uint8_t order_progress;
@@ -73,13 +73,11 @@ typedef struct GameFloaterStart {
     uint8_t order_source_island;
     uint32_t source_runtime_flags;
     /* FUN_00422d27's speed context is resolved before its coordinate step.
-       Initial workers start idle and take the fallback FA_Wander route on
-       their first simulation tick. Remaining modifiers stay zero until their
-       runtime sources are modeled by the session. */
+       Site bonuses come from the linked source and the owner's glyph mask;
+       owner_speed_modifier remains zero until its global source is modeled. */
     uint8_t movement_state;
-    int16_t category_speed_modifier;
+    int16_t owner_speed_modifier;
     uint8_t near_target_speed_override;
-    uint8_t site_speed_bonus;
     uint16_t stop_radius;
     /* FUN_0045d8b2's linked 100-byte record fields. FUN_0042219e copies a
        changed coordinate order into the separate tick record; this pending
@@ -139,6 +137,10 @@ typedef struct GameSession {
         uint16_t effect_y;
     } cast_effects[GAME_SESSION_MAX_CAST_EFFECTS];
     uint8_t active_cast_effect_count;
+    /* FUN_00416a9a's source sound events are drained by the platform adapter. */
+    uint8_t audio_event_head;
+    uint8_t audio_event_count;
+    GameSessionAudioEvent audio_events[GAME_SESSION_MAX_AUDIO_EVENTS];
     GamePlayerEconomy economy[GAME_START_PLAYER_COUNT];
     /* FUN_004662b7's 64-slot deferred-action table, initially zeroed by
        FUN_004637fc. This stores requests only; effect processing is separate. */
@@ -152,6 +154,8 @@ typedef struct GameSession {
     GameDiplomacyRequest diplomacy_requests[GAME_SESSION_MAX_DIPLOMACY_REQUESTS];
     uint8_t glyph_action_count;
     GameGlyphActionRequest glyph_actions[GAME_SESSION_MAX_GLYPH_ACTIONS];
+    uint8_t cast_action_count;
+    GameCastActionRequest cast_actions[GAME_SESSION_MAX_CAST_ACTIONS];
     uint8_t onoff_action_count;
     GameOnOffActionRequest onoff_actions[GAME_SESSION_MAX_ONOFF_ACTIONS];
     /* The IWLocInfo grab/place flow holds one owned building between clicks. */
@@ -162,6 +166,10 @@ typedef struct GameSession {
     uint16_t build_selection_count;
     GameBuildSelectionRequest build_selections[GAME_SESSION_MAX_BUILD_SELECTIONS];
     uint16_t class0_assignments;
+    /* Ordered WORLDPOS topology, retained so runtime class-2 completion can
+       resolve its reciprocal marker back to the source bridge-table slot. */
+    uint8_t world_bridge_count;
+    WorldBridge world_bridges[WORLD_MAP_MAX_BRIDGES];
     /* FUN_004718eb reads one active flag per WORLDPOS bridge pair. */
     uint32_t active_bridge_mask;
     GameRuntimeIsland islands[WORLD_MAP_MAX_ISLANDS];
