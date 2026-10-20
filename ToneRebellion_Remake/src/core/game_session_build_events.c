@@ -82,13 +82,35 @@ int game_session_pop_build_selection(GameSession *session,
 
 unsigned int game_session_dispatch_build_selections(GameSession *session)
 {
-    GameBuildSelectionRequest request;
+    unsigned int read_index;
+    unsigned int write_index = 0;
     unsigned int added = 0;
+    unsigned int count;
 
     if (session == NULL) return 0;
-    while (game_session_pop_build_selection(session, &request)) {
+    count = session->build_selection_count;
+    for (read_index = 0; read_index < count; ++read_index) {
+        GameBuildSelectionRequest request = session->build_selections[read_index];
         int slot;
+        unsigned int other;
+        int already_pending = 0;
+
         if (request.category != 0 || request.action_type != 5) continue;
+
+        /* The native task table coalesces matching type-5 records. Treat an
+           existing task as a successfully represented selection; otherwise
+           preserve the outbox entry if the fixed task table is full. */
+        for (other = 0; other < GAME_SESSION_MAX_PENDING_EVENTS; ++other) {
+            const GamePendingEvent *candidate = &session->pending_events[other];
+            if (candidate->active != 0 && candidate->action_type == 5 &&
+                candidate->payload_0c == (int16_t)request.reserved_zero &&
+                candidate->payload_0e == (int16_t)request.location_index &&
+                candidate->payload_12 == (int16_t)request.item_id) {
+                already_pending = 1;
+                break;
+            }
+        }
+        if (already_pending) continue;
 
         /* FUN_004662b7 copies packet byte offsets +2/+4/+8/+10/+12/+14
            into the task record, sets priority 1, and deduplicates type 5
@@ -100,8 +122,23 @@ unsigned int game_session_dispatch_build_selections(GameSession *session)
             (int16_t)request.reserved_zero,
             (int16_t)request.location_index,
             (int16_t)request.item_id);
-        if (slot >= 0) ++added;
+        if (slot >= 0) {
+            ++added;
+            continue;
+        }
+
+        /* The request remains queued when no pending-event slot is available.
+           Keep it and every later request in their original order. */
+        for (; read_index < count; ++read_index) {
+            session->build_selections[write_index++] =
+                session->build_selections[read_index];
+        }
+        break;
     }
+    session->build_selection_count = (uint16_t)write_index;
+    memset(&session->build_selections[write_index], 0,
+           (size_t)(GAME_SESSION_MAX_BUILD_SELECTIONS - write_index) *
+               sizeof(session->build_selections[0]));
     return added;
 }
 

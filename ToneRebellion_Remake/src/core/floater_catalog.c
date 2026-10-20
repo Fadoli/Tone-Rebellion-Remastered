@@ -27,6 +27,7 @@ static int next_record(const unsigned char *bytes, size_t length,
         size_t start = *position;
         size_t line_length;
         char *comment;
+        char *slash_comment;
         char *begin;
         char *end;
 
@@ -41,6 +42,10 @@ static int next_record(const unsigned char *bytes, size_t length,
         memcpy(line, bytes + start, line_length);
         line[line_length] = '\0';
         comment = strchr(line, ';');
+        slash_comment = strstr(line, "//");
+        if (comment == NULL || (slash_comment != NULL && slash_comment < comment)) {
+            comment = slash_comment;
+        }
         if (comment != NULL) *comment = '\0';
         begin = line;
         while (*begin == ' ' || *begin == '\t' || *begin == '\v' || *begin == '\f') ++begin;

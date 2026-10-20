@@ -674,6 +674,7 @@ static int select_iw_construct_item(void)
     IwConstructTransition transition;
     unsigned int i;
     int handled = 0;
+    int build_queued = 0;
 
     iw_construct_mouse_click(&g_iw_construct, g_game_session.config.selected_tribe,
                              &transition);
@@ -691,16 +692,20 @@ static int select_iw_construct_item(void)
                 /* FUN_0042fa0f turns this selection message into the observed
                    category-0/type-5 request. Its consumer is unknown, so the
                    UI queues the packet and does not place the item here. */
-                handled = 1;
-                (void)game_session_queue_build_selection(
+                build_queued = game_session_queue_build_selection(
                     &g_game_session, g_game_session.config.selected_tribe,
                     (uint8_t)g_menu.selected_map_island,
                     (uint16_t)g_selected_location,
                     (uint16_t)message->value);
+                handled = build_queued;
             }
         } else if (message->code == IW_CONSTRUCT_MSG_CLEAR_BUILD) {
-            g_iw_construct_open = 0;
-            (void)iw_construct_info_handle_message(&g_iw_construct_info, 1, 0);
+            /* Keep the chooser open if its bounded outbox could not accept the
+               order, so another click can enqueue it after the next tick. */
+            if (build_queued) {
+                g_iw_construct_open = 0;
+                (void)iw_construct_info_handle_message(&g_iw_construct_info, 1, 0);
+            }
         }
     }
     return handled;

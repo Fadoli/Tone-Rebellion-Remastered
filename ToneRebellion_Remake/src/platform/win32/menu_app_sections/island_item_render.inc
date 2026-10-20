@@ -20,7 +20,6 @@ static void draw_iw_construct(HDC dc)
         size_t item_index = (size_t)g_iw_construct.page *
                             IW_CONSTRUCT_ITEMS_PER_PAGE + column;
         int pane_width = window->pane.right - window->pane.left;
-        int column_width = pane_width / IW_CONSTRUCT_ITEMS_PER_PAGE;
         /* FUN_0043aee8 starts at pane_width/8 and advances pane_width/4. */
         int center_x = window->pane.left + pane_width / 8 +
                        pane_width * (int)column / IW_CONSTRUCT_ITEMS_PER_PAGE;
@@ -48,10 +47,13 @@ static void draw_iw_construct(HDC dc)
             }
         }
         if ((int)column == g_iw_construct.hovered_column) {
+            int hit_width = pane_width + 1;
             RECT highlight = {
-                window->pane.left + column_width * (int)column,
+                window->pane.left + hit_width * (int)column /
+                    IW_CONSTRUCT_ITEMS_PER_PAGE,
                 window->pane.top + 0x1a,
-                window->pane.left + column_width * ((int)column + 1),
+                window->pane.left + hit_width * ((int)column + 1) /
+                    IW_CONSTRUCT_ITEMS_PER_PAGE,
                 window->pane.bottom - 10
             };
             HBRUSH brush = CreateSolidBrush(RGB(119, 199, 234));

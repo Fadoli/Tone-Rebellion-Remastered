@@ -254,6 +254,10 @@ static void draw_hall_panel(HDC dc, int hall_player)
                         if (selected_event->action_type == 5) {
                             uint16_t item_id;
                             size_t name_index;
+                            int info_width = task_info_panel->pane.right -
+                                             task_info_panel->pane.left;
+                            int info_height = task_info_panel->pane.bottom -
+                                              task_info_panel->pane.top;
                             if (island_panel_info_construction_task_indices(
                                     selected_event->payload_12,
                                     (uint8_t)hall_player, &item_id,
@@ -274,23 +278,23 @@ static void draw_hall_panel(HDC dc, int hall_player)
                                 }
                                 if (name_index < BUILDING_NAME_COUNT &&
                                     g_building_names[name_index][0] != '\0') {
-                                    draw_bitmap_label(dc,
+                                    /* Leave room for the right-side building
+                                       preview; long localized names otherwise
+                                       draw underneath the sprite. */
+                                    draw_wrapped_bitmap_label(dc,
                                         g_building_names[name_index],
                                         task_info_panel->pane.left + 10,
                                         task_info_panel->pane.top + 0x1e,
+                                        info_width - 0x50, 1,
                                         RGB(185, 205, 220));
                                 }
                                 if (item_id < g_pad_catalog.item_count &&
                                     item_id < PAD_CATALOG_MAX_ITEMS &&
                                     g_building_art[item_id].frame_count != 0) {
-                                    int pane_width = task_info_panel->pane.right -
-                                                     task_info_panel->pane.left;
-                                    int pane_height = task_info_panel->pane.bottom -
-                                                      task_info_panel->pane.top;
                                     (void)draw_building_preview(dc, item_id,
                                         (uint8_t)hall_player,
-                                        task_info_panel->pane.left + pane_width - 0x1e,
-                                        task_info_panel->pane.top + pane_height - 10,
+                                        task_info_panel->pane.left + info_width - 0x1e,
+                                        task_info_panel->pane.top + info_height - 10,
                                         0x8000U);
                                 }
                             }

@@ -128,8 +128,7 @@ void iw_construct_mouse_move(IwConstructState *state, const WindowPane *pane,
 {
     int32_t column = -1;
     int32_t item_id = -1;
-    int32_t width;
-    int32_t column_width;
+    int32_t pane_width;
     size_t item_index;
     clear_transition(transition);
     if (state == NULL || pane == NULL) return;
@@ -137,10 +136,12 @@ void iw_construct_mouse_move(IwConstructState *state, const WindowPane *pane,
     if (pane->right >= pane->left && pane->bottom >= pane->top &&
         x >= pane->left && x <= pane->right && y >= pane->top + 0x1a &&
         y <= pane->bottom - 10) {
-        width = pane->right - pane->left;
-        column_width = (width + (width < 0 ? 3 : 0)) / IW_CONSTRUCT_ITEMS_PER_PAGE;
-        if (column_width > 0) {
-            column = (x - pane->left) / column_width;
+        /* WindowPane bounds are inclusive, while GDI's RECT right edge is
+           exclusive. Include the last pointer pixel in the four-way split. */
+        pane_width = pane->right - pane->left + 1;
+        if (pane_width > 0) {
+            column = (int32_t)(((int64_t)(x - pane->left) *
+                IW_CONSTRUCT_ITEMS_PER_PAGE) / pane_width);
             if (column >= 0 && column < IW_CONSTRUCT_ITEMS_PER_PAGE) {
                 item_index = (size_t)state->page * IW_CONSTRUCT_ITEMS_PER_PAGE +
                              (size_t)column;

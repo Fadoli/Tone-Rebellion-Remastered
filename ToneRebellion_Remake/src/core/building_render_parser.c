@@ -43,6 +43,7 @@ int building_render_next_line(const unsigned char *bytes, size_t length, size_t 
     size_t start = *position;
     size_t line_length;
     char *comment;
+    char *slash_comment;
     char *begin;
     char *end;
     if (*position >= length) return 0;
@@ -57,6 +58,10 @@ int building_render_next_line(const unsigned char *bytes, size_t length, size_t 
     memcpy(line, bytes + start, line_length);
     line[line_length] = '\0';
     comment = strchr(line, ';');
+    slash_comment = strstr(line, "//");
+    if (comment == NULL || (slash_comment != NULL && slash_comment < comment)) {
+        comment = slash_comment;
+    }
     if (comment != NULL) *comment = '\0';
     begin = line;
     while (*begin == ' ' || *begin == '\t' || *begin == '\v' || *begin == '\f') ++begin;

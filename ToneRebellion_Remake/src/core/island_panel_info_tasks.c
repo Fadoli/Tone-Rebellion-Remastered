@@ -286,6 +286,15 @@ int island_panel_info_extract_entry(const unsigned char *bytes, size_t length,
                 while (cursor < length && bytes[cursor] != '\n') ++cursor;
                 text_end = cursor;
                 if (text_end > text_start && bytes[text_end - 1] == '\r') --text_end;
+                {
+                    size_t comment;
+                    for (comment = text_start; comment + 1 < text_end; ++comment) {
+                        if (bytes[comment] == '/' && bytes[comment + 1] == '/') {
+                            text_end = comment;
+                            break;
+                        }
+                    }
+                }
                 if (text_end - text_start >= 3 &&
                     memcmp(bytes + text_start, "END", 3) == 0) {
                     output[used] = '\0';
