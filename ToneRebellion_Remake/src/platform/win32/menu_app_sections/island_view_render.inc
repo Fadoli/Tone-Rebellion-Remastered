@@ -908,6 +908,9 @@ static void render_island_view(HDC dc)
                             sprite_x, sprite_y, 0x10000U);
                     }
                 }
+                draw_building_info_extras(dc, info, selected_location,
+                    (uint8_t)g_menu.selected_map_island,
+                    (uint16_t)g_selected_location);
                 if (saved_info_dc != 0) RestoreDC(dc, saved_info_dc);
             }
         }

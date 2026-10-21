@@ -24,9 +24,12 @@ renderer.
 Creation event `FUN_00416a9a(0, site)` resolves `fltbirth` for ordinary tribes.
 Local `effects.txt` declares it `SoundOnly`, and `sound.txt` maps it to
 `data\fltbirth.wav`. The remake queues that sound through its existing Win32
-audio adapter. The worker appears at the class-1 marker and immediately uses
-the normal animated body and walking legs; the native birth event itself has
-no separate sprite sequence.
+audio adapter. The birth event has no sprite sequence of its own. The visible
+animation is the tribe site's PROD cycle: `FUN_004532e2` sets site flag 2,
+clears `+0x42`, links the floater at site `+0x2e` and holds it with `0x801`.
+The class-1 tick runs 100 ticks, then releases the worker at `(x, y - 0x28)`
+(`FUN_00450a71` cases 0/1, `../functions/0015_batch_0011/details-04-02.md`).
+The remake follows this through `leviathan_spawned_floater`.
 
 Evidence: `FUN_0045eaa7` (`ev_d0241191e19be6e3ec7ab4c4a16172c22e772b518c82aeef201ad3125475226d`),
 `FUN_004532e2` (`ev_f568b5a3b8f15baa665610518ba92d8599e54715db51c26ef29d327af6893104`),

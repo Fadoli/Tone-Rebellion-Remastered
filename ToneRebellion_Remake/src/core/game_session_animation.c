@@ -538,16 +538,21 @@ static void release_leviathan_floater(GameSession *session,
     if (index < 0 || (unsigned int)index >= session->floater_count) return;
     floater = &session->floaters[(unsigned int)index];
     if (!game_session_floater_is_active(floater) ||
-        (floater->source_runtime_flags & 0x800U) == 0 ||
-        floater->owner_slot != 4U) {
+        (floater->source_runtime_flags & 0x800U) == 0) {
         /* The spawned floater died and its slot was reused. */
         site->leviathan_spawned_floater = -1;
         return;
     }
-    floater->x = (uint16_t)((int32_t)site->x +
-        (item->prod.present ? item->prod.offset_x : 0));
-    floater->y = (uint16_t)((int32_t)site->y +
-        (item->prod.present ? item->prod.offset_y : 0));
+    if (site->renderer_class == 1 && site->record_value_10 <= 1) {
+        /* FUN_00450a71 cases 0/1 place the released floater at (x, y - 0x28). */
+        floater->x = site->x;
+        floater->y = (uint16_t)((int32_t)site->y - 0x28);
+    } else {
+        floater->x = (uint16_t)((int32_t)site->x +
+            (item->prod.present ? item->prod.offset_x : 0));
+        floater->y = (uint16_t)((int32_t)site->y +
+            (item->prod.present ? item->prod.offset_y : 0));
+    }
     floater->destination_x = floater->x;
     floater->destination_y = floater->y;
     floater->source_runtime_flags &= ~0x801U;

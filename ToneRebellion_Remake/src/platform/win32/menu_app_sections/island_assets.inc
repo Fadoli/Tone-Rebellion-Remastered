@@ -16,6 +16,8 @@ static int load_island_surface(int island_id, int map_island_index,
     SpriteSheet tone_candidate = {0};
     SpriteSheet pad_candidate = {0};
     SpriteSheet bridge_candidate = {0};
+    SpriteSheet activation_icon_candidate = {0};
+    SpriteSheet building_gauge_candidate = {0};
     SpriteSheet temp_hole_candidate = {0};
     SpriteSheet build_cycle_candidate = {0};
     SpriteSheet task_scroll_candidate = {0};
@@ -134,6 +136,10 @@ static int load_island_surface(int island_id, int map_island_index,
                            error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\br-trg01.shp", palette, &bridge_candidate,
                            error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\acticon.shp", palette,
+                           &activation_icon_candidate, error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\bldgage.shp", palette,
+                           &building_gauge_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\temphol0.shp", palette, &temp_hole_candidate,
                            error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\scarrow0.shp", palette, &build_cycle_candidate,
@@ -430,6 +436,8 @@ static int load_island_surface(int island_id, int map_island_index,
     free_sprite_sheet(&g_tone_field_art);
     free_sprite_sheet(&g_pad_art);
     free_sprite_sheet(&g_bridge_trigger_art);
+    free_sprite_sheet(&g_activation_icon_art);
+    free_sprite_sheet(&g_building_gauge_art);
     free_sprite_sheet(&g_temp_hole_art);
     free_sprite_sheet(&g_build_cycle_art);
     free_sprite_sheet(&g_task_scroll_art);
@@ -527,6 +535,10 @@ static int load_island_surface(int island_id, int map_island_index,
     memset(&pad_candidate, 0, sizeof(pad_candidate));
     g_bridge_trigger_art = bridge_candidate;
     memset(&bridge_candidate, 0, sizeof(bridge_candidate));
+    g_activation_icon_art = activation_icon_candidate;
+    memset(&activation_icon_candidate, 0, sizeof(activation_icon_candidate));
+    g_building_gauge_art = building_gauge_candidate;
+    memset(&building_gauge_candidate, 0, sizeof(building_gauge_candidate));
     g_temp_hole_art = temp_hole_candidate;
     memset(&temp_hole_candidate, 0, sizeof(temp_hole_candidate));
     g_build_cycle_art = build_cycle_candidate;
@@ -595,6 +607,8 @@ done:
     free_sprite_sheet(&tone_candidate);
     free_sprite_sheet(&pad_candidate);
     free_sprite_sheet(&bridge_candidate);
+    free_sprite_sheet(&activation_icon_candidate);
+    free_sprite_sheet(&building_gauge_candidate);
     free_sprite_sheet(&temp_hole_candidate);
     free_sprite_sheet(&build_cycle_candidate);
     free_sprite_sheet(&task_scroll_candidate);

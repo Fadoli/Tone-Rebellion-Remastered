@@ -147,3 +147,36 @@ grille `ACTICON` (bit i de l'ushort joueur `+0x4a`, i < `DAT_006136b0`),
 Inconnues: formule du pourcentage WORKSTR (ST0 hors pseudocode), identité de
 `DAT_006191f8` (+0) face à `source_maintenance_budget` (+0x3c), couleur du texte,
 appelant `0x40234c`.
+
+### ACTICON du Hall (port)
+
+Observation (ev_e47de0c0a7aca99494439a76c645dfcf775a893feb46fc262066f51d9a30f44e,
+ev_2ea57c14…): `DAT_00619242 + P+0x14*0x14a0` est le mot global de bits dont
+l'unique écriture est `FUN_004503bd`; ce n'est pas le champ joueur `+0x4a`
+(`P+0x4a` est un palier de mise en page). La boucle dessine `ACTICON` (acticon.shp,
+`shapes.txt`) frame i pour chaque bit i actif, i < `DAT_006136b0`, curseur (220,1),
+x += 10, retour à x=220/y += 10 après i=2,5,8,11 (x=225 pour i=11).
+Port: le masque est `special_feature_island_mask` (bits = index d'île). Hypothèse:
+`DAT_006136b0` = nombre d'îles (aucun écrivain statique, valeur initiale 0).
+Inconnues: nombre de frames d'acticon.shp, survol/infobulle (aucun dans le corps).
+
+### Variante non-résumé du Hall (P+0x18 != -1) — port partiel
+
+Observation (ev_671a14319b…, ev_9bd33459…, ev_7cbbb9a2…, ev_b5f6de1a…, asm
+0x440862-0x440878): après le test `P+0x18`, le jeu dessine: corps du bâtiment
+(`FUN_0040bf98`, x=base+0x1e/0x14/0xa selon `P+0x4a`, y=90, items 0x2c..0x2f);
+jauge `bldgage` (frame 0, (base-18,0), 36x8, marge 2, fraction `+0x34`/`FUN_00450978`,
+sauf item 0x2a ou propriétaire 4); rangée `bildicon` (frame clamp(owner+4,4,7), N
+icônes, x0=base-40, y=5, pas 8, 5 par ligne; N = short `+0x60` de
+`0x6192b0+slot*100+owner*0x14a0`); `tonecrys` frame 4 (11,17) + jauge `taskicon`
+6x55 (8,20), fraction `+0x2a`/(50+25*L) ; item 0x2f: `magctone` frame 4 (38,17) +
+jauge (35,20) et deux barres 3x55 (15,20)/(42,20); icônes ACTICON de queue; six
+icônes de slots (`in_ECX+0x78`, table `0x6137b8`, `FUN_0042704b`); onze contrôles BC_*.
+Port: `bldgage`, `tonecrys`/`magctone` (icônes seules), icônes ACTICON de queue
+(0x2c..0x2f, 0x2a). Interprétations: ACTICON dessiné si le bit est actif avec x
+avancé seulement sur icône dessinée; jauge `bldgage` horizontale, remplie de
+gauche à droite avec `game_session_repair_location_values`.
+Non porté: rangée `bildicon` (N non relié à un champ du port, trace de
+`FUN_00450385` ouverte), jauges `taskicon` (capacité = niveau de l'enregistrement
+staff `FUN_0045cd27`, orientation inconnue), barres 3x55, six slots, contrôles BC_*,
+placement natif du corps (le port garde son ancrage existant (un commentaire du code dit l'avoir calé sur une référence; non revérifié ici)).

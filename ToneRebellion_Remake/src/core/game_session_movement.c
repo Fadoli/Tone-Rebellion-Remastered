@@ -834,7 +834,7 @@ static int game_session_create_recruited_worker(GameSession *session,
 {
     const FloaterStats *stats;
     GameFloaterStart *floater;
-    const GameRuntimeLocation *location;
+    GameRuntimeLocation *location;
     unsigned int floater_index;
     uint8_t type_index;
 
@@ -900,12 +900,16 @@ static int game_session_create_recruited_worker(GameSession *session,
     floater->destination_y = location->y;
     floater->movement_speed = (uint16_t)stats->movement_speed;
     floater->has_wander_order = 1;
-    /* FUN_004532e2 sets floater +0x1c bits 0x801 after allocation, but the
-       remake has no producer that clears the 0x800 hold for workers, so
-       keep only 0x001; 0x800 would remove the worker after 0xc9 ticks. */
-    floater->source_runtime_flags = 0x001U;
+    /* FUN_004532e2 holds the floater with 0x801, links it at site +0x2e, sets
+       site flag 2 and clears +0x42. The class-1 PROD cycle (100 ticks) then
+       releases it at (x, y - 0x28) via release_leviathan_floater. */
+    floater->source_runtime_flags = 0x801U;
     if (floater_index >= session->floater_count)
         session->floater_count = (uint16_t)(floater_index + 1U);
+    location->leviathan_spawned_floater = (int16_t)floater_index;
+    location->source_flags |= 0x002U;
+    location->production_progress = 0;
+    location->source_value_42 = 0;
     game_session_refresh_player_maintenance_budgets(session);
     (void)game_session_queue_audio_event(
         session, GAME_SESSION_AUDIO_FLOATER_BIRTH, player_slot);

@@ -704,6 +704,106 @@ static void draw_island_feature(HDC dc, int island_id, const IslandLocation *sit
 #undef FEATURE_FRAME
 }
 
+/* FUN_00440567 tail block (both Hall variants, ev_671a1431...): ACTICON frames
+   chosen by the building item and the owner's feature mask G. Which of the
+   bits {0,1,3}/{6,7,5}/{10,11,9} draw, and whether x advances only on a drawn
+   icon, is an interpretation of the pseudocode; the owner-parity test is
+   observed but unexplained. */
+static void draw_hall_feature_icons(HDC dc, const WindowTemplate *info,
+                                    int32_t item, int32_t owner)
+{
+    static const unsigned int bits_2c[3] = {0U, 1U, 3U};
+    static const unsigned int bits_2d[3] = {6U, 7U, 5U};
+    static const unsigned int bits_2e[3] = {10U, 11U, 9U};
+    const unsigned int *bits = NULL;
+    unsigned int mask;
+    int x = 178;
+    unsigned int k;
+
+    if (info == NULL || !g_game_session_valid || owner < 0 ||
+        owner >= GAME_START_PLAYER_COUNT) return;
+    mask = g_game_session.economy[owner].special_feature_island_mask;
+    if (item == 0x2c) bits = bits_2c;
+    else if (item == 0x2d) bits = bits_2d;
+    else if (item == 0x2e) bits = bits_2e;
+    if (bits != NULL) {
+        for (k = 0; k < 3U; ++k) {
+            if ((mask >> bits[k]) & 1U) {
+                draw_sprite(dc, &g_activation_icon_art, bits[k],
+                            info->pane.left + x, info->pane.top + 1);
+                x += 10;
+            }
+        }
+        if (((owner & 1) != 0) == (item == 0x2c) && (mask & 4U) != 0) {
+            draw_sprite(dc, &g_activation_icon_art, 2U,
+                        info->pane.left + x, info->pane.top + 1);
+        }
+        if ((mask & 0x1000U) != 0) {
+            draw_sprite(dc, &g_activation_icon_art, 12U,
+                        info->pane.left + 16, info->pane.top + 21);
+        }
+    } else if (item == 0x2f) {
+        if ((mask & 0x100U) != 0) {
+            draw_sprite(dc, &g_activation_icon_art, 8U,
+                        info->pane.left + 43, info->pane.top + 21);
+        }
+    } else if (item == 0x2a) {
+        if ((mask & 0x2000U) != 0) {
+            draw_sprite(dc, &g_activation_icon_art, 13U,
+                        info->pane.left + 63, info->pane.top + 14);
+        }
+        if ((mask & 0x10U) != 0) {
+            draw_sprite(dc, &g_activation_icon_art, 4U,
+                        info->pane.left + 173, info->pane.top + 16);
+        }
+    }
+}
+
+/* Non-summary variant (P+0x18 != -1): bldgage frame 0 at (W/2-18, 0), 36x8,
+   inset 2, filled by +0x34 over FUN_00450978's maximum unless the item is
+   0x2a or the owner is 4; tonecrys frame 4 at (11,17); for item 0x2f also
+   magctone frame 4 at (38,17). The taskicon stock bars at (8,20)/(35,20) need
+   the staff-record capacity (FUN_0045cd27) and are not ported. */
+static void draw_building_info_extras(HDC dc, const WindowTemplate *info,
+                                      const GameRuntimeLocation *location,
+                                      uint8_t island_index,
+                                      uint16_t location_index)
+{
+    int16_t current;
+    int16_t maximum;
+    int32_t item = location->record_value_10;
+    int base = (info->pane.right - info->pane.left) / 2;
+
+    if (location->source_location_slot_18 == -1) return;
+    if (item != 0x2a && location->owner_id != 4 &&
+        g_building_gauge_art.frame_count != 0 &&
+        game_session_repair_location_values(&g_game_session, &g_pad_catalog,
+                island_index, location_index, &current, &maximum) &&
+        maximum > 0) {
+        int gauge_x = info->pane.left + base - 18;
+        int gauge_y = info->pane.top;
+        int inner_width = 36 - 4;
+        int filled = current <= 0 ? 0 :
+            (int)((long)inner_width * current / maximum);
+        if (filled > inner_width) filled = inner_width;
+        draw_sprite(dc, &g_building_gauge_art, 0U, gauge_x, gauge_y);
+        if (filled < inner_width) {
+            fill_rect(dc, gauge_x + 2 + filled, gauge_y + 2,
+                      gauge_x + 2 + inner_width, gauge_y + 6,
+                      g_island_palette[0]);
+        }
+    }
+    if (g_tone_crys_art.frame_count > 4U) {
+        draw_sprite(dc, &g_tone_crys_art, 4U,
+                    info->pane.left + 11, info->pane.top + 17);
+    }
+    if (item == 0x2f && g_magctone_art.frame_count > 4U) {
+        draw_sprite(dc, &g_magctone_art, 4U,
+                    info->pane.left + 38, info->pane.top + 17);
+    }
+    draw_hall_feature_icons(dc, info, item, location->owner_id);
+}
+
 static void draw_hall_stock_summary(HDC dc, int hall_player,
                                     const GameRuntimeIsland *island)
 {
@@ -753,6 +853,31 @@ static void draw_hall_stock_summary(HDC dc, int hall_player,
                           info->pane.left + row.amount_x,
                           info->pane.top + row.amount_y,
                           RGB(230, 238, 255));
+    }
+    draw_hall_feature_icons(dc, info, hall->record_value_10, hall->owner_id);
+    /* FUN_00440567 draws ACTICON frame i for each island i whose bit is set in
+       DAT_00619242 + owner*0x14a0 (the remake's special_feature_island_mask),
+       for i < DAT_006136b0 (runtime-written; taken as the island count, an
+       assumption). The cursor starts at (220,1), steps x by 10 per index and
+       wraps after i = 2, 5, 8 and 11; the i == 11 wrap uses x = 225. */
+    {
+        unsigned int icon_x = 220U;
+        unsigned int icon_y = 1U;
+        unsigned int i;
+        uint16_t feature_mask =
+            g_game_session.economy[hall_player].special_feature_island_mask;
+        for (i = 0; i < (unsigned int)g_game_session.island_count; ++i) {
+            if ((feature_mask >> (i & 31U)) & 1U) {
+                draw_sprite(dc, &g_activation_icon_art, i,
+                            info->pane.left + (int)icon_x,
+                            info->pane.top + (int)icon_y);
+            }
+            icon_x += 10U;
+            if (i == 2U || i == 5U || i == 8U || i == 11U) {
+                icon_x = i == 11U ? 225U : 220U;
+                icon_y += 10U;
+            }
+        }
     }
     {
         char population[96];

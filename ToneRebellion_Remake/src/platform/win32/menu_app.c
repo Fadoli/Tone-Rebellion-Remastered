@@ -96,6 +96,10 @@ static SpriteSheet g_trade_button_art;
 static SpriteSheet g_tone_field_art;
 static SpriteSheet g_pad_art;
 static SpriteSheet g_bridge_trigger_art;
+/* data/acticon.shp (ACTICON): Hall summary activation icons. */
+static SpriteSheet g_activation_icon_art;
+/* data/bldgage.shp (BLDGAGE): building damage gauge in IWLocInfo. */
+static SpriteSheet g_building_gauge_art;
 static SpriteSheet g_temp_hole_art;
 static SpriteSheet g_build_cycle_art;
 static SpriteSheet g_task_scroll_art;
