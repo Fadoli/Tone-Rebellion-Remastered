@@ -81,6 +81,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
                 const char *text;
                 int x;
                 int y;
+                COLORREF color;
             } row_labels[GAME_SESSION_MAX_TASKS * 2];
             size_t row_label_count = 0;
             int visible_rows = task_list_panel != NULL
@@ -130,7 +131,30 @@ static void draw_hall_panel(HDC dc, int hall_player)
                     IslandTaskRow row;
                     IslandTaskRowPosition position;
                     const char *label;
-                    if (!(stock_resource >= 0
+                    /* FUN_004459e6: a type-4 sub-type-1 task whose building
+                       has a pending UPGRADE request is the UPGRADE row (icon
+                       2, secondary frame (item == 0x2f) + 5, bildtone icon,
+                       gauge +0x28 over 20). The port's staff upgrade request
+                       is that task (payload_12 == 1, location in payload_0e). */
+                    const GameRuntimeLocation *upgrade_site = NULL;
+                    if (stock_resource < 0 && event->action_type == 4 &&
+                        event->payload_12 == 1 && event->payload_0a >= 0 &&
+                        (unsigned int)event->payload_0a <
+                            g_game_session.island_count &&
+                        event->payload_0e >= 0 &&
+                        (unsigned int)event->payload_0e <
+                            g_game_session.islands[event->payload_0a]
+                                .location_count)
+                        upgrade_site = &g_game_session.islands[event->payload_0a]
+                            .locations[event->payload_0e];
+                    if (upgrade_site != NULL) {
+                        row.label_key = "UPGRADE";
+                        row.task_icon_frame = 2;
+                        row.secondary_task_icon_frame =
+                            (int8_t)(upgrade_site->record_value_10 == 0x2f ? 6 : 5);
+                        row.resource_icon_type = -1;
+                    }
+                    if (!(upgrade_site != NULL ? 1 : stock_resource >= 0
                             ? island_panel_info_stock_task_row(
                                   (unsigned int)stock_resource, &row)
                             : island_panel_info_task_row(event->action_type,
@@ -138,6 +162,12 @@ static void draw_hall_panel(HDC dc, int hall_player)
                         !island_panel_info_task_row_position(task_list_panel,
                             (unsigned int)visible_rows,
                             (unsigned int)visible_index, &position)) continue;
+                    /* FUN_004459e6 writes colour index 5 into the SMFONT object for
+                       priority 2 and index 2 for priority 3 before the label
+                       and the "[n]" count, then restores index 6. */
+                    COLORREF row_text_color = event->priority == 2U
+                        ? g_island_palette[5] : event->priority == 3U
+                        ? g_island_palette[2] : g_island_palette[6];
                     label = task_label_text(row.label_key);
                     if (label == NULL || label[0] == '\0') continue;
                     if (task_slots[(size_t)offset + visible_index] ==
@@ -156,10 +186,39 @@ static void draw_hall_panel(HDC dc, int hall_player)
                     }
                     if (row_label_count < GAME_SESSION_MAX_TASKS) {
                         row_labels[row_label_count].text = label;
+                        row_labels[row_label_count].color = row_text_color;
                         row_labels[row_label_count].x = task_list_panel->pane.left +
                                                        position.label_x;
                         row_labels[row_label_count].y = task_list_panel->pane.top +
                                                        position.y;
+                        ++row_label_count;
+                    }
+                    /* FUN_004459e6 draws "[%d]" from task+4 at x=5 on every
+                       row; FUN_00421ec1 increments it when a floater attaches
+                       to the task, so it counts the floaters linked to it. */
+                    if (row_label_count < GAME_SESSION_MAX_TASKS * 2U) {
+                        static char task_count_text[GAME_SESSION_MAX_TASKS * 2][12];
+                        unsigned int attached = 0;
+                        unsigned int floater_slot;
+                        for (floater_slot = 0;
+                             floater_slot < g_game_session.floater_count;
+                             ++floater_slot) {
+                            if (g_game_session.floaters[floater_slot]
+                                    .linked_task_slot ==
+                                (int16_t)task_slots[(size_t)offset +
+                                                    visible_index])
+                                ++attached;
+                        }
+                        (void)snprintf(task_count_text[row_label_count],
+                            sizeof(task_count_text[row_label_count]),
+                            "[%u]", attached);
+                        row_labels[row_label_count].text =
+                            task_count_text[row_label_count];
+                        row_labels[row_label_count].color = row_text_color;
+                        row_labels[row_label_count].x =
+                            task_list_panel->pane.left + 5;
+                        row_labels[row_label_count].y =
+                            task_list_panel->pane.top + position.y;
                         ++row_label_count;
                     }
                     if (row.secondary_task_icon_frame >= 0 &&
@@ -180,7 +239,23 @@ static void draw_hall_panel(HDC dc, int hall_player)
                         draw_task_stock_gauge(dc, task_list_panel, hall_player,
                             (unsigned int)row.resource_icon_type, position.y);
                     }
-                    if (event->action_type == 0x12) {
+                    if (upgrade_site != NULL) {
+                        /* Gauge numerator is the building's +0x28 counter
+                           (Build Tone stock), denominator 20, __ftol chop. */
+                        unsigned int upgrade_fill = 66U;
+                        if (g_bildtone_art.frame_count > 0) {
+                            draw_sprite(dc, &g_bildtone_art, 0,
+                                task_list_panel->pane.left +
+                                    position.resource_icon_x,
+                                task_list_panel->pane.top + position.y + 7);
+                        }
+                        if (upgrade_site->resource_stock[0] < 20U)
+                            upgrade_fill = (66U *
+                                (unsigned int)upgrade_site->resource_stock[0]) /
+                                20U;
+                        draw_task_gauge(dc, task_list_panel, position.y,
+                                        upgrade_fill);
+                    } else if (event->action_type == 0x12) {
                         draw_task_repair_gauge(dc, task_list_panel, event,
                                                position.y);
                     } else if (event->action_type == 5) {
@@ -196,9 +271,9 @@ static void draw_hall_panel(HDC dc, int hall_player)
                 (void)GdiFlush();
                 for (label_index = 0; label_index < row_label_count;
                      ++label_index) {
-                    draw_bitmap_label_pixels(row_labels[label_index].text,
+                    draw_small_label_pixels(row_labels[label_index].text,
                         row_labels[label_index].x, row_labels[label_index].y,
-                        RGB(185, 205, 220));
+                        row_labels[label_index].color);
                 }
             }
             if (task_info_panel != NULL && g_empty_task_text[0] != '\0') {
@@ -476,7 +551,11 @@ static void draw_hall_panel(HDC dc, int hall_player)
                 int width;
                 int x;
                 int y;
-                (void)snprintf(amount_text, sizeof(amount_text), "%u", amount);
+                /* FUN_0043edac prints "%d" for a nonzero offer and "-" for zero. */
+                if (amount != 0)
+                    (void)snprintf(amount_text, sizeof(amount_text), "%u", amount);
+                else
+                    (void)snprintf(amount_text, sizeof(amount_text), "-");
                 width = measure_bitmap_text(NULL, amount_text, strlen(amount_text));
                 x = panel->pane.left + (int)target * 38 + 40 + (28 - width) / 2;
                 y = panel->pane.top + (int)resource * 24 + 44;
@@ -503,11 +582,12 @@ static void draw_hall_panel(HDC dc, int hall_player)
         if (entry_count == 0) {
             int width = measure_bitmap_text(NULL, g_empty_inventory_text,
                                            strlen(g_empty_inventory_text));
-            int height = (int)g_bitmap_font.height;
             int x = panel->pane.left +
                 ((panel->pane.right - panel->pane.left) - width) / 2;
+            /* FUN_0043d6a3 passes y = (bottom - top) / 2 - 6 for the NOART
+               text, with no text-height term (ev_7105b54d…). */
             int y = panel->pane.top +
-                ((panel->pane.bottom - panel->pane.top) - height) / 2 - 6;
+                (panel->pane.bottom - panel->pane.top) / 2 - 6;
             draw_bitmap_label(dc, g_empty_inventory_text, x, y,
                               RGB(185, 205, 220));
         } else {
@@ -562,7 +642,8 @@ static void draw_hall_panel(HDC dc, int hall_player)
                 draw_sprite(dc, &g_inventory_item_art, frame_index, x, y);
                 if (page[slot].count > 1) {
                     char count_text[12];
-                    (void)snprintf(count_text, sizeof(count_text), "%u",
+                    /* The count format at 0x4a020c is "(%d)". */
+                    (void)snprintf(count_text, sizeof(count_text), "(%u)",
                                    (unsigned int)page[slot].count);
                     draw_bitmap_label(dc, count_text,
                         x + 7, y - 21, RGB(235, 235, 220));
@@ -611,7 +692,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
             ((panel->pane.right - panel->pane.left) - width) / 2;
         int y = panel->pane.top +
             ((panel->pane.bottom - panel->pane.top) -
-             (int)g_bitmap_font.height) / 2 - 6;
+             (int)g_small_font.height) / 2 - 6;
         draw_bitmap_label(dc, empty_message, x, y, RGB(185, 205, 220));
     }
     if (panel_state == WINDOW_ISLAND_PANEL_TRADE) {
@@ -633,6 +714,13 @@ static void draw_hall_panel(HDC dc, int hall_player)
             if (frame >= 0 && (uint32_t)frame < g_trade_button_art.frame_count) {
                 draw_sprite(dc, &g_trade_button_art, (uint32_t)frame,
                             button->pane.left, button->pane.top);
+            }
+            /* The hovered button's caption (TRZERO / TRDOIT) is drawn at
+               (156, 50) of IWTrade by FUN_0043edac. */
+            if (hovered && g_trade_caption_text[index][0] != '\0') {
+                draw_bitmap_label(dc, g_trade_caption_text[index],
+                                  panel->pane.left + 156, panel->pane.top + 50,
+                                  RGB(185, 205, 220));
             }
         }
     }

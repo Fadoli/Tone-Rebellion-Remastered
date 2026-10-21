@@ -543,8 +543,9 @@ static void draw_sprite(HDC target, const SpriteSheet *sheet, uint32_t frame_ind
     SelectObject(source, previous);
 }
 
-static void draw_sprite_scaled(HDC target, const SpriteSheet *sheet, uint32_t frame_index,
-                               int x, int y, uint32_t scale_16_16)
+static void draw_sprite_scaled_plain(HDC target, const SpriteSheet *sheet,
+                                     uint32_t frame_index, int x, int y,
+                                     uint32_t scale_16_16)
 {
     HDC source;
     HGDIOBJ previous;
@@ -568,6 +569,114 @@ static void draw_sprite_scaled(HDC target, const SpriteSheet *sheet, uint32_t fr
     (void)AlphaBlend(target, x + offset_x, y + offset_y, width, height,
                      source, 0, 0, frame->width, frame->height, blend);
     SelectObject(source, previous);
+}
+
+/* FUN_0040bf98 copies a FUN_004106dd haze table into DAT_0049a610 for the
+   flag-0x10 placement ramp and blits the following layers through it
+   (FUN_00404c5a). A negative level draws sprites unchanged. */
+static int g_sprite_haze_selector;
+static int g_sprite_haze_level = -1;
+
+static int read_sprite_frame_pixels(const SpriteFrame *frame, DIBSECTION *dib)
+{
+    ZeroMemory(dib, sizeof(*dib));
+    return frame->bitmap != NULL &&
+           GetObjectA(frame->bitmap, sizeof(*dib), dib) >= (int)sizeof(*dib) &&
+           dib->dsBm.bmBits != NULL && dib->dsBm.bmBitsPixel == 32 &&
+           dib->dsBm.bmWidthBytes >= frame->width * 4;
+}
+
+static DWORD hazed_island_pixel(DWORD pixel, int selector, int level)
+{
+    uint8_t index;
+    COLORREF color;
+    if (!island_palette_lookup_nearest(&g_island_palette_lookup,
+            (uint32_t)RGB((pixel >> 16) & 0xffU, (pixel >> 8) & 0xffU,
+                          pixel & 0xffU) & UINT32_C(0x00ffffff), &index))
+        return pixel;
+    color = g_island_palette[island_haze_remap(&g_island_haze, selector,
+                                               level, index)];
+    return 0xff000000U | ((DWORD)GetRValue(color) << 16) |
+           ((DWORD)GetGValue(color) << 8) | (DWORD)GetBValue(color);
+}
+
+static void draw_sprite_scaled(HDC target, const SpriteSheet *sheet, uint32_t frame_index,
+                               int x, int y, uint32_t scale_16_16)
+{
+    const SpriteFrame *frame;
+    DIBSECTION dib;
+    BITMAPINFO info;
+    void *bits = NULL;
+    HBITMAP bitmap;
+    SpriteFrame hazed;
+    SpriteSheet single;
+    int level = g_sprite_haze_level;
+    int row;
+    if (level < 0 || sheet == NULL || frame_index >= sheet->frame_count) {
+        draw_sprite_scaled_plain(target, sheet, frame_index, x, y, scale_16_16);
+        return;
+    }
+    frame = &sheet->frames[frame_index];
+    if (!read_sprite_frame_pixels(frame, &dib)) return;
+    ZeroMemory(&info, sizeof(info));
+    info.bmiHeader.biSize = sizeof(info.bmiHeader);
+    info.bmiHeader.biWidth = frame->width;
+    info.bmiHeader.biHeight = -frame->height;
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+    bitmap = CreateDIBSection(NULL, &info, DIB_RGB_COLORS, &bits, NULL, 0);
+    if (bitmap == NULL || bits == NULL) {
+        if (bitmap != NULL) DeleteObject(bitmap);
+        return;
+    }
+    for (row = 0; row < frame->height; ++row) {
+        const DWORD *in = (const DWORD *)((const unsigned char *)dib.dsBm.bmBits +
+                                          (size_t)row * (size_t)dib.dsBm.bmWidthBytes);
+        DWORD *out = (DWORD *)bits + (size_t)row * (size_t)frame->width;
+        int column;
+        for (column = 0; column < frame->width; ++column)
+            out[column] = (in[column] >> 24) == 0U ? 0U :
+                hazed_island_pixel(in[column], g_sprite_haze_selector, level);
+    }
+    hazed = *frame;
+    hazed.bitmap = bitmap;
+    single.frames = &hazed;
+    single.frame_count = 1;
+    draw_sprite_scaled_plain(target, &single, 0, x, y, scale_16_16);
+    DeleteObject(bitmap);
+}
+
+/* FUN_004109a6: every destination pixel under the frame's opaque RLE spans is
+   replaced by table[destination]; the sprite's own colors are ignored. */
+static void recolor_under_sprite(HDC target, const SpriteSheet *sheet,
+                                 uint32_t frame_index, int x, int y,
+                                 int selector, int level)
+{
+    const SpriteFrame *frame;
+    DIBSECTION dib;
+    int row;
+    if (sheet == NULL || frame_index >= sheet->frame_count ||
+        target != g_paint_buffer_dc || g_paint_buffer_pixels == NULL) return;
+    frame = &sheet->frames[frame_index];
+    if (!read_sprite_frame_pixels(frame, &dib)) return;
+    (void)GdiFlush();
+    for (row = 0; row < frame->height; ++row) {
+        const DWORD *mask = (const DWORD *)((const unsigned char *)dib.dsBm.bmBits +
+                                            (size_t)row * (size_t)dib.dsBm.bmWidthBytes);
+        int destination_y = y + frame->y_offset + row;
+        int column;
+        if (destination_y < 0 || destination_y >= LOGICAL_HEIGHT) continue;
+        for (column = 0; column < frame->width; ++column) {
+            int destination_x = x + frame->x_offset + column;
+            DWORD *pixel;
+            if ((mask[column] >> 24) == 0U || destination_x < 0 ||
+                destination_x >= LOGICAL_WIDTH) continue;
+            pixel = &g_paint_buffer_pixels[(size_t)destination_y * LOGICAL_WIDTH +
+                                           (size_t)destination_x];
+            *pixel = hazed_island_pixel(*pixel, selector, level);
+        }
+    }
 }
 
 static void draw_sprite_region(HDC target, const SpriteSheet *sheet, uint32_t frame_index,

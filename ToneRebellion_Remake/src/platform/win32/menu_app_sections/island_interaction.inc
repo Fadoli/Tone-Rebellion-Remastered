@@ -274,6 +274,46 @@ static void draw_control_with_hover_overlay(HDC dc,
     }
 }
 
+/* Spell kind (spells.txt row) of the BC_Spell1..8 button under the pointer on a
+   player's item 0x2f/0x30 building, without the click-path kind filter. */
+static int hovered_spell_button_kind(int x, int y)
+{
+    static const char *const spell_names[8] = {
+        "BC_Spell1", "BC_Spell2", "BC_Spell3", "BC_Spell4",
+        "BC_Spell5", "BC_Spell6", "BC_Spell7", "BC_Spell8"
+    };
+    const GameRuntimeIsland *island;
+    const GameRuntimeLocation *location;
+    const WindowTemplate *button;
+    unsigned int index;
+
+    if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
+        g_island_panel_mode != WINDOW_ISLAND_PANEL_GENERAL ||
+        g_menu.selected_tribe < 0 ||
+        g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
+        g_menu.selected_map_island < 0 ||
+        g_menu.selected_map_island >= g_game_session.island_count ||
+        g_selected_location < 0) return -1;
+    island = &g_game_session.islands[g_menu.selected_map_island];
+    if ((unsigned int)g_selected_location >= island->location_count) return -1;
+    location = &island->locations[g_selected_location];
+    if (location->renderer_class != 0 ||
+        location->owner_id != g_menu.selected_tribe ||
+        location->source_location_slot_18 < 0 ||
+        location->record_value_10 != 0x2f) return -1;
+    button = window_catalog_hit_test_names(&g_window_catalog, 3, x, y,
+        spell_names, sizeof(spell_names) / sizeof(spell_names[0]));
+    if (button == NULL) return -1;
+    for (index = 0; index < 8; ++index) {
+        if (strcmp(button->name, spell_names[index]) == 0) {
+            return game_session_cast_kind_for_action(
+                (uint8_t)location->source_value_14,
+                (uint8_t)(0x15U + index));
+        }
+    }
+    return -1;
+}
+
 static int update_location_action_hover(int x, int y)
 {
     const char *const move_names[] = {"IWMove", "IWHallMove"};
@@ -327,10 +367,15 @@ static int update_location_action_hover(int x, int y)
         strcmp(onoff_control->name, "BC_OnOff") == 0;
     IslandLocationActionControl hovered = ISLAND_LOCATION_ACTION_NONE;
     if (control != NULL && strcmp(control->name, name) == 0) hovered = action;
-    if (hovered == g_hovered_location_action &&
-        repair_hovered == g_hovered_repair_control &&
-        upgrade_hovered == g_hovered_upgrade_control &&
-        onoff_hovered == g_hovered_onoff_control) return 0;
+    {
+        int spell_kind = hovered_spell_button_kind(x, y);
+        if (hovered == g_hovered_location_action &&
+            repair_hovered == g_hovered_repair_control &&
+            upgrade_hovered == g_hovered_upgrade_control &&
+            onoff_hovered == g_hovered_onoff_control &&
+            spell_kind == g_hovered_spell_kind) return 0;
+        g_hovered_spell_kind = spell_kind;
+    }
     g_hovered_location_action = hovered;
     g_hovered_repair_control = repair_hovered;
     g_hovered_upgrade_control = upgrade_hovered;

@@ -22,6 +22,43 @@ int game_session_queue_audio_event(GameSession *session, uint8_t kind,
     event = &session->audio_events[tail];
     event->kind = kind;
     event->owner_id = owner_id;
+    event->sound = 0;
+    ++session->audio_event_count;
+    return 1;
+}
+
+/* FUN_0041660b's cast effect name: kinds 1, 17 FLTARMOR; 2, 14, 21 FASTPROD;
+   7, 18 SACRIF; 10 KILLBEAS; 16 DESTSUPP; 22 ASCEND; every other kind uses
+   the owner-indexed spell effect (pointer table at 0x49bd68). Each effect's
+   SOUND line names the same sound. */
+int game_session_cast_sound_id(uint8_t kind, uint8_t owner)
+{
+    switch (kind) {
+    case 1: case 0x11: return 4;
+    case 2: case 0x0e: case 0x15: return 5;
+    case 7: case 0x12: return 6;
+    case 0x0a: return 7;
+    case 0x10: return 8;
+    case 0x16: return 9;
+    default: break;
+    }
+    return owner < 4U ? (int)owner : -1;
+}
+
+int game_session_queue_cast_audio(GameSession *session, uint8_t island,
+                                  uint8_t sound)
+{
+    unsigned int tail;
+    GameSessionAudioEvent *event;
+
+    if (session == NULL || sound >= GAME_CAST_SOUND_COUNT ||
+        session->audio_event_count >= GAME_SESSION_MAX_AUDIO_EVENTS) return 0;
+    tail = ((unsigned int)session->audio_event_head +
+            session->audio_event_count) % GAME_SESSION_MAX_AUDIO_EVENTS;
+    event = &session->audio_events[tail];
+    event->kind = GAME_SESSION_AUDIO_CAST;
+    event->owner_id = island;
+    event->sound = sound;
     ++session->audio_event_count;
     return 1;
 }

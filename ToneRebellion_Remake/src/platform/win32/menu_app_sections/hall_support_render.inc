@@ -73,32 +73,51 @@ static void draw_hall_info_panel(HDC dc, int panel_state)
                 panel->pane.left, panel->pane.top);
     if (text == NULL || text[0] == '\0') return;
 
-    /* FUN_00439673 puts the default text at (10,6) inside IWTextInfo and
-       calls the shared wrapping renderer. Use a fixed inset and the known
-       pane bounds here; the original callback's exact wrap metrics remain
-       unresolved. */
+    /* FUN_00439673 passes (10,6) to FUN_00428baa, whose callback FUN_0043954d
+       overrides it for every line: x = 6, right bound 173 (wrap width 167), and
+       y = previous y + 1 + font height starting from y = 6, so line k has its top
+       at 6 + (k + 1) * (h + 1) (ev_ff703ed6, ev_4fa53e73). Text is drawn with y as
+       the glyph-row top and has no native line limit; the port only stops at the
+       screen bottom. */
     pane_width = panel->pane.right - panel->pane.left;
     pane_height = panel->pane.bottom - panel->pane.top;
-    line_height = (int)g_bitmap_font.height + 2;
-    max_lines = (pane_height - 12) / line_height;
-    draw_wrapped_bitmap_label(dc, text, panel->pane.left + 8,
-                              panel->pane.top + 6, pane_width - 16,
-                              max_lines, g_island_palette[6]);
+    /* The text uses SMFONT (FUN_0042de0d returns &DAT_005c30b8, height 8) in
+       palette index 6 (FUN_0042da69), so h = 8 and the pitch is 9. */
+    line_height = (int)g_small_font.height + 1;
+    max_lines = (LOGICAL_HEIGHT - panel->pane.top) / line_height;
+    draw_wrapped_small_label(dc, text, panel->pane.left + 6,
+                             panel->pane.top + 6 + line_height,
+                             pane_width - 8, max_lines, line_height,
+                             g_island_palette[6]);
 }
 
 static void draw_diplomacy_initial_worker_icon(HDC dc,
                                                const GameFloaterStart *floater,
+                                               unsigned int fallback_tribe,
                                                int x, int y)
 {
     const SpriteSheet *body_art;
     const SpriteSheet *leg_art;
-    if (floater == NULL || floater->type_index >= GAME_START_PLAYER_COUNT) return;
-    body_art = floater->facing_left
-        ? &g_initial_floater_bodies_flipped[floater->type_index]
-        : &g_initial_floater_bodies[floater->type_index];
-    leg_art = floater->facing_left
-        ? &g_initial_floater_legs_flipped[floater->type_index]
-        : &g_initial_floater_legs[floater->type_index];
+    unsigned int type_index;
+    int facing_left;
+    /* FUN_00428191 builds its descriptor from the class (tribe) and subtype 0
+       only, never from a live floater, so a player without a live floater
+       still gets the tribe's worker banner. */
+    if (floater != NULL && floater->type_index < GAME_START_PLAYER_COUNT) {
+        type_index = floater->type_index;
+        facing_left = floater->facing_left;
+    } else if (fallback_tribe < GAME_START_PLAYER_COUNT) {
+        type_index = fallback_tribe;
+        facing_left = 0;
+    } else {
+        return;
+    }
+    body_art = facing_left
+        ? &g_initial_floater_bodies_flipped[type_index]
+        : &g_initial_floater_bodies[type_index];
+    leg_art = facing_left
+        ? &g_initial_floater_legs_flipped[type_index]
+        : &g_initial_floater_legs[type_index];
     if (body_art->frame_count == 0 || leg_art->frame_count == 0) return;
     /* FUN_0042704b uses frame zero for the observed initial worker pose.
        Its later per-object animation and status-dependent frames are not
@@ -137,6 +156,7 @@ static void draw_diplomacy_panel(HDC dc, const WindowTemplate *panel,
         if (game_diplomacy_player_icon_position(0, panel->pane.left,
                 pane_width, pane_height, &icon_x, &icon_y)) {
             draw_diplomacy_initial_worker_icon(dc, player_floaters[player_slot],
+                (unsigned int)player_slot,
                 panel->pane.left + (int)icon_x,
                 panel->pane.top + (int)icon_y);
         }
@@ -145,22 +165,38 @@ static void draw_diplomacy_panel(HDC dc, const WindowTemplate *panel,
         uint8_t target_player;
         uint32_t emblem_frame = column * 7U;
         uint32_t action_frame;
-        int action_y = pane_height - (column == 1U ? 20 : 30) - 15;
-        int32_t emblem_left = emblem_x[column] - panel->pane.left;
-        int32_t emblem_top = emblem_y[column] - panel->pane.top;
-        int32_t control_left = action_x[column] - panel->pane.left;
+        /* FUN_0043e5aa's helpers add the pane origin to their arguments, and
+           the caller passes the emblem and action coordinates minus that
+           origin, so they land at these window-absolute positions; the port's
+           draw_sprite does not add the origin, so use them directly. */
+        int action_y = panel->pane.top + pane_height -
+                       (column == 1U ? 20 : 30) - 15;
+        int32_t emblem_left = emblem_x[column];
+        int32_t emblem_top = emblem_y[column];
+        int32_t control_left = action_x[column];
         if (!game_diplomacy_target_player((uint8_t)player_slot,
                                           (uint8_t)column, &target_player)) continue;
 
-        /* FUN_0043e5aa draws each other-player group at frames 0, 7, and 14;
-           the last frame in each group is its policy-row hover highlight. */
+        /* FUN_0043e5aa draws each other-player group's base frame (0, 7, 14)
+           and, for the hovered policy row, blends the group's last frame
+           (+6) on top of it instead of replacing it. */
+        /* B = DAT_006192a0[local][target], the message-recipient flag the
+           remake keeps in message_recipient_mask: when set, FUN_0043e5aa draws
+           the animated variant 7c + 1 + anim, with anim stepping 0..4 every
+           third paint (the port steps it every third animation tick). */
+        if (g_game_session_valid &&
+            (g_game_session.message_recipient_mask[player_slot] &
+             (uint8_t)(1U << target_player)) != 0)
+            emblem_frame += 1U + (g_menu.animation_ticks / 3U) % 5U;
+        draw_sprite(dc, &g_diplomacy_art, emblem_frame,
+                    (int)emblem_left, (int)emblem_top);
+        emblem_frame = column * 7U;
         if (g_diplomacy_hover_valid &&
             g_diplomacy_hover.action == GAME_DIPLOMACY_POLICY &&
             g_diplomacy_hover.displayed_column == column) {
-            emblem_frame = (column + 1U) * 7U - 1U;
+            draw_sprite(dc, &g_diplomacy_art, emblem_frame + 6U,
+                        (int)emblem_left, (int)emblem_top);
         }
-        draw_sprite(dc, &g_diplomacy_art, emblem_frame,
-                    (int)emblem_left, (int)emblem_top);
 
         if (g_diplomacy_hover_valid &&
             g_diplomacy_hover.action == GAME_DIPLOMACY_RECIPIENT &&
@@ -176,6 +212,7 @@ static void draw_diplomacy_panel(HDC dc, const WindowTemplate *panel,
                     &icon_x, &icon_y)) {
                 /* FUN_0043e5aa draws each player icon before its policy state. */
                 draw_diplomacy_initial_worker_icon(dc, player_floaters[target_player],
+                    (unsigned int)target_player,
                     panel->pane.left + (int)icon_x,
                     panel->pane.top + (int)icon_y);
             }
@@ -195,8 +232,9 @@ static void draw_diplomacy_panel(HDC dc, const WindowTemplate *panel,
         const char *caption = g_diplomacy_hover.action == GAME_DIPLOMACY_POLICY
             ? g_diplomacy_recipient_text : g_diplomacy_policy_text;
         int x = panel->pane.left + pane_width / 2 + 15;
-        draw_bitmap_label(dc, caption, x, panel->pane.top + 7,
-                          g_island_palette[6]);
+        /* Drawn with SMFONT in palette index 6 (FUN_0043e5aa, ev_8f64bfc2). */
+        draw_small_label(dc, caption, x, panel->pane.top + 7,
+                         g_island_palette[6]);
     }
 }
 
@@ -207,6 +245,7 @@ static const char *task_label_text(const char *key)
     if (strcmp(key, "REPAIR") == 0) return g_task_label_text[1];
     if (strcmp(key, "DARTIFACT") == 0) return g_task_label_text[2];
     if (strcmp(key, "OARTIFACT") == 0) return g_task_label_text[3];
+    if (strcmp(key, "UPGRADE") == 0) return g_task_label_text[4];
     if (strcmp(key, "STOCK") == 0) return g_task_stock_text;
     if (strcmp(key, "TNORM") == 0) return g_task_priority_text[0];
     if (strcmp(key, "THIGH") == 0) return g_task_priority_text[1];

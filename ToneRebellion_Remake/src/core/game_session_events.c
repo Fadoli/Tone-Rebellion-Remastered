@@ -411,6 +411,18 @@ static const uint8_t cast_crystal_costs[22] = {
     13, 17, 12, 17, 19, 17, 12, 18, 18, 33, 22
 };
 
+/* spells.txt row `kind`: the MagCost and CryCost shown by the IWLocInfo bars
+   (FUN_00440567 reads 0x6188e2/0x6188e4 + s*0x2c). */
+int game_session_cast_kind_costs(int kind, uint16_t *magic_cost,
+                                 uint16_t *crystal_cost)
+{
+    if (kind < 0 || kind >= 22 || magic_cost == NULL ||
+        crystal_cost == NULL) return 0;
+    *magic_cost = cast_magic_costs[kind];
+    *crystal_cost = cast_crystal_costs[kind];
+    return 1;
+}
+
 int game_session_queue_cast_action(GameSession *session,
                                    uint8_t player_slot,
                                    uint8_t island_index,

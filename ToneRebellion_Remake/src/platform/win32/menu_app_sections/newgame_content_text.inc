@@ -44,10 +44,10 @@ static int load_newgame_captions(char *error, size_t error_capacity)
         goto done;
     }
     {
-        static const char *const task_keys[4] = {
-            "CONSTR", "REPAIR", "DARTIFACT", "OARTIFACT"
+        static const char *const task_keys[5] = {
+            "CONSTR", "REPAIR", "DARTIFACT", "OARTIFACT", "UPGRADE"
         };
-        for (i = 0; i < 4; ++i) {
+        for (i = 0; i < 5; ++i) {
             if (!extract_help_entry(bytes, member->length, task_keys[i],
                                     g_task_label_text[i],
                                     sizeof(g_task_label_text[i]))) {
@@ -140,6 +140,19 @@ static int load_newgame_captions(char *error, size_t error_capacity)
             (void)snprintf(error, error_capacity,
                            "gamey.txt key %s is missing or empty", key);
             goto done;
+        }
+    }
+    {
+        static const char *const trade_keys[2] = {"TRZERO", "TRDOIT"};
+        for (i = 0; i < 2; ++i) {
+            if (!extract_help_entry(bytes, member->length, trade_keys[i],
+                                    g_trade_caption_text[i],
+                                    sizeof(g_trade_caption_text[i]))) {
+                (void)snprintf(error, error_capacity,
+                               "gamey.txt key %s is missing or empty",
+                               trade_keys[i]);
+                goto done;
+            }
         }
     }
     {

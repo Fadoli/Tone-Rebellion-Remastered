@@ -17,3 +17,72 @@
 **Validation avec les données :** `tone` est le tag de classe 1 utilisé comme marqueur dans `FUN_0046466f`. Les fichiers `ISLAND00.TXT` à `ISLAND03.TXT` contiennent chacun quatre records `tone`; le test du corpus confirme que les quatre affectations et leurs sites voisins se résolvent avec les règles transcrites. Le post-traitement `FUN_00461859` associe séparément les liens du monde aux emplacements de classe 2; il n'est pas la source des marqueurs `tone`.
 
 **Port RNG :** `ToneRebellion_Remake/src/core/tone_rng.c` retranscrit la transition de `FUN_00474b90` et l'échelle de `FUN_00467260`. La constante flottante à `0x494798` est `32768.0f` (octets `00 00 00 47`). Le test `tone_rng_unit` vérifie la séquence pour une graine connue et la conversion bornée; le menu Win32 utilise désormais le même helper 15 bits au lieu d'une copie locale.
+
+## Revue de la carte du monde (REA, ev_beac7117…, ev_1f14e1d2…, ev_0068c343…, ev_0b2dd322…)
+
+Observation: le peintre est `FUN_00471e66` (boucle sur les enregistrements d'île/pont dans l'ordre
+des enregistrements; décalage de frame +15 inaccessible, +0 accessible, +30 accessible et
+`this+0x76`), appelé depuis `FUN_004711e2` (nom). `this+0x76` n'est écrit que par `FUN_00470f67`
+(message de déplacement de souris, test `FUN_00472013` sur le rectangle `DAT_006323b0 + id*0x10`
+rempli par `FUN_00405e11`, île du dessus d'abord, -1 sans île) et remis à -1 par `FUN_004701ef`:
+c'est l'île survolée, non persistante. Le nom (`xTarzus`, table `0x4a4870`, centré x, y = 0x3c)
+n'est dessiné que pour cette île, si accessible et `DAT_006191b4 == 0`. Le clic (`FUN_004702d9`
+cas 6 puis `FUN_00470fe7`) entre directement dans l'île survolée accessible
+(`DAT_0049f53c = île`, `FUN_0046c1b4(1, 3, 0)`): un seul clic, pas d'étape de sélection.
+Port: le nom ne se rabat plus sur l'île « sélectionnée », un clic sur une île survolée
+l'ouvre (`open_island_view` vérifie l'accès) et le texte « CLICK AN ISLAND TO SELECT… » écrit par
+le port (absent des chaînes de l'exécutable) est retiré. Entrée au clavier inchangée
+(commodité du port). Non vérifié: bouton enfoncé ou relâché pour le cas 6, sens de
+`DAT_006191b4`/`DAT_0062c6bc`, positions (`FUN_00471536`, formule orbitale du port), ordre de
+dessin ponts/îles (ordre des enregistrements), étiquette de débogage `%d` (touche 'N'), le
+re-test de survol à chaque tick du port (non vu dans le natif).
+
+### Positions, ponts et message de clic (REA, ev_b56fc9b6…, ev_425a59e3…, ev_b9ab52f4…, ev_23872f34…)
+
+Observation: `FUN_004718eb` reconstruit les enregistrements: d'abord une entrée de type 0 par île,
+puis une de type 1 par lien actif; `FUN_00471e66` les dessine dans cet ordre, donc les ponts passent
+par-dessus les îles. Position: `phase = (DAT_00618e44 mod 1440) * 0.017453277 / 4 + acc`, `a = θ - phase`
+(θ float de l'île `+0x29d4`, rayon `+0x29d8`, hauteur `+0x29dc`), `X = cos(a) * r * 0.13`, `Y = sin(a) *
+r * 0.06`, `Z = z * 0.06`, `x = cx + trunc(X + 0.5)`, `y = cy - trunc(Y + Z + 0.5)` (troncature x87
+« chop »); `acc` (radians) avance de ±6° par message 302 quand l'animation tourne (bit 0 = marche,
+bit 1 = sens, déplacés par les messages 300/301, pas par ceux-ci). Le pont est un nuage d'étincelles
+le long du segment A-B (10 points par pas, jitter RNG, palette de 8 indices); chaque point appelle le
+RNG de jeu 11 fois. Souris: l'événement 2 de la pompe (`WM_LBUTTONDOWN`) devient le message 6;
+le relâchement (événements 3, 5, 7) n'est jamais transmis: le clic d'île est donc le bouton
+gauche enfoncé.
+Port: la forme de la formule concorde (échelles 0.13/0.06, phase 0.25°/tick mod 1440, troncature). Corrigé:
+ponts dessinés après les îles; clic de carte sur `WM_LBUTTONDOWN` (le relâchement suivant est ignoré).
+Écarts restants: terme `acc` (cadence de 302 inconnue), unité de θ (radians dans le natif, degrés
+dans le port, conversion du chargeur introuvable), centre `cx/cy` (`this+0x784/786`) codé 320/240,
+flottants 32 bits x87 contre double, RNG de jeu non consommé par la peinture (choix du port).
+
+### Rotation, angle et centre (REA, ev_9c2912b8…, ev_12722ce8…, ev_ebaac76f…, ev_5f770dc6…)
+
+Observation: la carte ne tourne pas « par défaut » par le terme `acc`: `this+0x788` vaut 0 à l'initialisation
+(`FUN_004701ef`); la phase de base `(DAT_00618e44 mod 1440) * 0.017453277 / 4` avance en permanence.
+Les messages 300/301 (flèche gauche/droite, `FUN_004702d9` cas 5) basculent le bit de marche et le sens, 303
+est l'espace, flèche haut/bas règlent `this+0x70` (zoom); le message 302 posté à l'initialisation par
+`FUN_0046b928` (période 0) est renvoyé à chaque passage de `FUN_0046bacf` et ajoute ±6° à `acc` seulement si le
+bit de marche est levé. Aucun contrôle de `windows.txt` n'envoie 300/301/302. Angle: `worldpos.txt`
+(degrés), converti en radians au chargement par `FUN_004642a3` (`* 0.017453277`), copié par `FUN_00461859`
+dans l'île (`+0x29d4/d8/dc`): le port garde les degrés et convertit, ce qui est équivalent (la note
+« conversion introuvable » plus haut est obsolète). Centre: `FUN_00470259` écrit `cx = (+0x14 - +0xc) / 2` et
+`cy = (+0x18 - +0x10) / 2 + 15` (+15 pour dégager le nom), soit 319 et 254 pour la pane 0 0 639 479.
+Port: centre passé de (320, 240) à (319, 254) (même convention de pane inclusive que les panneaux
+d'île). Non porté: la rotation au clavier (le port utilise flèche gauche/droite pour changer de monde),
+le zoom, la cadence réelle de 302 (producteur de `FUN_0046bacf` indirect), le rectangle exact
+`this+0xc..0x18`.
+
+### Rotation clavier, zoom et échelle des îles (REA, ev_9c2912b8…, ev_4f9cb8ec…, ev_78bb7097…, ev_86fc6dd6…, ev_b3bada15…)
+
+Observation: le message 302 est mis en file avec une période 0 et est donc délivré une fois par appel de la pompe
+`FUN_00469f56`, elle-même limitée par la boucle principale à `frame_limit` images par seconde (`DAT_004c2b60`, clé
+`frame_limit` de `float.cfg`, 20 dans `THING1\FLOAT.CFG`). Les touches flèche gauche/droite (300/301), espace (303) et
+haut/bas (zoom `+0x70` par pas de 0x1000, de 0x1000 à 0x11000) sont toutes conditionnées par `DAT_004c2b74`, que
+seule la clé `nevada` de `float.cfg` met à 1: rotation et zoom au clavier sont donc inertes dans la configuration
+fournie (fonctions de débogage), et ne sont pas à porter. `this+0x70` est l'échelle (16.16) des sprites des îles
+d'index 4 et plus (`FUN_00471e66`); les îles 0 à 3 sont à l'échelle 1,0. Valeur initiale `0xc000` (75 %), écrite par
+`FUN_00470259` (rapport de la section précédente).
+Port: les îles d'index 4 et plus sont dessinées à l'échelle `0xc000` (`draw_sprite_scaled`), les zones de survol et de
+clic restent à la taille native (bornes de `FUN_00405e11`). Inférence: la mise à l'échelle du blit natif applique le
+même décalage de cadre que `draw_sprite_scaled`. Non vérifié à l'écran.

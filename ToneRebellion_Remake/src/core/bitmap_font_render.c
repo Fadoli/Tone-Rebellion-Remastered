@@ -24,7 +24,10 @@ size_t bitmap_font_render_pixels(const BitmapFont *font, const char *text,
                 if (py < 0 || (uint64_t)py >= target_height) continue;
                 for (col = 0; col < glyph_width; ++col) {
                     int64_t px = (int64_t)x + col;
-                    if (glyph_pixels[(size_t)row * glyph_width + col] == 1u &&
+                    /* Ink is any value other than background 0 and transparent 0xff:
+                     BGOUTFNT uses 1, SMFONT and BIGFONT use 243. */
+                    uint8_t glyph_pixel = glyph_pixels[(size_t)row * glyph_width + col];
+                    if (glyph_pixel != 0u && glyph_pixel != 0xffu &&
                         px >= 0 && (uint64_t)px < target_width) {
                         target[(size_t)py * target_stride + (size_t)px] = pixel;
                         ++written;

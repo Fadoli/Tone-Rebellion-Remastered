@@ -244,8 +244,4 @@ if(WIN32)
         COMMENT "Updating the ready-to-launch ToneRebellion_Remake.exe"
         VERBATIM
     )
-
-    add_executable(bench_task_text bench/task_text_bench.c)
-    target_link_libraries(bench_task_text PRIVATE tone_core user32 gdi32)
-    target_compile_features(bench_task_text PRIVATE c_std_11)
 endif()

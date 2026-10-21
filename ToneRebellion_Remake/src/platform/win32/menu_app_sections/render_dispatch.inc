@@ -8,8 +8,25 @@ static void render_world_map(HDC dc)
     if (g_menu.world_index < 0 || g_menu.world_index >= g_menu.world_map.world_count) return;
     world = &g_menu.world_map.worlds[g_menu.world_index];
     /* WorldWindow display type 1 (FUN_00471b74) renders explicit bridge pairs
-       as animated palette-color pixels. Draw these before the islands so the
-       island sprites cover the bridge endpoints. */
+       as animated palette-color pixels. They are drawn after the islands
+       (see below), as in the original record order. */
+    for (island_index = 0; island_index < world->island_count; ++island_index) {
+        const WorldIsland *island = &world->islands[island_index];
+        int x;
+        int y;
+        uint32_t frame = world_island_frame_index(
+            island_index, island->shape_id, g_hovered_island == (int)island_index);
+        world_island_position(island, &x, &y);
+        /* FUN_00471e66 draws islands 0..3 at scale 1.0 and the others at the
+           window scale this+0x70 (0xc000 = 75 % by default: FUN_00470259). The
+           hit rectangles stay unscaled (FUN_00405e11 bounds). */
+        if (island_index < 4U)
+            draw_sprite(dc, &g_small_islands, frame, x, y);
+        else
+            draw_sprite_scaled(dc, &g_small_islands, frame, x, y, 0xc000U);
+    }
+    /* FUN_00471e66 draws records in order: every island record precedes the
+       bridge records (FUN_004718eb), so the bridge sparks end up on top. */
     {
         BYTE bridge_colors[8];
         int ramp;
@@ -75,17 +92,10 @@ static void render_world_map(HDC dc)
             }
         }
     }
-    for (island_index = 0; island_index < world->island_count; ++island_index) {
-        const WorldIsland *island = &world->islands[island_index];
-        int x;
-        int y;
-        uint32_t frame = world_island_frame_index(
-            island_index, island->shape_id, g_hovered_island == (int)island_index);
-        world_island_position(island, &x, &y);
-        draw_sprite(dc, &g_small_islands, frame, x, y);
-    }
     {
-        int island_index = g_hovered_island >= 0 ? g_hovered_island : g_menu.selected_map_island;
+        /* FUN_004711e2 follows +0x76, the hovered island only; there is no
+           selected-island fallback. */
+        int island_index = g_hovered_island;
         if (island_index >= 0 && (size_t)island_index < world->island_count &&
             game_session_can_enter_island(&g_game_session,
                 (uint8_t)island_index, world_map_player_mask())) {
@@ -96,8 +106,6 @@ static void render_world_map(HDC dc)
             }
         }
     }
-    draw_bitmap_label(dc, "CLICK AN ISLAND TO SELECT  ENTER OR CLICK AGAIN TO OPEN",
-                      12, 454, RGB(160, 190, 222));
 }
 
 static void render_load_game(HDC dc)
@@ -131,6 +139,8 @@ static void paint_window(HWND window)
             render_world_map(back);
         } else if (g_menu.screen == SCREEN_ISLAND) {
             render_island_view(back);
+        } else if (g_menu.screen == SCREEN_LOGO) {
+            render_logo(back);
         } else {
             render_load_game(back);
         }

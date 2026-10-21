@@ -12,3 +12,53 @@
 - **Preuves :** `ev_8ca64092de3b786050ffad150abf2dd04b82ef777d65f1cab09f8f07936c5419`, `ev_b65156eb13978511b7f06cdb3fee86e7c2c4a37bf3cac67ad0f0badb2f999a68`, `ev_a8230350584e54954217dfeda123b6cf8d9dc6ca7211fff2385661c22cdab6ba`, `ev_352feb8e600eceb96c53f7813bd012e104389976cd0dc42358a78b6a0fcddd24`, `ev_dc8178f27dfbe5ae5eb96c11000ab02fb34bf426d8d5bfa2b5e0e778095f46d4`, `ev_b6c592d2020a3b072f7d397ada43d048a75789229d848e76ffadec2a536491cf`, `ev_78147898fdd67751ac4b9dc7f61c638b16c2a36dd616080db86817b146a0965a`, `ev_50b787cc3ab559f485e8b24562694aeeedfcc5940b0eab8001073461b3f42942`.
 
 Les notes détaillées historiques sont dans [island-panels.md](island-panels.md); pseudocode ciblé : [batch 0013](../functions/0013_batch_0009.md) et [batch 0014](../functions/0018_batch_0014.md).
+
+## Revue du panneau Inventaire (REA, ev_7105b54d…, ev_7c8f58f0…, ev_089a56b9…, ev_512d3ead…, ev_f7e67d60…)
+
+Concordances: page de 10 (5 × 2), cellule `(droite-gauche)/5` × `((bas-haut)-24)/2` à partir de `haut+24`,
+centrage des bornes opaques, compteur affiché seulement quand il dépasse 1 en `(x+7, y-21)`, contours de
+survol (indice de palette 1) et d'objet armé (indice 4, prioritaire) dessinés avant l'icône, comptes par
+joueur (`DAT_006191fc + id*2 + DAT_0049f538*0x14a0`), pas de remise à zéro de la page par le rafraîchissement.
+Corrigé: format du compteur `"(%d)"` (chaîne `0x4a020c`, avec parenthèses); ordonnée du texte `NOART` =
+`(bas-haut)/2 - 6` sans terme de hauteur de police.
+Écarts non portés: les messages natifs `0x3039` (texte d'information, clé `BRIDGE%02d` si id < 6 sinon
+`PLOT%02d` avec id - 6, dessiné en (10, 6)) et `0x42` (objet armé) vers le répartiteur; le port garde un
+retrait de 8 px pour tous les textes d'`IWTextInfo` (métriques de retour à la ligne natives non résolues,
+l'ancrage (10, 6) n'est établi que pour ce mode); hit-test sans bornes de colonne ou de ligne dans le natif
+(artefacts en bord droit et bas, le port renvoie -1); règle de visibilité d'`InvCycle` (hypothèse: seulement
+au-delà d'une page) et remise à zéro de la page au clic (introuvable côté natif).
+Inconnues: couleurs (compteur, `NOART`, indices de palette), décalage de cadre appliqué par `FUN_00404770`,
+égalité de `DAT_0049f538` et du joueur du Hall, touche clavier.
+
+### InvCycle, texte d'IWTextInfo et message 0x42 (REA, ev_3593eda8…, ev_68eb428b…, ev_20a8dd58…, ev_ff703ed6…, ev_614c66b1…)
+
+Observation: `InvCycle` envoie le message 69 (`0x45`) à `IWInventory`; `FUN_0043d285` fait
+`page = page + 1` si `(page + 1) * 10 < nombre`, sinon `page = 0`, puis marque le panneau à redessiner;
+le rafraîchissement `FUN_0043d59b` envoie `InvCycle` message 1 (montrer) au passage à 11 objets ou plus et
+message 2 (cacher) au retour à 10 ou moins, uniquement aux transitions (compte initial -1). La règle de
+`game_inventory_next_page` du port est équivalente. Clés de texte: objet 5 → `BRIDGE00`, objets 6..33 →
+`PLOT00..27` (déjà celles du port).
+`IWTextInfo` (pane 456 328 631 395, 175 x 67): `FUN_00439673` passe (10, 6) au renvoi à la ligne
+`FUN_00428baa`, mais le rappel `FUN_0043954d` impose x = 6, borne droite 173 (largeur 167), ordonnée
+`y + 1 + hauteur de ligne` et pas de ligne = hauteur de police + 1, sans limite de lignes; couleur = indice
+de palette 6. Les modes NEWGAME, LEVNAME et 5 sont centrés (`x = (droite-gauche-w)/2`, `y = (bas-haut)/2 - 10`),
+le mode 4 (niveau) écrit des lignes simples en (10, 2) et (10, 11). Message `0x42`: `FUN_0042fa0f` mémorise
+l'objet armé (`DAT_0049e9c4`) et le curseur (`FUN_0043530b(0x11)`); le clic n'envoie jamais -1, seul le
+message 2 d'`IWInventory` désarme.
+Port: retrait 6 et largeur `pane - 8` pour le texte d'`IWTextInfo`. Non porté: pas de ligne natif (`+1`, le
+renvoi partagé du port garde `+2` car ses autres appelants ont leurs propres rappels natifs), ordonnée
+de la première ligne (`y + 1 + h` non résolue face au décalage de cadre), modes centrés et mode 4.
+
+### Géométrie exacte du texte d'`IWTextInfo` (REA, ev_4fa53e73…, ev_ff703ed6…, ev_7517af5a…, ev_c4271bbf…)
+
+Observation: `FUN_00428baa(ctx, x, y, texte, 0, rappel)` appelle le rappel avant chaque ligne avec `(x, y)` et dessine
+la ligne aux sorties; l'argument `(10, 6)` est écrasé. `FUN_0043954d` sort `x = 6`, borne droite 173 (largeur
+167) et `y_sortie = y + 1 + h` (h = hauteur de la police courante, `[police+8]`); le décalage s'accumule, donc la
+ligne k a son sommet en `6 + (k + 1) * (h + 1)` (pas de ligne `h + 1`). Les mots se mesurent par somme des
+avances de glyphes, coupure gloutonne au dernier espace qui tient, aucune limite de lignes; `y` est le haut
+de la rangée de glyphes. Avec `bgoutfnt.fnt` (hauteur 13 à l'octet 8; liaison à `DAT_005c30b8` inférée): lignes
+aux ordonnées 20, 34, 48… Modes simples: NEWGAME, LEVNAME et le mode 5 sont centrés sans rappel
+(`x = (droite-gauche-w)/2`, `y = (bas-haut)/2 - 10`); le mode niveau dessine en (10, 2) et (10, 11).
+Port: `hall_support_render.inc` utilise maintenant x = 6, largeur 167, première ligne à `haut + 6 + h + 1` et pas
+`h + 1` via `draw_wrapped_bitmap_label_pitch`; le renvoi partagé des autres écrans garde `h + 2`. Non porté: les
+modes centrés et niveau; liaison de `DAT_005c30b8` à `bgoutfnt.fnt` non tracée.

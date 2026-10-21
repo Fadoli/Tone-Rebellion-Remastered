@@ -1079,6 +1079,13 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
                    selected-site flag and timer after the same cast wait. */
                 if (floater->order_timer < 400U) ++floater->order_timer;
                 if (floater->order_timer == 10U) {
+                    /* FUN_0041660b spawns the effect here; its SOUND plays on
+                       the effect's first tick for the viewing player. */
+                    int cast_sound = game_session_cast_sound_id(
+                        floater->cast_spell_kind, floater->owner_slot);
+                    if (cast_sound >= 0)
+                        (void)game_session_queue_cast_audio(session,
+                            floater->island_index, (uint8_t)cast_sound);
                     (void)game_session_schedule_cast_effect_step(
                         session, i, floater->cast_spell_kind,
                         floater->order_target_location,

@@ -73,8 +73,9 @@ int island_panel_info_stock_gauge_fill(uint16_t stock,
         return 1;
     }
     scaled = (uint64_t)stock * gauge_width;
-    *fill_width = (unsigned int)((scaled + (uint32_t)denominator / 2U) /
-                                 (uint32_t)denominator);
+    /* FUN_004118df's __ftol (0x472c6c) sets the x87 rounding control to chop,
+       so the filled width truncates (ev_4917da8e…). */
+    *fill_width = (unsigned int)(scaled / (uint32_t)denominator);
     return 1;
 }
 
@@ -84,8 +85,6 @@ int island_panel_info_task_gauge_fill(int16_t current, int16_t maximum,
 {
     uint64_t scaled;
     uint64_t denominator;
-    uint64_t whole;
-    uint64_t remainder;
     if (fill_width == NULL || current < 0 || maximum <= 0) return 0;
     if (current >= maximum) {
         *fill_width = gauge_width;
@@ -93,13 +92,10 @@ int island_panel_info_task_gauge_fill(int16_t current, int16_t maximum,
     }
     scaled = (uint64_t)(uint16_t)current * gauge_width;
     denominator = (uint16_t)maximum;
-    whole = scaled / denominator;
-    remainder = scaled % denominator;
-    /* FUN_004118df converts ratio*width through x87 __ftol (nearest, ties
-       to even under the default Windows rounding mode). */
-    if (remainder * 2U > denominator ||
-        (remainder * 2U == denominator && (whole & 1U) != 0)) ++whole;
-    *fill_width = (unsigned int)whole;
+    /* FUN_004118df converts ratio*width through __ftol (0x472c6c), which
+       sets the x87 rounding control to chop: the fill truncates
+       (ev_4917da8e…). */
+    *fill_width = (unsigned int)(scaled / denominator);
     return 1;
 }
 

@@ -180,3 +180,223 @@ Non porté: rangée `bildicon` (N non relié à un champ du port, trace de
 `FUN_00450385` ouverte), jauges `taskicon` (capacité = niveau de l'enregistrement
 staff `FUN_0045cd27`, orientation inconnue), barres 3x55, six slots, contrôles BC_*,
 placement natif du corps (le port garde son ancrage existant (un commentaire du code dit l'avoir calé sur une référence; non revérifié ici)).
+
+### Tracé `bildicon` et slots (pas de port)
+
+Observation (ev_3755627b…, ev_0f4bd30d…, ev_aa2efe38…, ev_af74df8d…, ev_ff014992…):
+`FUN_00450385` renvoie `0x6192b0 + slot*100 + owner*0x14a0` (0 si `+0x18 == -1`);
+ce bloc de 100 octets est l'objet « source » initialisé par `FUN_004528ca` et dont
+`FUN_0045c470` range les huit liens floater (`+4..+0x12`), le compte `+0x24` et le
+dernier id `+0x4c`: ils correspondent à `charge_floater_slots`, `charge_floater_count`
+et `charge_recent_floater` du port. `+0x60` (octets 96..97) reste dans le bloc,
+mais aucun écrivain n'a été trouvé (accès par pointeur calculé). La table
+`0x6137b8` est le tableau des floaters (pas 0x4c).
+Interprétation: la rangée `bildicon` compte probablement quelque chose lié aux
+liens floater; les six slots sont probablement des ids de floaters liés au site.
+Inconnues: écrivains de `+0x60`, écrivain de `in_ECX+0x78` (offset générique
+partagé avec d'autres objets liste), 48 vs 52 enregistrements par propriétaire.
+Raison de l'absence de port: sans écrivain ni lecteur établi, tout dessin de
+`bildicon` ou des slots serait une supposition de données.
+
+### Correction du tracé `+0x60` et `+0x78` (REA, port de `bildicon`)
+
+Observation (ev_a4a51711, ev_b504a93b, ev_4712553c, ev_e7593de8, ev_baeadee8):
+le short `R+0x60` est le numéro d'instance 0..9 attribué par `FUN_0045ee26` aux
+rangées source de même item (0x2c..0x32), 0 si aucune place; il n'est écrit ailleurs
+dans aucune des fonctions listées (recherche de stores word complète, dword/octet
+non cherchés). Il correspond à `source_category_slot_60` du port. La rangée
+`bildicon` boucle `i < R+0x60`: le port la dessine (frame clamp(owner+4,4,7),
+x0=W/2-40, y=5, pas 8, 5 par ligne). L'ancienne note « aucun écrivain » est
+dépassée. Interprétation: le sens « numérotation » vient de shapes.txt.
+Les six slots (`this+0x78`): seul `FUN_0044034e` les écrit, à chaque dessin
+(appelé via le thunk 0x402103 depuis `FUN_00440567`, pas par le message 14000):
+valeurs `R.word[4+j*2]` (liens floater) filtrées par type via `FUN_0045d7e8`,
+slots 0..2 type 0, 3..4 type 1, 5 type 2, -1 si vide. Non porté: le prédicat
+de `FUN_0045d7e8` et le type (nibble bas de `floater+0xA`) ne sont pas reliés au
+modèle floater du port.
+
+### Six slots du Hall (port)
+
+Observation (ev_ec3eeb90…, ev_62062fe1…, ev_d3dc2d7b…, ev_bfd78831…, ev_671a1431…):
+`FUN_0045d7e8(R, prev, kind)` renvoie le premier lien `j > prev` (8 liens
+`R+4..+0x12`, -1 = vide) dont le floater a `(+0x0a & 0xf) == kind`.
+`FUN_0044034e` remplit, à chaque dessin, `this+0x78` (6 shorts, -1 initial): kind 0
+→ slots 0.., kind 1 → 3.., kind 2 → 5.., sans plafond par kind (une 6e écriture
+dépasse le tableau). `FUN_00440567` dessine chaque floater présent par
+`FUN_0042704b` aux offsets de panneau X={230,230,230,195,195,160},
+Y={21,55,89,35,72,55} (item 0x2f: X={220,-,-,220,-,170}, Y={28,-,-,82,-,55}, 999 =
+masqué par le port), surbrillance si le floater est la sélection.
+Port: `draw_building_slot_floaters` (corps + jambes comme le panneau unité), kind =
+`attack_level_flags & 0xf` (déjà utilisé de même par la logique d'effectif du
+port). Non porté: surbrillance du floater sélectionné, sprites des types >= 4,
+écrivains natifs de `+0x0a`. Interprétation: kind = niveau d'unité.
+
+### Jauges taskicon et barres du Hall (REA, port partiel)
+
+Observation (asm 0x440aee-0x440b2a, ev_1b288a5409cf…, ev_5202cf39…, ev_13fb39e1…):
+la jauge TASKICON appelle `FUN_004118df` avec frame 8, (x,20), 6x55, marge 2,
+direction 1: verticale, remplie par le bas, le reste du haut peint en indice
+palette 0; géométrie intérieure x+2..x+4 (largeur 2 px selon les arguments, non
+recoupée visuellement) par y+22..y+73 (51 px). Fraction = stock/capacité bornée à
+[0,1], capacité de `FUN_0045cd27` = 50 + 25*L, L = short `+0x4a` de l'entrée
+location (`0x5ec640 + R[1]*0x60 + R[0]*0x29e8`). `bldgage`: horizontale (dir 0),
+remplie de gauche à droite, reste peint en indice 0. Barres 3x55 (x=15 et 42, y=20,
+`FUN_0041179e`, dir 1, segment seul): contour indice 1 et intérieur couleur 4, ou 2
+si `A > P+0x2a` / `B > P+0x2c`, avec `A = short 0x6188e4 + s*0x2c`,
+`B = FUN_0045d9c1(s)`, `s = this+0x74`, ignorées si `s < 0`.
+Port: jauges TASKICON pour `tonecrys` (8,20) et `magctone` (35,20, item 0x2f) avec
+L = `source_capacity_4a` (interprétation); `bldgage` aligné sur l'orientation.
+Non porté: barres 3x55 (table `0x6188e4/0x6188e2`, écrivains et sens inconnus;
+`s = this+0x74` fixé par le message 14000), contrôles `BC_*`, surbrillance de slot.
+Inconnues: relation exacte `R[0]`/`R[1]` ↔ île/location (supposée), sens de L.
+
+### Barres 3x55 du Hall: table `0x6188c0` (REA, pas de port)
+
+Observation (ev_1c2dcfc3…, ev_7b0f7fe9…, ev_be9d2da9…, ev_9c67aecb…, ev_ad242f26…,
+ev_bd2212f2…): les barres lisent un enregistrement de pas `0x2c` à `0x6188c0`:
+`+0x20` niveau (affiché `LEVEL n+1`), `+0x22` = B (étiquette « magctone »),
+`+0x24` = A (étiquette « tonecrys »), `+0x28` pointeur d'image. `FUN_0045da2a`
+refuse quand `site+0x2c < B` ou `site+0x2a < A`: A et B sont des coûts en
+cristal/magic-tone comparés aux stocks du site (interprétation: coûts, confiance
+moyenne). L'index `s` = octet de `0x4a2863 + monde*8 + (type-0x15)` (type 0x15..0x1c),
+ligne de catalogue 0..21, via `FUN_00450070`. La table est vide dans l'image
+(BSS): écrivain, source (pad.txt ou autre) et expéditeur du message 14000 vers
+`IWLocInfo` non identifiés; `this+0x74` est réutilisé de façon incohérente
+(index, pointeur, compte). Aucun champ du port ne correspond (pas de rangée
+`s`); la correspondance avec `building_tone_cost`/`maintenance_tone_cost` reste
+une hypothèse. Pas de port tant que l'écrivain n'est pas trouvé.
+
+### Correction: la table `0x6188c0` est `spells.txt` (REA)
+
+Observation (ev_0e751e17…, ev_6b705a6f…, ev_04e755bc…, ev_71318e69…, ev_4ee89808…,
+ev_1e292500…): `FUN_0041C46F` appelle `FUN_004642A3` (ECX = `0x5EC218`), qui charge
+`pad.txt`, `floater.txt` puis `spells.txt` par `FUN_00463563`; celle-ci écrit
+`this+0x2C6A8 + i*0x2C` (i < 0x20), soit `0x6188C0`. Disposition de la rangée:
+`+0x00` nom (32 octets), `+0x20` = `Level` - 1, `+0x22` = `MagCost`, `+0x24` =
+`CryCost`, `+0x28` = texte jusqu'à `END`. Le corpus `spells.txt` compte 22 sorts
+(ex.: rang 0 « Guérison du Dojo », niveau 1, MagCost 9, CryCost 7). L'indice `s`
+de `FUN_00450070` est l'octet `DAT_004A2863[monde*8 + type]` (type 0x15..0x1c),
+sans décalage `-0x15` (corrige la note précédente). Les barres 3x55 comparent donc
+le coût CryCost (A) et MagCost (B, x2/3 si le drapeau 0x100 du propriétaire) du
+sort `s` aux stocks `+0x2a`/`+0x2c` du site; le message 14000 est envoyé par
+`FUN_0042FA0F` (cas 0x47) à `IWHallMove`/`IWMove`, pas à `IWLocInfo`.
+Non porté: l'état « sort armé » (`this+0x74`) qui détermine `s` n'est pas établi
+côté `IWLocInfo` (le panneau l'initialise à 0, d'autres usages l'interprètent
+comme pointeur); le port charge déjà les coûts de sorts pour `FA_Cast`.
+
+### Barres de coût de sort du Hall (REA, port avec interprétation)
+
+Observation (ev_55234054, ev_8212125a, ev_bbb1cdc9, ev_469da8cd, ev_0b9148a5):
+`FUN_0044003d` (message 0x350d) et `FUN_00440567` (paint) sont deux emplacements
+de la même table virtuelle `PTR_LAB_00494458` et partagent le mot `this+0x74`
+(initialisé à -1). `FUN_0042fa0f` envoie 0x350d à `IWLocInfo` dans deux branches:
+code 6 (valeur -1, si la cible est IWMove/IWHallMove ou un objet de type 0x65) et
+code 7 (objet de type 0x65, id de sort 0x15..0x1c, valeur `FUN_00450070` =
+`DAT_004a2863[monde*8 + id]`, ligne de `spells.txt`). Le paint dessine les barres
+seulement pour l'item 0x2f et `+0x74 >= 0`. L'index est `monde*8 + id` (corrige la
+note « -0x15 » plus haut). Les événements 6/7 (survol, sortie, clic) n'ont pas été
+retrouvés. Interprétation: aperçu du coût au survol de `BC_Spell1..8`.
+Port: `g_hovered_spell_kind` (mis à jour au mouvement de souris, 0x2f seulement),
+`game_session_cast_kind_costs` (MagCost/CryCost de `spells.txt`), deux barres 3x55
+(x=15 CryCost vs stock `+0x2a`, x=42 MagCost x2/3 si masque 0x100 vs `+0x2c`)
+sur 50+25*L, contour indice 1, intérieur indice 4 (2 si coût > stock). Limites:
+déclencheur par survol non prouvé, valeur périmée possible au changement de
+sélection sans mouvement de souris, L = `source_capacity_4a` supposé.
+
+### Codes 6 et 7 de `FUN_0042fa0f` (REA, déclencheur non tranché)
+
+Observation (ev_b0dfec4e…, ev_120f8b9e…, ev_9fb07007…, ev_d53afc0c…): `FUN_0042fa0f`
+est l'entrée 3 de la table enregistrée par `FUN_0041c46f`; `param_1` est un code de
+commande de la table, pas un événement souris (`switch(param_1-1)`, codes 6 et 7 =
+cas 5 et 6); `param_2` est un enregistrement de contrôle (nom `+0x20`, type
+`+0x60`, id de sort `+0x64`). Aucun appel interne ne passe 6 ou 7; leur expéditeur
+(`FUN_0046c371` via l'objet de la table, `FUN_004337d9` clavier, `FUN_004293c6`)
+n'est pas résolu. Le gestionnaire de glyphes (`FUN_0043dcae`) utilise ses propres
+codes (1 = sortie, 6 = déplacement testé, 10 = pression): pas de numérotation
+commune démontrée.
+Conclusion: rien ne prouve un survol; le port garde l'aperçu de coût au survol de
+`BC_SpellN` comme interprétation non vérifiée, au même titre qu'un déclenchement
+à l'armement (clic) du sort resterait possible.
+
+### Correction: messages 6/7 = sortie/entrée de survol (REA)
+
+Observation (ev_1d8a9f0b…, ev_ad5951f4…, ev_7b2ad6ef…, ev_e64eb410…): `FUN_0046be81`
+est le test de survol: sur déplacement souris sans capture, le contrôle précédemment
+survolé reçoit les codes 10 puis 8 et le gestionnaire de groupe (`FUN_0042fa0f`,
+entrée 3) reçoit le message 6 (ancien contrôle); le nouveau contrôle reçoit le code 9
+et le gestionnaire de groupe le message 7 (nouveau contrôle). Les contrôles sans
+`+0x40 == 1`, `+0x38 == 1` ou hors de leur rectangle ne sont pas candidats. Dans
+`FUN_0042fa0f`, message 7 sur un contrôle de type `0x65` avec id de sort 0x15..0x1c
+envoie à `IWLocInfo` le message 0x350d avec la ligne de sort; message 6 envoie -1.
+Les « codes 6/7 » de la section précédente sont ces messages de groupe, pas les codes
+de contrôle (6 = bouton enfoncé, 7 = bouton relâché, 8 = survol quitté, 9 = survol
+entré, 10 = déplacement avec x,y). Le survol de `BC_SpellN` fixe donc bien `+0x74`
+et la sortie du survol le remet à -1: le déclencheur du port est confirmé.
+Non vérifié: que les enregistrements `BC_Spell` portent `+0x60 == 0x65`, `+0x40 == 1`
+et `+0x38 == 1` (données de contrôle, pas d'observation d'exécution).
+
+### Surbrillance des slots du Hall (REA, pas de port)
+
+Observation (ev_5cc7f5cc, ev_cbd81c59, ev_f8e0a7fb, ev_d9ffc20e, ev_671a1431):
+dans `FUN_0042704b`, `param_8 == 1` (ou `entity[0xe] == DAT_005e16ec`) charge la
+table de remappage `FUN_004106dd(1,1)` (256 octets copiés dans `DAT_0049a610`) et
+met `local_38 = 1`; sur la branche mise à l'échelle, `FUN_00405265` passe alors par
+`FUN_00404c5a` au lieu de `FUN_00404770`: même sprite, même position, pixels
+dessinés à travers la palette remappée (transparent = indice 0xFF). Pas d'anneau ni
+de changement de frame. Les crochets d'angle dépendent de `DAT_005dc668`, pas de
+`param_8`. Dans `FUN_00440567`, la surbrillance d'un slot vaut
+`*(DAT_005dc64c+0x170) == &0x6137b8[id]` (le floater sélectionné); le port a
+`g_selected_floater` pour cela.
+Non porté: les couleurs dépendent du contenu de `DAT_004b20f0` (non lu) et le port
+dessine des bitmaps alpha sans palette indexée; `FUN_00404c5a` n'est pas décompilée
+(l'usage de `DAT_0049a610` est déduit des xrefs). Un contour ou une teinte inventés
+ne seraient pas observés. Inconnue: le test `entity[0xe] == DAT_005e16ec`.
+
+### Borne de la grille ACTICON: `DAT_006136b0` = nombre d'îles (REA)
+
+Observation (ev_13ff3710…, ev_b603ce7e…, ev_8c970a17…, ev_f808c6cd…, ev_d266ae75…): le champ
+est écrit seulement par base calculée (`0x5EC218 + 0x27498`): `FUN_004637fc`
+(initialisation du monde, `tworld.cpp`) y range `DAT_005ebf98[taille du monde]` (0..3),
+`FUN_00467be5` le sauvegarde/recharge et `FUN_00462f1d` le remet à zéro. Les
+lecteurs (`FUN_0045eaa7`, `FUN_0045388f`, `FUN_0045f121`) bouclent `i < compte` sur des
+enregistrements d'île de `0x29e8` octets.
+Inférence (confiance moyenne): c'est le nombre d'îles du monde actif, ce que suppose le
+port (`g_game_session.island_count`). La valeur 15 n'est pas lisible statiquement (tables
+`DAT_005ebf98/005ebd68` nulles dans l'image, remplies à l'exécution).
+
+## Tâche 0xd (Obtain) et ordres Attack/Defend (REA, ev_639001c8…, ev_7b696e7a…, ev_8753775e…, ev_534c32c0…, ev_17f694ec…)
+
+Observation: `FUN_004662b7` range le paquet (mots: catégorie, joueur, type, site, île, emplacement de bâtiment,
+sous-type) dans la table de 64 entrées; `entry+4` est le compteur d'attachés, incrémenté et décrémenté par
+`FUN_00421ec1` (qui copie type, île, bâtiment et paramètre dans le floater: `+0x38` index de tâche, `+0x3c`
+type, `+0x40` île, `+0x42` emplacement, `+0x44` mot 7). Personne ne balaie la table pour le type 0xd; l'automate
+de floater `FUN_004211bb` (`switch(type-1)`, type 0xd = cas 0xc) passe à l'état 13 avec `+0x32` = emplacement ou,
+si le floater porte déjà l'objet voulu (`+0x18 == mot 7`), à l'état 4 vers une cible trouvée par
+`FUN_00420e94(2, joueur)`. Le site d'attache (`FUN_0041e569`?) n'est pas décompilé. `FUN_00466533` efface
+l'entrée et `FUN_00420669` détache les floaters. Les ordres `Attack`/`Defend` (`FUN_0045d867`: `+0x28` = mot
+`floater+0xe` de la table `0x6137b8`, `+0x2c` = 6 ou 8, `+0x30` = id; `FUN_0045d8b2`: lieux, genres 7 et 9) écrivent
+dans l'objet session `0x5ec218`; aucun lecteur des genres 6..9 n'a été trouvé.
+Interprétation: le ramassage natif ressemble à un pool de tâches pour floaters libres plutôt qu'à l'ordre à un
+floater choisi du port (`game_session_order_floater_to_ground_object`, action 0xd, état 13), dont l'état 13 et
+l'annulation (commande 12, `cancel_ground_pickup_order`) correspondent à l'automate natif. Non porté: attache
+automatique, ordres `Attack`/`Defend`/`Recall`. Inconnues: appelant d'attache, `FUN_0045dcf4`, lecteurs des
+genres 6..9, porte `FUN_00450385`.
+
+### Attache automatique et ordres en attente (REA, ev_7b65b0885c0f…, ev_16b5390f45dc…, ev_bd805382bd75…, ev_349b14e0b6a5…, ev_dce3014d7fa8…)
+
+Observation: la table des tâches natives (64 entrées de 0x14 octets, base `0x6183bc`) est parcourue par le
+sondage `FUN_0042219e` (appelé par `FUN_0041e569` et `FUN_004239e9`) pour un floater libre de classe != 4, sans
+lien de charge (`+0xc == -1`), de sous-type != 8, hors ordre de type 4/6/7 en cours, avec `DAT_006191b4 == 0`. Un
+candidat doit être actif, du même propriétaire, différent de l'entrée courante, accepté par `FUN_00422031` (cas 4, 5,
+0xb et 0x12; le type 0xd n'a pas de cas et passe) et par `FUN_0041e454` (classe 1 pour les types 6, 0xd, 0xb, 0x11 et
+le type 4 de charge 5..33). Choix: première entrée valide dans l'ordre d'index pour la classe 1 (cap: compteur
+`+4 < 1`, une seule attache à la fois pour 0xd, pas de distance); les autres classes utilisent le rang `+6`.
+`FUN_00421ec1` copie genre, île, site et charge dans le floater (`+0x3c/+0x40/+0x42/+0x44`) et appelle
+`FUN_00466533` si l'ancienne entrée était de type 0xd ou 4. Les ordres en attente 6..9 (`+0x28/+0x2c/+0x30` du
+floater, écrits par `FUN_0045d867/d8b2/dcf4`) sont lus par `FUN_00422d27` (genre 8: cible floater, genre 9: lieu,
+arrivée à moins de 100) et `FUN_0045de20`; le sondage n'attribue rien aux genres 6 et 7; la branche physique du genre 6
+(attaque) n'a pas été trouvée.
+Port: le ramassage est une commande à un floater choisi, sans table de 64 entrées, sans compteur `+4`, sans
+admission `FUN_00422031` ni classe `FUN_0041e454`, sans attache automatique, sans effacement `FUN_00466533`. À porter pour
+la tâche 0xd: création par le bouton `Obtain` (paquet type 0xd), attache automatique du premier floater libre
+(compteur < 1), état 13 déjà modélisé, détachement et effacement à la fin.

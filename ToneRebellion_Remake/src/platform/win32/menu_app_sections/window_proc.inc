@@ -18,6 +18,19 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             keep_background_tune_playing();
             return 0;
         }
+        if (wparam == 1 && g_menu.screen == SCREEN_LOGO) {
+            /* FUN_0041c46f: logo fade-in, fade-out, then the title state and
+               the `start` tune (requested after the logo). */
+            ++g_logo_tick;
+            if (logo_splash_finished()) {
+                free(g_logo_pixels);
+                g_logo_pixels = NULL;
+                g_menu.screen = SCREEN_MAIN_MENU;
+                set_background_tune_once("start");
+            }
+            InvalidateRect(window, NULL, FALSE);
+            return 0;
+        }
         if (wparam == 1 && (g_menu.screen == SCREEN_NEW_GAME ||
                             g_menu.screen == SCREEN_WORLD_MAP ||
                             g_menu.screen == SCREEN_ISLAND)) {
@@ -73,6 +86,16 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                     } else if (audio_event.kind == GAME_SESSION_AUDIO_FLOATER_BIRTH) {
                         sound = audio_event.owner_id == 4
                             ? g_levbirth_sound : g_fltbirth_sound;
+                    } else if (audio_event.kind == GAME_SESSION_AUDIO_CAST &&
+                               audio_event.sound < 10U &&
+                               g_menu.screen == SCREEN_ISLAND &&
+                               audio_event.owner_id == g_menu.selected_map_island) {
+                        /* FUN_004181a6 plays a cast effect's SOUND only when
+                           the instance's +0x08 (the caster's island, +0x0e)
+                           equals DAT_0049f53c, which FUN_0042fa0f also
+                           multiplies by the 0x29e8 island stride: the
+                           island being viewed. */
+                        sound = g_cast_sounds[audio_event.sound];
                     }
                     if (sound != NULL)
                         (void)PlaySoundA((LPCSTR)sound, NULL,
@@ -193,13 +216,47 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         }
         return 0;
     }
+    case WM_LBUTTONDOWN: {
+        if (g_menu.screen == SCREEN_LOGO) return 0;
+        /* FUN_00469f56 delivers the left button press as window message 6
+           and drops the release; FUN_00470fe7 enters the hovered island on
+           that press. Other screens keep their release-based clicks. */
+        RECT client;
+        RECT viewport;
+        int x;
+        int y;
+        GetClientRect(window, &client);
+        if (g_menu.screen != SCREEN_WORLD_MAP ||
+            !logical_viewport(client.right - client.left,
+                              client.bottom - client.top, &viewport)) return 0;
+        if (GET_X_LPARAM(lparam) < viewport.left || GET_X_LPARAM(lparam) >= viewport.right ||
+            GET_Y_LPARAM(lparam) < viewport.top || GET_Y_LPARAM(lparam) >= viewport.bottom) {
+            return 0;
+        }
+        x = ((GET_X_LPARAM(lparam) - viewport.left) * LOGICAL_WIDTH) /
+            (viewport.right - viewport.left);
+        y = ((GET_Y_LPARAM(lparam) - viewport.top) * LOGICAL_HEIGHT) /
+            (viewport.bottom - viewport.top);
+        if (world_island_at(x, y) >= 0) {
+            g_swallow_left_button_up = 1;
+            handle_click(window, x, y);
+            update_interaction_cursor();
+            InvalidateRect(window, NULL, FALSE);
+        }
+        return 0;
+    }
     case WM_LBUTTONUP: {
         RECT client;
         RECT viewport;
         int width;
         int height;
+        if (g_menu.screen == SCREEN_LOGO) return 0;
         int x;
         int y;
+        if (g_swallow_left_button_up) {
+            g_swallow_left_button_up = 0;
+            return 0;
+        }
         GetClientRect(window, &client);
         width = client.right - client.left;
         height = client.bottom - client.top;
@@ -311,6 +368,8 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         }
         return 0;
     case WM_KEYDOWN:
+        /* The original logo loop polls no input. */
+        if (g_menu.screen == SCREEN_LOGO) return 0;
         if (wparam == VK_ESCAPE) {
             if (g_menu.screen == SCREEN_LOAD_GAME) {
                 g_menu.screen = SCREEN_MAIN_MENU;

@@ -20,9 +20,10 @@ static void draw_iw_construct(HDC dc)
         size_t item_index = (size_t)g_iw_construct.page *
                             IW_CONSTRUCT_ITEMS_PER_PAGE + column;
         int pane_width = window->pane.right - window->pane.left;
-        /* FUN_0043aee8 starts at pane_width/8 and advances pane_width/4. */
+        /* FUN_0043aee8 starts at pane_width/8 and advances (pane_width >> 2)
+           per column: 31, 94, 157, 220 for the 255-px pane. */
         int center_x = window->pane.left + pane_width / 8 +
-                       pane_width * (int)column / IW_CONSTRUCT_ITEMS_PER_PAGE;
+                       (pane_width >> 2) * (int)column;
         if (item_index >= g_iw_construct_item_count) break;
         {
             uint16_t item_id = (uint16_t)(g_iw_construct_items[item_index] +
@@ -47,16 +48,16 @@ static void draw_iw_construct(HDC dc)
             }
         }
         if ((int)column == g_iw_construct.hovered_column) {
-            int hit_width = pane_width + 1;
+            /* FUN_0043aee8 frames x in [cx - W/8 + 5, cx + W/8 - 5] and
+               y in [top + 0x1a, bottom - 10], centred on the column. */
             RECT highlight = {
-                window->pane.left + hit_width * (int)column /
-                    IW_CONSTRUCT_ITEMS_PER_PAGE,
+                center_x - pane_width / 8 + 5,
                 window->pane.top + 0x1a,
-                window->pane.left + hit_width * ((int)column + 1) /
-                    IW_CONSTRUCT_ITEMS_PER_PAGE,
+                center_x + pane_width / 8 - 5,
                 window->pane.bottom - 10
             };
-            HBRUSH brush = CreateSolidBrush(RGB(119, 199, 234));
+            /* FUN_0042dd0f(1) = DAT_0049e140[1]: palette index 1. */
+            HBRUSH brush = CreateSolidBrush(g_island_palette[1]);
             FrameRect(dc, &highlight, brush);
             DeleteObject(brush);
         }
@@ -89,16 +90,33 @@ static void draw_iw_construct(HDC dc)
                             info_window->pane.left + 0x2d,
                             info_window->pane.top + 0x4b);
             }
+            {
+                /* FUN_0043b369 also prints the cost with the "%d" format at
+                   (0x25, 0x2d) (ev_16025862, ev_b8912db6). The text colour
+                   is not decoded. */
+                char cost_text[16];
+                (void)snprintf(cost_text, sizeof(cost_text), "%d",
+                               (int)info_item->building_tone_cost);
+                draw_bitmap_label(dc, cost_text,
+                                  info_window->pane.left + 0x25,
+                                  info_window->pane.top + 0x2d,
+                                  RGB(185, 205, 220));
+            }
         }
         if (item_id < PAD_CATALOG_MAX_ITEMS &&
             g_building_descriptions[item_id][0] != '\0') {
-            int text_width = (info_window->pane.right - info_window->pane.left) - 0x4f;
-            int text_height = info_window->pane.bottom - info_window->pane.top - 0x60;
-            int line_height = (int)g_bitmap_font.height + 2;
+            /* FUN_0043b369 wraps through FUN_0043b333 (same body as
+               FUN_0043954d): x = 6, right bound 173, first top = y + 1 + h
+               from y = 0x58, pitch h + 1 (ev_ddd2a7e7, ev_342f06e5). */
+            int text_width = 173 - 6;
+            int text_height = info_window->pane.bottom - info_window->pane.top - 0x58;
+            /* SMFONT (height 8), palette index 6: first top = 0x58 + 9. */
+            int line_height = (int)g_small_font.height + 1;
             int max_lines = line_height > 0 ? text_height / line_height : 0;
-            draw_wrapped_bitmap_label(dc, g_building_descriptions[item_id],
-                info_window->pane.left + 10, info_window->pane.top + 0x58,
-                text_width, max_lines, RGB(232, 236, 244));
+            draw_wrapped_small_label(dc, g_building_descriptions[item_id],
+                info_window->pane.left + 6,
+                info_window->pane.top + 0x58 + line_height,
+                text_width, max_lines, line_height, g_island_palette[6]);
         }
     }
 }
@@ -155,6 +173,36 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
         y += fall_ticks + (fall_ticks * fall_ticks) / 0x28;
     }
 
+    /* Flag 0x010 (set by FUN_004528ca at placement, cleared at +0x48 == 100)
+       is the native placement ramp. Below tick 84 the solidpad frame recolors
+       the ground under its silhouette through a haze table, then every later
+       layer is shifted down by a decaying offset; later layers are blitted
+       through the same table, whose level follows FUN_0040bf98's +0x48 rule.
+       The type-1 "pool" variant, the +0x58 stipple levels and flag 0x100 are
+       not ported. */
+    if ((runtime_location->source_flags & 0x010U) != 0 &&
+        scale_16_16 == 0x10000U) {
+        int pose_ticks = runtime_location->source_value_48;
+        int pose_selector = runtime_location->source_value_14 != 4 ? 1 : 0;
+        int pose_level = pose_ticks < 16 ? pose_ticks / 2
+                       : pose_ticks > 84 ? (100 - pose_ticks) / 2 : 7;
+        if (pose_ticks >= 0 && pose_ticks <= 100) {
+            if (pose_ticks < 84) {
+                const PadCatalogItem *pose_pad = pad_catalog_find(
+                    &g_pad_catalog, (uint16_t)raw_id);
+                uint32_t pad_frame = pose_pad != NULL && pose_pad->size >= 0
+                    ? (uint32_t)pose_pad->size : 0U;
+                int remaining = 84 - pose_ticks;
+                recolor_under_sprite(dc, &g_solidpad_art, pad_frame, x, y,
+                                     pose_selector, pose_level);
+                y += remaining < 8 ? (remaining * remaining) / 8
+                                   : 2 * remaining - 8;
+            }
+            g_sprite_haze_selector = pose_selector;
+            g_sprite_haze_level = pose_level;
+        }
+    }
+
     /* FUN_0040bf98 draws the static/base item layer and then the CHUG layer.
        The source divides the object's +0x3a progress by CHUG speed. The menu
        timer is only a provisional source for that per-object counter. */
@@ -197,16 +245,9 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
         }
     }
     if (item->cons.present) {
-        if (runtime_location->new_build_animation_ticks != 0) {
-            frame = building_render_cons_frame(
-                item, runtime_location->new_build_animation_ticks > 1U
-                    ? runtime_location->new_build_animation_ticks - 2U : 0U,
-                4U);
-        } else {
-            frame = building_render_cons_frame(item,
-                runtime_location->construction_progress,
-                runtime_location->source_flags);
-        }
+        frame = building_render_cons_frame(item,
+            runtime_location->construction_progress,
+            runtime_location->source_flags);
         if (frame < sheet->frame_count) {
             draw_sprite_scaled(dc, sheet, frame, x, y, scale_16_16);
             drew = 1;
@@ -310,6 +351,7 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
             drew = 1;
         }
     }
+    g_sprite_haze_level = -1;
     /* FUN_0040bf98 draws CRUMBLE after the item's data layers on the full-size
        in-world path. The overlay runs for flag 0x080 through the destruction
        timer and uses a nine-frame band for each pad size (class 1 uses band 4). */
@@ -759,6 +801,83 @@ static void draw_hall_feature_icons(HDC dc, const WindowTemplate *info,
     }
 }
 
+/* FUN_004118df call at 0x440b2a: TASKICON frame 8 at (x,20), 6x55, inset 2,
+   vertical (dir 1): interior x+2..x+4 by y+22..y+73, filled from the bottom
+   by ftol(51 * stock / cap), the remaining top part painted with palette
+   index 0. cap = FUN_0045cd27 = 50 + 25 * L, L = short +0x4a of the
+   building's own location entry (taken as source_capacity_4a: interpretation;
+   the 2 px interior width follows the pushed arguments and has no visual
+   cross-check). */
+static void draw_building_stock_gauge(HDC dc, const WindowTemplate *info,
+                                      int x, uint16_t stock, int16_t level)
+{
+    const int interior_height = 55 - 4;
+    int32_t capacity = (int32_t)level * 25 + 50;
+    int filled;
+    int gauge_x = info->pane.left + x;
+    int gauge_y = info->pane.top + 20;
+
+    if (g_task_icon_art.frame_count <= 8U || capacity <= 0) return;
+    filled = (int32_t)stock >= capacity ? interior_height :
+        (int)((int64_t)interior_height * stock / capacity);
+    draw_sprite(dc, &g_task_icon_art, 8U, gauge_x, gauge_y);
+    if (filled < interior_height) {
+        fill_rect(dc, gauge_x + 2, gauge_y + 2, gauge_x + 4,
+                  gauge_y + 2 + (interior_height - filled),
+                  g_island_palette[0]);
+    }
+}
+
+/* FUN_0041179e (calls 0x440d96/0x440eac): 3x55 vertical segment, filled from
+   the bottom by ftol(55 * ratio), outlined in palette index 1 with the
+   interior (1 px inset) in `colour`. Nothing is drawn for a zero-length fill. */
+static void draw_spell_cost_bar(HDC dc, int left, int top, int cost,
+                                int32_t capacity, int colour)
+{
+    const int height = 55;
+    int filled;
+    int bar_top;
+    if (capacity <= 0 || cost <= 0) return;
+    filled = cost >= capacity ? height : (int)((int64_t)height * cost / capacity);
+    if (filled <= 0) return;
+    bar_top = top + height - filled;
+    fill_rect(dc, left, bar_top, left + 3, top + height, g_island_palette[1]);
+    if (filled > 2) {
+        fill_rect(dc, left + 1, bar_top + 1, left + 2, top + height - 1,
+                  g_island_palette[colour]);
+    }
+}
+
+/* FUN_00440567 draws these only for item 0x2f while this+0x74 >= 0 (spell
+   row s): bar 1 at x=15 is CryCost (spells.txt +0x24) against the site stock
+   +0x2a, bar 2 at x=42 is MagCost (+0x22, x2/3 when the owner's mask bit 0x100
+   is set) against +0x2c; both over 50 + 25 * L. Colour 2 when the cost exceeds
+   the stock, otherwise 4. The pointer-hover trigger for s is interpreted
+   from message 0x350d's spell-button context. */
+static void draw_spell_cost_bars(HDC dc, const WindowTemplate *info,
+                                 const GameRuntimeLocation *location)
+{
+    uint16_t magic_cost;
+    uint16_t crystal_cost;
+    int32_t capacity = (int32_t)location->source_capacity_4a * 25 + 50;
+    int owner = location->owner_id;
+    int magic;
+
+    if (g_hovered_spell_kind < 0 ||
+        !game_session_cast_kind_costs(g_hovered_spell_kind, &magic_cost,
+                                      &crystal_cost)) return;
+    magic = magic_cost;
+    if (owner >= 0 && owner < GAME_START_PLAYER_COUNT &&
+        (g_game_session.economy[owner].special_feature_island_mask & 0x100U))
+        magic = magic * 2 / 3;
+    draw_spell_cost_bar(dc, info->pane.left + 15, info->pane.top + 20,
+        crystal_cost, capacity,
+        (int)crystal_cost > (int)location->resource_stock[1] ? 2 : 4);
+    draw_spell_cost_bar(dc, info->pane.left + 42, info->pane.top + 20,
+        magic, capacity,
+        magic > (int)location->resource_stock[2] ? 2 : 4);
+}
+
 /* Non-summary variant (P+0x18 != -1): bldgage frame 0 at (W/2-18, 0), 36x8,
    inset 2, filled by +0x34 over FUN_00450978's maximum unless the item is
    0x2a or the owner is 4; tonecrys frame 4 at (11,17); for item 0x2f also
@@ -793,13 +912,34 @@ static void draw_building_info_extras(HDC dc, const WindowTemplate *info,
                       g_island_palette[0]);
         }
     }
+    /* BILDICON dots: N = source +0x60 (the 0..9 instance id FUN_0045ee26
+       assigns among same-item rows, ev_a4a51711), frame clamp(owner+4,4,7),
+       x0 = W/2-40, y = 5, step 8, five per row. Reading N as a count of
+       dots is literal from the loop; the numbering meaning is inferred. */
+    {
+        int icon_frame = location->owner_id + 4;
+        int dot;
+        int dots = location->source_category_slot_60;
+        if (icon_frame < 4) icon_frame = 4;
+        if (icon_frame > 7) icon_frame = 7;
+        for (dot = 0; dot < dots; ++dot) {
+            draw_sprite(dc, &g_building_number_art, (uint32_t)icon_frame,
+                        info->pane.left + base - 40 + 8 * (dot % 5),
+                        info->pane.top + 5 + 8 * (dot / 5));
+        }
+    }
     if (g_tone_crys_art.frame_count > 4U) {
         draw_sprite(dc, &g_tone_crys_art, 4U,
                     info->pane.left + 11, info->pane.top + 17);
     }
+    draw_building_stock_gauge(dc, info, 8, location->resource_stock[1],
+                              location->source_capacity_4a);
     if (item == 0x2f && g_magctone_art.frame_count > 4U) {
         draw_sprite(dc, &g_magctone_art, 4U,
                     info->pane.left + 38, info->pane.top + 17);
+        draw_building_stock_gauge(dc, info, 35, location->resource_stock[2],
+                                  location->source_capacity_4a);
+        draw_spell_cost_bars(dc, info, location);
     }
     draw_hall_feature_icons(dc, info, item, location->owner_id);
 }

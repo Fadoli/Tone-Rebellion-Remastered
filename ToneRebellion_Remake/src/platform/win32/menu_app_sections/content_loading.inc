@@ -390,6 +390,29 @@ static int load_menu_art(char *error, size_t error_capacity)
                 g_bridge_sound = NULL;
             }
         }
+        {
+            static const char *const cast_sound_names[10] = {
+                "data\\pspell.wav", "data\\sspell.wav", "data\\mspell.wav",
+                "data\\lspell.wav", "data\\fltarmor.wav", "data\\fastprod.wav",
+                "data\\sacrif.wav", "data\\killbeas.wav", "data\\destsupp.wav",
+                "data\\ascend.wav"
+            };
+            unsigned int cast_index;
+            for (cast_index = 0; cast_index < 10U; ++cast_index) {
+                const CobMember *cast_member = cob_archive_find(&archive,
+                    cast_sound_names[cast_index]);
+                if (cast_member == NULL || cast_member->length < 44) continue;
+                g_cast_sounds[cast_index] =
+                    (unsigned char *)malloc(cast_member->length);
+                if (g_cast_sounds[cast_index] != NULL &&
+                    !cob_archive_read_member(&archive, cast_member,
+                        g_cast_sounds[cast_index], cast_member->length,
+                        error, error_capacity)) {
+                    free(g_cast_sounds[cast_index]);
+                    g_cast_sounds[cast_index] = NULL;
+                }
+            }
+        }
     }
     {
         const CobMember *font = cob_archive_find(&archive, "data\\bgoutfnt.fnt");
@@ -409,6 +432,25 @@ static int load_menu_art(char *error, size_t error_capacity)
         }
         free(bytes);
     }
+    {
+        const CobMember *font = cob_archive_find(&archive, "data\\smfont.fnt");
+        unsigned char *bytes = NULL;
+        if (font == NULL) {
+            (void)snprintf(error, error_capacity, "data\\smfont.fnt was not found in TONE01.COB");
+            goto done;
+        }
+        bytes = (unsigned char *)malloc(font->length);
+        if (bytes == NULL ||
+            !cob_archive_read_member(&archive, font, bytes, font->length,
+                                     error, error_capacity) ||
+            !bitmap_font_init(&g_small_font, bytes, font->length,
+                              error, error_capacity)) {
+            free(bytes);
+            goto done;
+        }
+        free(bytes);
+    }
+    (void)load_logo_splash(&archive);
     memcpy(g_newgame_palette, newgame_palette, sizeof(g_newgame_palette));
     memcpy(g_map_palette, mainmap_palette, sizeof(g_map_palette));
     success = 1;
@@ -426,6 +468,7 @@ done:
         free_sprite_sheet(&g_small_islands);
         free_sprite_sheet(&g_load_save_art);
         bitmap_font_free(&g_bitmap_font);
+        bitmap_font_free(&g_small_font);
         free(g_button_sound);
         g_button_sound = NULL;
         free(g_fltbuild_sound);
@@ -442,6 +485,13 @@ done:
         g_levdeath_sound = NULL;
         free(g_bridge_sound);
         g_bridge_sound = NULL;
+        {
+            unsigned int cast_index;
+            for (cast_index = 0; cast_index < 10U; ++cast_index) {
+                free(g_cast_sounds[cast_index]);
+                g_cast_sounds[cast_index] = NULL;
+            }
+        }
     }
     return success;
 }
@@ -523,8 +573,12 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     }
     update_window_title(window);
     /* The original main loop requests `start` without a repeat flag before
-       the title menu settles on `ambi1`. */
-    set_background_tune_once("start");
+       the title menu settles on `ambi1`, after the logo when float.cfg has
+       the `logo` keyword (the tune is started when the splash ends). */
+    if (g_logo_pixels != NULL)
+        g_menu.screen = SCREEN_LOGO;
+    else
+        set_background_tune_once("start");
     (void)SetTimer(window, 1, 33, NULL);
     (void)SetTimer(window, 2, 1000, NULL);
     ShowWindow(window, show_command);
@@ -571,6 +625,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_bridge_trigger_art);
     free_sprite_sheet(&g_activation_icon_art);
     free_sprite_sheet(&g_building_gauge_art);
+    free_sprite_sheet(&g_building_number_art);
     free_sprite_sheet(&g_temp_hole_art);
     free_sprite_sheet(&g_build_cycle_art);
     free_sprite_sheet(&g_task_scroll_art);
@@ -613,6 +668,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_newgame_captions);
     free_sprite_sheet(&g_tribe_descriptions);
     bitmap_font_free(&g_bitmap_font);
+    bitmap_font_free(&g_small_font);
     stop_background_tune();
     (void)PlaySoundA(NULL, NULL, 0);
     free(g_button_sound);
@@ -623,6 +679,11 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free(g_fltdeath_sound);
     free(g_levdeath_sound);
     free(g_bridge_sound);
+    {
+        unsigned int cast_index;
+        for (cast_index = 0; cast_index < 10U; ++cast_index)
+            free(g_cast_sounds[cast_index]);
+    }
     free(g_island_height_data);
     return (int)message.wParam;
 }

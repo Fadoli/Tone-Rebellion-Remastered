@@ -195,6 +195,59 @@ static int draw_island_leviathan_spawn_effect(
     return 1;
 }
 
+/* FUN_0044034e fills six panel slots from the selected site's eight floater
+   links (+4..+0x12): kind 0 fills slots 0..2, kind 1 slots 3..4, kind 2 slot 5
+   (no per-kind cap in the source), where the kind is the low nibble of the
+   floater's +0x0a (the port's unit level). FUN_00440567 then draws each
+   present floater through FUN_0042704b at the fixed pane offsets below; the
+   selected-floater highlight path is not ported. */
+static void draw_building_slot_floaters(HDC dc, const WindowTemplate *info,
+                                        const GameRuntimeLocation *location)
+{
+    static const int x_default[6] = {230, 230, 230, 195, 195, 160};
+    static const int y_default[6] = {21, 55, 89, 35, 72, 55};
+    static const int x_hall[6] = {220, 999, 999, 220, 999, 170};
+    static const int y_hall[6] = {28, 999, 999, 82, 999, 55};
+    int16_t slots[6] = {-1, -1, -1, -1, -1, -1};
+    const int *xs = location->record_value_10 == 0x2f ? x_hall : x_default;
+    const int *ys = location->record_value_10 == 0x2f ? y_hall : y_default;
+    unsigned int kind;
+    unsigned int slot;
+
+    if (!g_game_session_valid || location->source_location_slot_18 == -1) return;
+    for (kind = 0; kind < 3U; ++kind) {
+        unsigned int k = kind == 1U ? 3U : kind == 2U ? 5U : 0U;
+        int link;
+        for (link = 0; link < 8; ++link) {
+            int16_t id = location->charge_floater_slots[link];
+            if (id < 0 || (unsigned int)id >= g_game_session.floater_count ||
+                (g_game_session.floaters[id].attack_level_flags & 0x0fU) != kind)
+                continue;
+            if (k < 6U) slots[k] = id;
+            ++k;
+        }
+    }
+    for (slot = 0; slot < 6U; ++slot) {
+        const GameFloaterStart *floater;
+        const SpriteSheet *body_art;
+        const SpriteSheet *leg_art;
+        int x = info->pane.left + xs[slot];
+        int y = info->pane.top + ys[slot];
+        if (slots[slot] < 0 || xs[slot] == 999) continue;
+        floater = &g_game_session.floaters[slots[slot]];
+        if (floater->type_index >= 4U) continue;
+        body_art = floater->facing_left
+            ? &g_initial_floater_bodies_flipped[floater->type_index]
+            : &g_initial_floater_bodies[floater->type_index];
+        leg_art = floater->facing_left
+            ? &g_initial_floater_legs_flipped[floater->type_index]
+            : &g_initial_floater_legs[floater->type_index];
+        if (leg_art->frame_count != 0)
+            draw_sprite(dc, leg_art, island_floater_legs_frame(floater), x, y);
+        if (body_art->frame_count != 0) draw_sprite(dc, body_art, 0, x, y);
+    }
+}
+
 static void render_island_view(HDC dc)
 {
     const int image_top = 0;
@@ -911,6 +964,7 @@ static void render_island_view(HDC dc)
                 draw_building_info_extras(dc, info, selected_location,
                     (uint8_t)g_menu.selected_map_island,
                     (uint16_t)g_selected_location);
+                draw_building_slot_floaters(dc, info, selected_location);
                 if (saved_info_dc != 0) RestoreDC(dc, saved_info_dc);
             }
         }
@@ -1194,7 +1248,7 @@ static void draw_location_action_panel(HDC dc)
             HBRUSH fill = CreateSolidBrush(fill_color);
             HBRUSH border = CreateSolidBrush(RGB(168, 190, 224));
             int text_width = measure_bitmap_text(NULL, label, strlen(label));
-            int text_height = (int)g_bitmap_font.height;
+            int text_height = (int)g_small_font.height;
             if (fill != NULL) {
                 (void)FillRect(dc, &bridge_button_rect, fill);
                 DeleteObject(fill);
@@ -1234,7 +1288,7 @@ static void draw_location_action_panel(HDC dc)
             }
             {
                 int text_width = measure_bitmap_text(NULL, label, strlen(label));
-                int text_height = (int)g_bitmap_font.height;
+                int text_height = (int)g_small_font.height;
                 draw_bitmap_label(dc, label,
                     button_rect.left + ((button_rect.right - button_rect.left) -
                                         text_width) / 2,
@@ -1269,7 +1323,7 @@ static void draw_location_action_panel(HDC dc)
     if (g_cryptic_text[1][0] != '\0') {
         size_t text_length = strlen(g_cryptic_text[1]);
         int text_width = measure_bitmap_text(NULL, g_cryptic_text[1], text_length);
-        int text_height = (int)g_bitmap_font.height;
+        int text_height = (int)g_small_font.height;
         int pane_width = text_panel->pane.right - text_panel->pane.left;
         int pane_height = text_panel->pane.bottom - text_panel->pane.top;
         draw_bitmap_label(dc, g_cryptic_text[1],

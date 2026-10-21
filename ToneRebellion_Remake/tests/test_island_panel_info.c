@@ -155,7 +155,7 @@ int main(int argc, char **argv)
     assert(island_panel_info_task_gauge_fill(1, 3, 70, &gauge_fill));
     assert(gauge_fill == 23);
     assert(island_panel_info_task_gauge_fill(1, 4, 70, &gauge_fill));
-    assert(gauge_fill == 18);
+    assert(gauge_fill == 17);
     assert(island_panel_info_task_gauge_fill(3, 4, 70, &gauge_fill));
     assert(gauge_fill == 52);
     assert(island_panel_info_task_gauge_fill(3, 3, 70, &gauge_fill));

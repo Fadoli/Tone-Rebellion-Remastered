@@ -18,6 +18,7 @@ static int load_island_surface(int island_id, int map_island_index,
     SpriteSheet bridge_candidate = {0};
     SpriteSheet activation_icon_candidate = {0};
     SpriteSheet building_gauge_candidate = {0};
+    SpriteSheet building_number_candidate = {0};
     SpriteSheet temp_hole_candidate = {0};
     SpriteSheet build_cycle_candidate = {0};
     SpriteSheet task_scroll_candidate = {0};
@@ -27,6 +28,7 @@ static int load_island_surface(int island_id, int map_island_index,
     SpriteSheet tone_crys_candidate = {0};
     SpriteSheet magctone_candidate = {0};
     SpriteSheet crumble_candidate = {0};
+    SpriteSheet solidpad_candidate = {0};
     SpriteSheet hall_stock_candidate = {0};
     SpriteSheet repair_button_candidate = {0};
     SpriteSheet upgrade_button_candidate = {0};
@@ -140,6 +142,8 @@ static int load_island_surface(int island_id, int map_island_index,
                            &activation_icon_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\bldgage.shp", palette,
                            &building_gauge_candidate, error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\bildicon.shp", palette,
+                           &building_number_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\temphol0.shp", palette, &temp_hole_candidate,
                            error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\scarrow0.shp", palette, &build_cycle_candidate,
@@ -158,6 +162,8 @@ static int load_island_surface(int island_id, int map_island_index,
                            &magctone_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\crumble.shp", palette,
                            &crumble_candidate, error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\solidpad.shp", palette,
+                           &solidpad_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\thbutt.shp", palette, &hall_stock_candidate,
                            error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\repair.shp", palette,
@@ -438,6 +444,7 @@ static int load_island_surface(int island_id, int map_island_index,
     free_sprite_sheet(&g_bridge_trigger_art);
     free_sprite_sheet(&g_activation_icon_art);
     free_sprite_sheet(&g_building_gauge_art);
+    free_sprite_sheet(&g_building_number_art);
     free_sprite_sheet(&g_temp_hole_art);
     free_sprite_sheet(&g_build_cycle_art);
     free_sprite_sheet(&g_task_scroll_art);
@@ -447,6 +454,7 @@ static int load_island_surface(int island_id, int map_island_index,
     free_sprite_sheet(&g_tone_crys_art);
     free_sprite_sheet(&g_magctone_art);
     free_sprite_sheet(&g_crumble_art);
+    free_sprite_sheet(&g_solidpad_art);
     free_sprite_sheet(&g_hall_stock_art);
     free_sprite_sheet(&g_repair_button_art);
     free_sprite_sheet(&g_upgrade_button_art);
@@ -539,6 +547,8 @@ static int load_island_surface(int island_id, int map_island_index,
     memset(&activation_icon_candidate, 0, sizeof(activation_icon_candidate));
     g_building_gauge_art = building_gauge_candidate;
     memset(&building_gauge_candidate, 0, sizeof(building_gauge_candidate));
+    g_building_number_art = building_number_candidate;
+    memset(&building_number_candidate, 0, sizeof(building_number_candidate));
     g_temp_hole_art = temp_hole_candidate;
     memset(&temp_hole_candidate, 0, sizeof(temp_hole_candidate));
     g_build_cycle_art = build_cycle_candidate;
@@ -557,6 +567,8 @@ static int load_island_surface(int island_id, int map_island_index,
     memset(&magctone_candidate, 0, sizeof(magctone_candidate));
     g_crumble_art = crumble_candidate;
     memset(&crumble_candidate, 0, sizeof(crumble_candidate));
+    g_solidpad_art = solidpad_candidate;
+    memset(&solidpad_candidate, 0, sizeof(solidpad_candidate));
     g_hall_stock_art = hall_stock_candidate;
     memset(&hall_stock_candidate, 0, sizeof(hall_stock_candidate));
     g_repair_button_art = repair_button_candidate;
@@ -609,6 +621,7 @@ done:
     free_sprite_sheet(&bridge_candidate);
     free_sprite_sheet(&activation_icon_candidate);
     free_sprite_sheet(&building_gauge_candidate);
+    free_sprite_sheet(&building_number_candidate);
     free_sprite_sheet(&temp_hole_candidate);
     free_sprite_sheet(&build_cycle_candidate);
     free_sprite_sheet(&task_scroll_candidate);
@@ -618,6 +631,7 @@ done:
     free_sprite_sheet(&tone_crys_candidate);
     free_sprite_sheet(&magctone_candidate);
     free_sprite_sheet(&crumble_candidate);
+    free_sprite_sheet(&solidpad_candidate);
     free_sprite_sheet(&hall_stock_candidate);
     free_sprite_sheet(&repair_button_candidate);
     free_sprite_sheet(&upgrade_button_candidate);

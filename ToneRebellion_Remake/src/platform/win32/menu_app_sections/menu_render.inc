@@ -61,6 +61,11 @@ static void draw_configured_buttons(HDC dc, int state, const char *shape_id,
         int frame;
         if (!template_is_in_state(window, state) ||
             strcmp(window->shape_id, shape_id) != 0 || window->shape_frame < 0) continue;
+        /* FUN_004489c0 (message 1) sends message 2 to RESUME when the resume
+           file has no valid header; for the generic button class message 2
+           clears +0x3c/+0x38 and FUN_0042a55d then skips the draw (hidden). */
+        if (state == 0 && strcmp(window->name, "RESUME") == 0 &&
+            !g_resume_available) continue;
         frame = window->shape_frame;
         if (state == 0) {
             int help_index = template_help_index(window);
@@ -173,8 +178,11 @@ static void world_island_position(const WorldIsland *island, int *x, int *y)
     float x_delta = (float)(cos((double)angle) * island->range * scale_x);
     float y_delta = (float)(sin((double)angle) * island->range * scale_y);
     float z_delta = (float)island->z * scale_y;
-    *x = 320 + (int)(x_delta + 0.5f);
-    *y = 240 - (int)(y_delta + z_delta + 0.5f);
+    /* FUN_00470259 sets the centre to half the WORLDVIEW pane (0 0 639 479,
+       inclusive coordinates as the other Iw* panes): cx = 639 / 2 and
+       cy = 479 / 2 + 15 (this+0x784/0x786). */
+    *x = 319 + (int)(x_delta + 0.5f);
+    *y = 254 - (int)(y_delta + z_delta + 0.5f);
 }
 
 static uint8_t world_map_player_mask(void)

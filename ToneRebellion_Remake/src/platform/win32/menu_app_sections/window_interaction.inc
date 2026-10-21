@@ -69,12 +69,13 @@ static void handle_click(HWND window, int x, int y)
         }
     } else if (g_menu.screen == SCREEN_WORLD_MAP) {
         int clicked_island = world_island_at(x, y);
+        /* FUN_00470fe7 (msg 6) enters the hovered island (+0x76, set only by
+           the mouse-move hit test FUN_00470f67) when FUN_0047117d says it is
+           accessible: one click, no select-then-open step. open_island_view
+           applies the access check. */
         if (clicked_island >= 0) {
-            if (clicked_island == g_menu.selected_map_island) {
-                (void)open_island_view(window, clicked_island);
-            } else {
-                g_menu.selected_map_island = clicked_island;
-            }
+            g_menu.selected_map_island = clicked_island;
+            (void)open_island_view(window, clicked_island);
         }
     } else if (g_menu.screen == SCREEN_ISLAND) {
         if (location_grab_button_at(x, y) &&

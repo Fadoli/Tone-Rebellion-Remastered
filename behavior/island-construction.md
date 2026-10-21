@@ -51,3 +51,29 @@ L'audit propriétaire/champs confirme que `game_session_place_building` lie `own
 **Cible de construction possédée :** la comparaison directe de `FUN_004526de` autorise un site si le propriétaire natif `+0x14` vaut `-1` ou le joueur demandeur, si l'ID runtime vaut 0 ou 1, et si le bit de visibilité du joueur est présent à `+0x22`. `FUN_00422031` applique cette garde avant la suite de l'affectation. Le port n'exige donc plus un site strictement sans propriétaire dans l'ouverture de `IWConstruct`, le calcul de progression, le dépôt du Build Tone, l'invalidation différée de la tâche et la pose du bâtiment; il conserve les contraintes d'île, de classe, de taille et d'ID 0/1. Evidences REA : `FUN_004526de` `ev_779f88d063ef4bbea416bd7d588842ec62066092acdedfddb08c086f86bb1599`, `FUN_00422031` `ev_858c591efc073d5ba347f88912d81d59586825f353beaf3519db48a41718048c`.
 
 **Capacité et propriétaire des bâtiments de staff :** `FUN_0045ee26` scanne 48 lignes dans le record runtime de l'île courante (`in_ECX`), pas dans un registre global par joueur. Chaque ligne est partagée par les sites de cette île; les sous-slots 0..9 sont suivis séparément par ID runtime d'item. Si aucune ligne n'est libre, `FUN_004528ca` retourne avant d'écrire `+0x18`; `FUN_00452859` ignore ce retour et signale quand même le succès. Le site peut donc rester actif sans lien source. Si les dix sous-slots d'un type sont pleins mais qu'une ligne source reste libre, l'allocateur renvoie cette ligne avec le sous-slot 0. Le constructeur écrit le joueur passé en `+0x14`; son allocateur émet une assertion si ce propriétaire ne correspond pas à l'indice d'île. Le chemin CONSTR du remake exige toujours que requête et floater aient le même joueur. **Correction du port :** la réservation des lignes est maintenant locale à l'île, tandis que le regroupement des sous-slots suit l'ID runtime d'item; la capacité pleine conserve le comportement natif et laisse le lien source à `-1`. Une régression couvre la réservation d'une ligne libre sur une seconde île après saturation de la première. Evidences REA : `FUN_0045ee26` `ev_b6e3be01e911adf9f0f08ebd638a9eaddda3acef10bce2a726f0ce973741209b`, `FUN_004528ca` `ev_48b4bcba9562b96d86e08e3898333b2848f2054141dcd10e2ad9becb516044e3`, `FUN_00452859` `ev_a571ddb810f57eb82ddb7110d751957927677498282088ff2bc3d5256611b345`, `FUN_004527ee` `ev_a276c027673154b0589645e6ce25cec2a9c53dc1f0bbedd38a738330b881819d`; vérification des champs `FUN_00452fcb` `ev_6dcc14b1bd1727577aa60640c53abacf5e04373b65f897772c68be47b7059f69`.
+
+## Revue d'`IWConstruct`/`IWConstructInfo` (REA, ev_de83ec3f…, ev_ba3b9c3…, ev_7a0084a7…, ev_d557825c…)
+
+Concordances: quatre objets par page, ordre des candidats (40, 37, 39, 38, 44..47) et seuils de `FUN_0045f121`,
+ancrages (objet en `(cx, H-0x23)`, icône de coût en `(cx, H-0x0f)` à l'échelle 0x8000, cadre `min(coût-1, 0x31)`),
+détail (objet en `(W-0x37, 0x55)` à pleine échelle, icône de coût en `(0x2d, 0x4b)`, description à (10, 0x58)),
+`BuildCycle` seulement au-delà de 4 objets, aucun état grisé, clic qui envoie le message 0x34 puis ferme.
+Corrigé: centres de colonne `W/8 + k * (W >> 2)` (31, 94, 157, 220 pour W = 255) au lieu de `W * k / 4`; cadre de survol
+centré sur la colonne (`cx - W/8 + 5` à `cx + W/8 - 5`, `haut + 0x1a` à `bas - 10`) au lieu de la colonne entière;
+nombre du coût `"%d"` dessiné en `(0x25, 0x2d)` dans le détail (`FUN_00472ca0`, `FUN_004289c0`; couleur non décodée).
+Écarts restants: le natif dessine le cadre de survol avant l'objet (le port après), couleur du cadre inconnue (le port
+garde RGB(119, 199, 234)), condition de l'icône de coût `>= 0` natif contre `> 0` dans le port, formule du test de
+survol natif non décompilée (le port utilise `W + 1`), fermeture inconditionnelle au clic (le port reste ouvert si la
+file refuse, écart assumé), largeur et lignes du renvoi de la description non établies.
+
+### Survol, couleur du cadre et description (REA, ev_c2f8746e…, ev_d9ec1bc8…, ev_14b842bd…, ev_24aea2d9…, ev_ddd2a7e7…, ev_342f06e5…)
+
+Observation: le message 10 appelle `FUN_0043ad79(x, y)`: survol valide si `gauche <= x <= droite` et `haut + 0x1a <= y <= bas - 10`;
+`colonne = (x - gauche) / (W >> 2)` avec `W = droite - gauche`; une cinquième colonne (derniers pixels) est écrite puis rejetée:
+aucun survol (W = 255: `x - gauche` de 252 à 255). Le clic (message 6) ne retest pas la position et utilise `+0x70`. Le
+cadre est dessiné avec `FUN_0042dd0f(1)` = `DAT_0049e140[1]` = indice de palette 1 (même que le contour de survol de
+l'inventaire), avant l'objet de la colonne. La description passe par `FUN_00428baa` avec le rappel `FUN_0043b333`
+(corps identique à `FUN_0043954d`): `x = 6`, borne droite 173 (largeur 167), première ligne en `0x58 + 1 + h`, pas `h + 1`.
+Port: découpe en colonnes par `(x - gauche) / (W >> 2)` (colonne 5 sans survol), cadre en indice de palette 1, description en
+`x = 6`, largeur 167, première ligne `haut + 0x58 + h + 1`, pas `h + 1` (`draw_wrapped_bitmap_label_pitch`).
+Écarts restants: le cadre est dessiné après l'objet (natif avant), couleur de texte de la description non décodée.

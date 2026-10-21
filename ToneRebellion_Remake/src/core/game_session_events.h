@@ -104,6 +104,20 @@ int game_session_queue_cast_action_target(GameSession *session,
                                           uint8_t action_subtype,
                                           int16_t target_floater_index);
 int game_session_cast_kind_for_action(uint8_t owner, uint8_t action_subtype);
+/* effects.txt SOUND of the effect FUN_0041660b spawns for FA_Cast `kind`:
+   0..3 are the owner-indexed PSPELL/SSPELL/MSPELL/LSPELL defaults, then
+   FLTARMOR, FASTPROD, SACRIF, KILLBEAS, DESTSUPP, ASCEND. */
+enum {
+    GAME_CAST_SOUND_COUNT = 10
+};
+int game_session_cast_sound_id(uint8_t kind, uint8_t owner);
+/* `island` is the caster's island: the sound is only audible while that island
+   is being viewed. */
+int game_session_queue_cast_audio(GameSession *session, uint8_t island,
+                                  uint8_t sound);
+/* spells.txt MagCost/CryCost for a native spell kind 0..21. */
+int game_session_cast_kind_costs(int kind, uint16_t *magic_cost,
+                                 uint16_t *crystal_cost);
 unsigned int game_session_dispatch_cast_actions(GameSession *session);
 /* BC_OnOff's established message route. */
 int game_session_queue_onoff_action(GameSession *session,

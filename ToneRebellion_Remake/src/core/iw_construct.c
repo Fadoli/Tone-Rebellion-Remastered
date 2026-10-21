@@ -136,12 +136,13 @@ void iw_construct_mouse_move(IwConstructState *state, const WindowPane *pane,
     if (pane->right >= pane->left && pane->bottom >= pane->top &&
         x >= pane->left && x <= pane->right && y >= pane->top + 0x1a &&
         y <= pane->bottom - 10) {
-        /* WindowPane bounds are inclusive, while GDI's RECT right edge is
-           exclusive. Include the last pointer pixel in the four-way split. */
-        pane_width = pane->right - pane->left + 1;
+        /* FUN_0043ad79: column = (x - left) / (W >> 2) with W = right - left;
+           a fifth column (the last W - 4 * (W >> 2) + 1 pixels) is rejected,
+           so it gives no hover. */
+        pane_width = (pane->right - pane->left) >> 2;
         if (pane_width > 0) {
-            column = (int32_t)(((int64_t)(x - pane->left) *
-                IW_CONSTRUCT_ITEMS_PER_PAGE) / pane_width);
+            column = (x - pane->left) / pane_width;
+            if (column >= IW_CONSTRUCT_ITEMS_PER_PAGE) column = -1;
             if (column >= 0 && column < IW_CONSTRUCT_ITEMS_PER_PAGE) {
                 item_index = (size_t)state->page * IW_CONSTRUCT_ITEMS_PER_PAGE +
                              (size_t)column;

@@ -260,7 +260,8 @@ int game_session_place_building(GameSession *session,
     runtime->construction_progress = 0;
     runtime->production_progress = 0;
     runtime->animation_rate = 1;
-    runtime->new_build_animation_ticks = 1;
+    /* The placement ramp is native flag 0x010 / +0x48, already set above. */
+    runtime->new_build_animation_ticks = 0;
     /* The native initializer leaves BARG's double at +0x50 untouched. */
     (void)game_session_recalculate_active_locations(session);
     game_session_refresh_player_maintenance_budgets(session);

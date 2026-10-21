@@ -38,7 +38,8 @@ enum { LOGICAL_WIDTH = 640, LOGICAL_HEIGHT = 480, ISLAND_NAME_COUNT = 15,
        SITE_TEXT_CAPACITY = 768 };
 enum { SITE_TEXT_POOL, SITE_TEXT_POOL_INFECT, SITE_TEXT_PRIME_POOL,
        SITE_TEXT_BRIDGE, SITE_TEXT_SUPPLY0 };
-enum { SCREEN_MAIN_MENU, SCREEN_NEW_GAME, SCREEN_WORLD_MAP, SCREEN_ISLAND, SCREEN_LOAD_GAME };
+enum { SCREEN_MAIN_MENU, SCREEN_NEW_GAME, SCREEN_WORLD_MAP, SCREEN_ISLAND, SCREEN_LOAD_GAME,
+       SCREEN_LOGO };
 enum { HELP_MAIN_NEWGAME, HELP_MAIN_RESUME, HELP_MAIN_LOAD, HELP_MAIN_EXIT,
        HELP_NEW_EXIT, HELP_NEW_WORLD, HELP_NEW_TRIBE0,
        HELP_NEW_TRIBE1, HELP_NEW_TRIBE2, HELP_NEW_TRIBE3, HELP_NEW_DIFFICULTY,
@@ -100,6 +101,8 @@ static SpriteSheet g_bridge_trigger_art;
 static SpriteSheet g_activation_icon_art;
 /* data/bldgage.shp (BLDGAGE): building damage gauge in IWLocInfo. */
 static SpriteSheet g_building_gauge_art;
+/* data/bildicon.shp (BILDICON): dots for training-building numbering. */
+static SpriteSheet g_building_number_art;
 static SpriteSheet g_temp_hole_art;
 static SpriteSheet g_build_cycle_art;
 static SpriteSheet g_task_scroll_art;
@@ -109,6 +112,7 @@ static SpriteSheet g_bildtone_art;
 static SpriteSheet g_tone_crys_art;
 static SpriteSheet g_magctone_art;
 static SpriteSheet g_crumble_art;
+static SpriteSheet g_solidpad_art;
 static SpriteSheet g_hall_stock_art;
 static SpriteSheet g_repair_button_art;
 static SpriteSheet g_upgrade_button_art;
@@ -148,17 +152,24 @@ static unsigned char *g_levbirth_sound;
 static unsigned char *g_fltdeath_sound;
 static unsigned char *g_levdeath_sound;
 static unsigned char *g_bridge_sound;
+/* PSPELL, SSPELL, MSPELL, LSPELL, FLTARMOR, FASTPROD, SACRIF, KILLBEAS,
+   DESTSUPP, ASCEND (GameCastSoundId order). */
+static unsigned char *g_cast_sounds[10];
 static char g_music_directory[MAX_PATH];
 static char g_current_tune[16];
 static int g_music_device_open;
 static int g_music_loops;
 static BitmapFont g_bitmap_font;
+/* data/smfont.fnt (8 px): the default UI font of IWTextInfo, the Diplomacy
+   caption and most panels (FUN_0042de0d returns &DAT_005c30b8); its ink value
+   is 243 and its colour is palette index 6 (FUN_0042da69). */
+static BitmapFont g_small_font;
 static char g_help_text[HELP_ENTRY_COUNT][1024];
 static char g_newgame_text[8][256];
 static char g_empty_glyph_text[256];
 static char g_empty_inventory_text[256];
 static char g_empty_task_text[256];
-static char g_task_label_text[4][256];
+static char g_task_label_text[5][256];
 static char g_task_stock_text[256];
 static char g_task_building_const_text[256];
 static char g_task_priority_text[3][256];
@@ -169,6 +180,8 @@ static char g_hall_work_label[64];
 static char g_hall_surplus_label[64];
 /* gamey.txt WORKER, AWAKE, LEVEL, HITS, STRENGTH, CHARGE (FUN_00429ebe). */
 static char g_unit_label_text[6][64];
+/* gamey.txt TRZERO and TRDOIT: Trade button hover captions (FUN_0043edac). */
+static char g_trade_caption_text[2][64];
 /* names.txt slots filled by FUN_0041d70d: tribes, then beasts. */
 static char g_tribe_names[5][12];
 static char g_beast_names[18][16];
@@ -208,6 +221,13 @@ static IslandLocationActionControl g_hovered_location_action =
 static int g_hovered_repair_control;
 static int g_hovered_upgrade_control;
 static int g_hovered_onoff_control;
+/* Native spell kind under BC_Spell1..8, or -1. FUN_00440567's cost bars read
+   the armed spell word (+0x74), set through message 0x350d (interpreted as
+   the spell button's mouse-over context). */
+static int g_hovered_spell_kind = -1;
+/* Set when a world-map press already acted: the matching release is dropped,
+   as the original pump never delivers it (FUN_00469f56). */
+static int g_swallow_left_button_up;
 static int g_hovered_location_grab;
 static int g_hovered_hall_stock = -1;
 static int g_hovered_island_button = -1;
@@ -276,11 +296,22 @@ static HDC g_sprite_source_dc;
 
 #include "menu_app_sections/hall_support_render.inc"
 
+/* The Hall, task, trade, inventory, unit-detail and construction panels draw
+   their text with SMFONT in palette index 6 (REA: callers of the 0x4014c9
+   accessor, see behavior/ui-fonts.md), so route their labels to it. */
+#define draw_bitmap_label(dc, text, x, y, color)     draw_small_label((dc), (text), (x), (y), g_island_palette[6])
+#define draw_bitmap_label_pixels(text, x, y, color)     draw_small_label_pixels((text), (x), (y), g_island_palette[6])
+#define measure_bitmap_text(context, text, length)     measure_small_text((text), (length))
 #include "menu_app_sections/hall_panel_render.inc"
 
 #include "menu_app_sections/island_item_render.inc"
 
 #include "menu_app_sections/island_view_render.inc"
+#undef draw_bitmap_label
+#undef draw_bitmap_label_pixels
+#undef measure_bitmap_text
+
+#include "menu_app_sections/logo_splash.inc"
 
 #include "menu_app_sections/render_dispatch.inc"
 

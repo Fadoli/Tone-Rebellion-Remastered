@@ -549,9 +549,9 @@ static void release_leviathan_floater(GameSession *session,
         floater->y = (uint16_t)((int32_t)site->y - 0x28);
     } else {
         floater->x = (uint16_t)((int32_t)site->x +
-            (item->prod.present ? item->prod.offset_x : 0));
+            (item != NULL && item->prod.present ? item->prod.offset_x : 0));
         floater->y = (uint16_t)((int32_t)site->y +
-            (item->prod.present ? item->prod.offset_y : 0));
+            (item != NULL && item->prod.present ? item->prod.offset_y : 0));
     }
     floater->destination_x = floater->x;
     floater->destination_y = floater->y;
@@ -1354,25 +1354,26 @@ void game_session_tick_item_animations_with_floaters(
                 state->record_value_10 >= catalog->item_count)
                 goto tick_location_done;
             item = building_render_find(catalog, (uint16_t)state->record_value_10);
+            /* Items 0/1 are noshape and have no render row, but FUN_00450a71
+               still runs the flag-2 counter (FUN_00456bd0 NULL gives 0x28,
+               100 for class 1 unless +0x14 is 4) and releases the linked
+               floater, which the tribe worker spawn relies on. */
+            if (item == NULL && state->renderer_class == 1 &&
+                state->record_value_10 <= 1 &&
+                (state->source_flags & 0x002U) != 0) {
+                uint32_t limit = state->source_value_14 != 4 ? 100U : 0x28U;
+                ++state->production_progress;
+                state->source_value_42 = (int16_t)state->production_progress;
+                if (limit <= state->production_progress) {
+                    state->source_flags &= ~0x002U;
+                    release_leviathan_floater(session, state, NULL);
+                }
+            }
             if (item == NULL) {
                 if (is_leviathan_defense(state))
                     tick_leviathan_defense(session, pad_catalog, island,
                                            state, NULL, location_index);
                 goto tick_location_done;
-            }
-
-            /* REA establishes the data-driven CONS layer and its per-item
-               frame speed, but not a native post-placement intro. The remake
-               plays one CONS cycle after placement, independently of the
-               native CONS flag used by bridge construction. */
-            if (state->new_build_animation_ticks != 0) {
-                duration = building_render_cons_duration(item);
-                if (duration == 0 ||
-                    state->new_build_animation_ticks > duration) {
-                    state->new_build_animation_ticks = 0;
-                } else {
-                    ++state->new_build_animation_ticks;
-                }
             }
 
             /* INCI (+0x3e) is advanced before the class-specific item switch

@@ -41,12 +41,15 @@ typedef enum GameSessionAudioEventKind {
     GAME_SESSION_AUDIO_FLOATER_DEATH = 1,
     GAME_SESSION_AUDIO_BUILD = 2,
     GAME_SESSION_AUDIO_BRIDGE = 3,
-    GAME_SESSION_AUDIO_FLOATER_BIRTH = 4
+    GAME_SESSION_AUDIO_FLOATER_BIRTH = 4,
+    /* FA_Cast effect sound: `sound` is a GameCastSoundId (effects.txt SOUND). */
+    GAME_SESSION_AUDIO_CAST = 5
 } GameSessionAudioEventKind;
 
 typedef struct GameSessionAudioEvent {
     uint8_t kind;
     int16_t owner_id;
+    uint8_t sound;
 } GameSessionAudioEvent;
 
 typedef enum GameSessionWorldEventKind {
