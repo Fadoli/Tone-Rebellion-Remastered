@@ -79,8 +79,13 @@ static IslandLocationActionControl selected_location_action(void)
         return ISLAND_LOCATION_ACTION_NONE;
     }
     location = &island->locations[g_selected_location];
+    /* record_value_10 is owner-specific (base + owner * 16); the control
+       choice (Hall vs. other buildings) tests the base ID. */
     return island_panel_location_action_control(
-        location->record_value_10, location->owner_id, g_menu.selected_tribe);
+        location->owner_id >= 0 && location->owner_id < GAME_START_PLAYER_COUNT
+            ? location->record_value_10 - location->owner_id * 16
+            : location->record_value_10,
+        location->owner_id, g_menu.selected_tribe);
 }
 
 static int selected_repair_button_visible(void)
@@ -200,10 +205,9 @@ static int selected_upgrade_button_visible(void)
     base_item_id = location->record_value_10 -
         (int32_t)g_menu.selected_tribe * 16;
 
-    /* FUN_004672ef command 3 accepts the Hall and source buildings 0x2c..0x30;
-       it advances their +0x4a tier modulo four. */
-    return base_item_id == 0x2a ||
-        (base_item_id >= 0x2c && base_item_id <= 0x30);
+    /* Source buildings 0x2c..0x30 only: the Hall tier is raised automatically
+       by update_player_hall_tier, so its Upgrade button stays hidden. */
+    return base_item_id >= 0x2c && base_item_id <= 0x30;
 }
 
 static int selected_cast_action_at(int x, int y)

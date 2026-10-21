@@ -9,9 +9,11 @@ greater than 300 and a marker remains available, `FUN_004532e2` creates one
 worker, then the timer resets. Gross capacity is stored separately from net
 surplus so the population threshold follows the native formula.
 
-Gross capacity is fixed at 10. `FUN_0045e6d3` computes a provisional count
-from accessible class-1 Tone pools, but `FUN_00477599` overwrites it with
-`0.5 × 20.0` before calculating the net budget and worker threshold.
+Gross capacity is `(int)(sqrt(S) * 20.0)`, `S` = sum over islands of the
+class-1 count returned by `FUN_00462285`. `FUN_00477599` is the CRT `pow`
+(`fyl2x` path); the caller pushes `0.5` then the sum, so it computes `S^0.5`,
+not a constant 10. The earlier "0.5 x 20.0 = 10" reading took the wrong stack
+slot. Net budget is `capacity - min(spend, capacity)`.
 
 The source selects a visible class-1 location on the currently selected
 island, nearest its Hall anchor. The remake has no live selected-island state

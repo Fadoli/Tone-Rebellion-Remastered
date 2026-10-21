@@ -136,6 +136,7 @@ static void draw_diplomacy_panel(HDC dc, const WindowTemplate *panel,
     int pane_width = panel->pane.right - panel->pane.left;
     int pane_height = panel->pane.bottom - panel->pane.top;
     const GameFloaterStart *player_floaters[GAME_START_PLAYER_COUNT] = {0};
+    if (player_slot < 0 || player_slot >= GAME_START_PLAYER_COUNT) return;
     if (g_game_session_valid) {
         unsigned floater_index;
         for (floater_index = 0; floater_index < g_game_session.floater_count;

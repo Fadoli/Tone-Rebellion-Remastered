@@ -751,6 +751,16 @@ static void draw_island_feature(HDC dc, int island_id, const IslandLocation *sit
    bits {0,1,3}/{6,7,5}/{10,11,9} draw, and whether x advances only on a drawn
    icon, is an interpretation of the pseudocode; the owner-parity test is
    observed but unexplained. */
+/* Port records keep owner-specific item IDs (base + owner * 16); native Hall
+   text and icon predicates test the base ID. */
+static int32_t location_base_item_id(const GameRuntimeLocation *location)
+{
+    int32_t item = location->record_value_10;
+    if (location->owner_id >= 0 && location->owner_id < GAME_START_PLAYER_COUNT)
+        item -= location->owner_id * 16;
+    return item;
+}
+
 static void draw_hall_feature_icons(HDC dc, const WindowTemplate *info,
                                     int32_t item, int32_t owner)
 {
@@ -890,7 +900,7 @@ static void draw_building_info_extras(HDC dc, const WindowTemplate *info,
 {
     int16_t current;
     int16_t maximum;
-    int32_t item = location->record_value_10;
+    int32_t item = location_base_item_id(location);
     int base = (info->pane.right - info->pane.left) / 2;
 
     if (location->source_location_slot_18 == -1) return;
@@ -968,7 +978,7 @@ static void draw_hall_stock_summary(HDC dc, int hall_player,
     /* FUN_00440567 draws this summary only inside the P+0x18 == -1 branch
        when P+0x10 == 0x2a (ev_671a1431...). */
     if (hall->source_location_slot_18 != -1 ||
-        hall->record_value_10 != 0x2a) return;
+        location_base_item_id(hall) != 0x2a) return;
     pane.left = info->pane.left;
     pane.top = info->pane.top;
     pane.right = info->pane.right + 1;
@@ -994,7 +1004,8 @@ static void draw_hall_stock_summary(HDC dc, int hall_player,
                           info->pane.top + row.amount_y,
                           RGB(230, 238, 255));
     }
-    draw_hall_feature_icons(dc, info, hall->record_value_10, hall->owner_id);
+    draw_hall_feature_icons(dc, info, location_base_item_id(hall),
+                            hall->owner_id);
     /* FUN_00440567 draws ACTICON frame i for each island i whose bit is set in
        DAT_00619242 + owner*0x14a0 (the remake's special_feature_island_mask),
        for i < DAT_006136b0 (runtime-written; taken as the island count, an

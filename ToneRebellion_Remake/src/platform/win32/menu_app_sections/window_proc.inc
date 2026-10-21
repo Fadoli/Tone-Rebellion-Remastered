@@ -217,6 +217,8 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         return 0;
     }
     case WM_LBUTTONDOWN: {
+        /* A release lost outside the window must not swallow a later click. */
+        g_swallow_left_button_up = 0;
         if (g_menu.screen == SCREEN_LOGO) return 0;
         /* FUN_00469f56 delivers the left button press as window message 6
            and drops the release; FUN_00470fe7 enters the hovered island on
@@ -250,9 +252,9 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         RECT viewport;
         int width;
         int height;
-        if (g_menu.screen == SCREEN_LOGO) return 0;
         int x;
         int y;
+        if (g_menu.screen == SCREEN_LOGO) return 0;
         if (g_swallow_left_button_up) {
             g_swallow_left_button_up = 0;
             return 0;

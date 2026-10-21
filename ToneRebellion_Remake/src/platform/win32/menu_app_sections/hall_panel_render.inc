@@ -580,16 +580,25 @@ static void draw_hall_panel(HDC dc, int hall_player)
                   g_mouse_x, g_mouse_y, cycle_names, 1)
             : NULL;
         if (entry_count == 0) {
-            int width = measure_bitmap_text(NULL, g_empty_inventory_text,
-                                           strlen(g_empty_inventory_text));
+            /* FUN_0043d6a3 draws NOART with BIGFONT (palette index 6). */
+            int use_big = g_big_font.bytes != NULL;
+            int width = use_big
+                ? measure_big_text(g_empty_inventory_text,
+                                   strlen(g_empty_inventory_text))
+                : measure_small_text(g_empty_inventory_text,
+                                     strlen(g_empty_inventory_text));
             int x = panel->pane.left +
                 ((panel->pane.right - panel->pane.left) - width) / 2;
             /* FUN_0043d6a3 passes y = (bottom - top) / 2 - 6 for the NOART
                text, with no text-height term (ev_7105b54d…). */
             int y = panel->pane.top +
                 (panel->pane.bottom - panel->pane.top) / 2 - 6;
-            draw_bitmap_label(dc, g_empty_inventory_text, x, y,
-                              RGB(185, 205, 220));
+            if (use_big)
+                draw_big_label(dc, g_empty_inventory_text, x, y,
+                               g_island_palette[6]);
+            else
+                draw_small_label(dc, g_empty_inventory_text, x, y,
+                                 g_island_palette[6]);
         } else {
             /* FUN_0043d6a3 uses the stored page index directly. If the item
                count shrinks, the source leaves an out-of-range page empty

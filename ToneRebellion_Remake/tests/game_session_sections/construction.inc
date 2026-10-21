@@ -675,24 +675,24 @@ static void test_tone_maintenance_surplus_tracks_regions_and_workers(void)
     session.floaters[0].is_active = 1;
     session.floaters[0].type_index = 0;
 
-    /* Native gross capacity is 10; the worker and active building consume
-       two points of the available budget. */
+    /* Native gross capacity is (int)(sqrt(5 regions) * 20) = 44; the worker
+       and active building consume two points of the available budget. */
     game_session_refresh_player_maintenance_budgets(&session);
-    assert(session.economy[0].source_maintenance_capacity == 10);
-    assert(session.economy[0].source_maintenance_budget == 8);
+    assert(session.economy[0].source_maintenance_capacity == 44);
+    assert(session.economy[0].source_maintenance_budget == 42);
 
-    /* A sixth region does not change the native fixed gross capacity. */
+    /* A sixth region raises capacity to (int)(sqrt(6) * 20) = 48. */
     session.islands[0].locations[5].renderer_class = 1;
     session.islands[0].locations[5].source_value_14 = 0;
     session.islands[0].locations[5].source_value_22 = 1U;
     game_session_refresh_player_maintenance_budgets(&session);
-    assert(session.economy[0].source_maintenance_capacity == 10);
-    assert(session.economy[0].source_maintenance_budget == 8);
+    assert(session.economy[0].source_maintenance_capacity == 48);
+    assert(session.economy[0].source_maintenance_budget == 46);
 
     /* Losing that worker returns its upkeep to the available surplus. */
     session.floaters[0].is_active = 0;
     game_session_refresh_player_maintenance_budgets(&session);
-    assert(session.economy[0].source_maintenance_budget == 9);
+    assert(session.economy[0].source_maintenance_budget == 47);
 }
 
 static void test_recruitment_waits_for_surplus_then_creates_animated_worker(void)
@@ -717,9 +717,9 @@ static void test_recruitment_waits_for_surplus_then_creates_animated_worker(void
     assert(game_session_initialize(&world, islands, &catalog, &floater_catalog,
                                    &config, &session, error, sizeof(error)));
 
-    /* The native gross capacity is 10, with four starting workers charged. */
-    assert(session.economy[0].source_maintenance_capacity == 10);
-    assert(session.economy[0].source_maintenance_budget == 6);
+    /* The gross capacity is (int)(sqrt(3) * 20) = 34, with four starting workers charged. */
+    assert(session.economy[0].source_maintenance_capacity == 34);
+    assert(session.economy[0].source_maintenance_budget == 30);
     for (index = 0; index < 300; ++index)
         game_session_tick_floater_moves(&session, index + 1U, &catalog);
     assert(session.floater_count == 16);
@@ -743,7 +743,7 @@ static void test_recruitment_waits_for_surplus_then_creates_animated_worker(void
             assert(floater->has_wander_order);
             assert(floater->island_index ==
                    session.economy[owner].hall_island_index);
-            assert(session.economy[owner].source_maintenance_budget == 5);
+            assert(session.economy[owner].source_maintenance_budget == 29);
         }
     }
     assert(worker_count == 5);
@@ -929,6 +929,67 @@ static void test_construction_completes_on_native_empty_status_one_site(void)
     assert(site->source_value_34 == 17);
     assert(site->source_value_32 == 1);
     assert(site->source_flags == 0x410);
+}
+
+static void test_wandering_worker_with_stale_delivery_claim_rejoins_pool(void)
+{
+    GameSession session = {0};
+    PadCatalog catalog = {0};
+    GameRuntimeLocation *hall;
+    GameFloaterStart *floater;
+    int slot;
+
+    session.island_count = 1;
+    session.floater_count = 1;
+    session.islands[0].location_count = 1;
+    session.economy[0].hall_island_index = 0;
+    session.economy[0].hall_location_index = 0;
+    hall = &session.islands[0].locations[0];
+    hall->renderer_class = 0;
+    hall->record_value_10 = 0x2a;
+    hall->owner_id = 0;
+
+    floater = &session.floaters[0];
+    floater->is_active = 1;
+    floater->owner_slot = 0;
+    floater->island_index = 0;
+    floater->source_subtype = 0;
+    floater->source_link_0c = -1;
+    floater->linked_task_slot = -1;
+
+    slot = game_session_pending_event_add(&session, 0, 0, 4, 0, 0, 1);
+    assert(slot == 0);
+
+    /* The order ended and the worker went back to idle wandering, but the
+       task claim stayed: it counts on the task row and is never rescheduled. */
+    session.pending_events[slot].assigned_floater_count = 1;
+    floater->linked_task_slot = (int16_t)slot;
+    floater->active_order_action = 4;
+    floater->order_resource_code = 1;
+    floater->order_target_island = 0;
+    floater->order_target_location = 0;
+    floater->movement_state = 0x0e;
+    floater->has_wander_order = 1;
+    floater->has_move_order = 0;
+
+    game_session_assign_local_resource_tasks(&session, &catalog);
+    assert(floater->linked_task_slot == -1);
+    assert(floater->active_order_action == 0);
+    assert(session.pending_events[slot].assigned_floater_count == 0);
+
+    /* A worker that really follows the order keeps its claim. */
+    session.pending_events[slot].assigned_floater_count = 1;
+    floater->linked_task_slot = (int16_t)slot;
+    floater->active_order_action = 4;
+    floater->order_resource_code = 1;
+    floater->order_target_island = 0;
+    floater->order_target_location = 0;
+    floater->movement_state = 4;
+    floater->has_wander_order = 0;
+    floater->has_move_order = 1;
+    game_session_assign_local_resource_tasks(&session, &catalog);
+    assert(floater->linked_task_slot == slot);
+    assert(session.pending_events[slot].assigned_floater_count == 1);
 }
 
 static void test_cancelled_construction_releases_assigned_floater(void)

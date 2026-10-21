@@ -461,6 +461,42 @@ static void render_island_view(HDC dc)
             leg_art = floater->facing_left
                           ? &g_initial_floater_legs_flipped[floater->type_index]
                           : &g_initial_floater_legs[floater->type_index];
+            /* FUN_0042704b draws cargo first (behind legs and body) at
+               floater + fltinf graspxy (record +0x25/+0x26), mirrored with
+               the facing, plus the per-item vertical offset (DAT_0049acbe,
+               not yet extracted: 0 here). */
+            if (floater->carried_resource_code != 0) {
+                static const int8_t grasp_x[4] = {10, 10, 13, 11};
+                static const int8_t grasp_y[4] = {12, 14, 14, 20};
+                int hand_x = floater_x + (floater->facing_left
+                    ? -grasp_x[floater->type_index]
+                    : grasp_x[floater->type_index]);
+                int hand_y = floater_y + grasp_y[floater->type_index];
+                if (floater->carried_resource_code >= 1 &&
+                    floater->carried_resource_code <= GAME_RESOURCE_TYPE_COUNT) {
+                    static const SpriteSheet *const carried_art[] = {
+                        &g_bildtone_art, &g_tone_crys_art, &g_magctone_art
+                    };
+                    const SpriteSheet *cargo_art = carried_art[
+                        (unsigned int)floater->carried_resource_code - 1U];
+                    if (cargo_art->frame_count != 0) {
+                        draw_sprite_scaled(dc, cargo_art, 0, hand_x, hand_y,
+                                           0x00008000U);
+                    }
+                } else if (floater->carried_resource_code >=
+                               GAME_INVENTORY_ITEM_FIRST_ID &&
+                           floater->carried_resource_code <
+                               GAME_INVENTORY_ITEM_FIRST_ID +
+                                   GAME_INVENTORY_ITEM_COUNT &&
+                           (uint32_t)(floater->carried_resource_code -
+                               GAME_INVENTORY_ITEM_FIRST_ID) <
+                                   g_inventory_item_art.frame_count) {
+                    draw_sprite_scaled(dc, &g_inventory_item_art,
+                                       (uint32_t)(floater->carried_resource_code -
+                                           GAME_INVENTORY_ITEM_FIRST_ID),
+                                       hand_x, hand_y, 0x00008000U);
+                }
+            }
             draw_sprite(dc, leg_art, leg_frame, floater_x, floater_y);
             draw_sprite(dc, body_art, 0, floater_x, floater_y);
             /* FUN_0042822b calls FUN_0042704b with param_5=1 for world
@@ -514,46 +550,6 @@ static void render_island_view(HDC dc)
                     draw_sprite(dc, &g_floater_info_art, stat_frame,
                                 badge_x, badge_y);
                 }
-            }
-            /* FUN_0042704b places the resolved resource at the body's +0x25/
-               +0x26 anchor when +0x18 is nonzero. shapeinf.txt is not yet
-               loaded by the remake, so this uses a provisional hand anchor. */
-            if (floater->carried_resource_code >= 1 &&
-                floater->carried_resource_code <= GAME_RESOURCE_TYPE_COUNT) {
-                static const SpriteSheet *const carried_art[] = {
-                    &g_bildtone_art, &g_tone_crys_art, &g_magctone_art
-                };
-                const SpriteSheet *cargo_art = carried_art[
-                    (unsigned int)floater->carried_resource_code - 1U];
-                if (cargo_art->frame_count != 0 && body_art->frame_count != 0) {
-                    const SpriteFrame *body_frame = &body_art->frames[0];
-                    int hand_x = floater_x + body_frame->x_offset +
-                                 (floater->facing_left ? -6 : 5);
-                    int hand_y = floater_y + body_frame->y_offset - 1;
-                    draw_sprite_scaled(dc, cargo_art, 0,
-                                       hand_x, hand_y,
-                                       0x00008000U);
-                }
-            } else if (floater->carried_resource_code >=
-                           GAME_INVENTORY_ITEM_FIRST_ID &&
-                       floater->carried_resource_code <
-                           GAME_INVENTORY_ITEM_FIRST_ID +
-                               GAME_INVENTORY_ITEM_COUNT &&
-                       (uint32_t)(floater->carried_resource_code -
-                           GAME_INVENTORY_ITEM_FIRST_ID) <
-                               g_inventory_item_art.frame_count &&
-                       body_art->frame_count != 0) {
-                const SpriteFrame *body_frame = &body_art->frames[0];
-                int hand_x = floater_x + body_frame->x_offset +
-                             (floater->facing_left ? -6 : 5);
-                int hand_y = floater_y + body_frame->y_offset - 1;
-                uint32_t item_frame = (uint32_t)(
-                    floater->carried_resource_code -
-                    GAME_INVENTORY_ITEM_FIRST_ID);
-                /* FUN_0042704b resolves PIT_Object cargo through the same
-                   5..33 item range. Show that item in the worker's hand. */
-                draw_sprite_scaled(dc, &g_inventory_item_art, item_frame,
-                                   hand_x, hand_y, 0x00008000U);
             }
         }
     }
@@ -1200,8 +1196,18 @@ static void draw_location_action_panel(HDC dc)
         repair_button = window_catalog_find(&g_window_catalog, "BC_Repair", 3);
         /* Keep normal artwork as the first layer: the source highlight frames
            extend the art but are not substitutes for the button itself. */
-        if (selected_onoff_button_visible()) {
-            draw_control_with_hover_overlay(dc, onoff_button,
+        if (selected_onoff_button_visible() && onoff_button != NULL) {
+            /* NSTATES 2: BLDCMD frames 19/20 are the two switch positions
+               (interpretation: 19 = enabled, matching the default 0x400 bit
+               and the descriptor's frame); the hover overlay (21) is shared. */
+            WindowTemplate onoff_state = *onoff_button;
+            const GameRuntimeLocation *onoff_site =
+                &island->locations[g_selected_location];
+            if ((onoff_site->source_flags & 0x400U) == 0 &&
+                onoff_state.nstates > 1) {
+                ++onoff_state.shape_frame;
+            }
+            draw_control_with_hover_overlay(dc, &onoff_state,
                 &g_building_command_art, g_hovered_onoff_control);
         }
         if (selected_upgrade_button_visible()) {
@@ -1320,13 +1326,13 @@ static void draw_location_action_panel(HDC dc)
         (uint32_t)text_panel->shape_frame >= g_temp_hole_art.frame_count) return;
     draw_sprite(dc, &g_temp_hole_art, (uint32_t)text_panel->shape_frame,
                 text_panel->pane.left, text_panel->pane.top);
-    if (g_cryptic_text[1][0] != '\0') {
-        size_t text_length = strlen(g_cryptic_text[1]);
-        int text_width = measure_bitmap_text(NULL, g_cryptic_text[1], text_length);
+    if (g_move_button_text[0] != '\0') {
+        size_t text_length = strlen(g_move_button_text);
+        int text_width = measure_bitmap_text(NULL, g_move_button_text, text_length);
         int text_height = (int)g_small_font.height;
         int pane_width = text_panel->pane.right - text_panel->pane.left;
         int pane_height = text_panel->pane.bottom - text_panel->pane.top;
-        draw_bitmap_label(dc, g_cryptic_text[1],
+        draw_bitmap_label(dc, g_move_button_text,
             text_panel->pane.left + (pane_width - text_width) / 2,
             text_panel->pane.top + (pane_height - text_height) / 2,
             g_island_palette[6]);

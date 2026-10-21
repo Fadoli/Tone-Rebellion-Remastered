@@ -537,6 +537,15 @@ static void reclaim_orphaned_task_claim(GameSession *session,
                   floater->handoff_resume_action == 0x12));
         }
     }
+    /* An active delivery/construction/repair order clears the wander fallback
+       when it is assigned. A worker that is idle-wandering again while still
+       claiming such a task lost its order without releasing the claim, so it
+       would stay counted on the task and never rejoin the idle pool. */
+    if (task_matches && floater->has_wander_order && !floater->has_move_order &&
+        floater->movement_state == 0x0e &&
+        (floater->active_order_action == 4 ||
+         floater->active_order_action == 0x12))
+        task_matches = 0;
     if (task_matches) return;
 
     /* A completed or cancelled order can leave a floater linked to a slot

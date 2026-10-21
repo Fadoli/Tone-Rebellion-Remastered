@@ -400,3 +400,20 @@ Port: le ramassage est une commande à un floater choisi, sans table de 64 entr�
 admission `FUN_00422031` ni classe `FUN_0041e454`, sans attache automatique, sans effacement `FUN_00466533`. À porter pour
 la tâche 0xd: création par le bouton `Obtain` (paquet type 0xd), attache automatique du premier floater libre
 (compteur < 1), état 13 déjà modélisé, détachement et effacement à la fin.
+
+### Ordres Attack/Defend/Recall: enregistrement de bâtiment et adoption (REA, ev_242a6f46…, ev_8520758d…, ev_7b65b088…, ev_3477c421…, ev_8578fcc7…)
+
+Observation: `FUN_0045d867`, `FUN_0045d8b2` et `FUN_0045dcf4` n'écrivent pas dans le floater cible mais (inférence forte) dans
+l'enregistrement source de 100 octets du bâtiment sélectionné (`&0x6192b0 + emplacement * 100 + joueur * 0x14a0`): `+0x28` île,
+`+0x2c` genre (6 attaque floater, 7 attaque lieu, 8 défense floater, 9 défense de zone ou rappel), `+0x30` cible. Le sondage
+`FUN_0042219e` fait adopter cet ordre à chaque floater de classe différente de 4 dont le lien de charge (`+0xc`) désigne
+l'emplacement et dont l'état n'est pas `0x13` (`+0x2c` → `+0x3c`, `+0x28` → `+0x40`, `+0x30` → `+0x42`); les genres 6 et 7 sont
+exclus de l'attribution automatique. Comportement par genre (automate `FUN_004211bb`, `FUN_0041e569`): 6 approche (`0xf`) puis frappe
+périodique du floater cible (`6`, `FUN_004200d2`); 7 déplacement lointain (`0x10`) puis frappe du bâtiment (`7`, `FUN_00420188`); 8 suivi du
+floater protégé (`8`, `FUN_00422d27`, arrivée à moins de 100) avec bascule en `0xf` puis `6` si un ennemi est trouvé
+(`FUN_004208eb`); 9 déplacement vers le site (`9`, `FUN_0041e427`, `FUN_004672a6` < 100) puis recherche d'ennemi au site
+(`FUN_00420829`) ou relance (tenue de zone). Un floater de sous-type 8 sans ordre retourne au genre 9 à son domicile.
+Port: genres 6/7 (auto-attribution), 8 (`defend_target_floater`) et 9 (`game_session_advance_action9`, partiel: pas de tenue de
+zone ni de relance) existent par floater; absents: l'enregistrement d'ordre du bâtiment et l'adoption par lien de charge, les boutons
+`Attack*`/`Defend*`/`Recall`, et l'écriture des ordres joueur par le paquet de catégorie 1. Inconnues: ECX exact des écrivains, cible de
+`Recall` (`FUN_00452e2b`), effets de `FUN_00415fc6`, double rôle de `+0x32`.

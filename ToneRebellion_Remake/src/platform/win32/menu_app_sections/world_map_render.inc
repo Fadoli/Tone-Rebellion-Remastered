@@ -187,6 +187,48 @@ static void draw_small_label(HDC dc, const char *text, int x, int y,
         LOGICAL_WIDTH, x, y, dib_pixel);
 }
 
+/* The hand-picked default panel text colours of the Hall, task, inventory,
+   unit and construction panels stand for the native default colour, palette
+   index 6; any other colour (status, warning, owner markers) is kept. */
+static COLORREF panel_text_color(COLORREF color)
+{
+    if (color == RGB(230, 238, 255) || color == RGB(185, 205, 220) ||
+        color == RGB(235, 235, 220) || color == RGB(220, 232, 244) ||
+        color == RGB(232, 236, 244)) return g_island_palette[6];
+    return color;
+}
+
+/* BIGFONT text (DAT_005c2870, height 11, ink 243, colour palette index 6). */
+static int32_t measure_big_text(const char *text, size_t length)
+{
+    size_t i;
+    int32_t width = 0;
+    for (i = 0; i < length; ++i) {
+        uint32_t glyph_width;
+        const uint8_t *glyph_pixels;
+        uint32_t code = (unsigned char)text[i];
+        if (code >= g_big_font.glyph_count) code = (uint32_t)'?';
+        if (bitmap_font_get_glyph(&g_big_font, code, &glyph_width, &glyph_pixels))
+            width += (int32_t)glyph_width;
+    }
+    return width;
+}
+
+static void draw_big_label(HDC dc, const char *text, int x, int y,
+                           COLORREF color)
+{
+    uint32_t dib_pixel;
+    if (text == NULL || dc != g_paint_buffer_dc || g_paint_buffer_pixels == NULL ||
+        g_big_font.bytes == NULL) return;
+    dib_pixel = ((uint32_t)GetRValue(color) << 16) |
+                ((uint32_t)GetGValue(color) << 8) |
+                (uint32_t)GetBValue(color);
+    (void)GdiFlush();
+    (void)bitmap_font_render_pixels(&g_big_font, text,
+        (uint32_t *)g_paint_buffer_pixels, LOGICAL_WIDTH, LOGICAL_HEIGHT,
+        LOGICAL_WIDTH, x, y, dib_pixel);
+}
+
 /* Caller has flushed GDI writes to the paint DIB already. */
 static void draw_small_label_pixels(const char *text, int x, int y,
                                     COLORREF color)

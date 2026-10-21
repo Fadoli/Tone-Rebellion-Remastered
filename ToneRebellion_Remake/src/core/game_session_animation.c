@@ -1282,8 +1282,22 @@ void game_session_tick_item_animations_with_floaters(
                     state->construction_progress = 0;
                     state->production_progress = 0;
                     state->source_flags &= ~0x010U;
-                    (void)game_session_recalculate_location_active_with_visibility(
-                        state);
+                    /* Clearing 0x010 can activate a finished item-0x28 site;
+                       its owner's visible x spans (FUN_00462285) and the
+                       maintenance budgets must follow, or the neighbouring
+                       sites stay locked until some other 0x28 change. */
+                    if (game_session_recalculate_location_active_with_visibility(
+                            state)) {
+                        if (state->renderer_class == 0 &&
+                            state->source_value_14 >= 0 &&
+                            state->source_value_14 < GAME_START_PLAYER_COUNT &&
+                            game_session_base_item_id(state) == 0x28) {
+                            (void)game_session_recalculate_player_island_visibility(
+                                session, (uint8_t)island_index,
+                                (uint8_t)state->source_value_14);
+                        }
+                        game_session_refresh_player_maintenance_budgets(session);
+                    }
                 }
             }
 

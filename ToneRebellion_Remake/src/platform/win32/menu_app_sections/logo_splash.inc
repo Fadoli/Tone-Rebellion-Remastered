@@ -5,10 +5,10 @@
 enum {
     LOGO_WIDTH = 640,
     LOGO_HEIGHT = 480,
-    /* Port pacing (the original has no delay): ticks are 33 ms timer ticks. */
-    LOGO_FADE_IN_TICKS = 24,
-    LOGO_HOLD_TICKS = 30,
-    LOGO_FADE_OUT_TICKS = 24
+    /* Port pacing (the original has no delay): ticks are 50 ms timer ticks. */
+    LOGO_FADE_IN_TICKS = 16,
+    LOGO_HOLD_TICKS = 20,
+    LOGO_FADE_OUT_TICKS = 16
 };
 
 static unsigned char *g_logo_pixels;
@@ -33,6 +33,14 @@ static int float_cfg_has_keyword(const char *keyword)
     }
     fclose(file);
     return found;
+}
+
+/* float.cfg `easyunlock` (DAT_004c2ba0), read once. */
+static int float_cfg_easyunlock(void)
+{
+    static int cached = -1;
+    if (cached < 0) cached = float_cfg_has_keyword("easyunlock") ? 1 : 0;
+    return cached;
 }
 
 /* Minimal GIF87a/89a decoder for one non-animated 8-bit image of exactly
@@ -79,6 +87,7 @@ static int decode_logo_gif(const unsigned char *data, size_t length,
         (flags & 0x40U) != 0) return 0;
     position += 10;
     if ((flags & 0x80U) != 0) position += (size_t)3U << ((flags & 7U) + 1U);
+    if (position >= length) return 0;
     min_code_size = data[position++];
     if (min_code_size < 2 || min_code_size > 8) return 0;
     clear_code = 1U << min_code_size;
@@ -118,7 +127,7 @@ static int decode_logo_gif(const unsigned char *data, size_t length,
         {
             unsigned current = code;
             size_t depth = 0;
-            if (previous != 0xffffU && code >= next_code) {
+            if (previous != 0xffffU && code == next_code) {
                 /* KwKwK case: the string is previous + its own first byte. */
                 stack[depth++] = first;
                 current = previous;

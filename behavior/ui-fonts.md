@@ -47,3 +47,12 @@ Port: les libellés des panneaux Hall, tâches, commerce, inventaire, diplomatie
 (macros dans `menu_app.c`); les textes avec renvoi partagé, la nouvelle partie, le texte d'aide du menu et la carte
 gardent `bgoutfnt`. Non porté: couleurs de ligne 5 et 2 des tâches, `bigfont` des étiquettes de lieu et de
 `NOART`, géométrie verticale recalculée sur la hauteur 8 (certains centrages utilisent encore la hauteur 13).
+
+Mise à jour: `bigfont.fnt` (`dataigfont.fnt` de TONE01.COB, hauteur 11) est chargée (`g_big_font`, `measure_big_text`, `draw_big_label`)
+et sert au texte `NOART` du panneau Inventaire (palette 6), seul usage de `bigfont` dans un panneau déjà confirmé par `FUN_0043d6a3`.
+Les autres usages de `bigfont` (étiquettes de lieu, écran de nouvelle partie, en-tête de royaume) ne sont pas établis comme police dessinée.
+
+Correctif (relecture indépendante des changements): la macro `draw_bitmap_label` des fichiers Hall/île ne passe plus tout en palette 6;
+elle n'y remplace que les couleurs par défaut choisies à la main (`panel_text_color`), les autres (statuts, avertissements, marqueurs)
+sont conservées. `bigfont` est facultative (repli sur `smfont` pour `NOART`). Autres correctifs: garde de `player_slot` dans le panneau
+Diplomatie, bornes et cas `code == next_code` du décodeur GIF, indicateur de relâchement du clic de carte remis à zéro au clic suivant.

@@ -132,6 +132,13 @@ static int load_newgame_captions(char *error, size_t error_capacity)
                        "gamey.txt key SURPFLOW is missing or empty");
         goto done;
     }
+    if (!extract_help_entry(bytes, member->length, "BC1",
+                            g_move_button_text,
+                            sizeof(g_move_button_text))) {
+        (void)snprintf(error, error_capacity,
+                       "gamey.txt key BC1 is missing or empty");
+        goto done;
+    }
     for (i = 0; i < ISLAND_PANEL_INFO_CRYPTIC_COUNT; ++i) {
         char key[16] = {0};
         if (!island_panel_info_cryptic_key((unsigned int)i, key, sizeof(key)) ||

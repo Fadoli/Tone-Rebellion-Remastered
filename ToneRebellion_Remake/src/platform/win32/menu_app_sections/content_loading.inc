@@ -95,11 +95,22 @@ static int load_game_session_for_selected_world(char *error, size_t error_capaci
        analysis. Keep the core's documented explicit default until that is
        resolved; do not infer it from the selected tribe. */
     config.home_island_index = 0;
-    config.randomize_class0_assignment = 0;
+    /* DAT_0049c99c (`easyplot`) is 1 unless float.cfg has the keyword, and
+       FUN_004637fc then draws each pair site's island at random; the keyword
+       places them in order. Fall back to the in-order rule if a random draw
+       cannot find enough free records. */
+    config.randomize_class0_assignment =
+        float_cfg_has_keyword("easyplot") ? 0 : 1;
     config.random_seed = g_random_state;
     if (!game_session_initialize(world, island_records, &g_pad_catalog,
                                  &g_floater_catalog, &config, &session,
-                                 error, error_capacity)) return 0;
+                                 error, error_capacity)) {
+        if (config.randomize_class0_assignment == 0) return 0;
+        config.randomize_class0_assignment = 0;
+        if (!game_session_initialize(world, island_records, &g_pad_catalog,
+                                     &g_floater_catalog, &config, &session,
+                                     error, error_capacity)) return 0;
+    }
 
     g_game_session = session;
     game_music_state_init(&g_game_music);
@@ -450,6 +461,23 @@ static int load_menu_art(char *error, size_t error_capacity)
         }
         free(bytes);
     }
+    {
+        const CobMember *font = cob_archive_find(&archive, "data\\bigfont.fnt");
+        unsigned char *bytes = NULL;
+        /* BIGFONT only draws NOART: a missing or unreadable file falls back to
+           SMFONT instead of aborting the menu art. */
+        if (font != NULL) {
+            char font_error[128];
+            bytes = (unsigned char *)malloc(font->length);
+            if (bytes != NULL &&
+                cob_archive_read_member(&archive, font, bytes, font->length,
+                                        font_error, sizeof(font_error))) {
+                (void)bitmap_font_init(&g_big_font, bytes, font->length,
+                                       font_error, sizeof(font_error));
+            }
+            free(bytes);
+        }
+    }
     (void)load_logo_splash(&archive);
     memcpy(g_newgame_palette, newgame_palette, sizeof(g_newgame_palette));
     memcpy(g_map_palette, mainmap_palette, sizeof(g_map_palette));
@@ -469,6 +497,7 @@ done:
         free_sprite_sheet(&g_load_save_art);
         bitmap_font_free(&g_bitmap_font);
         bitmap_font_free(&g_small_font);
+        bitmap_font_free(&g_big_font);
         free(g_button_sound);
         g_button_sound = NULL;
         free(g_fltbuild_sound);
@@ -579,7 +608,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
         g_menu.screen = SCREEN_LOGO;
     else
         set_background_tune_once("start");
-    (void)SetTimer(window, 1, 33, NULL);
+    (void)SetTimer(window, 1, 50, NULL); /* frame_limit 20, one tick per frame */
     (void)SetTimer(window, 2, 1000, NULL);
     ShowWindow(window, show_command);
     UpdateWindow(window);
@@ -669,6 +698,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_tribe_descriptions);
     bitmap_font_free(&g_bitmap_font);
     bitmap_font_free(&g_small_font);
+    bitmap_font_free(&g_big_font);
     stop_background_tune();
     (void)PlaySoundA(NULL, NULL, 0);
     free(g_button_sound);

@@ -164,6 +164,8 @@ static BitmapFont g_bitmap_font;
    caption and most panels (FUN_0042de0d returns &DAT_005c30b8); its ink value
    is 243 and its colour is palette index 6 (FUN_0042da69). */
 static BitmapFont g_small_font;
+/* data/bigfont.fnt (11 px, DAT_005c2870): NOART in the Inventory panel. */
+static BitmapFont g_big_font;
 static char g_help_text[HELP_ENTRY_COUNT][1024];
 static char g_newgame_text[8][256];
 static char g_empty_glyph_text[256];
@@ -178,6 +180,8 @@ static char g_task_category_text[4][256];
 static char g_hall_population_label[64];
 static char g_hall_work_label[64];
 static char g_hall_surplus_label[64];
+/* gamey.txt BC1: caption of the Move button (FUN_0042f150 index 1). */
+static char g_move_button_text[128];
 /* gamey.txt WORKER, AWAKE, LEVEL, HITS, STRENGTH, CHARGE (FUN_00429ebe). */
 static char g_unit_label_text[6][64];
 /* gamey.txt TRZERO and TRDOIT: Trade button hover captions (FUN_0043edac). */
@@ -299,9 +303,9 @@ static HDC g_sprite_source_dc;
 /* The Hall, task, trade, inventory, unit-detail and construction panels draw
    their text with SMFONT in palette index 6 (REA: callers of the 0x4014c9
    accessor, see behavior/ui-fonts.md), so route their labels to it. */
-#define draw_bitmap_label(dc, text, x, y, color)     draw_small_label((dc), (text), (x), (y), g_island_palette[6])
-#define draw_bitmap_label_pixels(text, x, y, color)     draw_small_label_pixels((text), (x), (y), g_island_palette[6])
-#define measure_bitmap_text(context, text, length)     measure_small_text((text), (length))
+#define draw_bitmap_label(dc, text, x, y, color) draw_small_label((dc), (text), (x), (y), panel_text_color(color))
+#define draw_bitmap_label_pixels(text, x, y, color) draw_small_label_pixels((text), (x), (y), panel_text_color(color))
+#define measure_bitmap_text(context, text, length) measure_small_text((text), (length))
 #include "menu_app_sections/hall_panel_render.inc"
 
 #include "menu_app_sections/island_item_render.inc"

@@ -198,8 +198,8 @@ int main(int argc, char **argv)
                              economy->hall_island_index, visible_markers,
                              all_markers);
                 assert(visible_markers == 1);
-                assert(economy->source_maintenance_capacity == 10);
-                assert(economy->source_maintenance_budget == 6);
+                assert(economy->source_maintenance_capacity == 20);
+                assert(economy->source_maintenance_budget == 16);
             }
         }
         {

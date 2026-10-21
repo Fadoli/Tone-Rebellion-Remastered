@@ -116,8 +116,8 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
     assert(session.config.selected_tribe == 3);
     assert(session.island_count == 5);
     assert(session.floater_count == 16);
-    assert(session.economy[0].source_maintenance_capacity == 10);
-    assert(session.economy[0].source_maintenance_budget == 6);
+    assert(session.economy[0].source_maintenance_capacity == 34);
+    assert(session.economy[0].source_maintenance_budget == 30);
     assert(session.pending_event_count == 0);
     assert(session.pending_events[0].active == 0);
     assert(session.tone_placements.placement_count == 5);
@@ -488,6 +488,7 @@ int main(void)
     test_recruitment_waits_for_surplus_then_creates_animated_worker();
     test_initialized_workers_build_from_queued_selection();
     test_construction_completes_on_native_empty_status_one_site();
+    test_wandering_worker_with_stale_delivery_claim_rejoins_pool();
     test_charge_order_accepts_each_players_source_variant();
     test_floater_pickup_order_collects_ground_artifact();
     test_floater_move_state_advances_only_simulation_assigned_destinations();

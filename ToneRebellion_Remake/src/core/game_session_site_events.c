@@ -3,6 +3,7 @@
 #include "game_session_internal.h"
 #include "pad_catalog.h"
 
+#include <math.h>
 #include <string.h>
 
 /* Site On/Off commands and their active-state recalculation. */
@@ -291,27 +292,29 @@ void game_session_tick_site_effect_timers(GameSession *session)
 static void game_session_recalculate_player_maintenance_budgets(
     GameSession *session)
 {
-    /* FUN_0045e6d3 makes a provisional regional sum, then FUN_00477599
-       overwrites gross capacity with 0.5 * 20.0 before charging maintenance. */
+    /* FUN_0045e6d3 sums the per-island FUN_00462285 counts, then
+       FUN_00477599 (CRT pow, args pushed 0.5 then sum) yields sqrt(sum); the
+       result is multiplied by 20.0 (0x494780) and truncated by __ftol into
+       the gross capacity before charging maintenance. */
     int32_t maintenance[GAME_START_PLAYER_COUNT] = {0};
+    int32_t region_sum[GAME_START_PLAYER_COUNT] = {0};
     unsigned int island_index;
     unsigned int floater_index;
     unsigned int player_slot;
 
-    /* Keep the regional visibility side effects; the sum itself is discarded. */
     for (player_slot = 0; player_slot < GAME_START_PLAYER_COUNT; ++player_slot) {
         for (island_index = 0; island_index < session->island_count;
              ++island_index) {
             GameRuntimeIsland *island = &session->islands[island_index];
             if (island->location_count > ISLAND_DATA_MAX_LOCATIONS) continue;
-            (void)recalculate_island_visibility_for_player(
+            region_sum[player_slot] += recalculate_island_visibility_for_player(
                 session, island, (uint8_t)player_slot);
         }
     }
 
     for (player_slot = 0; player_slot < GAME_START_PLAYER_COUNT; ++player_slot) {
         session->economy[player_slot].source_maintenance_capacity =
-            10;
+            (int32_t)(sqrt((double)region_sum[player_slot]) * 20.0);
 
         uint32_t owned_flag = 0x800U << player_slot;
         for (island_index = 0; island_index < session->island_count;
@@ -341,9 +344,13 @@ static void game_session_recalculate_player_maintenance_budgets(
             if (game_session_floater_is_active(floater) &&
                 floater->type_index == player_slot) ++maintenance[player_slot];
         }
-        if (maintenance[player_slot] > 10) maintenance[player_slot] = 10;
+        if (maintenance[player_slot] >
+            session->economy[player_slot].source_maintenance_capacity)
+            maintenance[player_slot] =
+                session->economy[player_slot].source_maintenance_capacity;
         session->economy[player_slot].source_maintenance_budget =
-            10 - maintenance[player_slot];
+            session->economy[player_slot].source_maintenance_capacity -
+            maintenance[player_slot];
     }
 }
 

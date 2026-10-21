@@ -60,6 +60,10 @@ static int load_island_surface(int island_id, int map_island_index,
     char shape_name[48];
     char palette_name[48];
     char template_shape_name[32];
+    char main_buttons_name[32];
+    char thall_name[32];
+    char temp_hole_name[32];
+    char build_cycle_name[32];
     char height_name[48];
     char text_name[48];
     char feature_name[48];
@@ -109,6 +113,17 @@ static int load_island_surface(int island_id, int map_island_index,
     (void)snprintf(palette_name, sizeof(palette_name), "data\\island%02d.pal", island_id);
     (void)snprintf(template_shape_name, sizeof(template_shape_name),
                    "data\\isletmp%d.shp", selected_player);
+    /* The binary formats data\MAINBUT%d, THALL%d, TEMPHOL%d and SCARROW%d.SHP
+       (format strings at 0x49fa00..0x49fad0); the tribe index is assumed to be
+       the same active player as ISLETMP. */
+    (void)snprintf(main_buttons_name, sizeof(main_buttons_name),
+                   "data\\mainbut%d.shp", selected_player);
+    (void)snprintf(thall_name, sizeof(thall_name),
+                   "data\\thall%d.shp", selected_player);
+    (void)snprintf(temp_hole_name, sizeof(temp_hole_name),
+                   "data\\temphol%d.shp", selected_player);
+    (void)snprintf(build_cycle_name, sizeof(build_cycle_name),
+                   "data\\scarrow%d.shp", selected_player);
     (void)snprintf(height_name, sizeof(height_name), "data\\island%02d.hzt", island_id);
     (void)snprintf(text_name, sizeof(text_name), "data\\island%02d.txt", island_id);
     (void)snprintf(feature_name, sizeof(feature_name), "data\\i%02d-feat.shp", island_id);
@@ -120,13 +135,13 @@ static int load_island_surface(int island_id, int map_island_index,
                            &template_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\lilmap.shp", palette,
                            &lilmap_candidate, error, error_capacity) ||
-        !load_sprite_sheet(&archive, "data\\mainbut0.shp", palette,
+        !load_sprite_sheet(&archive, main_buttons_name, palette,
                            &main_buttons_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\isrealm.shp", palette,
                            &realm_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\fltinfo.shp", palette,
                            &floater_info_candidate, error, error_capacity) ||
-        !load_sprite_sheet(&archive, "data\\thall0.shp", palette,
+        !load_sprite_sheet(&archive, thall_name, palette,
                            &hall_command_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\glinv.shp", palette,
                            &glyph_inventory_candidate, error, error_capacity) ||
@@ -144,9 +159,9 @@ static int load_island_surface(int island_id, int map_island_index,
                            &building_gauge_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\bildicon.shp", palette,
                            &building_number_candidate, error, error_capacity) ||
-        !load_sprite_sheet(&archive, "data\\temphol0.shp", palette, &temp_hole_candidate,
+        !load_sprite_sheet(&archive, temp_hole_name, palette, &temp_hole_candidate,
                            error, error_capacity) ||
-        !load_sprite_sheet(&archive, "data\\scarrow0.shp", palette, &build_cycle_candidate,
+        !load_sprite_sheet(&archive, build_cycle_name, palette, &build_cycle_candidate,
                            error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\scroll.shp", palette, &task_scroll_candidate,
                            error, error_capacity) ||

@@ -566,10 +566,42 @@ static void handle_click(HWND window, int x, int y)
                                 GAME_INVENTORY_ITEM_FIRST_ID +
                                 GAME_INVENTORY_ITEM_COUNT &&
                             g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
+                            int target_location = clicked_location;
+                            /* easyunlock (FUN_0042fa0f at 0x430dc1): a pair
+                               item 6 + 2 * island id + side placed on its own
+                               island is redirected next to the clicked site:
+                               the island's centre feature site (kind 4) goes
+                               to site + 1, a pair site (class 3) holding the
+                               other side goes to site - 1 (side 0) or
+                               site + 1 (side 1). */
+                            if (float_cfg_easyunlock()) {
+                                const GameRuntimeIsland *unlock_island =
+                                    &g_game_session.islands[
+                                        g_menu.selected_map_island];
+                                int pair_code = g_selected_inventory_item - 6;
+                                int pair_side = pair_code & 1;
+                                const GameRuntimeLocation *clicked_site =
+                                    &unlock_island->locations[clicked_location];
+                                if ((pair_code >> 1) ==
+                                        unlock_island->leviathan_marker_shape_id) {
+                                    if (clicked_site->record_value_10 == 4) {
+                                        target_location = clicked_location + 1;
+                                    } else if (clicked_site->renderer_class == 3 &&
+                                               clicked_site->source_capacity_4a !=
+                                                   pair_side) {
+                                        target_location = clicked_location +
+                                            (pair_side == 0 ? -1 : 1);
+                                    }
+                                    if (target_location < 0 ||
+                                        target_location >=
+                                            (int)unlock_island->location_count)
+                                        target_location = clicked_location;
+                                }
+                            }
                             (void)game_session_queue_inventory_action(
                                 &g_game_session, g_menu.selected_tribe,
                                 (uint8_t)g_menu.selected_map_island,
-                                (uint16_t)clicked_location,
+                                (uint16_t)target_location,
                                 (uint8_t)g_selected_inventory_item);
                             /* FUN_0042fa0f clears the selection and returns
                                to general mode even if the location guard
@@ -587,6 +619,33 @@ static void handle_click(HWND window, int x, int y)
                         InvalidateRect(window, NULL, FALSE);
                     } else if (clicked_location < 0) {
                         g_selected_location = -1;
+                        /* Clicking empty ground returns to the local Hall view. */
+                        if (g_game_session_valid &&
+                            g_menu.selected_tribe < GAME_START_PLAYER_COUNT &&
+                            g_menu.selected_map_island >= 0 &&
+                            g_menu.selected_map_island <
+                                g_game_session.island_count &&
+                            g_selected_glyph < 0 &&
+                            g_selected_inventory_item <
+                                GAME_INVENTORY_ITEM_FIRST_ID) {
+                            const GamePlayerEconomy *economy =
+                                &g_game_session.economy[g_menu.selected_tribe];
+                            if (economy->hall_island_index ==
+                                    (uint8_t)g_menu.selected_map_island &&
+                                economy->hall_location_index <
+                                    g_game_session.islands[
+                                        g_menu.selected_map_island].location_count) {
+                                g_selected_location =
+                                    (int)economy->hall_location_index;
+                                if (selected_hall_player() < 0) {
+                                    g_selected_location = -1;
+                                } else {
+                                    g_island_panel_mode =
+                                        WINDOW_ISLAND_PANEL_GENERAL;
+                                    g_hovered_hall_command = -1;
+                                }
+                            }
+                        }
                         InvalidateRect(window, NULL, FALSE);
                     }
                 }
