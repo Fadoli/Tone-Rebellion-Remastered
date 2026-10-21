@@ -112,7 +112,7 @@ int game_session_construction_task_values(const GameSession *session,
     if ((uint16_t)event->payload_0e >=
         session->islands[event->payload_0a].location_count) return 0;
     location = &session->islands[event->payload_0a].locations[event->payload_0e];
-    if (location->renderer_class != 0 || location->owner_id != -1 ||
+    if (location->renderer_class != 0 ||
         !game_session_build_target_available(location,
             (uint8_t)event->player_id) || location->construction_site_size > 2U)
         return 0;
@@ -163,10 +163,11 @@ int game_session_place_building(GameSession *session,
         return 0;
     }
     runtime = &session->islands[island_index].locations[location_index];
-    if (runtime->renderer_class != 0 || runtime->owner_id != -1 ||
+    if (runtime->renderer_class != 0 ||
         !game_session_build_target_available(runtime, player_slot) ||
         !iw_construct_site_size(site, &site_size)) {
-        set_error(error, error_capacity, "building placement requires an empty construction site");
+        set_error(error, error_capacity,
+                  "building placement requires an available construction site");
         return 0;
     }
     if (base_item_id == 0) {
@@ -229,6 +230,7 @@ int game_session_place_building(GameSession *session,
     runtime->source_value_14 = player_slot;
     runtime->source_value_32 = 1;
     runtime->source_value_34 = source_value_34_maximum;
+    runtime->leviathan_spawned_floater = -1;
     runtime->record_value_24 = 0;
     runtime->resource_stock[GAME_RESOURCE_BUILD_TONE] = 0;
     runtime->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 0;
@@ -241,6 +243,7 @@ int game_session_place_building(GameSession *session,
     runtime->source_value_3e = -1;
     runtime->source_value_40 = 0;
     runtime->source_value_42 = 0;
+    runtime->resource_retry_tick_36 = -1;
     runtime->source_value_44 = 0;
     runtime->source_value_46 = 0;
     runtime->source_value_48 = 0;

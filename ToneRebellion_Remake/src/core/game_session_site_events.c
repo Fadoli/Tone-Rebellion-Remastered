@@ -247,11 +247,8 @@ void game_session_tick_site_effect_timers(GameSession *session)
 static void game_session_recalculate_player_maintenance_budgets(
     GameSession *session)
 {
-    /* This remake model currently assigns capacity per accessible region.
-       Native assembly instead passes a region sum and 0.5 to FUN_00477599;
-       its wrapper loads the second double, then multiplies by 20.0, so the
-       observed +0x3c write is 10 regardless of the region sum. Keep this
-       divergence explicit pending a separate parity decision. */
+    /* FUN_00462285 counts each accessible class-1 Tone pool. FUN_0045e6d3
+       converts the summed count to gross maintenance capacity at 10 per pool. */
     int32_t capacities[GAME_START_PLAYER_COUNT] = {0};
     int32_t maintenance[GAME_START_PLAYER_COUNT] = {0};
     int32_t capacity_budget[GAME_START_PLAYER_COUNT] = {0};
@@ -550,7 +547,9 @@ unsigned int game_session_dispatch_onoff_actions(GameSession *session,
     while (game_session_pop_onoff_action(session, &request)) {
         GameRuntimeLocation *location;
         const PadCatalogItem *item;
+        int runtime_item_id;
         int base_item_id;
+        int catalog_item_id;
         int was_enabled;
         int active_flag_changed;
         unsigned int subtype;
@@ -563,13 +562,17 @@ unsigned int game_session_dispatch_onoff_actions(GameSession *session,
         }
         location = &session->islands[request.island_index]
                         .locations[request.location_index];
-        base_item_id = location->record_value_10 -
-                       (int)request.player_slot * 16;
+        runtime_item_id = location->record_value_10;
+        base_item_id = runtime_item_id - (int)request.player_slot * 16;
         if (location->renderer_class != 0 ||
             location->owner_id != request.player_slot ||
             base_item_id < 0x25 || base_item_id > 0x27) {
             continue;
         }
+
+        /* FUN_00453bf6 resolves the owner-specific row from the runtime ID
+           and separately applies that player's maintenance budget. */
+        catalog_item_id = runtime_item_id;
 
         /* FUN_00453bf6 compares ON against the current +0x40 player balance.
            The source recomputes that balance when a site's active bit changes;
@@ -580,9 +583,9 @@ unsigned int game_session_dispatch_onoff_actions(GameSession *session,
         if ((location->source_flags & 0x400U) != 0) {
             location->source_flags &= ~0x400U;
         } else {
-            item = location->record_value_10 >= 0 &&
-                   location->record_value_10 <= (int32_t)UINT16_MAX
-                ? pad_catalog_find(catalog, (uint16_t)location->record_value_10)
+            item = catalog_item_id >= 0 &&
+                   catalog_item_id <= (int)UINT16_MAX
+                ? pad_catalog_find(catalog, (uint16_t)catalog_item_id)
                 : NULL;
             if (item != NULL && item->maintenance_tone_cost <=
                     session->economy[request.player_slot].source_maintenance_budget) {

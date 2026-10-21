@@ -362,6 +362,7 @@ int game_session_finish_location_move(GameSession *session,
     source->charge_floater_count = 0;
     source->charge_recent_floater = -1;
     source->charge_staff_task_handle = -1;
+    source->leviathan_spawned_floater = -1;
     source->source_capacity_4a = 0;
     source->source_progress_08 = 0;
     source->source_level_flags = 0;

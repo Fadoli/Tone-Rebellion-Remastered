@@ -105,6 +105,65 @@ static int selected_repair_button_visible(void)
         current_hit_points, maximum_hit_points);
 }
 
+static int selected_bridge_build_button_rect(RECT *rect, int *out_state)
+{
+    const GameRuntimeIsland *island;
+    const GameRuntimeLocation *location;
+    const WindowTemplate *panel;
+    int pending = 0;
+    unsigned int slot;
+
+    if (out_state != NULL) *out_state = 0;
+    if (rect == NULL || !g_game_session_valid ||
+        g_menu.screen != SCREEN_ISLAND ||
+        g_island_panel_mode != WINDOW_ISLAND_PANEL_GENERAL ||
+        g_menu.selected_tribe < 0 ||
+        g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
+        g_menu.selected_map_island < 0 ||
+        g_menu.selected_map_island >= g_game_session.island_count ||
+        g_selected_location < 0) return 0;
+
+    island = &g_game_session.islands[g_menu.selected_map_island];
+    if ((unsigned int)g_selected_location >= island->location_count) return 0;
+    location = &island->locations[g_selected_location];
+    if (location->renderer_class != 2 || location->record_value_10 != 2 ||
+        (location->source_flags & 0x001U) != 0) return 0;
+
+    if ((location->source_flags & 0x006U) != 0) pending = 2;
+
+    for (slot = 0; slot < GAME_SESSION_MAX_PENDING_EVENTS; ++slot) {
+        const GamePendingEvent *event = &g_game_session.pending_events[slot];
+        if (event->active != 0 && event->player_id == g_menu.selected_tribe &&
+            event->action_type == 4 &&
+            event->payload_0a == g_menu.selected_map_island &&
+            event->payload_0e == g_selected_location &&
+            event->payload_12 == GAME_INVENTORY_ITEM_FIRST_ID) {
+            if (pending == 0) pending = 1;
+            break;
+        }
+    }
+
+    panel = window_catalog_find(&g_window_catalog, "IWLocControl", 3);
+    if (panel == NULL) return 0;
+    rect->left = panel->pane.left + 8;
+    rect->right = rect->left + 104;
+    if (rect->right > panel->pane.right - 8)
+        rect->right = panel->pane.right - 8;
+    rect->top = panel->pane.bottom - 32;
+    rect->bottom = rect->top + 24;
+    if (out_state != NULL) *out_state = pending == 0 ? 1 : pending;
+    return rect->right > rect->left && rect->top >= panel->pane.top &&
+           rect->bottom <= panel->pane.bottom;
+}
+
+static int selected_bridge_build_button_at(int x, int y)
+{
+    RECT rect;
+    int state;
+    return selected_bridge_build_button_rect(&rect, &state) && state == 1 &&
+        x >= rect.left && x < rect.right && y >= rect.top && y < rect.bottom;
+}
+
 static int selected_onoff_button_visible(void)
 {
     const GameRuntimeIsland *island;
@@ -624,9 +683,20 @@ static int open_iw_construct(int location_index)
     site = &g_island_surface_data.locations[location_index];
     runtime_island = &g_game_session.islands[g_menu.selected_map_island];
     if (location_index >= runtime_island->location_count ||
-        runtime_island->locations[location_index].renderer_class != 0 ||
-        runtime_island->locations[location_index].record_value_10 != 0 ||
-        runtime_island->locations[location_index].owner_id != -1) return 0;
+        g_menu.selected_tribe < 0 ||
+        g_menu.selected_tribe >= GAME_START_PLAYER_COUNT) return 0;
+    {
+        const GameRuntimeLocation *runtime_site =
+            &runtime_island->locations[location_index];
+        int16_t owner = (int16_t)g_menu.selected_tribe;
+        uint16_t owner_bit = (uint16_t)(1U << g_menu.selected_tribe);
+        if (runtime_site->renderer_class != 0 ||
+            (runtime_site->source_value_14 != -1 &&
+             runtime_site->source_value_14 != owner) ||
+            (runtime_site->record_value_10 != 0 &&
+             runtime_site->record_value_10 != 1) ||
+            (runtime_site->source_value_22 & owner_bit) == 0) return 0;
+    }
 
     /* Initial new-game state gives each player one home island. The rule-set
        selector is still unresolved; at owned-island count 1 the only gated

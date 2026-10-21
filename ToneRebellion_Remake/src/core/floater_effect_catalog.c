@@ -37,8 +37,10 @@ static int impact_effect_index(const char *name)
     return -1;
 }
 
-static int parse_impact_frames(char *text,
-                               uint8_t frames[FLOATER_IMPACT_LEVEL_COUNT])
+static int parse_impact_frames(
+    char *text,
+    uint8_t starts[FLOATER_IMPACT_LEVEL_COUNT],
+    uint8_t frames[FLOATER_IMPACT_LEVEL_COUNT])
 {
     char *cursor = skip_space(text);
     char *end;
@@ -56,7 +58,9 @@ static int parse_impact_frames(char *text,
         cursor = end + 1;
         last = strtol(cursor, &end, 10);
         if (end == cursor || first < 1 || last < first ||
+            last - 1 > (long)UINT8_MAX ||
             last - first + 1 > (long)UINT8_MAX) return 0;
+        starts[i] = (uint8_t)(first - 1);
         frames[i] = (uint8_t)(last - first + 1);
         cursor = end;
     }
@@ -70,6 +74,8 @@ int floater_catalog_load_impact_effects(const unsigned char *bytes,
                                         size_t error_capacity)
 {
     uint8_t parsed[FLOATER_IMPACT_REALM_COUNT][FLOATER_IMPACT_LEVEL_COUNT] = {{0}};
+    uint8_t parsed_starts[FLOATER_IMPACT_REALM_COUNT]
+                         [FLOATER_IMPACT_LEVEL_COUNT] = {{0}};
     uint8_t seen_effects = 0;
     uint8_t seen_types = 0;
     uint8_t seen_realms = 0;
@@ -147,7 +153,8 @@ int floater_catalog_load_impact_effects(const unsigned char *bytes,
         } else if (current_effect >= 0 && strcmp(key, "LEVELFRAMES") == 0) {
             uint8_t bit = (uint8_t)(1U << current_effect);
             if ((seen_frames & bit) ||
-                !parse_impact_frames(argument, parsed[current_effect])) {
+                !parse_impact_frames(argument, parsed_starts[current_effect],
+                                     parsed[current_effect])) {
                 set_error(error, error_capacity, "invalid impact LEVELFRAMES",
                           line_number);
                 return 0;
@@ -162,5 +169,7 @@ int floater_catalog_load_impact_effects(const unsigned char *bytes,
         return 0;
     }
     memcpy(catalog->impact_frame_counts, parsed, sizeof(parsed));
+    memcpy(catalog->impact_frame_starts, parsed_starts,
+           sizeof(parsed_starts));
     return 1;
 }

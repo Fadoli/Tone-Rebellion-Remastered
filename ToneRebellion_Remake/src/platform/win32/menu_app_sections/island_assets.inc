@@ -31,6 +31,8 @@ static int load_island_surface(int island_id, int map_island_index,
     SpriteSheet building_command_candidate = {0};
     SpriteSheet inventory_item_candidate = {0};
     SpriteSheet diplomacy_candidate = {0};
+    SpriteSheet defense_projectile_candidates[4] = {{0}};
+    SpriteSheet defense_impact_candidates[4] = {{0}};
     SpriteSheet floater_info_candidate = {0};
     SpriteSheet building_candidates[PAD_CATALOG_MAX_ITEMS] = {{0}};
     SpriteSheet floater_body_candidates[4] = {{0}};
@@ -57,6 +59,10 @@ static int load_island_surface(int island_id, int map_island_index,
     };
     static const char *const floater_leg_names[4] = {
         "data\\plegs.shp", "data\\slegs.shp", "data\\mlegs.shp", "data\\llegs.shp"
+    };
+    static const char *const defense_impact_names[4] = {
+        "data\\phy.shp", "data\\sup.shp", "data\\erealm.shp",
+        "data\\nrealm.shp"
     };
     unsigned int hall_index;
     unsigned int item_id;
@@ -142,6 +148,22 @@ static int load_island_surface(int island_id, int map_island_index,
                            &inventory_item_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\diploma.shp", palette,
                            &diplomacy_candidate, error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\v-shot1b.shp", palette,
+                           &defense_projectile_candidates[0], error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\v-sht2fx.shp", palette,
+                           &defense_projectile_candidates[1], error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\v-mnrb.shp", palette,
+                           &defense_projectile_candidates[2], error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\join4.shp", palette,
+                           &defense_projectile_candidates[3], error, error_capacity) ||
+        !load_sprite_sheet(&archive, defense_impact_names[0], palette,
+                           &defense_impact_candidates[0], error, error_capacity) ||
+        !load_sprite_sheet(&archive, defense_impact_names[1], palette,
+                           &defense_impact_candidates[1], error, error_capacity) ||
+        !load_sprite_sheet(&archive, defense_impact_names[2], palette,
+                           &defense_impact_candidates[2], error, error_capacity) ||
+        !load_sprite_sheet(&archive, defense_impact_names[3], palette,
+                           &defense_impact_candidates[3], error, error_capacity) ||
         !load_sprite_sheet(&archive, feature_name, palette, &feature_candidate,
                            error, error_capacity)) {
         goto done;
@@ -375,6 +397,18 @@ static int load_island_surface(int island_id, int map_island_index,
     free_sprite_sheet(&g_inventory_item_art);
     free_sprite_sheet(&g_diplomacy_art);
     for (hall_index = 0; hall_index < 4; ++hall_index) {
+        free_sprite_sheet(&g_leviathan_projectile_art[hall_index]);
+        g_leviathan_projectile_art[hall_index] =
+            defense_projectile_candidates[hall_index];
+        memset(&defense_projectile_candidates[hall_index], 0,
+               sizeof(defense_projectile_candidates[hall_index]));
+        free_sprite_sheet(&g_leviathan_impact_art[hall_index]);
+        g_leviathan_impact_art[hall_index] =
+            defense_impact_candidates[hall_index];
+        memset(&defense_impact_candidates[hall_index], 0,
+               sizeof(defense_impact_candidates[hall_index]));
+    }
+    for (hall_index = 0; hall_index < 4; ++hall_index) {
         free_sprite_sheet(&g_initial_floater_bodies[hall_index]);
         g_initial_floater_bodies[hall_index] = floater_body_candidates[hall_index];
         memset(&floater_body_candidates[hall_index], 0,
@@ -506,6 +540,10 @@ done:
     free_sprite_sheet(&building_command_candidate);
     free_sprite_sheet(&inventory_item_candidate);
     free_sprite_sheet(&diplomacy_candidate);
+    for (hall_index = 0; hall_index < 4; ++hall_index)
+        free_sprite_sheet(&defense_projectile_candidates[hall_index]);
+    for (hall_index = 0; hall_index < 4; ++hall_index)
+        free_sprite_sheet(&defense_impact_candidates[hall_index]);
     for (item_id = 0; item_id < PAD_CATALOG_MAX_ITEMS; ++item_id) {
         free_sprite_sheet(&building_candidates[item_id]);
     }

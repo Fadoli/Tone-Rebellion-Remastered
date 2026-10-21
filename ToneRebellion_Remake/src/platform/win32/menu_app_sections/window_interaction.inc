@@ -236,6 +236,17 @@ static void handle_click(HWND window, int x, int y)
             g_selected_location >= 0 &&
             g_selected_location < g_game_session.islands[
                 g_menu.selected_map_island].location_count) {
+            if (selected_bridge_build_button_at(x, y)) {
+                /* Native IWLocControl message 0x3a queues action type 4 with
+                   artifact 5 for an idle class-2 bridge marker. */
+                (void)game_session_queue_inventory_action(&g_game_session,
+                    (uint8_t)g_menu.selected_tribe,
+                    (uint8_t)g_menu.selected_map_island,
+                    (uint16_t)g_selected_location,
+                    GAME_INVENTORY_ITEM_FIRST_ID);
+                InvalidateRect(window, NULL, FALSE);
+                return;
+            }
             int cast_action = selected_cast_action_at(x, y);
             if (cast_action >= 0) {
                 (void)game_session_queue_cast_action(&g_game_session,

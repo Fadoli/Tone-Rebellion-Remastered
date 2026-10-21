@@ -57,6 +57,10 @@ int game_session_initialize(const WorldDefinition *world,
 
     memset(&next, 0, sizeof(next));
     next.config = *config;
+    memcpy(next.effect_impact_frame_counts, floater_catalog->impact_frame_counts,
+           sizeof(next.effect_impact_frame_counts));
+    memcpy(next.effect_impact_frame_starts, floater_catalog->impact_frame_starts,
+           sizeof(next.effect_impact_frame_starts));
     next.island_count = world->island_count;
     next.world_bridge_count = world->bridge_count;
     memcpy(next.world_bridges, world->bridges,
@@ -133,6 +137,7 @@ int game_session_initialize(const WorldDefinition *world,
         for (location_index = 0; location_index < runtime->location_count; ++location_index) {
             GameRuntimeLocation *state = &runtime->locations[location_index];
             const PadCatalogItem *pad_item = NULL;
+            state->resource_retry_tick_36 = -1;
             if (state->record_value_10 > 0 &&
                 state->record_value_10 <= (int32_t)UINT16_MAX &&
                 state->renderer_class <= 1) {

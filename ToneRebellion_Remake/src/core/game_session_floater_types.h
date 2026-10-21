@@ -111,6 +111,23 @@ typedef struct GameFloaterStart {
     uint8_t is_active;
 } GameFloaterStart;
 
+typedef struct GameDefenseProjectile {
+    uint8_t active;
+    uint8_t island_index;
+    uint8_t effect_sheet_index;
+    uint8_t animation_tick;
+    uint8_t movement_speed;
+    uint8_t impact_phase;
+    uint8_t impact_realm_index;
+    uint8_t impact_frame_start;
+    uint8_t impact_frame_count;
+    int16_t target_floater;
+    int16_t target_location;
+    int16_t attack_power;
+    uint16_t x;
+    uint16_t y;
+} GameDefenseProjectile;
+
 static inline int game_session_floater_is_active(
     const GameFloaterStart *floater)
 {
@@ -132,6 +149,8 @@ typedef struct GameSession {
        new worker. Keep them separate from mutable live floater state. */
     FloaterStats worker_birth_stats[GAME_START_PLAYER_COUNT];
     uint8_t worker_birth_impact_frame_counts[GAME_START_PLAYER_COUNT][4];
+    uint8_t effect_impact_frame_counts[4][4];
+    uint8_t effect_impact_frame_starts[4][4];
     GameFloaterStart floaters[GAME_SESSION_MAX_FLOATERS];
     /* Native floater table reserves 256 records; count is a high-water mark
        and needs 16 bits to represent a full table. */
@@ -153,6 +172,9 @@ typedef struct GameSession {
         uint16_t effect_y;
     } cast_effects[GAME_SESSION_MAX_CAST_EFFECTS];
     uint8_t active_cast_effect_count;
+    /* Tower bolts reuse the source effect's per-frame target pursuit and
+       impact damage path; the platform resolves the source EFFECTS SHP art. */
+    GameDefenseProjectile defense_projectiles[32];
     /* FUN_00416a9a's source sound events are drained by the platform adapter. */
     uint8_t audio_event_head;
     uint8_t audio_event_count;

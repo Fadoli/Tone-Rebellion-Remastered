@@ -804,20 +804,26 @@ static void test_cancelled_construction_releases_assigned_floater(void)
     GameSession session = {0};
     PadCatalog catalog = {0};
     GameRuntimeLocation *site;
+    GameRuntimeLocation *next_site;
     GameRuntimeLocation *hall;
     GameFloaterStart *floater;
     GamePendingEvent expected;
     int slot;
+    int next_slot;
 
     session.island_count = 1;
     session.floater_count = 1;
-    session.islands[0].location_count = 2;
+    session.islands[0].location_count = 3;
     session.economy[0].hall_island_index = 0;
     session.economy[0].hall_location_index = 1;
     site = &session.islands[0].locations[0];
     site->source_value_22 = 1;
     site->owner_id = -1;
     site->source_value_14 = -1;
+    next_site = &session.islands[0].locations[2];
+    next_site->source_value_22 = 1;
+    next_site->owner_id = -1;
+    next_site->source_value_14 = -1;
     hall = &session.islands[0].locations[1];
     hall->record_value_10 = 0x2a;
     hall->owner_id = 0;
@@ -839,6 +845,9 @@ static void test_cancelled_construction_releases_assigned_floater(void)
 
     slot = game_session_pending_event_add(&session, 0, 0, 5, 0, 0, 0x25);
     assert(slot == 0);
+    next_slot = game_session_pending_event_add(
+        &session, 0, 0, 5, 0, 2, 0x25);
+    assert(next_slot == 1);
     game_session_assign_local_resource_tasks(&session, &catalog);
     assert(floater->active_order_action == 4);
     assert(floater->linked_task_slot == slot);
@@ -848,8 +857,9 @@ static void test_cancelled_construction_releases_assigned_floater(void)
     /* FUN_00466533 detaches workers referencing the cancelled CONSTR slot. */
     assert(game_session_dispatch_task_command(&session, (uint8_t)slot,
                                               12, &expected));
-    assert(session.pending_event_count == 0);
+    assert(session.pending_event_count == 1);
     assert(session.pending_events[slot].active == 0);
+    assert(session.pending_events[next_slot].active == 1);
     assert(floater->active_order_action == 0);
     assert(floater->linked_task_slot == -1);
     assert(floater->order_target_location == -1);
@@ -864,18 +874,13 @@ static void test_cancelled_construction_releases_assigned_floater(void)
     assert(site->record_value_10 == 0);
     assert(hall->resource_stock[GAME_RESOURCE_BUILD_TONE] == 1);
 
-    game_session_assign_local_resource_tasks(&session, &catalog);
-    assert(floater->active_order_action == 0);
-    assert(hall->resource_stock[GAME_RESOURCE_BUILD_TONE] == 1);
-
-    /* A fresh selection after cancellation reuses the released task slot and
-       the detached worker can claim the restarted construction task. */
-    assert(game_session_queue_build_selection(&session, 0, 0, 0, 0x25));
-    assert(game_session_dispatch_build_selections(&session) == 1);
+    /* The second building was queued before cancellation; the freed worker
+       should claim that existing task on the next scheduler pass. */
     assert(session.pending_event_count == 1);
-    assert(session.pending_events[slot].active == 1);
+    assert(session.pending_events[next_slot].active == 1);
     game_session_assign_local_resource_tasks(&session, &catalog);
     assert(floater->active_order_action == 4);
-    assert(floater->linked_task_slot == slot);
-    assert(session.pending_events[slot].assigned_floater_count == 1);
+    assert(floater->linked_task_slot == next_slot);
+    assert(floater->order_target_location == 2);
+    assert(session.pending_events[next_slot].assigned_floater_count == 1);
 }

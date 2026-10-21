@@ -318,6 +318,38 @@ static void render_island_view(HDC dc)
             }
         }
     }
+    if (runtime_island != NULL && g_game_session_valid) {
+        unsigned int projectile_index;
+        for (projectile_index = 0; projectile_index < 32; ++projectile_index) {
+            const GameDefenseProjectile *projectile =
+                &g_game_session.defense_projectiles[projectile_index];
+            const SpriteSheet *effect_art;
+            uint32_t frame;
+            int x;
+            int y;
+            if (projectile->active == 0 ||
+                projectile->island_index != g_menu.selected_map_island ||
+                projectile->effect_sheet_index >= 4) continue;
+            effect_art = projectile->impact_phase != 0
+                ? &g_leviathan_impact_art[projectile->effect_sheet_index]
+                : &g_leviathan_projectile_art[projectile->effect_sheet_index];
+            if (effect_art->frame_count == 0) continue;
+            x = (int)projectile->x - g_island_scroll_x;
+            y = image_top + (int)projectile->y;
+            if (x < -32 || x >= LOGICAL_WIDTH + 32) continue;
+            if (projectile->impact_phase != 0) {
+                uint32_t impact_offset = projectile->animation_tick / 2U;
+                if (projectile->impact_frame_count == 0) continue;
+                if (impact_offset >= projectile->impact_frame_count)
+                    impact_offset = projectile->impact_frame_count - 1U;
+                frame = (uint32_t)projectile->impact_frame_start + impact_offset;
+            } else {
+                frame = (projectile->animation_tick / 2U) % effect_art->frame_count;
+            }
+            if (frame >= effect_art->frame_count) continue;
+            draw_sprite(dc, effect_art, frame, x, y);
+        }
+    }
     if (focus != NULL) {
         int x = (int)focus->x - g_island_scroll_x;
         int y = image_top + (int)focus->y;
@@ -854,6 +886,37 @@ static void draw_location_action_panel(HDC dc)
                                 spell_button->pane.left, spell_button->pane.top);
                 }
             }
+        }
+    }
+    {
+        RECT bridge_button_rect;
+        int bridge_state;
+        if (selected_bridge_build_button_rect(&bridge_button_rect,
+                                              &bridge_state)) {
+            COLORREF fill_color = bridge_state == 1
+                ? RGB(43, 57, 84) : RGB(59, 63, 74);
+            const char *label = bridge_state == 1 ? "BUILD BRIDGE" :
+                bridge_state == 2 ? "BRIDGE REQUESTED" : "BRIDGE BUILDING";
+            HBRUSH fill = CreateSolidBrush(fill_color);
+            HBRUSH border = CreateSolidBrush(RGB(168, 190, 224));
+            int text_width = measure_bitmap_text(NULL, label, strlen(label));
+            int text_height = (int)g_bitmap_font.height;
+            if (fill != NULL) {
+                (void)FillRect(dc, &bridge_button_rect, fill);
+                DeleteObject(fill);
+            }
+            if (border != NULL) {
+                (void)FrameRect(dc, &bridge_button_rect, border);
+                DeleteObject(border);
+            }
+            draw_bitmap_label(dc, label,
+                bridge_button_rect.left +
+                    ((bridge_button_rect.right - bridge_button_rect.left) -
+                     text_width) / 2,
+                bridge_button_rect.top +
+                    ((bridge_button_rect.bottom - bridge_button_rect.top) -
+                     text_height) / 2,
+                RGB(240, 244, 255));
         }
     }
     if (panel != NULL && selected_location_can_be_grabbed()) {

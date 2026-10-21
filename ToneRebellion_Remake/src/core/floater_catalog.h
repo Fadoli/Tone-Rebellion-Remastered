@@ -29,6 +29,8 @@ typedef struct FloaterCatalog {
     FloaterStats rows[FLOATER_CATALOG_ROW_COUNT];
     uint8_t impact_frame_counts[FLOATER_IMPACT_REALM_COUNT]
                                [FLOATER_IMPACT_LEVEL_COUNT];
+    uint8_t impact_frame_starts[FLOATER_IMPACT_REALM_COUNT]
+                               [FLOATER_IMPACT_LEVEL_COUNT];
 } FloaterCatalog;
 
 /* Parse the 45 ordered records loaded by FUN_004633a7. */

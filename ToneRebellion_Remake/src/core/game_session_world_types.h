@@ -63,6 +63,9 @@ typedef struct GameRuntimeLocation {
     int16_t charge_recent_floater;
     /* Source staffing row +0x50 task handle; -1 means no queued staff request. */
     int16_t charge_staff_task_handle;
+    /* Class-1 Leviathan markers keep the hidden type-4 floater created at
+       PROD start here until the production animation releases it. */
+    int16_t leviathan_spawned_floater;
     /* Raw +0x4a short: FUN_0045eaa7 uses it as the Hall stock threshold;
        FUN_0040bf98 also uses it as the BASE frame step. */
     int16_t source_capacity_4a;

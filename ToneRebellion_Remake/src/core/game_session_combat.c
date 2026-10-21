@@ -233,6 +233,64 @@ int32_t game_session_damage_floater(GameSession *session,
     return damage;
 }
 
+int32_t game_session_damage_floater_from_power(GameSession *session,
+                                               unsigned int target_index,
+                                               int32_t attack_power)
+{
+    GameFloaterStart *target;
+    int32_t defense_power;
+    int32_t modifier;
+    double score;
+    int32_t attack_realm;
+    int32_t target_realm;
+    int32_t chance;
+    int32_t random_range;
+    int32_t damage;
+
+    if (session == NULL || target_index >= session->floater_count) return 0;
+    target = &session->floaters[target_index];
+    if (!game_session_floater_is_active(target) || attack_power < 0 ||
+        (target->source_runtime_flags & 0x108U) != 0) return 0;
+
+    /* FUN_00420217 compares the incoming pad-row strength against the target's
+       FUN_0041fde6 power, adjusts hit chance by difficulty and realm, then
+       rolls three values for damage. */
+    defense_power = (target->source_subtype == 0 ||
+                     target->source_subtype == 9)
+        ? 0 : floater_attack_power(target);
+    modifier = difficulty_attack_modifier(attack_power,
+                                           session->config.difficulty);
+    score = (double)(attack_power + 7 - defense_power);
+    attack_realm = ((int32_t)target->source_subtype + 1) & 3;
+    target_realm = target->attack_realm & 3;
+    if (attack_realm == target_realm) {
+        score += modifier;
+    } else if (((int32_t)target->source_subtype + 3) % 4 == target_realm) {
+        score -= modifier;
+    } else if (((int32_t)target->source_subtype & 3) != target_realm) {
+        score += (target->type_index > 1U ? 0.5 : -0.5) * attack_power;
+    }
+    chance = source_round_to_int((60.0 * score) / 14.0) + 10;
+    if (tone_rng_bounded(&session->random_state, 100) >= chance) return 0;
+
+    random_range = attack_power - 1;
+    if (random_range < 1) random_range = 1;
+    damage = (tone_rng_bounded(&session->random_state, random_range) +
+              tone_rng_bounded(&session->random_state, random_range) + 3 +
+              tone_rng_bounded(&session->random_state, random_range)) / 3;
+    if (damage > 10) damage = 10;
+    if (damage < 0) damage = 0;
+    if (target->current_hit_points > (uint8_t)damage) {
+        target->current_hit_points =
+            (uint8_t)(target->current_hit_points - (uint8_t)damage);
+    } else {
+        target->current_hit_points = 0;
+        target->source_runtime_flags |= 0x008U;
+        target->source_death_timer = 0;
+    }
+    return damage;
+}
+
 void game_session_clear_cast_site(GameSession *session, uint8_t island_index,
                                   uint16_t location_index,
                                   GameRuntimeLocation *target);
@@ -300,6 +358,43 @@ int32_t game_session_damage_site(GameSession *session,
     return damage;
 }
 
+int32_t game_session_damage_site_from_power(GameSession *session,
+                                            uint8_t island_index,
+                                            uint16_t location_index,
+                                            int32_t attack_power)
+{
+    GameRuntimeLocation *target;
+    int32_t item_id;
+    int32_t random_range;
+    int32_t damage;
+
+    if (session == NULL || island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count)
+        return 0;
+    target = &session->islands[island_index].locations[location_index];
+    item_id = game_session_base_item_id(target);
+    /* FUN_004533a8 routes impact damage through FUN_00420217 and then the
+       same site death state consumed by FUN_00450a71. */
+    if (target->renderer_class > 1U || target->owner_id < 0 ||
+        target->owner_id >= GAME_START_PLAYER_COUNT || item_id == 0 ||
+        (item_id >= 0x17 && item_id <= 0x24) ||
+        (target->source_flags & 0x290U) != 0) return 0;
+
+    /* FUN_00420217 rolls three values from the target pad's +0x0a field,
+       averages them with the source's +3 bias, and caps damage at ten. */
+    random_range = attack_power - 1;
+    if (random_range < 1) random_range = 1;
+    damage = (tone_rng_bounded(&session->random_state, random_range) +
+              tone_rng_bounded(&session->random_state, random_range) + 3 +
+              tone_rng_bounded(&session->random_state, random_range)) / 3;
+    if (damage > 10) damage = 10;
+    if (damage < 0) damage = 0;
+    target->source_value_34 = (int16_t)(target->source_value_34 - damage);
+    if (target->source_value_34 < 1)
+        mark_site_destroyed(session, target, island_index);
+    return damage;
+}
+
 void game_session_clear_cast_site(GameSession *session, uint8_t island_index,
                                   uint16_t location_index,
                                   GameRuntimeLocation *target)
@@ -355,6 +450,11 @@ void game_session_clear_cast_site(GameSession *session, uint8_t island_index,
     target->charge_source_value_30 = 0;
     target->charge_floater_count = 0;
     target->charge_recent_floater = -1;
+    if (target->leviathan_spawned_floater >= 0 &&
+        (unsigned int)target->leviathan_spawned_floater < session->floater_count) {
+        session->floaters[(unsigned int)target->leviathan_spawned_floater].is_active = 0;
+    }
+    target->leviathan_spawned_floater = -1;
     target->resource_stock[GAME_RESOURCE_BUILD_TONE] = 0;
     target->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 0;
     target->resource_stock[GAME_RESOURCE_MAGIC_TONE] = 0;

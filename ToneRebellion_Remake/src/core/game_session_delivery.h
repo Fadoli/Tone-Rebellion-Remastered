@@ -11,6 +11,7 @@ void game_session_assign_local_resource_tasks(GameSession *session,
 void game_session_update_construction_tasks(GameSession *session,
                                              const PadCatalog *catalog);
 void game_session_advance_local_resource_task(GameSession *session,
+                                               const PadCatalog *catalog,
                                                GameFloaterStart *floater);
 /* Route an active REPAIR task to its next Build Tone pickup source. */
 int game_session_start_repair_supply(GameSession *session,

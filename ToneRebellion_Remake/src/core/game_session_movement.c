@@ -1032,7 +1032,7 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
              (floater->active_order_action == 0x12 &&
               (floater->movement_state == 3 || floater->movement_state == 4))) &&
             !floater->has_move_order) {
-            game_session_advance_local_resource_task(session, floater);
+            game_session_advance_local_resource_task(session, catalog, floater);
             if (!floater->has_move_order) continue;
         }
 
@@ -1178,8 +1178,9 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
             floater->has_move_order = 0;
             if (game_session_tick_ground_object_pickup(session, floater, 1))
                 continue;
-            if (floater->movement_state == 3 || floater->movement_state == 4) {
-                game_session_advance_local_resource_task(session, floater);
+            if (floater->movement_state == 3 || floater->movement_state == 4 ||
+                floater->movement_state == 5) {
+                game_session_advance_local_resource_task(session, catalog, floater);
                 continue;
             }
             if (floater->movement_state == 9 || floater->movement_state == 0x0f ||
@@ -1261,7 +1262,7 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
             if (floater->movement_state == 9 || floater->movement_state == 0x0f ||
                 floater->movement_state == 0x10) floater->movement_state = 0;
         }
-        game_session_advance_local_resource_task(session, floater);
+        game_session_advance_local_resource_task(session, catalog, floater);
         game_session_tick_timed_movement_state(floater);
 
     }

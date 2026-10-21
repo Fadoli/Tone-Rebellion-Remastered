@@ -501,6 +501,10 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_island_lilmap_art);
     free_sprite_sheet(&g_island_main_buttons);
     free_sprite_sheet(&g_island_realm_art);
+    for (unsigned int effect_index = 0; effect_index < 4; ++effect_index) {
+        free_sprite_sheet(&g_leviathan_projectile_art[effect_index]);
+        free_sprite_sheet(&g_leviathan_impact_art[effect_index]);
+    }
     free_sprite_sheet(&g_floater_info_art);
     free_sprite_sheet(&g_hall_command_art);
     free_sprite_sheet(&g_glyph_inventory_art);

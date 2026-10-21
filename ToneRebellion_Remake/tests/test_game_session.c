@@ -468,6 +468,7 @@ int main(void)
     test_onoff_action_queues_target_without_changing_location_flags();
     test_build_selection_queues_source_packet_without_placing_item();
     test_construct_click_item_becomes_queued_build_packet();
+    test_cancelled_construction_releases_assigned_floater();
     test_inci_animation_uses_source_counter_and_delayed_activation();
     test_active_item_four_and_twenty_two_counter_stops_at_32();
     test_class0_item5_spawns_neutral_item_after_difficulty_delay();
@@ -483,7 +484,6 @@ int main(void)
     test_recruitment_waits_for_surplus_then_creates_animated_worker();
     test_initialized_workers_build_from_queued_selection();
     test_construction_completes_on_native_empty_status_one_site();
-    test_cancelled_construction_releases_assigned_floater();
     test_charge_order_accepts_each_players_source_variant();
     test_floater_pickup_order_collects_ground_artifact();
     test_floater_move_state_advances_only_simulation_assigned_destinations();

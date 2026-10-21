@@ -78,6 +78,20 @@ static int delivery_item_code_valid(int16_t item_code)
          item_code < GAME_INVENTORY_ITEM_FIRST_ID + GAME_INVENTORY_ITEM_COUNT);
 }
 
+static int location_is_producer_for_resource(
+    const GameRuntimeLocation *location, int16_t player_id,
+    int16_t resource_code)
+{
+    int32_t producer_item;
+
+    if (location == NULL || location->renderer_class != 0 ||
+        location->owner_id != player_id ||
+        resource_code < 1 || resource_code > GAME_RESOURCE_TYPE_COUNT) return 0;
+    producer_item = resource_code == 1 ? 0x25 :
+                    resource_code == 2 ? 0x27 : 0x26;
+    return game_session_base_item_id(location) == producer_item;
+}
+
 static int artifact_delivery_target_valid(const GameSession *session,
                                           const GameFloaterStart *floater,
                                           uint8_t island_index,
@@ -274,7 +288,7 @@ static int construction_task_details(const GameSession *session,
         if ((uint16_t)event->payload_0e >= island->location_count) return 0;
         target = &island->locations[(uint16_t)event->payload_0e];
     }
-    if (target->renderer_class != 0 || target->owner_id != -1 ||
+    if (target->renderer_class != 0 ||
         !game_session_build_target_available(target,
             (uint8_t)event->player_id) || target->construction_site_size > 2U)
         return 0;
@@ -305,17 +319,27 @@ static int assign_construction_task_for_floater(
     uint32_t reserved;
     uint8_t source_island = floater->island_index;
     int source_index;
+    int finalize_building;
 
     if (event->player_id != floater->owner_slot ||
-        !construction_task_details(session, catalog, event, &target, &item) ||
-        target->resource_stock[GAME_RESOURCE_BUILD_TONE] >=
-            (uint16_t)item->building_tone_cost) return 0;
-    reserved = target->resource_stock[GAME_RESOURCE_BUILD_TONE] +
-        (uint16_t)event->assigned_floater_count;
-    if (reserved >= (uint16_t)item->building_tone_cost) return 0;
-    source_index = floater->carried_resource_code == 1 ? -1 :
-        construction_refill_source(session, floater, &source_island);
-    if (floater->carried_resource_code != 1 && source_index < 0) return 0;
+        !construction_task_details(session, catalog, event, &target, &item))
+        return 0;
+    finalize_building = target->resource_stock[GAME_RESOURCE_BUILD_TONE] >=
+        (uint16_t)item->building_tone_cost;
+    if (finalize_building) {
+        /* The task's assigned count includes workers still returning from a
+           source. Let those orders drain before assigning the single state-5
+           finisher; otherwise several idle workers can queue for one site. */
+        if (event->assigned_floater_count != 0) return 0;
+        source_index = -1;
+    } else {
+        reserved = target->resource_stock[GAME_RESOURCE_BUILD_TONE] +
+            (uint16_t)event->assigned_floater_count;
+        if (reserved >= (uint16_t)item->building_tone_cost) return 0;
+        source_index = floater->carried_resource_code == 1 ? -1 :
+            construction_refill_source(session, floater, &source_island);
+        if (floater->carried_resource_code != 1 && source_index < 0) return 0;
+    }
     if (event->payload_0a != source_island &&
         !construction_handoff_available(session, source_island,
                                          floater->owner_slot)) return 0;
@@ -328,7 +352,23 @@ static int assign_construction_task_for_floater(
     floater->order_target_island = (uint8_t)event->payload_0a;
     floater->order_source_island = source_island;
     floater->order_timer = 0;
-    if (source_index < 0) {
+    if (finalize_building) {
+        if (event->payload_0a == floater->island_index) {
+            floater_target_location(floater, target, 5);
+        } else {
+            floater->source_order_coordinate_30 = (uint16_t)(
+                ((uint16_t)(((uint32_t)target->x + 5U) / 10U) << 8) |
+                (uint16_t)(((uint32_t)target->y + 5U) / 10U));
+            if (!game_session_begin_floater_handoff(
+                    session, floater, (uint8_t)event->payload_0a)) {
+                floater->active_order_action = 0;
+                release_task_claim(session, floater);
+                return 0;
+            }
+            floater->handoff_resume_action = 4;
+            floater->handoff_resume_state = 5;
+        }
+    } else if (source_index < 0) {
         if (event->payload_0a == floater->island_index) {
             floater_target_location(floater, target, 4);
         } else {
@@ -527,8 +567,8 @@ static int deposit_construction_resource(GameSession *session,
 
     target = &session->islands[event->payload_0a]
         .locations[(uint16_t)event->payload_0e];
-    if (target->renderer_class != 0 || target->owner_id != -1 ||
-        (target->record_value_10 != 0 && target->record_value_10 != 1) ||
+    if (target->renderer_class != 0 ||
+        !game_session_build_target_available(target, floater->owner_slot) ||
         target->resource_stock[0] == UINT16_MAX)
         return 0;
     ++target->resource_stock[0];
@@ -624,22 +664,19 @@ void game_session_update_construction_tasks(GameSession *session,
 
     if (session == NULL || catalog == NULL) return;
 
-    /* Consume completed CONSTR tasks before assigning another worker. */
+    /* Keep valid CONSTR tasks queued until a worker reaches the target.
+       FUN_0041e569's state-5 arrival calls FUN_004527ee to place the pad. */
     for (slot = 0; slot < GAME_SESSION_MAX_PENDING_EVENTS; ++slot) {
         GamePendingEvent *event = &session->pending_events[slot];
-        const GameRuntimeLocation *target;
-        const PadCatalogItem *item;
-        IslandLocation site = {0};
-
         if (event->active != 0 && event->action_type == 5 &&
             event->payload_0a >= 0 && event->payload_0a < session->island_count &&
             event->payload_0e >= 0 &&
             (uint16_t)event->payload_0e <
                 session->islands[event->payload_0a].location_count) {
-            target = &session->islands[event->payload_0a]
+            const GameRuntimeLocation *target = &session->islands[event->payload_0a]
                 .locations[(uint16_t)event->payload_0e];
-            if (target->owner_id != -1 ||
-                (target->record_value_10 != 0 && target->record_value_10 != 1) ||
+            if (!game_session_build_target_available(target,
+                    (uint8_t)event->player_id) ||
                 target->construction_site_size > 2U) {
                 /* FUN_00466533 detaches every floater whose active order
                    references this slot before the invalid CONSTR task goes. */
@@ -650,34 +687,12 @@ void game_session_update_construction_tasks(GameSession *session,
             }
         }
 
-        if (!construction_task_details(session, catalog, event, &target, &item) ||
-            target->resource_stock[GAME_RESOURCE_BUILD_TONE] <
-                (uint16_t)item->building_tone_cost) continue;
-
-        /* The runtime retains the original pad size; reuse the normal source
-           placement initializer once the delivered Build Tone meets its cost. */
-        site.kind = ISLAND_LOCATION_PAD;
-        site.renderer_subtype = target->construction_site_size;
-        if (game_session_place_building(session, catalog,
-                (uint8_t)event->player_id, (uint8_t)event->payload_0a,
-                (uint16_t)event->payload_0e, &site,
-                (uint16_t)event->payload_12, NULL, 0)) {
-            /* game_session_place_building recalculates the active state and
-               refreshes maintenance budgets after FUN_004528ca initializes it. */
-            /* Completing the target invalidates any workers still reserved
-               against this slot, such as workers en route when stock arrived
-               through another path. */
-            {
-                GamePendingEvent expected = *event;
-                (void)game_session_dispatch_task_command(
-                    session, (uint8_t)slot, 12, &expected);
-            }
-        }
     }
 
 }
 
 void game_session_advance_local_resource_task(GameSession *session,
+                                       const PadCatalog *catalog,
                                        GameFloaterStart *floater)
 {
     GameRuntimeIsland *island;
@@ -685,13 +700,57 @@ void game_session_advance_local_resource_task(GameSession *session,
     int16_t code;
     int recharge_order;
 
+    if (session == NULL || floater == NULL) return;
     recharge_order = floater->active_order_action == 2 ||
         floater->active_order_action == 17;
     if ((floater->active_order_action != 4 && !recharge_order &&
          floater->active_order_action != 0x12) ||
+        catalog == NULL ||
         floater->island_index >= session->island_count ||
         floater->x != floater->destination_x || floater->y != floater->destination_y)
         return;
+
+    if (floater->active_order_action == 4 && floater->movement_state == 5) {
+        int16_t slot = floater->linked_task_slot;
+        GamePendingEvent *event;
+        const GameRuntimeLocation *build_target;
+        const PadCatalogItem *build_item;
+        IslandLocation site = {0};
+
+        if (slot < 0 || slot >= GAME_SESSION_MAX_PENDING_EVENTS) return;
+        event = &session->pending_events[(uint8_t)slot];
+        if (event->active == 0 || event->action_type != 5 ||
+            event->player_id != floater->owner_slot ||
+            event->payload_0a != floater->order_target_island ||
+            event->payload_0e != floater->order_target_location ||
+            !construction_task_details(session, catalog, event,
+                                       &build_target, &build_item) ||
+            build_target->resource_stock[GAME_RESOURCE_BUILD_TONE] <
+                (uint16_t)build_item->building_tone_cost) {
+            floater->active_order_action = 0;
+            release_task_claim(session, floater);
+            floater->movement_state = 0;
+            floater->has_move_order = 0;
+            return;
+        }
+
+        site.kind = ISLAND_LOCATION_PAD;
+        site.renderer_subtype = build_target->construction_site_size;
+        if (game_session_place_building(session, catalog,
+                (uint8_t)event->player_id, (uint8_t)event->payload_0a,
+                (uint16_t)event->payload_0e, &site,
+                (uint16_t)event->payload_12, NULL, 0)) {
+            GamePendingEvent expected = *event;
+            (void)game_session_dispatch_task_command(
+                session, (uint8_t)slot, 12, &expected);
+        } else {
+            floater->active_order_action = 0;
+            release_task_claim(session, floater);
+            floater->movement_state = 0;
+            floater->has_move_order = 0;
+        }
+        return;
+    }
 
     if (recharge_order && floater->movement_state == 2) {
         int special_receiver;
@@ -718,9 +777,14 @@ void game_session_advance_local_resource_task(GameSession *session,
 
         /* FUN_0041e569's state-2 case waits at Halls/linked sites, then uses
            FUN_00452c31/FUN_00452eac to withdraw one requested resource. */
-        special_receiver = target->record_value_10 == 0x2a ||
-            target->source_location_slot_18 != -1 ||
-            (floater->source_runtime_flags & 1U) != 0;
+        /* Native producer sources use their +0x36 retry counter while PROD
+           completes. Do not route a linked producer through the fixed
+           20-tick Hall/source wait, which can expire before its output exists. */
+        special_receiver = location_is_player_hall(target) ||
+            ((target->source_location_slot_18 != -1 ||
+              (floater->source_runtime_flags & 1U) != 0) &&
+             !location_is_producer_for_resource(target,
+                 floater->owner_slot, code));
         if (special_receiver) {
             if (floater->order_timer == 0) {
                 /* FUN_0041e569 calls FUN_00425084 before starting the 20-tick
@@ -799,8 +863,10 @@ void game_session_advance_local_resource_task(GameSession *session,
             return;
         source = &island->locations[(uint16_t)floater->order_source_location];
         if (location_is_player_hall(source) ||
-            source->source_location_slot_18 != -1 ||
-            (floater->source_runtime_flags & 1U) != 0) {
+            ((source->source_location_slot_18 != -1 ||
+              (floater->source_runtime_flags & 1U) != 0) &&
+             !location_is_producer_for_resource(source,
+                 floater->owner_slot, code))) {
             /* This branch counts to 20 after arrival before checking stock. */
             if (floater->order_timer == 0) {
                 floater->source_runtime_flags |= 1U;
@@ -984,7 +1050,6 @@ int local_refill_source_is_valid(const GameSession *session,
                                        int16_t resource_code)
 {
     const GameRuntimeIsland *island;
-    int32_t producer_item;
 
     if (session == NULL || island_index >= session->island_count ||
         !delivery_item_code_valid(resource_code)) return 0;
@@ -1003,13 +1068,18 @@ int local_refill_source_is_valid(const GameSession *session,
             game_session_location_resource_available(session, island_index,
                 location_index, resource_code);
     }
-    producer_item = resource_code == 1 ? 0x25 :
-                    resource_code == 2 ? 0x27 : 0x26;
     {
         const GameRuntimeLocation *location = &island->locations[location_index];
-        return location->owner_id == player_id &&
-               location->record_value_10 == producer_item + player_id * 16 &&
-               (location->source_flags & 1U) != 0;
+        /* FUN_00452ceb accepts the owning player's Hall as a refill source for
+           each resource when its corresponding raw stock is positive. The
+           generic refill search visits connected islands too, so recognizing
+           Hall stock here enables cross-island construction supply. */
+        if (location->owner_id == player_id &&
+            location_is_player_hall(location) &&
+            location->resource_stock[resource_code - 1] != 0) return 1;
+        return (location->source_flags & 1U) != 0 &&
+            location_is_producer_for_resource(location, player_id,
+                                               resource_code);
     }
 }
 
@@ -1021,6 +1091,7 @@ static int local_refill_source_on_island(GameSession *session,
     const GameRuntimeIsland *island;
     uint16_t candidate_indices[10];
     int32_t candidate_distances[10];
+    int32_t candidate_weights[10];
     unsigned int candidate_count = 0;
     int32_t distance_sum = 0;
     double inverse_weight_sum = 0.0;
@@ -1076,16 +1147,20 @@ static int local_refill_source_on_island(GameSession *session,
         inverse_weight_sum += (double)distance_sum /
                               (double)candidate_distances[location_index];
 
-    roll = tone_rng_bounded(&session->random_state, 1000);
-    {
-        int32_t cumulative = 0;
-        for (location_index = 0; location_index < candidate_count; ++location_index) {
-            double raw_weight = (double)distance_sum /
-                                (double)candidate_distances[location_index];
-            cumulative += (int32_t)((1000.0 / inverse_weight_sum) * raw_weight + 0.5);
-            if (roll < cumulative) return (int)candidate_indices[location_index];
-        }
+    /* FUN_0041e28e stores each normalized inverse-distance weight separately,
+       then compares the same random roll against each weight in candidate
+       order. It does not turn these weights into cumulative thresholds. */
+    for (location_index = 0; location_index < candidate_count; ++location_index) {
+        double raw_weight = (double)distance_sum /
+                            (double)candidate_distances[location_index];
+        candidate_weights[location_index] = (int32_t)(
+            (1000.0 / inverse_weight_sum) * raw_weight);
     }
+
+    roll = tone_rng_bounded(&session->random_state, 1000);
+    for (location_index = 0; location_index < candidate_count; ++location_index)
+        if (roll < candidate_weights[location_index])
+            return (int)candidate_indices[location_index];
     return -1;
 }
 
