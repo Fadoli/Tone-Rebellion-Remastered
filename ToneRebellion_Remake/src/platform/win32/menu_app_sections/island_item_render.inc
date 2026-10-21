@@ -725,7 +725,10 @@ static void draw_hall_stock_summary(HDC dc, int hall_player,
     if (info == NULL || g_temp_hole_art.frame_count <= 1U) return;
 
     hall = &island->locations[g_selected_location];
-    if (hall->source_location_slot_18 != -1) return;
+    /* FUN_00440567 draws this summary only inside the P+0x18 == -1 branch
+       when P+0x10 == 0x2a (ev_671a1431...). */
+    if (hall->source_location_slot_18 != -1 ||
+        hall->record_value_10 != 0x2a) return;
     pane.left = info->pane.left;
     pane.top = info->pane.top;
     pane.right = info->pane.right + 1;
@@ -766,15 +769,15 @@ static void draw_hall_stock_summary(HDC dc, int hall_player,
                               info->pane.left + 0xb6,
                               info->pane.top + 0x29,
                               RGB(230, 238, 255));
-            if (total > 0) {
-                (void)snprintf(work_summary, sizeof(work_summary),
-                               "%s %u (%u%%)",
-                               g_hall_work_label, count, percentage);
-                draw_bitmap_label(dc, work_summary,
-                                  info->pane.left + 0xb6,
-                                  info->pane.top + 0x33,
-                                  RGB(230, 238, 255));
-            }
+            /* WORKSTR is drawn unconditionally in the binary (no total > 0
+               branch in the FUN_00440567 pseudocode). */
+            (void)snprintf(work_summary, sizeof(work_summary),
+                           "%s %u (%u%%)",
+                           g_hall_work_label, count, percentage);
+            draw_bitmap_label(dc, work_summary,
+                              info->pane.left + 0xb6,
+                              info->pane.top + 0x33,
+                              RGB(230, 238, 255));
         }
         (void)snprintf(tone_surplus, sizeof(tone_surplus),
             "%s %ld", g_hall_surplus_label,

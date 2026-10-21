@@ -20,21 +20,16 @@ static unsigned int island_leviathan_leg_sheet(uint8_t subtype)
         ? (unsigned int)(subtype - 9U) : 9U;
 }
 
-/* FUN_0044338b indexes the 16-byte xSpores string table at 0x4a4a50 by
-   level + (subtype - 9) * 2; the source strings carry a leading 'x'. */
+/* FUN_0044338b indexes the 16-byte beast slot table at 0x4a4a50 by
+   level + (subtype - 9) * 2. FUN_0041d70d overwrites the initial "x" strings
+   with the names.txt beast names at startup. */
 static const char *island_leviathan_info_name(uint8_t subtype,
                                               unsigned int level)
 {
-    static const char *const names[18] = {
-        "xSpores", "xSpores", "xRakalingus", "xBroontilingus", "xZeeth",
-        "xKeth", "xDrack", "xNadrack", "xTone Wasp", "xSasp", "xRonth",
-        "xVarnth", "xMetha", "xKoalint", "xZwacker", "xZwaup", "xShandi",
-        "xFlindex"
-    };
     unsigned int index;
     if (subtype < 9U || subtype > 17U) return "";
     index = level + (unsigned int)(subtype - 9U) * 2U;
-    return index < 18U ? names[index] : "";
+    return index < 18U ? g_beast_names[index] : "";
 }
 
 /* FUN_00439673 mode 0 for non-building sites: kind 1 (pool) starts at POOL;
@@ -657,9 +652,15 @@ static void render_island_view(HDC dc)
                four tribe-specific *work rows: 3 hit points and 0 strength.
                FUN_00466fe4 initializes current hits to FUN_00420f28's max. */
             {
-                const char *worker_label = "WORKER";
-                int label_width = measure_bitmap_text(NULL, worker_label,
-                                                       strlen(worker_label));
+                /* Name row: "%s %s" of the names.txt tribe slot and the
+                   gamey.txt WORKER label (FUN_0044338b, class 0). */
+                char worker_label[96];
+                int label_width;
+                (void)snprintf(worker_label, sizeof(worker_label), "%s %s",
+                    g_tribe_names[selected_floater->type_index],
+                    g_unit_label_text[0]);
+                label_width = measure_bitmap_text(NULL, worker_label,
+                                                   strlen(worker_label));
                 draw_bitmap_label(dc, worker_label,
                     info->pane.left +
                         ((info->pane.right - info->pane.left + 1) - label_width) / 2,
@@ -672,11 +673,11 @@ static void render_island_view(HDC dc)
                 int16_t current_charge;
                 int16_t maximum_charge;
                 (void)snprintf(hit_points_label, sizeof(hit_points_label),
-                    "HITS %u/%u",
+                    "%s %u/%u", g_unit_label_text[3],
                     (unsigned int)selected_floater->current_hit_points,
                     (unsigned int)selected_floater->max_hit_points);
                 (void)snprintf(strength_label, sizeof(strength_label),
-                    "STRENGTH %u",
+                    "%s %u", g_unit_label_text[4],
                     (unsigned int)selected_floater->attack_strength);
                 draw_bitmap_label(dc, hit_points_label,
                                   info->pane.left + 5, info->pane.top + 23,
@@ -689,7 +690,7 @@ static void render_island_view(HDC dc)
                 if (game_session_floater_charge_values(selected_floater,
                         &g_floater_catalog, &current_charge, &maximum_charge)) {
                     (void)snprintf(charge_label, sizeof(charge_label),
-                        "CHARGE %d/%d", (int)current_charge,
+                        "%s %d/%d", g_unit_label_text[5], (int)current_charge,
                         (int)maximum_charge);
                     draw_bitmap_label(dc, charge_label,
                                       info->pane.left + 5,
@@ -847,18 +848,21 @@ static void render_island_view(HDC dc)
                     ((info->pane.right - info->pane.left + 1) - label_width) / 2,
                 info->pane.top + 3, RGB(230, 238, 255));
             row_y = info->pane.top + 23;
-            (void)snprintf(row_label, sizeof(row_label), "LEVEL %u", level + 1U);
+            (void)snprintf(row_label, sizeof(row_label), "%s %u", g_unit_label_text[2],
+                           level + 1U);
             draw_bitmap_label(dc, row_label, info->pane.left + 5, row_y,
                               RGB(230, 238, 255));
             row_y += 10;
-            (void)snprintf(row_label, sizeof(row_label), "HITS %d/%d",
+            (void)snprintf(row_label, sizeof(row_label), "%s %d/%d",
+                g_unit_label_text[3],
                 selected_floater->current_hit_points < 0
                     ? 0 : (int)selected_floater->current_hit_points,
                 (int)selected_floater->max_hit_points);
             draw_bitmap_label(dc, row_label, info->pane.left + 5, row_y,
                               RGB(230, 238, 255));
             row_y += 10;
-            (void)snprintf(row_label, sizeof(row_label), "STRENGTH %u",
+            (void)snprintf(row_label, sizeof(row_label), "%s %u",
+                g_unit_label_text[4],
                 (unsigned int)selected_floater->attack_strength);
             draw_bitmap_label(dc, row_label, info->pane.left + 5, row_y,
                               RGB(230, 238, 255));

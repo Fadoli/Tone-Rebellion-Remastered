@@ -122,3 +122,28 @@ coexistent; sémantique de `+0x24` (sous-ID ou compte) inconnue.
 Inconnues: appelants de `FUN_00440567`/`FUN_00441d3e` (dispatch non résolu),
 fond exact (`DAT_004c2b08`; le port garde `g_temp_hole_art` frame 1), sémantique
 du clic (`FUN_00441d3e` cas 6).
+
+## Textes du détail d'unité (port aligné)
+
+Observation (ev_347b34f6, ev_76cadb79, ev_8518ba3d, ev_fe68d74a): la ligne de
+nom de `FUN_0044338b` est `"%s %s"` du slot tribu (`0x49cfc8`, pas 12) et du
+libellé `WORKER`/`AWAKE`. Les chaînes `xTark`… ne sont que l'image initiale:
+`FUN_0041d70d` les remplace au démarrage par les lignes de `names.txt` (5 tribus,
+5 pluriels, 15 îles, 18 bêtes dont le tableau xSpores). Libellés via `FUN_00429ebe`
+(gamey.txt, non mis en majuscules): Ouvrier, Le Sage, Niveau, Coups, Puissance,
+Charge. Le port affiche maintenant « Tark Ouvrier », `Coups a/b`, `Puissance n`,
+`Charge a/b` et les noms de bêtes de `names.txt`, au lieu des littéraux anglais.
+Interprétation: contenu des slots à l'exécution déduit du parseur, non observé en
+mémoire. Inconnues: police/couleur natives, `DAT_004c2bb0`.
+
+## Revue du panneau Hall (FUN_00440567)
+
+Observation (ev_671a14319b2fe7be486009e7ab2ec75a402dc35e1dc4794f78145e9aa95e9233,
+ev_fccc3ec3…): lignes bildtone/tonecrys/magctone (icônes et montants), SURPFLOW
+(5,4), POPSTR (0xb6,0x29) et WORKSTR (0xb6,0x33) concordent avec le port. Corrigé:
+WORKSTR n'a pas de garde `total>0`; le résumé exige `P+0x10==0x2a`. Non porté:
+grille `ACTICON` (bit i de l'ushort joueur `+0x4a`, i < `DAT_006136b0`),
+`bldgage`, icônes de queue, variante `P+0x18 != -1` (bildicon/taskicon/slots).
+Inconnues: formule du pourcentage WORKSTR (ST0 hors pseudocode), identité de
+`DAT_006191f8` (+0) face à `source_maintenance_budget` (+0x3c), couleur du texte,
+appelant `0x40234c`.

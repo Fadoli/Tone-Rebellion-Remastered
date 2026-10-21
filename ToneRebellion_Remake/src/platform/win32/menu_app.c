@@ -163,6 +163,11 @@ static char g_task_category_text[4][256];
 static char g_hall_population_label[64];
 static char g_hall_work_label[64];
 static char g_hall_surplus_label[64];
+/* gamey.txt WORKER, AWAKE, LEVEL, HITS, STRENGTH, CHARGE (FUN_00429ebe). */
+static char g_unit_label_text[6][64];
+/* names.txt slots filled by FUN_0041d70d: tribes, then beasts. */
+static char g_tribe_names[5][12];
+static char g_beast_names[18][16];
 static char g_inventory_info_text[768];
 static char g_glyph_info_text[768];
 static char g_cryptic_text[ISLAND_PANEL_INFO_CRYPTIC_COUNT][768];

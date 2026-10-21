@@ -142,6 +142,69 @@ static int load_newgame_captions(char *error, size_t error_capacity)
             goto done;
         }
     }
+    {
+        static const char *const unit_keys[6] = {
+            "WORKER", "AWAKE", "LEVEL", "HITS", "STRENGTH", "CHARGE"
+        };
+        for (i = 0; i < 6; ++i) {
+            if (!extract_help_entry(bytes, member->length, unit_keys[i],
+                                    g_unit_label_text[i],
+                                    sizeof(g_unit_label_text[i]))) {
+                (void)snprintf(error, error_capacity,
+                               "gamey.txt key %s is missing or empty",
+                               unit_keys[i]);
+                goto done;
+            }
+        }
+    }
+    /* FUN_0041d70d reads names.txt, skipping blank and comment lines, into
+       5 tribe slots (11 chars), 5 plural, 15 island and 18 beast slots. */
+    {
+        const CobMember *names = cob_archive_find(&archive, "names.txt");
+        unsigned char *text;
+        size_t pos = 0;
+        unsigned int slot = 0;
+        if (names == NULL) {
+            (void)snprintf(error, error_capacity,
+                           "names.txt was not found in TONE00.COB");
+            goto done;
+        }
+        text = (unsigned char *)malloc(names->length == 0 ? 1 : names->length);
+        if (text == NULL ||
+            !cob_archive_read_member(&archive, names, text, names->length,
+                                     error, error_capacity)) {
+            free(text);
+            goto done;
+        }
+        while (pos < names->length && slot < 43U) {
+            size_t start = pos;
+            size_t end;
+            while (pos < names->length && text[pos] != '\n') ++pos;
+            end = pos;
+            if (pos < names->length) ++pos;
+            while (end > start && (text[end - 1] == '\r' ||
+                                   text[end - 1] == ' ')) --end;
+            if (end == start || text[start] == ';' ||
+                (end - start >= 2 && text[start] == '/' &&
+                 text[start + 1] == '/')) continue;
+            if (slot < 5U) {
+                size_t n = end - start > 11U ? 11U : end - start;
+                memcpy(g_tribe_names[slot], text + start, n);
+                g_tribe_names[slot][n] = '\0';
+            } else if (slot >= 25U) {
+                size_t n = end - start > 15U ? 15U : end - start;
+                memcpy(g_beast_names[slot - 25U], text + start, n);
+                g_beast_names[slot - 25U][n] = '\0';
+            }
+            ++slot;
+        }
+        free(text);
+        if (slot < 43U) {
+            (void)snprintf(error, error_capacity,
+                           "names.txt has %u names, expected 43", slot);
+            goto done;
+        }
+    }
     success = 1;
 done:
     free(bytes);
