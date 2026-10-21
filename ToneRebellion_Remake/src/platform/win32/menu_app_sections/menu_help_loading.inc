@@ -99,6 +99,16 @@ done:
     return success;
 }
 
+static int help_key_line_matches(const unsigned char *line, size_t length,
+                                 const char *key, size_t key_length)
+{
+    size_t tail = key_length;
+    if (length < key_length || memcmp(line, key, key_length) != 0) return 0;
+    while (tail < length && (line[tail] == ' ' || line[tail] == '\t')) ++tail;
+    return tail == length ||
+           (tail + 1 < length && line[tail] == '/' && line[tail + 1] == '/');
+}
+
 static size_t extract_repeated_help_entries(const unsigned char *bytes, size_t length,
                                            const char *key,
                                            char (*outputs)[BUILDING_NAME_CAPACITY],
@@ -114,8 +124,9 @@ static size_t extract_repeated_help_entries(const unsigned char *bytes, size_t l
         while (cursor < length && bytes[cursor] != '\n') ++cursor;
         line_end = cursor;
         if (line_end > line_start && bytes[line_end - 1] == '\r') --line_end;
-        if (line_end - line_start == key_length &&
-            memcmp(bytes + line_start, key, key_length) == 0) {
+        /* bldname.txt LEVNAME keys carry a trailing "// PIT_..." comment. */
+        if (help_key_line_matches(bytes + line_start, line_end - line_start,
+                                  key, key_length)) {
             size_t used = 0;
             if (cursor < length) ++cursor;
             while (cursor < length) {

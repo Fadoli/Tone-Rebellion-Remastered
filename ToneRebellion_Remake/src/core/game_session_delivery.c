@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include "game_session_delivery_internal.h"
 #include "game_session_action9.h"
 #include "game_session_economy.h"
@@ -13,50 +15,6 @@ static int location_is_player_hall(const GameRuntimeLocation *location)
     return location != NULL && location->owner_id >= 0 &&
         location->owner_id < GAME_START_PLAYER_COUNT &&
         location->record_value_10 == 0x2a + location->owner_id * 16;
-}
-
-static void claim_hall_source_if_needed(GameSession *session,
-                                        const GameFloaterStart *floater,
-                                        int16_t resource_code)
-{
-    const GameRuntimeLocation *source;
-    if (session == NULL || floater == NULL ||
-        resource_code < 1 || resource_code > GAME_RESOURCE_TYPE_COUNT ||
-        floater->owner_slot >= GAME_START_PLAYER_COUNT ||
-        floater->order_source_island >= session->island_count ||
-        floater->order_source_location < 0 ||
-        (uint16_t)floater->order_source_location >=
-            session->islands[floater->order_source_island].location_count)
-        return;
-    source = &session->islands[floater->order_source_island].locations[
-        (uint16_t)floater->order_source_location];
-    if (location_is_player_hall(source)) {
-        session->economy[floater->owner_slot].hall_resource_source_busy[
-            (unsigned int)resource_code - 1U] = 1;
-    }
-}
-
-static void release_hall_source_if_needed(GameSession *session,
-                                          const GameFloaterStart *floater)
-{
-    const GameRuntimeLocation *source;
-    int16_t resource_code;
-    if (session == NULL || floater == NULL ||
-        floater->carried_resource_code == floater->order_resource_code ||
-        floater->owner_slot >= GAME_START_PLAYER_COUNT ||
-        floater->order_source_island >= session->island_count ||
-        floater->order_source_location < 0 ||
-        (uint16_t)floater->order_source_location >=
-            session->islands[floater->order_source_island].location_count)
-        return;
-    resource_code = floater->order_resource_code;
-    if (resource_code < 1 || resource_code > GAME_RESOURCE_TYPE_COUNT) return;
-    source = &session->islands[floater->order_source_island].locations[
-        (uint16_t)floater->order_source_location];
-    if (location_is_player_hall(source)) {
-        session->economy[floater->owner_slot].hall_resource_source_busy[
-            (unsigned int)resource_code - 1U] = 0;
-    }
 }
 
 static int construction_refill_source(GameSession *session,
@@ -106,7 +64,6 @@ int game_session_start_repair_supply(GameSession *session,
     floater->order_timer = 0;
     if (source_island == floater->island_index) {
         floater_target_location(floater, source, 3);
-        claim_hall_source_if_needed(session, floater, 1);
         return 1;
     }
 
@@ -116,7 +73,6 @@ int game_session_start_repair_supply(GameSession *session,
     if (!game_session_begin_floater_handoff(session, floater, source_island))
         return 0;
     floater->handoff_resume_state = 3;
-    claim_hall_source_if_needed(session, floater, 1);
     return 1;
 }
 
@@ -330,8 +286,6 @@ static int assign_delivery_task_for_floater(GameSession *session,
             floater->handoff_resume_state = 3;
         }
     }
-    if (source_index >= 0)
-        claim_hall_source_if_needed(session, floater, event->payload_12);
     floater->has_wander_order = 0;
     floater->wander_timer = 0;
     return 1;
@@ -485,8 +439,6 @@ static int assign_construction_task_for_floater(
             floater->handoff_resume_state = 3;
         }
     }
-    if (!finalize_building && source_index >= 0)
-        claim_hall_source_if_needed(session, floater, 1);
     floater->has_wander_order = 0;
     floater->wander_timer = 0;
     return 1;
@@ -565,6 +517,12 @@ static void reclaim_orphaned_task_claim(GameSession *session,
         event = &session->pending_events[(uint8_t)slot];
         if (event->active != 0 && event->player_id == floater->owner_slot &&
             event->payload_0a == floater->order_target_island &&
+            event->action_type == 0x0b &&
+            event->payload_0c == floater->order_target_location) {
+            /* CHARGE workers are linked with no active order action. */
+            task_matches = floater->active_order_action == 0;
+        } else if (event->active != 0 && event->player_id == floater->owner_slot &&
+            event->payload_0a == floater->order_target_island &&
             event->payload_0e == floater->order_target_location) {
             task_matches =
                 (floater->active_order_action == 4 &&
@@ -604,6 +562,57 @@ static void reclaim_orphaned_task_claim(GameSession *session,
     }
 }
 
+/* FUN_0041e454 marks CHARGE and artifact deliveries as urgent: they take one
+   worker only and are never swapped away from. */
+static int task_is_urgent(const GamePendingEvent *event)
+{
+    return event->action_type == 0x0b ||
+        (event->action_type == 4 && event->payload_12 >= 5 &&
+         event->payload_12 < 0x22);
+}
+
+/* Per-row test of FUN_0042219e (ev_336bbb7515c8443945b3e4cc1fce6af1a1909d6c26154f4c7db9b75deaa9afaa).
+   With no current task the scan starts at count 1000 / class 1, so class 1
+   rows accept below 999 workers, class 2 below 1998 and class 3 always. With
+   a task, a row replaces it only when it has at least two workers fewer (same
+   class) or the weighted equivalent for classes 1 and 2. */
+static int task_count_rule_accepts(const GamePendingEvent *row,
+                                   int current_count, int current_class)
+{
+    const int count = row->assigned_floater_count;
+    const int row_class = row->priority;
+
+    if (task_is_urgent(row)) return count < 1;
+    if (row_class == 3 && current_class != 3) return 1;
+    if (row_class == current_class) return count < current_count - 1;
+    if (row_class == 2 && current_class == 1)
+        return count < current_count * 2 - 2;
+    if (row_class == 1 && current_class == 2)
+        return count * 2 < current_count - 1;
+    return 0;
+}
+
+/* FUN_0042219e leaves urgent tasks alone and skips workers in combat states
+   6/7 or +0x2c == 4 (delivering). The remake also keeps a CONSTR finisher
+   (state 5) and cross-island handoffs (action 9) on their task. */
+static const GamePendingEvent *rebalance_current_task(
+    const GameSession *session, const GameFloaterStart *floater)
+{
+    const GamePendingEvent *event;
+
+    if (floater->linked_task_slot < 0 ||
+        floater->linked_task_slot >= GAME_SESSION_MAX_PENDING_EVENTS ||
+        (floater->active_order_action != 4 &&
+         floater->active_order_action != 0x12) ||
+        floater->movement_state == 4 || floater->movement_state == 5 ||
+        floater->movement_state == 6 || floater->movement_state == 7)
+        return NULL;
+    event = &session->pending_events[(uint8_t)floater->linked_task_slot];
+    if (event->active == 0 || event->player_id != floater->owner_slot ||
+        task_is_urgent(event)) return NULL;
+    return event;
+}
+
 static void assign_resource_tasks(GameSession *session,
                                   const PadCatalog *catalog)
 {
@@ -623,69 +632,108 @@ static void assign_resource_tasks(GameSession *session,
     for (floater_index = 0; floater_index < session->floater_count;
          ++floater_index) {
         GameFloaterStart *floater = &session->floaters[floater_index];
+        GameFloaterStart saved_floater;
+        GamePendingEvent saved_events[GAME_SESSION_MAX_PENDING_EVENTS];
+        const GamePendingEvent *current_task = NULL;
+        int current_count = 1000;
+        int current_class = 1;
+        int current_slot = -1;
+        int swapped = 0;
+        int assigned_task = 0;
         int idle_wander;
         int replacing_move;
         int can_take_local_task;
         int can_take_construction;
 
         reclaim_orphaned_task_claim(session, floater);
-        idle_wander = floater->movement_state == 0x0e &&
-            floater->has_wander_order && !floater->has_move_order;
-        replacing_move = floater->active_order_action == 9 &&
-            floater->movement_state == 9;
-        can_take_local_task = floater->active_order_action == 0 &&
-            (floater->movement_state == 0 || idle_wander);
-        can_take_construction =
-            (floater->active_order_action == 0 || replacing_move) &&
-            (floater->movement_state == 0 || floater->movement_state == 9 ||
-             idle_wander) &&
-            (floater->carried_resource_code == 0 ||
-             floater->carried_resource_code == 1);
-
+        /* FUN_0041e569 skips floaters with +0x1c bits 0x808. */
         if (!game_session_floater_is_active(floater) ||
-            (floater->source_runtime_flags & 0x008U) != 0 ||
-            floater->linked_task_slot != -1 || floater->source_link_0c != -1 ||
+            (floater->source_runtime_flags & 0x808U) != 0 ||
+            floater->source_link_0c != -1 ||
             floater->type_index == 4 || floater->source_subtype == 8 ||
             floater->owner_slot >= GAME_FLOATER_CATEGORY_COUNT ||
             floater->island_index >= session->island_count) continue;
+        if (floater->linked_task_slot != -1) {
+            /* FUN_0041e569 calls FUN_0042219e every tick in state 0 and only
+               once per ten ticks (offset by the floater index) otherwise. */
+            if ((session->simulation_tick + floater_index) % 10U != 0U)
+                continue;
+            current_task = rebalance_current_task(session, floater);
+            if (current_task == NULL) continue;
+            current_count = current_task->assigned_floater_count;
+            current_class = current_task->priority;
+            current_slot = floater->linked_task_slot;
+        }
 
         /* FUN_0042219e checks the first eligible row in slot order. Keep the
            task type's worker guards, but arbitrate CONSTR/CHARGE/delivery in
            that shared order instead of giving one type a fixed priority. */
         for (slot = 0; slot < GAME_SESSION_MAX_PENDING_EVENTS; ++slot) {
             GamePendingEvent *event = &session->pending_events[slot];
-            int special_task = event->action_type == 0x0b ||
-                (event->action_type == 4 && event->payload_12 >= 5 &&
-                 event->payload_12 < 0x22);
 
+            if (event->active == 0 || (int)slot == current_slot) continue;
             if (priority_three_pending[floater->owner_slot] &&
-                event->priority != 3 && !special_task) continue;
-            if (!special_task) {
-                int assigned = event->assigned_floater_count;
-                if (event->priority == 1) {
-                    if (assigned >= 999) continue;
-                } else if (event->priority == 2) {
-                    /* With no current task, FUN_0042219e starts at
-                       local_34=1000/priority=1 and accepts priority 2 while
-                       assigned_count < local_34*2 - 2. */
-                    if (assigned < 0 || assigned >= 1998) continue;
-                } else if (event->priority != 3) {
-                    continue;
-                }
+                event->priority != 3 && !task_is_urgent(event)) continue;
+            if (!task_count_rule_accepts(event, current_count, current_class))
+                continue;
+            if (current_task != NULL && !swapped) {
+                /* Release the old claim only once a row passed the count
+                   test; everything is restored if no row takes the worker. */
+                saved_floater = *floater;
+                memcpy(saved_events, session->pending_events,
+                       sizeof(saved_events));
+                release_task_claim(session, floater);
+                floater->active_order_action = 0;
+                floater->movement_state = 0;
+                floater->has_move_order = 0;
+                floater->order_timer = 0;
+                floater->order_target_location = -1;
+                floater->order_target_island = UINT8_MAX;
+                floater->order_resource_code = GAME_RESOURCE_NONE;
+                swapped = 1;
             }
+            idle_wander = floater->movement_state == 0x0e &&
+                floater->has_wander_order && !floater->has_move_order;
+            replacing_move = floater->active_order_action == 9 &&
+                floater->movement_state == 9;
+            can_take_local_task = floater->active_order_action == 0 &&
+                (floater->movement_state == 0 || idle_wander);
+            can_take_construction =
+                (floater->active_order_action == 0 || replacing_move) &&
+                (floater->movement_state == 0 || floater->movement_state == 9 ||
+                 idle_wander) &&
+                (floater->carried_resource_code == 0 ||
+                 floater->carried_resource_code == 1);
+
             if (event->action_type == 0x0b && can_take_local_task &&
                 assign_charge_task_for_floater(
-                    session, floater, floater_index, slot)) break;
+                    session, floater, floater_index, slot)) {
+                assigned_task = 1;
+                break;
+            }
             if (event->action_type == 4 && can_take_local_task &&
-                assign_delivery_task_for_floater(session, floater, slot)) break;
+                assign_delivery_task_for_floater(session, floater, slot)) {
+                assigned_task = 1;
+                break;
+            }
             if (event->action_type == 5 && catalog != NULL &&
                 can_take_construction &&
                 assign_construction_task_for_floater(
-                    session, catalog, floater, slot)) break;
+                    session, catalog, floater, slot)) {
+                assigned_task = 1;
+                break;
+            }
             if (event->action_type == 0x12 && catalog != NULL &&
                 can_take_local_task &&
                 assign_repair_task_for_floater(
-                    session, catalog, floater, slot)) break;
+                    session, catalog, floater, slot)) {
+                assigned_task = 1;
+                break;
+            }
+        }
+        if (swapped && !assigned_task) {
+            *floater = saved_floater;
+            memcpy(session->pending_events, saved_events, sizeof(saved_events));
         }
     }
 }
@@ -1440,7 +1488,6 @@ void floater_target_location(GameFloaterStart *floater,
 void release_task_claim(GameSession *session, GameFloaterStart *floater)
 {
     int16_t slot = floater->linked_task_slot;
-    release_hall_source_if_needed(session, floater);
     if (slot >= 0 && slot < GAME_SESSION_MAX_PENDING_EVENTS) {
         GamePendingEvent *event = &session->pending_events[(uint8_t)slot];
         int matches_resource_task = event->action_type == 4 &&

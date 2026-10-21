@@ -576,7 +576,8 @@ void game_session_clear_cast_site(GameSession *session, uint8_t island_index,
     target->charge_recent_floater = -1;
     if (target->leviathan_spawned_floater >= 0 &&
         (unsigned int)target->leviathan_spawned_floater < session->floater_count) {
-        session->floaters[(unsigned int)target->leviathan_spawned_floater].is_active = 0;
+        game_session_retire_floater(session,
+            (unsigned int)target->leviathan_spawned_floater);
     }
     target->leviathan_spawned_floater = -1;
     target->resource_stock[GAME_RESOURCE_BUILD_TONE] = 0;

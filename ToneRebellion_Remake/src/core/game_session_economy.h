@@ -27,9 +27,6 @@ int game_session_location_resource_available(const GameSession *session,
 int game_session_hall_resource_source_available(const GameSession *session,
                                                 uint8_t player_slot,
                                                 int16_t resource_code);
-void game_session_release_hall_resource_source(GameSession *session,
-                                               uint8_t player_slot,
-                                               int16_t resource_code);
 /* FUN_0045f2a1 reads this location's pad.txt movement tuple and multiplies
    each short by runtime +0x4a + 1. The order matches stocks +0x28/+0x2a/+0x2c.
    This calculates costs only; source eligibility remains a separate check. */

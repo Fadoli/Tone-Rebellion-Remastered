@@ -518,6 +518,7 @@ static void test_code_five_delivery_starts_bridge_cons_for_its_owner(void)
     GameSession session = {0};
     GameRuntimeLocation *bridge;
     GameFloaterStart *floater;
+    PadCatalog pad_catalog = {0};
     BuildingRenderCatalog catalog = {0};
     int slot;
 
@@ -581,7 +582,7 @@ static void test_code_five_delivery_starts_bridge_cons_for_its_owner(void)
     /* The worker picks code 5 up from its Hall inventory before delivery. */
     floater->x = session.islands[0].locations[1].x;
     for (unsigned int tick = 0; tick < 20; ++tick)
-        game_session_advance_local_resource_task(&session, floater);
+        game_session_advance_local_resource_task(&session, &pad_catalog, floater);
     assert(session.economy[1].inventory_count[0] == 0);
     assert(floater->carried_resource_code == 5);
     assert(floater->movement_state == 4);
@@ -589,7 +590,7 @@ static void test_code_five_delivery_starts_bridge_cons_for_its_owner(void)
     /* Exact-arrival state 4 reaches the class-2/code-5 helper branch. */
     floater->x = bridge->x;
     floater->y = bridge->y;
-    game_session_advance_local_resource_task(&session, floater);
+    game_session_advance_local_resource_task(&session, &pad_catalog, floater);
     assert((bridge->source_flags & 0x004U) != 0);
     assert(bridge->construction_progress == 0);
     assert(bridge->resource_stock[GAME_RESOURCE_MAGIC_TONE] == 1);
@@ -737,7 +738,8 @@ static void test_onoff_action_queues_target_without_changing_location_flags(void
     assert((site->source_flags & 0x400U) != 0);
     assert(game_session_queue_onoff_action(&session, 2, 0, 1));
     assert(game_session_dispatch_onoff_actions(&session, &catalog) == 1);
-    catalog.items[0x45].maintenance_tone_cost = 1;
+    /* The player capacity is the constant 10, so only a larger cost is refused. */
+    catalog.items[0x45].maintenance_tone_cost = 11;
     assert(game_session_queue_onoff_action(&session, 2, 0, 1));
     assert(game_session_dispatch_onoff_actions(&session, &catalog) == 0);
     assert((site->source_flags & 0x400U) == 0);

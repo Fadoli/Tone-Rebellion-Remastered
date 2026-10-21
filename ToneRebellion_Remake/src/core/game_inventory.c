@@ -66,6 +66,7 @@ int game_inventory_hit_test(const GameInventoryEntry *entries,
     row_height = (pane_height - 24) / 2;
     if (column_width <= 0 || row_height <= 0) return -1;
     first = page * GAME_INVENTORY_PAGE_SIZE;
+    if ((x - pane_left) / column_width >= 5) return -1;
     slot = (size_t)((x - pane_left) / column_width) +
         (size_t)((y - (pane_top + 24)) / row_height) * 5;
     if (slot >= GAME_INVENTORY_PAGE_SIZE || first + slot >= entry_count) return -1;

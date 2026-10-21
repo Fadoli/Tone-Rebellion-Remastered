@@ -26,7 +26,6 @@ int game_session_initialize_start_players(
 
         for (unit = 0; unit < GAME_RESOURCE_TYPE_COUNT; ++unit) {
             session->economy[island_index].resource_task_slot[unit] = -1;
-            session->economy[island_index].hall_resource_source_busy[unit] = 0;
         }
 
         /* FUN_0046466f sets island runtime +0x29ac + player*4 for each

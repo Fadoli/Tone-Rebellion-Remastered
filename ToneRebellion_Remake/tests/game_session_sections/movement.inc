@@ -61,6 +61,7 @@ static void test_floater_pickup_order_collects_ground_artifact(void)
     object->x = 100;
     object->y = 100;
     object->charge_staff_task_handle = -1;
+    object->leviathan_spawned_floater = -1; /* runtime sites start at -1, not slot 0 */
     object->source_location_slot_18 = -1;
     object->source_category_slot_60 = -1;
     for (slot = 0; slot < 8; ++slot)

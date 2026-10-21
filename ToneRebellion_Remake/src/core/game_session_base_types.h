@@ -97,7 +97,6 @@ typedef struct GamePlayerEconomy {
     int16_t resource_task_slot[GAME_RESOURCE_TYPE_COUNT];
     /* FUN_00452ceb only exposes Hall stock as a refill source while the
        matching player/resource pickup lock at DAT_0061a588 is clear. */
-    uint8_t hall_resource_source_busy[GAME_RESOURCE_TYPE_COUNT];
     /* IWTrade keeps three resource amounts for each of the three other
        players. Columns use the source display order with the local player
        omitted (FUN_0043edac / FUN_0043ec78). */

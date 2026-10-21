@@ -24,6 +24,14 @@ static void game_session_apply_charge_debit(GameFloaterStart *floater,
 }
 
 static void game_session_remove_floater(GameSession *session,
+                                        unsigned int floater_index);
+void game_session_retire_floater(GameSession *session,
+                                 unsigned int floater_index)
+{
+    game_session_remove_floater(session, floater_index);
+}
+
+static void game_session_remove_floater(GameSession *session,
                                         unsigned int floater_index)
 {
     GameFloaterStart *floater = &session->floaters[floater_index];
@@ -892,9 +900,10 @@ static int game_session_create_recruited_worker(GameSession *session,
     floater->destination_y = location->y;
     floater->movement_speed = (uint16_t)stats->movement_speed;
     floater->has_wander_order = 1;
-    /* FUN_004532e2 sets floater +0x1c bits 0x801 after allocation. The normal
-       island renderer then uses the same animated body and walking legs. */
-    floater->source_runtime_flags = 0x801U;
+    /* FUN_004532e2 sets floater +0x1c bits 0x801 after allocation, but the
+       remake has no producer that clears the 0x800 hold for workers, so
+       keep only 0x001; 0x800 would remove the worker after 0xc9 ticks. */
+    floater->source_runtime_flags = 0x001U;
     if (floater_index >= session->floater_count)
         session->floater_count = (uint16_t)(floater_index + 1U);
     game_session_refresh_player_maintenance_budgets(session);

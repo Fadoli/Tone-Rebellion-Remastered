@@ -116,8 +116,8 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
     assert(session.config.selected_tribe == 3);
     assert(session.island_count == 5);
     assert(session.floater_count == 16);
-    assert(session.economy[0].source_maintenance_capacity == 30);
-    assert(session.economy[0].source_maintenance_budget == 26);
+    assert(session.economy[0].source_maintenance_capacity == 10);
+    assert(session.economy[0].source_maintenance_budget == 6);
     assert(session.pending_event_count == 0);
     assert(session.pending_events[0].active == 0);
     assert(session.tone_placements.placement_count == 5);
@@ -130,7 +130,9 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
         assert(marker->record_value_10 == placement->item_id);
         assert(marker->owner_id == placement->owner_id);
         assert(marker->source_value_14 == placement->owner_id);
-        assert(marker->source_value_32 == 1);
+        /* FUN_00460460 gives item 5 rate 1; other markers get the island spawn interval. */
+        assert(marker->record_value_10 == 5 ? marker->source_value_32 == 1 :
+               marker->source_value_32 >= 0);
         assert(marker->source_value_3e == -1);
     }
     for (island_index = 0; island_index < session.island_count; ++island_index) {
@@ -444,7 +446,9 @@ int main(void)
     test_building_placement_matches_source_runtime_initialization();
     test_building_placement_links_every_player_and_source_record();
     test_full_source_record_table_still_completes_construction();
-    test_source_record_capacity_is_per_island();
+    test_source_record_capacity_is_per_player();
+    test_several_workers_share_one_construction_task_from_the_hall();
+    test_busy_worker_moves_to_a_task_with_two_fewer_workers();
     test_hall_resource_ledger_is_safe();
     test_hall_resource_modes_cycle_through_original_three_states();
     test_hall_stock_mode_creates_and_releases_linked_resource_tasks();

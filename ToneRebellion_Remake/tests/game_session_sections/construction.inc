@@ -191,7 +191,7 @@ static void test_building_placement_links_every_player_and_source_record(void)
         assert(runtime->record_value_10 == (int32_t)item_id);
         assert(runtime->owner_id == (int32_t)player);
         assert(runtime->source_value_14 == (int32_t)player);
-        assert(runtime->source_location_slot_18 == (int16_t)player);
+        assert(runtime->source_location_slot_18 == 0);
         assert(runtime->source_category_slot_60 == 0);
         assert(runtime->source_value_34 == 17);
         assert(runtime->source_flags == ((0xa5a5ffffU & ~0x0fU) | 0x410U));
@@ -217,19 +217,20 @@ static void test_full_source_record_table_still_completes_construction(void)
 {
     GameSession session = {0};
     PadCatalog catalog = {0};
+    IslandLocation site_data = {0};
     GameRuntimeLocation *site;
-    GamePendingEvent *event;
+    char error[128];
     unsigned int index;
 
     session.island_count = 1;
-    session.islands[0].location_count = GAME_SOURCE_RECORDS_PER_ISLAND + 1U;
+    session.islands[0].location_count = GAME_SOURCE_RECORDS_PER_PLAYER + 1U;
     catalog.item_count = PAD_CATALOG_MAX_ITEMS;
     catalog.items[0x2c].item_id = 0x2c;
     catalog.items[0x2c].size = 0;
     catalog.items[0x2c].building_tone_cost = 1;
     catalog.items[0x2c].hit_points = 17;
 
-    for (index = 0; index < GAME_SOURCE_RECORDS_PER_ISLAND; ++index) {
+    for (index = 0; index < GAME_SOURCE_RECORDS_PER_PLAYER; ++index) {
         GameRuntimeLocation *building = &session.islands[0].locations[index];
         building->owner_id = 0;
         building->record_value_10 = 0x2c;
@@ -238,39 +239,33 @@ static void test_full_source_record_table_still_completes_construction(void)
             index % GAME_SOURCE_SUBSLOTS_PER_ITEM);
     }
 
-    site = &session.islands[0].locations[GAME_SOURCE_RECORDS_PER_ISLAND];
+    site = &session.islands[0].locations[GAME_SOURCE_RECORDS_PER_PLAYER];
     site->renderer_class = 0;
-    site->record_value_10 = 1;
+    site->record_value_10 = 0;
     site->owner_id = -1;
     site->source_value_14 = -1;
     site->source_location_slot_18 = -1;
     site->source_category_slot_60 = -1;
     site->source_value_22 = 1;
     site->construction_site_size = 0;
-    site->resource_stock[GAME_RESOURCE_BUILD_TONE] = 1;
+    site_data.kind = ISLAND_LOCATION_PAD_SMALL;
+    site_data.renderer_subtype = 0;
 
-    event = &session.pending_events[0];
-    event->active = 1;
-    event->player_id = 0;
-    event->action_type = 5;
-    event->payload_0a = 0;
-    event->payload_0e = GAME_SOURCE_RECORDS_PER_ISLAND;
-    event->payload_12 = 0x2c;
-    session.pending_event_count = 1;
-
-    game_session_update_construction_tasks(&session, &catalog);
-
-    /* Native placement initializes +0x10/+0x14 before the full-table return;
-       its caller ignores that return and completes the building. */
+    /* Placement is now done by the worker's state-5 arrival through
+       FUN_004527ee, not by the CONSTR task update. Native placement
+       initializes +0x10/+0x14 before the full-table return; its caller
+       ignores that return and completes the building. */
+    assert(game_session_place_building(&session, &catalog, 0, 0,
+        GAME_SOURCE_RECORDS_PER_PLAYER, &site_data, 0x2c,
+        error, sizeof(error)));
     assert(site->record_value_10 == 0x2c);
     assert(site->owner_id == 0 && site->source_value_14 == 0);
     assert(site->source_location_slot_18 == -1);
     assert(site->source_category_slot_60 == -1);
     assert(site->source_value_32 == 1 && site->source_value_34 == 17);
-    assert(session.pending_events[0].active == 0);
 }
 
-static void test_source_record_capacity_is_per_island(void)
+static void test_source_record_capacity_is_per_player(void)
 {
     GameSession session = {0};
     PadCatalog catalog = {0};
@@ -280,7 +275,7 @@ static void test_source_record_capacity_is_per_island(void)
     unsigned int index;
 
     session.island_count = 2;
-    session.islands[0].location_count = GAME_SOURCE_RECORDS_PER_ISLAND;
+    session.islands[0].location_count = GAME_SOURCE_RECORDS_PER_PLAYER;
     session.islands[1].location_count = 1;
     catalog.item_count = PAD_CATALOG_MAX_ITEMS;
     catalog.items[0x2c + 2 * 16].item_id = 0x2c + 2 * 16;
@@ -288,7 +283,7 @@ static void test_source_record_capacity_is_per_island(void)
     catalog.items[0x2c + 2 * 16].building_tone_cost = 1;
     catalog.items[0x2c + 2 * 16].hit_points = 17;
 
-    for (index = 0; index < GAME_SOURCE_RECORDS_PER_ISLAND; ++index) {
+    for (index = 0; index < GAME_SOURCE_RECORDS_PER_PLAYER; ++index) {
         GameRuntimeLocation *building = &session.islands[0].locations[index];
         building->owner_id = 2;
         building->record_value_10 = 0x2c + 2 * 16;
@@ -311,8 +306,10 @@ static void test_source_record_capacity_is_per_island(void)
         &site, 0x2c, error, sizeof(error)));
     assert(runtime->owner_id == 2);
     assert(runtime->source_value_14 == 2);
-    assert(runtime->source_location_slot_18 == 0);
-    assert(runtime->source_category_slot_60 == 0);
+    /* FUN_0045ee26 scans the owner's 48 rows across all islands, so a full
+       table on island 0 leaves this island-1 building without a source link. */
+    assert(runtime->source_location_slot_18 == -1);
+    assert(runtime->source_category_slot_60 == -1);
 }
 
 static void test_player_source_building_keeps_native_id_for_island_state(void)
@@ -378,7 +375,7 @@ static void test_construction_assignment_matches_source_candidate_guards(void)
     catalog.items[0x25].size = 0;
     catalog.items[0x25].building_tone_cost = 2;
     catalog.items[0x25].maintenance_tone_cost = 1;
-    session.economy[0].source_maintenance_budget = 1;
+    session.economy[0].source_maintenance_capacity = 1;
 
     floater = &session.floaters[0];
     floater->is_active = 1;
@@ -432,12 +429,12 @@ static void test_construction_assignment_matches_source_candidate_guards(void)
     game_session_assign_local_resource_tasks(&session, &catalog);
     assert(other_floater->active_order_action == 0);
     site->source_value_14 = -1;
-    session.economy[0].source_maintenance_budget = 0;
+    session.economy[0].source_maintenance_capacity = 0;
     game_session_assign_local_resource_tasks(&session, &catalog);
     assert(other_floater->active_order_action == 0);
 
     /* The task cannot claim a pad larger than the marked construction site. */
-    session.economy[0].source_maintenance_budget = 1;
+    session.economy[0].source_maintenance_capacity = 1;
     catalog.items[0x25].size = 1;
     game_session_assign_local_resource_tasks(&session, &catalog);
     assert(other_floater->active_order_action == 0);
@@ -446,6 +443,132 @@ static void test_construction_assignment_matches_source_candidate_guards(void)
     hall->resource_stock[GAME_RESOURCE_BUILD_TONE] = 0;
     game_session_assign_local_resource_tasks(&session, &catalog);
     assert(other_floater->active_order_action == 0);
+}
+
+static void test_several_workers_share_one_construction_task_from_the_hall(void)
+{
+    GameSession session = {0};
+    PadCatalog catalog = {0};
+    GameRuntimeLocation *site;
+    GameRuntimeLocation *hall;
+    unsigned int index;
+    int slot;
+
+    session.island_count = 1;
+    session.floater_count = 3;
+    session.islands[0].location_count = 2;
+    session.economy[0].hall_island_index = 0;
+    session.economy[0].hall_location_index = 1;
+    session.economy[0].source_maintenance_capacity = 10;
+    site = &session.islands[0].locations[0];
+    site->renderer_class = 0;
+    site->record_value_10 = 1;
+    site->record_value_24 = 5;
+    site->owner_id = -1;
+    site->source_value_14 = -1;
+    site->source_value_22 = 1;
+    hall = &session.islands[0].locations[1];
+    hall->renderer_class = 0;
+    hall->record_value_10 = 0x2a;
+    hall->owner_id = 0;
+    hall->resource_stock[GAME_RESOURCE_BUILD_TONE] = 3;
+    catalog.item_count = 0x26;
+    catalog.items[0x25].item_id = 0x25;
+    catalog.items[0x25].building_tone_cost = 3;
+    for (index = 0; index < 3; ++index) {
+        GameFloaterStart *floater = &session.floaters[index];
+        floater->is_active = 1;
+        floater->owner_slot = 0;
+        floater->island_index = 0;
+        floater->source_link_0c = -1;
+        floater->linked_task_slot = -1;
+    }
+    slot = game_session_pending_event_add(&session, 0, 0, 5, 0, 0, 0x25);
+    assert(slot == 0);
+
+    /* FUN_0042219e has no per-source lock: the Hall serves every worker while
+       its stock is positive, and the task accepts as many workers as it still
+       needs. FUN_00452ceb only requires the stock-mode word to be 0. */
+    session.economy[0].stock_mode[GAME_RESOURCE_BUILD_TONE] = 1;
+    game_session_assign_local_resource_tasks(&session, &catalog);
+    assert(session.pending_events[slot].assigned_floater_count == 0);
+    session.economy[0].stock_mode[GAME_RESOURCE_BUILD_TONE] = 0;
+    game_session_assign_local_resource_tasks(&session, &catalog);
+    assert(session.pending_events[slot].assigned_floater_count == 3);
+    for (index = 0; index < 3; ++index)
+        assert(session.floaters[index].active_order_action == 4);
+}
+
+static void test_busy_worker_moves_to_a_task_with_two_fewer_workers(void)
+{
+    GameSession session = {0};
+    GameRuntimeLocation *hall;
+    unsigned int index;
+    int slot_a;
+    int slot_b;
+
+    session.island_count = 1;
+    session.floater_count = 3;
+    session.islands[0].location_count = 3;
+    hall = &session.islands[0].locations[2];
+    hall->renderer_class = 0;
+    hall->record_value_10 = 0x2a;
+    hall->owner_id = 0;
+    for (index = 0; index < 2; ++index) {
+        GameRuntimeLocation *target = &session.islands[0].locations[index];
+        target->renderer_class = 0;
+        target->owner_id = 0;
+        target->record_value_10 = 0x25;
+    }
+    slot_a = game_session_pending_event_add(&session, 0, 0, 4, 0, 0, 1);
+    slot_b = game_session_pending_event_add(&session, 0, 0, 4, 0, 1, 1);
+    assert(slot_a == 0 && slot_b == 1);
+    for (index = 0; index < 3; ++index) {
+        GameFloaterStart *floater = &session.floaters[index];
+        floater->is_active = 1;
+        floater->owner_slot = 0;
+        floater->island_index = 0;
+        floater->source_link_0c = -1;
+        floater->carried_resource_code = 1;
+        floater->active_order_action = 4;
+        floater->movement_state = 3;
+        floater->has_move_order = 1;
+        floater->linked_task_slot = (int16_t)slot_a;
+        floater->order_resource_code = 1;
+        floater->order_target_island = 0;
+        floater->order_target_location = 0;
+    }
+    session.pending_events[slot_a].assigned_floater_count = 3;
+
+    /* FUN_0041e569 re-runs FUN_0042219e once per ten ticks for a floater that
+       is not in state 0, offset by its index. Floater 0 is due at tick 0. A
+       row replaces the current task when it has at least two workers fewer:
+       task B (0 workers) beats task A (3 workers). */
+    session.simulation_tick = 0;
+    game_session_assign_local_resource_tasks(&session, NULL);
+    assert(session.floaters[0].linked_task_slot == slot_b);
+    assert(session.floaters[0].order_target_location == 1);
+    assert(session.floaters[1].linked_task_slot == slot_a);
+    assert(session.pending_events[slot_a].assigned_floater_count == 2);
+    assert(session.pending_events[slot_b].assigned_floater_count == 1);
+
+    /* Floater 1 is due at tick 9: A has 2 workers, B has 1, and 1 < 2 - 1 is
+       false, so it keeps its task and the counts do not move. */
+    session.simulation_tick = 9;
+    game_session_assign_local_resource_tasks(&session, NULL);
+    assert(session.floaters[1].linked_task_slot == slot_a);
+    assert(session.pending_events[slot_a].assigned_floater_count == 2);
+    assert(session.pending_events[slot_b].assigned_floater_count == 1);
+
+    /* An urgent task (an artifact delivery, FUN_0041e454) is never abandoned
+       by the balancing pass, even when another task has far fewer workers. */
+    session.pending_events[slot_a].payload_12 = 5;
+    session.floaters[2].order_resource_code = 5;
+    session.pending_events[slot_b].assigned_floater_count = 0;
+    session.simulation_tick = 8;
+    game_session_assign_local_resource_tasks(&session, NULL);
+    assert(session.floaters[2].linked_task_slot == slot_a);
+    assert(session.pending_events[slot_a].assigned_floater_count == 2);
 }
 
 static void test_construction_task_delivers_cost_before_deferred_placement(void)
@@ -569,7 +692,7 @@ static void test_tone_maintenance_surplus_tracks_regions_and_workers(void)
     /* Losing that worker returns its upkeep to the available surplus. */
     session.floaters[0].is_active = 0;
     game_session_refresh_player_maintenance_budgets(&session);
-    assert(session.economy[0].source_maintenance_budget == 59);
+    assert(session.economy[0].source_maintenance_budget == 9);
 }
 
 static void test_recruitment_waits_for_surplus_then_creates_animated_worker(void)
@@ -616,11 +739,11 @@ static void test_recruitment_waits_for_surplus_then_creates_animated_worker(void
                    session.player_starts.players[owner].floater_type_index);
             assert(floater->current_hit_points ==
                    session.worker_birth_stats[owner].hit_points);
-            assert(floater->source_runtime_flags == 0x801U);
+            assert(floater->source_runtime_flags == 0x001U);
             assert(floater->has_wander_order);
             assert(floater->island_index ==
                    session.economy[owner].hall_island_index);
-            assert(session.economy[owner].source_maintenance_budget == 25);
+            assert(session.economy[owner].source_maintenance_budget == 5);
         }
     }
     assert(worker_count == 5);
@@ -699,7 +822,7 @@ static void test_initialized_workers_build_from_queued_selection(void)
     assert(session.pending_events[slot].payload_0a == start->island_index);
     assert(session.pending_events[slot].payload_0e == (int16_t)location_index);
     assert(session.pending_events[slot].payload_12 == 37);
-    assert(session.economy[0].source_maintenance_budget == 26);
+    assert(session.economy[0].source_maintenance_budget == 6);
     assert(session.economy[0].source_maintenance_budget <
            item->maintenance_tone_cost);
     {
@@ -788,15 +911,24 @@ static void test_construction_completes_on_native_empty_status_one_site(void)
     assert(session.pending_events[slot].active == 1);
     assert(site->owner_id == -1 && site->record_value_10 == 1);
 
+    /* The task update no longer places the pad: that happens when the worker
+       arrives (FUN_004527ee), through game_session_place_building. */
     site->resource_stock[GAME_RESOURCE_BUILD_TONE] = 1;
     game_session_update_construction_tasks(&session, &catalog);
+    assert(site->record_value_10 == 1 && session.pending_events[slot].active == 1);
+    {
+        IslandLocation site_data = {0};
+        char error[128];
+        site_data.kind = ISLAND_LOCATION_PAD_SMALL;
+        assert(game_session_place_building(&session, &catalog, 2, 0, 0,
+            &site_data, 0x2c, error, sizeof(error)));
+    }
     assert(site->record_value_10 == 76);
     assert(site->owner_id == 2);
     assert(site->source_value_14 == 2);
     assert(site->source_value_34 == 17);
     assert(site->source_value_32 == 1);
     assert(site->source_flags == 0x410);
-    assert(session.pending_events[slot].active == 0);
 }
 
 static void test_cancelled_construction_releases_assigned_floater(void)

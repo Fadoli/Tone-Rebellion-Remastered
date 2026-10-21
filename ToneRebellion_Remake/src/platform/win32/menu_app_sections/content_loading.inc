@@ -223,6 +223,12 @@ static int load_building_render_catalog(char *error, size_t error_capacity)
                        "bldname.txt did not contain all 64 BLDNAME entries");
         goto done;
     }
+    /* FUN_00439673 reads LEVNAME entries for owner-4 sites; a short file
+       leaves later entries empty rather than failing the load. */
+    memset(g_leviathan_names, 0, sizeof(g_leviathan_names));
+    (void)extract_repeated_help_entries(name_bytes, name_member->length,
+                                        "LEVNAME", g_leviathan_names,
+                                        LEVIATHAN_NAME_COUNT);
     memset(g_building_descriptions, 0, sizeof(g_building_descriptions));
     {
         uint16_t item_index;

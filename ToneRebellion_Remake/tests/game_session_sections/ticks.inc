@@ -99,7 +99,7 @@ static void test_class0_item5_spawns_neutral_item_after_difficulty_delay(void)
     source->source_value_14 = 4;
     source->source_value_22 = 0x00ff;
     source->record_value_24 = 7;
-    source->source_flags = 0xdeadbeefU;
+    source->source_flags = 0xdeadbe4fU; /* no 0x80/0x20: those start the destruction and upgrade timers */
     source->source_value_32 = 1;
     source->animation_rate = 1;
     source->producer_cadence = 19;
@@ -126,7 +126,8 @@ static void test_class0_item5_spawns_neutral_item_after_difficulty_delay(void)
     assert(source->owner_id == 4 && source->source_value_14 == 4);
     assert(source->source_value_34 == 30 && source->source_value_32 == 1);
     assert(source->record_value_24 == 7);
-    assert(source->source_flags == 0xdeadbef0U);
+    /* Replacement keeps 0x400 only (FUN_00452859 clears 0x10); the active bit is then recomputed. */
+    assert(source->source_flags == 0xdeadbe41U);
     assert(source->source_value_22 == 0);
     assert(source->charge_source_value_30 == 0);
     assert(source->source_value_3a == 0 && source->source_value_3c == 0);
@@ -183,7 +184,8 @@ static void test_item_animation_uses_source_flags_and_per_object_counters(void)
     }
     assert(location->glyph_progress == 0); /* source GLYP phase wraps at 40 */
     location->chug_progress = 0;
-    location->animation_rate = 2;
+    /* The increment follows raw +0x32, not the render-facing animation_rate. */
+    location->source_value_32 = 2;
     game_session_tick_item_animations(&session, &catalog);
     assert(location->chug_progress == 2); /* source adds CHUG speed at rate >= 2 */
 }
@@ -257,6 +259,10 @@ static void test_active_cons_and_prod_counters_finish_at_source_limits(void)
     item->cons.fallback_frame = 3; /* bldinf CONS parameter, source +0x0a */
     item->prod.present = 1;
     item->prod.threshold = 2;      /* bldinf PROD parameter, source +0x0c */
+    /* The PROD cycle lasts as long as its animation: one frame, two ticks. */
+    item->prod.first_frame = 1;
+    item->prod.last_frame = 1;
+    item->prod.ticks_per_frame = 2;
 
     game_session_tick_item_animations(&session, &catalog);
     assert(location->construction_progress == 1);
@@ -303,12 +309,16 @@ static void test_producer_cadence_starts_prod_and_waits_for_output_consumption(v
     location->renderer_class = 0;
     location->source_flags = 0x411U;
     location->animation_rate = 1;
+    location->source_value_32 = 1; /* the cadence adds raw +0x32 */
     catalog.item_count = 0x28;
     item = &catalog.items[0x25];
     item->item_id = 0x25;
     item->present = 1;
     item->prod.present = 1;
     item->prod.threshold = 2;
+    item->prod.first_frame = 1; /* PROD lasts one frame, two ticks */
+    item->prod.last_frame = 1;
+    item->prod.ticks_per_frame = 2;
 
     location->source_flags = 0x410U;
     game_session_tick_item_animations(&session, &catalog);
@@ -335,11 +345,13 @@ static void test_producer_cadence_starts_prod_and_waits_for_output_consumption(v
         game_session_tick_item_animations(&session, &catalog);
     }
     assert(location->record_value_24 == 1);
-    assert(location->producer_cadence == 0);
+    /* The cadence check runs before the output is written, so the completion tick adds +0x32 once. */
+    assert(location->producer_cadence == 1);
     assert((location->source_flags & 0x002U) == 0);
 
     location->record_value_24 = 0;
     location->animation_rate = 2;
+    location->source_value_32 = 2;
     for (tick = 0; tick < 10; ++tick) {
         game_session_tick_item_animations(&session, &catalog);
     }
@@ -349,6 +361,7 @@ static void test_producer_cadence_starts_prod_and_waits_for_output_consumption(v
     location->source_flags = 0x411U;
     location->record_value_10 = 0x26;
     location->animation_rate = 1;
+    location->source_value_32 = 1;
     location->record_value_24 = 0;
     location->production_progress = 0;
     item = &catalog.items[0x26];
@@ -356,6 +369,9 @@ static void test_producer_cadence_starts_prod_and_waits_for_output_consumption(v
     item->present = 1;
     item->prod.present = 1;
     item->prod.threshold = 1;
+    item->prod.first_frame = 1;
+    item->prod.last_frame = 1;
+    item->prod.ticks_per_frame = 1;
     for (tick = 0; tick < 20; ++tick) {
         game_session_tick_item_animations(&session, &catalog);
     }
@@ -371,6 +387,9 @@ static void test_producer_cadence_starts_prod_and_waits_for_output_consumption(v
     item->present = 1;
     item->prod.present = 1;
     item->prod.threshold = 1;
+    item->prod.first_frame = 1;
+    item->prod.last_frame = 1;
+    item->prod.ticks_per_frame = 1;
     for (tick = 0; tick < 20; ++tick) {
         game_session_tick_item_animations(&session, &catalog);
     }

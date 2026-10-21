@@ -77,11 +77,6 @@ int game_session_consume_location_resource(GameSession *session,
             uint16_t *stock = &location->resource_stock[resource_code - 1];
             if (*stock > 0) {
                 --*stock;
-                /* Only a player Hall owns a DAT_0061a588 reservation; other
-                   item-0x2a sites expose the same native +0x28..+0x2c stock. */
-                if (location_is_player_hall(location))
-                    game_session_release_hall_resource_source(session,
-                        (uint8_t)location->owner_id, (int16_t)resource_code);
                 return 1;
             }
         }
@@ -130,19 +125,12 @@ int game_session_hall_resource_source_available(const GameSession *session,
     if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
         resource_code < 1 || resource_code > GAME_RESOURCE_TYPE_COUNT)
         return 0;
-    return session->economy[player_slot].hall_resource_source_busy[
+    /* FUN_00452ceb reads the player's stock-mode word (+0x13d0 + 2 * k,
+       DAT_0061a588/a/c) and accepts the Hall as a source only while it is 0.
+       There is no per-worker lock: stock is checked and debited at pickup
+       (FUN_00452c31/FUN_00452eac), so several workers may head to the Hall. */
+    return session->economy[player_slot].stock_mode[
         (unsigned int)resource_code - 1U] == 0;
-}
-
-void game_session_release_hall_resource_source(GameSession *session,
-                                               uint8_t player_slot,
-                                               int16_t resource_code)
-{
-    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
-        resource_code < 1 || resource_code > GAME_RESOURCE_TYPE_COUNT)
-        return;
-    session->economy[player_slot].hall_resource_source_busy[
-        (unsigned int)resource_code - 1U] = 0;
 }
 
 static void update_player_hall_tier(const GameSession *session,
@@ -623,10 +611,14 @@ unsigned int game_session_update_resource_requests(GameSession *session)
                             (int16_t)economy->hall_location_index &&
                         event->payload_12 == (int16_t)(resource + 1U)) {
                         GamePendingEvent expected = *event;
+                        const uint8_t saved_mode = economy->stock_mode[resource];
                         /* FUN_0045eaa7 cancels the task through
-                           FUN_00466533, which also detaches its worker. */
+                           FUN_00466533, which also detaches its worker. It
+                           does not call FUN_0045fb6f, so the stock mode stays
+                           2 (REA ev_ac771f12cdb7dcea6cf4d26c22c2f8051c89f38012d375a9717fbae85d7e0791). */
                         (void)game_session_dispatch_task_command(session,
                             (uint8_t)linked_slot, 12, &expected);
+                        economy->stock_mode[resource] = saved_mode;
                     }
                 }
                 economy->resource_task_slot[resource] = -1;

@@ -102,3 +102,34 @@ Le remake n'ajoute donc plus de bouton `RAMASSER` à `IWLocControl`. Lorsqu'un f
 Le rendu de sélection du remake a été corrigé séparément : la sélection d'un `PIT_Object` (runtime type 1, classe 0, propriétaire -1, objet 5–33) passe désormais avant le panneau du floater conservé. Elle affiche l'icône de l'objet et son texte d'inventaire dans `IWLocInfo`; la sélection native de cibles 5–33 est observée dans `FUN_0045302a` (`ev_11ae9b199167de7f63009a806860da707448a67daead1d9059621173b4fb6477`). Ce panneau descriptif est un rendu du remake, sans prétendre qu'il existe sous cette forme dans le jeu d'origine.
 
 À la fin d'un état 13 réussi, `FUN_0041e569` renvoie aussi un floater subtype 8 vers le Hall lorsque l'ordre n'est pas `FA_Cast` et que le garde global natif est ouvert. Le remake reprend ce retour Hall via le trajet coordonnée déjà porté; son tick n'avance que lorsque la simulation est active. Evidence : `ev_a22f1c921d2325494e512998fc999d7e222d5c45422f7d52c6d808b30b8feccd`.
+
+## Vue IWLocInfo après sélection (état du port)
+
+Observation (pseudocode stocké de `FUN_0044338b`, REA live indisponible lors de
+cette passe, rien revérifié): pour un objet au sol (`owner=-1`),
+`FUN_004207f2` renvoie null, donc BLDNAME, LEVEL et CHARGE sont sautés. Ligne
+de nom centrée à y=3, lignes de texte à x=4 (y=23, 33), sprite à (W-50, H/2+5)
+à 100 % via `FUN_0042704b`. Aucun bouton créé par cette fonction.
+Le port applique cette géométrie (nom centré, icône à 100 %) et retire le
+libellé inventé « OBJET AU SOL ».
+Interprétation: le texte du nom (première ligne de la description d'inventaire)
+et la frame `id-5` de la feuille d'objets.
+Inconnues: chaîne native du nom (table xTark/0x4a0d38), valeurs des lignes 2–3
+pour un objet, feuille/frame choisie dans `FUN_0042704b`, mode de panneau ouvert
+par le clic île.
+
+### Complément REA (FUN_0042704b, chaînes)
+
+Observation (ev_7561f651, ev_18fc192b, ev_7a048a61, ev_f6810b9e, ev_f4da15d7):
+`FUN_0042704b` dessine l'icône d'objet via `FUN_0040adb5`: item >= 4 donne la
+feuille `DAT_0049acb4`, frame `item-5` (valeur statique initiale 0xffff, fixée
+à l'exécution; si feuille 0 et 4<item<0x22, texte `"%02d"` de `item-5`). Frame
+`id-5` du port confirmée; la feuille reste inconnue statiquement. Chaînes:
+`0x4a0d38`="HITS", `0x4a0d4c`="STRENGTH", `0x4a0d0c`="WORKER", `0x4a0d14`="AWAKE";
+table xTark (pas 12 @0x49cfc8): xTark, xZygon, xCephean, xDyla, xLeviathan.
+Ligne de nom native = `"%s %s"` (entrée xTark + WORKER/AWAKE), résolue par
+`thunk_FUN_00429ebe` (non décodé). Le texte final du nom d'un objet au sol
+reste donc inconnu; le port garde la description d'inventaire (interprétation).
+Écart à vérifier: le sous-agent attribue l'ID d'objet à `+0x18` et dit que
+`+0x24` n'est pas un sélecteur de forme (≥0x14 saute le corps), contrairement à
+la lecture de `FUN_0045f337` ci-dessus; non tranché.

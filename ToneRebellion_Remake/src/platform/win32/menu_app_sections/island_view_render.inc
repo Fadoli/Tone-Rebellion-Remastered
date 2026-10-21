@@ -20,6 +20,23 @@ static unsigned int island_leviathan_leg_sheet(uint8_t subtype)
         ? (unsigned int)(subtype - 9U) : 9U;
 }
 
+/* FUN_0044338b indexes the 16-byte xSpores string table at 0x4a4a50 by
+   level + (subtype - 9) * 2; the source strings carry a leading 'x'. */
+static const char *island_leviathan_info_name(uint8_t subtype,
+                                              unsigned int level)
+{
+    static const char *const names[18] = {
+        "xSpores", "xSpores", "xRakalingus", "xBroontilingus", "xZeeth",
+        "xKeth", "xDrack", "xNadrack", "xTone Wasp", "xSasp", "xRonth",
+        "xVarnth", "xMetha", "xKoalint", "xZwacker", "xZwaup", "xShandi",
+        "xFlindex"
+    };
+    unsigned int index;
+    if (subtype < 9U || subtype > 17U) return "";
+    index = level + (unsigned int)(subtype - 9U) * 2U;
+    return index < 18U ? names[index] : "";
+}
+
 static uint32_t island_leviathan_legs_frame(const GameFloaterStart *floater,
                                              unsigned int sheet_index)
 {
@@ -577,9 +594,16 @@ static void render_island_view(HDC dc)
                                     pane.right, pane.bottom);
             draw_sprite(dc, &g_temp_hole_art, 1,
                         info->pane.left, info->pane.top);
-            draw_bitmap_label(dc, "OBJET AU SOL",
-                              info->pane.left + 5, info->pane.top + 5,
-                              RGB(230, 238, 255));
+            /* FUN_0044338b layout (stored Ghidra evidence only; REA session
+               was unavailable for live re-verification): a centred name row
+               at y=3, text rows at x=4, and the object sprite at
+               (W-50, H/2+5) at 100%. A ground object has owner -1, so
+               FUN_004207f2 returns null and the BLDNAME/LEVEL/CHARGE rows
+               are skipped. FUN_0040adb5 maps item>=4 to frame item-5 of
+               sheet DAT_0049acb4, so frame id-5 is observed. The native name
+               row is "%s %s" (xTark-table entry + WORKER/AWAKE) through a
+               label lookup that is not decoded; the inventory description's
+               first line stays an interpretation. */
             if (description_index >= 0 &&
                 description_index < GAME_INVENTORY_ITEM_COUNT) {
                 const char *description =
@@ -588,19 +612,24 @@ static void render_island_view(HDC dc)
                 if (description_length >= sizeof(item_description))
                     description_length = sizeof(item_description) - 1U;
                 if (description_length != 0) {
+                    int label_width;
                     memcpy(item_description, description, description_length);
                     item_description[description_length] = '\0';
+                    label_width = measure_bitmap_text(NULL, item_description,
+                                                      description_length);
                     draw_bitmap_label(dc, item_description,
-                                      info->pane.left + 5,
-                                      info->pane.top + 20,
-                                      RGB(185, 205, 220));
+                        info->pane.left +
+                            ((info->pane.right - info->pane.left + 1) -
+                             label_width) / 2,
+                        info->pane.top + 3, RGB(230, 238, 255));
                 }
             }
             if (item_frame < g_inventory_item_art.frame_count) {
-                int icon_x = info->pane.right - 38;
-                int icon_y = info->pane.top + 29;
+                int icon_x = info->pane.right - 50;
+                int icon_y = info->pane.top +
+                    (info->pane.bottom - info->pane.top) / 2 + 5;
                 draw_sprite_scaled(dc, &g_inventory_item_art, item_frame,
-                                   icon_x, icon_y, 0x00008000U);
+                                   icon_x, icon_y, 0x00010000U);
             }
             if (saved_info_dc != 0) RestoreDC(dc, saved_info_dc);
         }
@@ -775,13 +804,76 @@ static void render_island_view(HDC dc)
             }
             if (saved_info_dc != 0) RestoreDC(dc, saved_info_dc);
         }
+    } else if (selected_floater != NULL && selected_floater->owner_slot == 4U &&
+               game_session_floater_is_active(selected_floater) &&
+               selected_floater->source_subtype >= 9U &&
+               selected_floater->source_subtype <= 17U &&
+               island_panel_location_info_visible(g_island_panel_mode)) {
+        const WindowTemplate *info = window_catalog_find(
+            &g_window_catalog, "IWLocInfo", 3);
+        if (info != NULL && g_temp_hole_art.frame_count > 1) {
+            RECT pane = {info->pane.left, info->pane.top,
+                         info->pane.right + 1, info->pane.bottom + 1};
+            int saved_info_dc = SaveDC(dc);
+            unsigned int level = selected_floater->attack_level_flags & 0x0fU;
+            char name_label[24];
+            char row_label[32];
+            int label_width;
+            int row_y;
+            (void)IntersectClipRect(dc, pane.left, pane.top,
+                                    pane.right, pane.bottom);
+            draw_sprite(dc, &g_temp_hole_art, 1,
+                        info->pane.left, info->pane.top);
+
+            /* FUN_0044338b, category-4 (Leviathan) unit branch (Evidence
+               ev_5f9c5a49...): FUN_004207f2 is null, so the building rows are
+               skipped. A centred name row at y=3 comes from the xSpores table
+               index (level + (subtype - 9) * 2), then LEVEL (level + 1),
+               HITS cur/max, STRENGTH at x=4 and the monster sprite at
+               (W-50, H/2+5). The table strings keep their source "x" prefix. */
+            (void)snprintf(name_label, sizeof(name_label), "%s",
+                island_leviathan_info_name(selected_floater->source_subtype,
+                                           level));
+            label_width = measure_bitmap_text(NULL, name_label,
+                                              strlen(name_label));
+            draw_bitmap_label(dc, name_label,
+                info->pane.left +
+                    ((info->pane.right - info->pane.left + 1) - label_width) / 2,
+                info->pane.top + 3, RGB(230, 238, 255));
+            row_y = info->pane.top + 23;
+            (void)snprintf(row_label, sizeof(row_label), "LEVEL %u", level + 1U);
+            draw_bitmap_label(dc, row_label, info->pane.left + 5, row_y,
+                              RGB(230, 238, 255));
+            row_y += 10;
+            (void)snprintf(row_label, sizeof(row_label), "HITS %d/%d",
+                selected_floater->current_hit_points < 0
+                    ? 0 : (int)selected_floater->current_hit_points,
+                (int)selected_floater->max_hit_points);
+            draw_bitmap_label(dc, row_label, info->pane.left + 5, row_y,
+                              RGB(230, 238, 255));
+            row_y += 10;
+            (void)snprintf(row_label, sizeof(row_label), "STRENGTH %u",
+                (unsigned int)selected_floater->attack_strength);
+            draw_bitmap_label(dc, row_label, info->pane.left + 5, row_y,
+                              RGB(230, 238, 255));
+            draw_island_leviathan_floater(dc, selected_floater,
+                info->pane.right - 50,
+                info->pane.top + (info->pane.bottom - info->pane.top) / 2 + 5);
+            if (saved_info_dc != 0) RestoreDC(dc, saved_info_dc);
+        }
     } else if (island_panel_location_info_visible(g_island_panel_mode) &&
                runtime_island != NULL && g_selected_location >= 0 &&
                g_selected_location < runtime_island->location_count) {
         const GameRuntimeLocation *selected_location =
             &runtime_island->locations[g_selected_location];
         int32_t raw_item_id = selected_location->record_value_10;
-        if (raw_item_id >= 0x25 && raw_item_id < g_pad_catalog.item_count) {
+        /* FUN_00440567 paints any kind-0 site with item >= 2 (Evidence
+           ev_cb0962ae...); owner-4 sites draw only the building sprite there.
+           Hall/task blocks are skipped (+0x18 == -1, no owner HITS gauge). */
+        int leviathan_building = selected_location->owner_id == 4 &&
+            selected_location->renderer_class == 0 && raw_item_id >= 5;
+        if ((raw_item_id >= 0x25 || leviathan_building) &&
+            raw_item_id < g_pad_catalog.item_count) {
             const WindowTemplate *info = window_catalog_find(
                 &g_window_catalog, "IWLocInfo", 3);
             if (info != NULL && g_temp_hole_art.frame_count > 1) {
@@ -980,6 +1072,31 @@ static void draw_location_action_panel(HDC dc)
                 g_building_descriptions[selected_location->record_value_10],
                 text_panel->pane.left + 10, text_panel->pane.top + 0x10,
                 pane_width - 20, max_lines, RGB(230, 238, 255));
+        }
+    } else if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL &&
+               selected_location->owner_id == 4 &&
+               selected_location->renderer_class == 0 &&
+               selected_location->record_value_10 >= 5 &&
+               selected_location->record_value_10 - 5 < LEVIATHAN_NAME_COUNT &&
+               g_leviathan_names[selected_location->record_value_10 - 5][0] != '\0') {
+        /* FUN_00439673 mode 0: pad items have no description key for owner 4,
+           so the LEVNAME entry (item - 5) is centred at y = H/2 - 10. */
+        const char *level_name =
+            g_leviathan_names[selected_location->record_value_10 - 5];
+        text_panel = window_catalog_find(&g_window_catalog, "IWTextInfo", 3);
+        if (text_panel != NULL && text_panel->shape_frame >= 0 &&
+            (uint32_t)text_panel->shape_frame < g_temp_hole_art.frame_count) {
+            int pane_width = text_panel->pane.right - text_panel->pane.left;
+            int pane_height = text_panel->pane.bottom - text_panel->pane.top;
+            int name_width = measure_bitmap_text(NULL, level_name,
+                                                 strlen(level_name));
+            draw_sprite(dc, &g_temp_hole_art,
+                        (uint32_t)text_panel->shape_frame,
+                        text_panel->pane.left, text_panel->pane.top);
+            draw_bitmap_label(dc, level_name,
+                text_panel->pane.left + (pane_width - name_width) / 2,
+                text_panel->pane.top + pane_height / 2 - 10,
+                RGB(230, 238, 255));
         }
     }
 

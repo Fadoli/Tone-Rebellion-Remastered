@@ -537,7 +537,13 @@ static void release_leviathan_floater(GameSession *session,
     int32_t index = site->leviathan_spawned_floater;
     if (index < 0 || (unsigned int)index >= session->floater_count) return;
     floater = &session->floaters[(unsigned int)index];
-    if (!game_session_floater_is_active(floater)) return;
+    if (!game_session_floater_is_active(floater) ||
+        (floater->source_runtime_flags & 0x800U) == 0 ||
+        floater->owner_slot != 4U) {
+        /* The spawned floater died and its slot was reused. */
+        site->leviathan_spawned_floater = -1;
+        return;
+    }
     floater->x = (uint16_t)((int32_t)site->x +
         (item->prod.present ? item->prod.offset_x : 0));
     floater->y = (uint16_t)((int32_t)site->y +
@@ -1311,7 +1317,8 @@ void game_session_tick_item_animations_with_floaters(
                ID 0 loops 0..89; ID 5 advances to 125 then restarts at 102.
                Both still pass through the shared CONS/PROD counters and item
                switch after this CHUG update. */
-            if (state->renderer_class == 1 && state->record_value_10 == 0) {
+            if (state->renderer_class == 1 &&
+                (state->record_value_10 == 0 || state->record_value_10 == 5)) {
                 state->chug_progress = island_tone_pool_next_counter(
                     state->record_value_10, state->chug_progress);
             }
@@ -1329,6 +1336,14 @@ void game_session_tick_item_animations_with_floaters(
                     state->charge_source_value_30 + 1U);
             }
 
+            /* The item-5 growth counter belongs to the FUN_00450a71 item
+               switch, not to the render descriptor, so it still runs when
+               the render catalog has no row for this ID. */
+            if (state->record_value_10 == 5 &&
+                (state->record_value_10 >= catalog->item_count ||
+                 building_render_find(catalog, 5) == NULL) &&
+                tick_item5_spawn(session, pad_catalog, state, island_index))
+                goto tick_location_done;
             if (state->record_value_10 < 0 ||
                 (state->record_value_10 == 0 && state->renderer_class != 1) ||
                 state->record_value_10 >= catalog->item_count)
@@ -1363,10 +1378,8 @@ void game_session_tick_item_animations_with_floaters(
                CHUG from their descriptor, while POOL item 5 uses its own
                loop/ping-pong counter before the common CONS/PROD updates. */
             if (state->renderer_class == 1) {
-                if (state->record_value_10 == 5) {
-                    state->chug_progress = island_tone_pool_next_counter(
-                        state->record_value_10, state->chug_progress);
-                } else if (state->record_value_10 != 0 && item->chug.present) {
+                if (state->record_value_10 != 0 && state->record_value_10 != 5 &&
+                    item->chug.present) {
                     duration = building_render_chug_duration(item);
                     if (duration != 0) {
                         state->chug_progress = (uint16_t)(state->chug_progress + 1U);

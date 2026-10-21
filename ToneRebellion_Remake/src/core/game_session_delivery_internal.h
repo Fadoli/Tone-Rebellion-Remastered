@@ -11,5 +11,7 @@ int refill_source(GameSession *session, const GameFloaterStart *floater,
 void floater_target_location(GameFloaterStart *floater,
                              const GameRuntimeLocation *location, uint8_t state);
 void release_task_claim(GameSession *session, GameFloaterStart *floater);
+void game_session_retire_floater(GameSession *session,
+                                 unsigned int floater_index);
 
 #endif

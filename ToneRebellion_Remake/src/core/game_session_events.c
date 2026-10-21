@@ -484,7 +484,7 @@ unsigned int game_session_dispatch_cast_actions(GameSession *session)
             (uint8_t)building->source_value_14, request.action_subtype);
         /* Kinds 0..0x16 now have reconstructed FA_Cast tick and impact
            effects, except kind 0x0a requests its target floater from the UI. */
-        if (kind > 0x16) continue;
+        if (kind > 0x15) continue;
         if (kind == 0x0a &&
             (request.target_floater_index < 0 ||
              (unsigned int)request.target_floater_index >= session->floater_count ||
