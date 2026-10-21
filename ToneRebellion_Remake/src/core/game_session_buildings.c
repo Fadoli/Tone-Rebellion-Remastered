@@ -247,7 +247,6 @@ int game_session_place_building(GameSession *session,
     /* FUN_004528ca clears bit 0 and adds 0x410; FUN_00452fcb clears bits
        1..3. FUN_004527ee re-ORs bit 0x10, already present in 0x410. */
     runtime->source_flags = (runtime->source_flags & ~0x0fU) | 0x410U;
-    runtime->base_progress = 0;
     /* FUN_004528ca does not write the modeled +0x0c cadence field. */
     runtime->chug_progress = 0;
     runtime->glyph_progress = 0;

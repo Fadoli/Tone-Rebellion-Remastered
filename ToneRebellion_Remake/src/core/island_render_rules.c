@@ -118,6 +118,47 @@ int island_worker_health_overlay_enabled(uint8_t flags,
            (flags & ISLAND_FLOATER_OVERLAY_HEALTH) != 0;
 }
 
+uint32_t island_worker_legs_frame(uint8_t worker_type, int has_cargo,
+                                  uint32_t animation_ticks)
+{
+    static const uint8_t carry_first[4] = {23, 23, 60, 24};
+    static const uint8_t carry_last[4] = {30, 30, 66, 39};
+    enum { HOVER_FIRST = 0, HOVER_LAST = 15, TICKS_PER_FRAME = 2 };
+    uint32_t first;
+    uint32_t last;
+    uint32_t frame_count;
+
+    if (worker_type >= 4U) return 0;
+    first = has_cargo ? carry_first[worker_type] : HOVER_FIRST;
+    last = has_cargo ? carry_last[worker_type] : HOVER_LAST;
+    frame_count = last - first + 1U;
+    return first + (animation_ticks / TICKS_PER_FRAME) % frame_count;
+}
+
+uint32_t island_worker_attack_legs_frame(uint16_t first_frame,
+                                         uint16_t last_frame,
+                                         uint16_t ticks_per_frame,
+                                         int ping_pong,
+                                         uint32_t attack_progress)
+{
+    uint32_t first = first_frame;
+    uint32_t last = last_frame;
+    uint32_t span;
+    uint32_t phase;
+
+    if (last < first) return first;
+    if (ticks_per_frame == 0) return first;
+    span = last - first;
+    phase = attack_progress / ticks_per_frame;
+    if (ping_pong && span != 0) {
+        uint32_t cycle = span * 2U;
+        uint32_t offset = phase % cycle;
+        if (offset > span) offset = cycle - offset;
+        return first + offset;
+    }
+    return first + phase % (span + 1U);
+}
+
 int island_worker_health_badge_layout(uint8_t worker_type,
                                       uint8_t max_hit_points, int facing_left,
                                       int32_t body_hit_left,

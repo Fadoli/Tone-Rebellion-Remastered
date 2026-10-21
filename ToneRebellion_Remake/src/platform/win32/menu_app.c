@@ -97,6 +97,7 @@ static SpriteSheet g_task_priority_art;
 static SpriteSheet g_bildtone_art;
 static SpriteSheet g_tone_crys_art;
 static SpriteSheet g_magctone_art;
+static SpriteSheet g_crumble_art;
 static SpriteSheet g_hall_stock_art;
 static SpriteSheet g_repair_button_art;
 static SpriteSheet g_upgrade_button_art;

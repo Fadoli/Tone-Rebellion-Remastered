@@ -130,6 +130,7 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
     const BuildingRenderItem *item;
     const SpriteSheet *sheet;
     uint32_t frame;
+    int destruction_origin_y = y;
     int drew = 0;
 
     if (runtime_location == NULL || (raw_id = runtime_location->record_value_10) <= 0 ||
@@ -139,11 +140,20 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
     sheet = &g_building_art[raw_id];
     if (sheet->frames == NULL || sheet->frame_count == 0) return 0;
 
+    /* FUN_0040bf98 shifts the intact building downward after destruction
+       tick 30; the CRUMBLE overlay remains anchored at its original position. */
+    if ((runtime_location->source_flags & 0x080U) != 0 &&
+        scale_16_16 == 0x10000U && runtime_location->source_value_48 > 0x1e) {
+        int32_t fall_ticks = runtime_location->source_value_48 - 0x1e;
+        y += fall_ticks + (fall_ticks * fall_ticks) / 0x28;
+    }
+
     /* FUN_0040bf98 draws the static/base item layer and then the CHUG layer.
        The source divides the object's +0x3a progress by CHUG speed. The menu
        timer is only a provisional source for that per-object counter. */
     if (item->base.present) {
-        frame = building_render_base_frame_for_state(item, runtime_location->base_progress,
+        frame = building_render_base_frame_for_state(item,
+                                                     runtime_location->source_capacity_4a,
                                                      runtime_location->source_flags);
         if (frame < sheet->frame_count) {
             draw_sprite_scaled(dc, sheet, frame, x, y, scale_16_16);
@@ -196,6 +206,25 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
                                scale_16_16);
             drew = 1;
         }
+        /* FUN_0040bf98 draws the producer's resource marker at the PROD
+           descriptor offset when its threshold is reached or output is pending. */
+        {
+            int resource_code = building_render_visible_resource_code(
+                item, runtime_location->record_value_10, runtime_location->owner_id,
+                runtime_location->production_progress,
+                runtime_location->source_flags, runtime_location->record_value_24);
+            const SpriteSheet *resource_art = resource_code == 1
+                ? &g_bildtone_art : resource_code == 2
+                ? &g_tone_crys_art : resource_code == 3
+                ? &g_magctone_art : NULL;
+            if (resource_art != NULL && resource_art->frame_count != 0) {
+                BuildingRenderPoint effect_position =
+                    building_render_prod_threshold_position(item, x, y);
+                draw_sprite_scaled(dc, resource_art, 0, effect_position.x,
+                                   effect_position.y, scale_16_16);
+                drew = 1;
+            }
+        }
     }
     if (item->occu.present && (runtime_location->source_flags & 8U) != 0) {
         frame = (uint32_t)item->occu.first_frame - 1U;
@@ -208,6 +237,21 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
         frame = building_render_barg_frame(item, runtime_location->barg_progress);
         if (frame < sheet->frame_count) {
             draw_sprite_scaled(dc, sheet, frame, x, y, scale_16_16);
+            drew = 1;
+        }
+    }
+    /* FUN_0040bf98 draws CRUMBLE after the item's data layers on the full-size
+       in-world path. The overlay runs for flag 0x080 through the destruction
+       timer and uses a nine-frame band for each pad size (class 1 uses band 4). */
+    if ((runtime_location->source_flags & 0x080U) != 0 &&
+        scale_16_16 == 0x10000U && g_crumble_art.frames != NULL) {
+        const PadCatalogItem *pad_item = pad_catalog_find(
+            &g_pad_catalog, (uint16_t)raw_id);
+        int8_t item_size = pad_item == NULL ? -1 : pad_item->size;
+        frame = building_render_crumble_frame(runtime_location->renderer_class,
+            item_size, runtime_location->source_value_48);
+        if (frame < g_crumble_art.frame_count) {
+            draw_sprite(dc, &g_crumble_art, frame, x, destruction_origin_y);
             drew = 1;
         }
     }

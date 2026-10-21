@@ -34,8 +34,12 @@ int game_session_pending_event_add(GameSession *session, int16_t player_id,
         unsigned int other;
         for (other = 0; other < GAME_SESSION_MAX_PENDING_EVENTS; ++other) {
             const GamePendingEvent *candidate = &session->pending_events[other];
+            /* These modeled task records are scoped to a player and island;
+               omitting either field aliases otherwise identical local IDs. */
             if (other == slot || candidate->active == 0 ||
                 candidate->action_type != action_type ||
+                candidate->player_id != player_id ||
+                candidate->payload_0a != payload_0a ||
                 candidate->payload_0c != payload_0c ||
                 candidate->payload_0e != payload_0e ||
                 candidate->payload_12 != payload_12) continue;
@@ -140,6 +144,10 @@ int game_session_dispatch_task_command(GameSession *session, uint8_t slot,
             floater->source_order_pending = 0;
             floater->source_runtime_flags &= ~0x065U;
             floater->has_move_order = 0;
+            floater->handoff_target_island = UINT8_MAX;
+            floater->handoff_departure_location = -1;
+            floater->handoff_resume_action = 0;
+            floater->handoff_resume_state = 0;
             floater->movement_state = 0;
             floater->has_wander_order = 1;
             floater->wander_timer = 0;

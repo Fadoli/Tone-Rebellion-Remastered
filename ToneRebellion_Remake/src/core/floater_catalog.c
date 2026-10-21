@@ -122,8 +122,10 @@ static int parse_row(const char *line, FloaterStats *row)
 typedef struct FloaterAnimationEntry {
     char item_name[9];
     int16_t attack_start;
+    int16_t attack_end;
     int16_t attack_terminal;
     int16_t ticks_per_frame;
+    uint8_t attack_ping_pong;
     uint8_t has_attack;
 } FloaterAnimationEntry;
 
@@ -135,6 +137,7 @@ static int parse_attack_animation(const char *line, FloaterAnimationEntry *entry
     int16_t end;
     int16_t ticks_per_frame = 2;
     int16_t terminal;
+    uint8_t ping_pong = 0;
     int status;
 
     status = next_token(&cursor, token, sizeof(token));
@@ -150,10 +153,12 @@ static int parse_attack_animation(const char *line, FloaterAnimationEntry *entry
         if (parse_short(token, &ticks_per_frame)) {
             status = next_token(&cursor, token, sizeof(token));
             if (status == 1) {
+                ping_pong = (uint8_t)ascii_case_equal(token, "P");
                 status = next_token(&cursor, token, sizeof(token));
                 if (status == 1 && !parse_short(token, &terminal)) return 0;
             }
         } else {
+            ping_pong = (uint8_t)ascii_case_equal(token, "P");
             status = next_token(&cursor, token, sizeof(token));
             if (status == 1 && !parse_short(token, &terminal)) return 0;
         }
@@ -161,8 +166,10 @@ static int parse_attack_animation(const char *line, FloaterAnimationEntry *entry
     if (next_token(&cursor, token, sizeof(token)) != 0 || ticks_per_frame < 0)
         return 0;
     entry->attack_start = start;
+    entry->attack_end = end;
     entry->attack_terminal = terminal;
     entry->ticks_per_frame = ticks_per_frame;
+    entry->attack_ping_pong = ping_pong;
     entry->has_attack = 1;
     return 1;
 }
@@ -223,12 +230,40 @@ int floater_catalog_load_animations(const unsigned char *bytes, size_t length,
         unsigned int animation_index;
         row->shape_info_index = -1;
         row->attack_period = 0;
+        row->attack_frame_first = 0;
+        row->attack_frame_last = 0;
+        row->attack_frame_ticks_per_frame = 0;
+        row->attack_frame_duration = 0;
+        row->attack_frame_ping_pong = 0;
         for (animation_index = 0; animation_index < entry_count; ++animation_index) {
             const FloaterAnimationEntry *entry = &entries[animation_index];
             int32_t period;
+            int32_t frame_duration;
             if (!ascii_case_equal(row->draw_id, entry->item_name)) continue;
             row->shape_info_index = (int16_t)animation_index;
             if (!entry->has_attack) break;
+            if (entry->attack_start < 0 ||
+                entry->attack_end < entry->attack_start) {
+                set_error(error, error_capacity,
+                          "floater attack frame range is invalid", 0);
+                return 0;
+            }
+            frame_duration = entry->attack_ping_pong
+                ? (int32_t)(entry->attack_end - entry->attack_start) *
+                    entry->ticks_per_frame * 2
+                : (int32_t)(entry->attack_end - entry->attack_start + 1) *
+                    entry->ticks_per_frame;
+            if (frame_duration < 0 || frame_duration > (int32_t)UINT16_MAX) {
+                set_error(error, error_capacity,
+                          "floater attack frame duration is out of range", 0);
+                return 0;
+            }
+            row->attack_frame_first = (uint16_t)entry->attack_start;
+            row->attack_frame_last = (uint16_t)entry->attack_end;
+            row->attack_frame_ticks_per_frame =
+                (uint16_t)entry->ticks_per_frame;
+            row->attack_frame_duration = (uint16_t)frame_duration;
+            row->attack_frame_ping_pong = entry->attack_ping_pong;
             /* FUN_0042520e returns (attack terminal frame - first frame) times
                the parsed attack rate at row offsets +0x38/+0x3c/+0x3e. */
             period = ((int32_t)entry->attack_terminal - entry->attack_start) *

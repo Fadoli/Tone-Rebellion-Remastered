@@ -163,21 +163,23 @@ static void test_pending_event_table_matches_source_slots_and_deduplication(void
     assert(second == 1);
     assert(session.pending_event_count == 2);
     assert(game_session_pending_event_add(&session, 2, 17, 5, 33, 45, 9) == 2);
-    assert(game_session_pending_event_add(&session, 3, 99, 5, 33, 45, 9) == -1);
-    assert(session.pending_event_count == 3);
-    assert(session.pending_events[3].active == 0);
+    /* A matching site/building tuple on another island/player is a distinct
+       construction task even when its remaining payload fields match. */
+    assert(game_session_pending_event_add(&session, 3, 99, 5, 33, 45, 9) == 3);
+    assert(session.pending_event_count == 4);
+    assert(session.pending_events[3].active == 1);
     assert(session.pending_events[3].player_id == 3);
     assert(session.pending_events[3].payload_0a == 99);
-    assert(game_session_pending_event_add(&session, 2, 17, 13, 33, 45, 9) == 3);
+    assert(game_session_pending_event_add(&session, 2, 17, 13, 33, 45, 9) == 4);
     assert(game_session_pending_event_add(&session, 2, 17, 13, 33, 45, 9) == -1);
-    assert(session.pending_event_count == 4);
+    assert(session.pending_event_count == 5);
 
     assert(game_session_pending_event_release(&session, (uint8_t)second));
     assert(!game_session_pending_event_release(&session, (uint8_t)second));
     assert(session.pending_events[second].payload_12 == 9);
     assert(!game_session_pending_event_release(&session,
                                                GAME_SESSION_MAX_PENDING_EVENTS));
-    assert(session.pending_event_count == 3);
+    assert(session.pending_event_count == 4);
     assert(!game_session_pending_event_release(NULL, 0));
 
     memset(&session, 0, sizeof(session));
@@ -763,8 +765,9 @@ static void test_build_selection_queues_source_packet_without_placing_item(void)
     uint8_t task_slots[GAME_SESSION_MAX_TASKS];
     unsigned int index;
 
-    session.island_count = 1;
+    session.island_count = 2;
     session.islands[0].location_count = 2;
+    session.islands[1].location_count = 2;
     site = &session.islands[0].locations[1];
     site->record_value_10 = 0;
     site->owner_id = -1;
@@ -799,13 +802,21 @@ static void test_build_selection_queues_source_packet_without_placing_item(void)
     assert(task_slots[0] == 0);
     assert(site->record_value_10 == 0 && site->owner_id == -1);
 
-    /* Source duplicate matching ignores player and island fields, and keys
-       the type-5 slot by payload_0c, payload_0e, and payload_12. */
+    /* Identical local site/building IDs on another player or island are
+       distinct tasks; only a repeated request for the same owner/site folds. */
     assert(game_session_queue_build_selection(&session, 3, 0, 1, 44));
-    assert(game_session_dispatch_build_selections(&session) == 0);
+    assert(game_session_dispatch_build_selections(&session) == 1);
     assert(session.build_selection_count == 0);
-    assert(session.pending_event_count == 1);
-    assert(session.pending_events[1].active == 0);
+    assert(session.pending_event_count == 2);
+    assert(session.pending_events[1].active == 1);
+    assert(session.pending_events[1].player_id == 3);
+    assert(game_session_queue_build_selection(&session, 2, 1, 1, 44));
+    assert(game_session_dispatch_build_selections(&session) == 1);
+    assert(session.pending_event_count == 3);
+    assert(session.pending_events[2].payload_0a == 1);
+    assert(game_session_queue_build_selection(&session, 2, 0, 1, 44));
+    assert(game_session_dispatch_build_selections(&session) == 0);
+    assert(session.pending_event_count == 3);
 
     assert(game_session_queue_build_selection(&session, 2, 0, 1, 45));
     assert(game_session_pop_build_selection(&session, &request));
@@ -818,7 +829,7 @@ static void test_build_selection_queues_source_packet_without_placing_item(void)
     assert(!game_session_queue_build_selection(NULL, 0, 0, 0, 44));
     assert(!game_session_queue_build_selection(&session,
         GAME_START_PLAYER_COUNT, 0, 0, 44));
-    assert(!game_session_queue_build_selection(&session, 0, 1, 0, 44));
+    assert(!game_session_queue_build_selection(&session, 0, 2, 0, 44));
     assert(!game_session_queue_build_selection(&session, 0, 0, 2, 44));
 
     for (index = 0; index < GAME_SESSION_MAX_BUILD_SELECTIONS; ++index) {

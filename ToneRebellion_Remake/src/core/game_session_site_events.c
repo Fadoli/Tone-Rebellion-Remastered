@@ -325,6 +325,13 @@ int game_session_recalculate_location_active_with_visibility(
 
     if (location == NULL) return 0;
     if (location->renderer_class == 2 || location->renderer_class == 3) return 0;
+    /* FUN_004539e9 refuses to set the active bit when raw +0x14 is -1,
+       even if the source flags and visibility mask would otherwise qualify. */
+    if (location->source_value_14 == -1) {
+        uint32_t previous_flags = location->source_flags;
+        location->source_flags &= ~1U;
+        return (previous_flags & 1U) != 0;
+    }
     visibility_bit = 1U << ((unsigned int)location->source_value_14 & 31U);
     if (location->source_value_14 != 4 &&
         (location->source_value_22 & visibility_bit) == 0) {

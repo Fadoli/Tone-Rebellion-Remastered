@@ -8,24 +8,24 @@ uint32_t building_render_base_frame(const BuildingRenderItem *item)
 }
 
 uint32_t building_render_base_frame_for_state(const BuildingRenderItem *item,
-                                              uint16_t base_progress,
+                                              int16_t source_value_4a,
                                               uint32_t source_flags)
 {
     const BuildingRenderSegment *segment;
-    uint32_t frame;
+    int32_t frame;
+    int32_t first;
+    int32_t last;
     if (item == NULL) return 0;
     segment = &item->base;
     if (!segment->present || segment->first_frame == 0 ||
         segment->last_frame < segment->first_frame) return 0;
-    frame = (uint32_t)segment->first_frame - 1U + base_progress;
+    first = (int32_t)segment->first_frame - 1;
+    last = (int32_t)segment->last_frame - 1;
+    frame = first + source_value_4a;
     if ((source_flags & 0x20U) != 0 && frame != 0) --frame;
-    if (frame < (uint32_t)segment->first_frame - 1U) {
-        frame = (uint32_t)segment->first_frame - 1U;
-    }
-    if (frame > (uint32_t)segment->last_frame - 1U) {
-        frame = (uint32_t)segment->last_frame - 1U;
-    }
-    return frame;
+    if (frame < first) frame = first;
+    if (frame > last) frame = last;
+    return (uint32_t)frame;
 }
 
 uint32_t building_render_chug_frame(const BuildingRenderItem *item,
@@ -162,6 +162,35 @@ BuildingRenderPoint building_render_prod_threshold_position(const BuildingRender
     return position;
 }
 
+int building_render_visible_resource_code(const BuildingRenderItem *item,
+                                          int32_t runtime_item_id,
+                                          int32_t owner_id,
+                                          uint32_t production_progress,
+                                          uint32_t source_flags,
+                                          int32_t pending_resource_code)
+{
+    int32_t base_item_id = runtime_item_id;
+    int32_t expected_code;
+    int output_visible;
+
+    if (item == NULL || !item->prod.present || owner_id < 0 || owner_id >= 4)
+        return 0;
+    if ((source_flags & 0x002U) != 0) {
+        output_visible = item->prod.threshold != UINT16_MAX &&
+            item->prod.threshold <= production_progress;
+    } else {
+        output_visible = pending_resource_code != 0;
+    }
+    if (!output_visible) return 0;
+    base_item_id -= owner_id * 16;
+    if (base_item_id == 0x25) expected_code = 1;
+    else if (base_item_id == 0x27) expected_code = 2;
+    else if (base_item_id == 0x26) expected_code = 3;
+    else return 0;
+    if ((source_flags & 0x002U) != 0) return expected_code;
+    return pending_resource_code == expected_code ? expected_code : 0;
+}
+
 uint32_t building_render_barg_frame(const BuildingRenderItem *item,
                                     double barg_progress)
 {
@@ -190,4 +219,22 @@ uint32_t building_render_barg_frame(const BuildingRenderItem *item,
     if (ticks == 0) return UINT32_MAX;
     if (ticks - 1U > last - first) return last;
     return first + ticks - 1U;
+}
+
+uint32_t building_render_crumble_frame(uint8_t renderer_class, int8_t item_size,
+                                       int16_t destruction_ticks)
+{
+    int32_t phase = destruction_ticks;
+    uint32_t first;
+
+    if (renderer_class == 1U) {
+        first = 27U;
+    } else {
+        if (item_size < 0 || item_size > 2) return UINT32_MAX;
+        first = (uint32_t)item_size * 9U;
+    }
+    if (phase > 0x58) phase = 100 - phase;
+    phase /= 3;
+    if (phase < 4) return first + (uint32_t)phase;
+    return first + 4U + (uint32_t)(phase - 4) % 5U;
 }

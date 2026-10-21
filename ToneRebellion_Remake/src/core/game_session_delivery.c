@@ -93,10 +93,10 @@ static int artifact_delivery_target_valid(const GameSession *session,
         return 0;
     target = &session->islands[island_index].locations[(uint16_t)location_index];
     if (target->renderer_class == 2) {
-        /* FUN_004503bd accepts carried code 5 at class-2 sites while CONS is
-           idle. Its active-CONS fallback updates an unmodeled counter, so do
-           not assign a duplicate delivery through this path yet. */
-        return resource_code == 5 && (target->source_flags & 0x004U) == 0;
+        /* FUN_004503bd routes class-2 deliveries through the bridge trigger:
+           idle CONS consumes code 5 to start construction; every other
+           artifact delivery follows the inventory-credit path. */
+        return resource_code >= GAME_INVENTORY_ITEM_FIRST_ID;
     }
     if (target->renderer_class != 0) return 0;
     if (target->owner_id == -1 && target->record_value_10 == 0) return 1;
@@ -570,16 +570,26 @@ static void credit_floater_delivery(GameSession *session,
                    session->islands[floater->island_index].location_count) {
         GameRuntimeLocation *target = &session->islands[floater->island_index]
             .locations[(uint16_t)floater->order_target_location];
-        if (resource_code == 5 && target->renderer_class == 2 &&
-            (target->source_flags & 0x004U) == 0) {
-            /* FUN_004503bd case 2 stores the actor dword at raw +0x2c, starts
-               CONS and clears +0x40. +0x2c aliases the third stock short in
-               the runtime layout; its meaning on class 2 is not stock. */
-            target->resource_stock[GAME_RESOURCE_MAGIC_TONE] =
-                floater->owner_slot;
-            target->source_flags |= 0x004U;
-            target->construction_progress = 0;
-            floater->carried_resource_code = 0;
+        if (target->renderer_class == 2) {
+            if (resource_code == 5 &&
+                (target->source_flags & 0x004U) == 0) {
+                /* FUN_004503bd case 2 stores the actor dword at raw +0x2c,
+                   starts CONS and clears +0x40. +0x2c aliases the third
+                   stock short in the runtime layout; on class 2 it is the
+                   contributor slot, not stock. */
+                target->resource_stock[GAME_RESOURCE_MAGIC_TONE] =
+                    floater->owner_slot;
+                target->source_flags |= 0x004U;
+                target->construction_progress = 0;
+                floater->carried_resource_code = 0;
+            } else {
+                /* If CONS is already active (or another artifact arrives),
+                   FUN_004503bd falls through to FUN_0045f075(code, 1) and
+                   credits the contributing player's artifact inventory. */
+                ++session->economy[floater->owner_slot].inventory_count[
+                    (unsigned int)(resource_code - GAME_INVENTORY_ITEM_FIRST_ID)];
+                floater->carried_resource_code = 0;
+            }
         } else if (target->renderer_class == 0 && target->owner_id == -1 &&
             target->record_value_10 == 0) {
             /* FUN_004503bd turns an empty class-0 record into PIT_Object and

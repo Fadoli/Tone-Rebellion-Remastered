@@ -42,7 +42,6 @@ typedef struct GameRuntimeLocation {
     /* FUN_0041ff2e reads the selected record's word at +0x0a and displays
        its low nibble plus one as LEVEL. */
     uint16_t source_level_flags;
-    uint16_t base_progress;
     /* Three stock values observed in the hall runtime record at +0x28/+0x2a/
        +0x2c. Ghidra reads them as short fields; exact signedness/caps remain
        unconfirmed. */
@@ -64,7 +63,8 @@ typedef struct GameRuntimeLocation {
     int16_t charge_recent_floater;
     /* Source staffing row +0x50 task handle; -1 means no queued staff request. */
     int16_t charge_staff_task_handle;
-    /* Raw Hall threshold read by FUN_0045eaa7. */
+    /* Raw +0x4a short: FUN_0045eaa7 uses it as the Hall stock threshold;
+       FUN_0040bf98 also uses it as the BASE frame step. */
     int16_t source_capacity_4a;
     /* FUN_004528ca initializes runtime +0x34 from FUN_00450978; repair task
        rows later read this mutable short from their target location. */
@@ -90,6 +90,9 @@ typedef struct GameRuntimeLocation {
     uint16_t construction_progress;
     uint16_t production_progress;
     uint16_t animation_rate;
+    /* BARG double at +0x50: FUN_0045cd75 mirrors +0x30 / 250 while a staff
+       floater trains, then fades it by 0.25 per tick without an active trainee.
+       FUN_004528ca leaves this value untouched when a site is reused. */
     double barg_progress;
     /* Construction pads are retained from the island layout so a completed
        CONSTR task can validate placement without a separate layout lookup. */

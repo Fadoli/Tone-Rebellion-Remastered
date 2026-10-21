@@ -1,3 +1,19 @@
+static uint32_t island_floater_legs_frame(const GameFloaterStart *floater)
+{
+    if (floater == NULL) return 0;
+    if ((floater->movement_state == 6 || floater->movement_state == 7) &&
+        floater->attack_timer != 0 &&
+        floater->attack_timer <= floater->attack_frame_duration) {
+        return island_worker_attack_legs_frame(
+            floater->attack_frame_first, floater->attack_frame_last,
+            floater->attack_frame_ticks_per_frame,
+            floater->attack_frame_ping_pong, floater->attack_timer);
+    }
+    return island_worker_legs_frame(
+        floater->type_index, floater->carried_resource_code != 0,
+        g_menu.animation_ticks);
+}
+
 static void render_island_view(HDC dc)
 {
     const int image_top = 0;
@@ -180,8 +196,8 @@ static void render_island_view(HDC dc)
         }
     }
     /* FUN_0046466f creates four idle type-0 floaters for each player at the
-       selected hall marker. FUN_0042704b draws their tribe-specific legs and
-       body separately; shapeinf.txt defines body frame 0 and hover frames 0..15. */
+       selected hall marker. FUN_0042704b draws tribe-specific legs and body
+       separately, switching from hover to carry legs when cargo is present. */
     if (runtime_island != NULL && g_game_session_valid) {
         unsigned floater_index;
         for (floater_index = 0; floater_index < g_game_session.floater_count;
@@ -198,7 +214,7 @@ static void render_island_view(HDC dc)
             floater_x = (int)floater->x - g_island_scroll_x;
             if (floater_x < -64 || floater_x >= LOGICAL_WIDTH + 64) continue;
             floater_y = image_top + (int)floater->y;
-            leg_frame = (g_menu.animation_ticks / 4u) % 16u;
+            leg_frame = island_floater_legs_frame(floater);
             body_art = floater->facing_left
                            ? &g_initial_floater_bodies_flipped[floater->type_index]
                            : &g_initial_floater_bodies[floater->type_index];
@@ -476,7 +492,7 @@ static void render_island_view(HDC dc)
                the text. The island renderer's original base-worker sheets
                supply the same body and animated legs used in the world view. */
             {
-                uint32_t leg_frame = (g_menu.animation_ticks / 4u) % 16u;
+                uint32_t leg_frame = island_floater_legs_frame(selected_floater);
                 int sprite_x = info->pane.right - 50;
                 int sprite_y = info->pane.top +
                     (info->pane.bottom - info->pane.top) / 2 + 5;
@@ -662,10 +678,8 @@ static void render_island_view(HDC dc)
                         ? &g_initial_floater_legs_flipped[floater->type_index]
                         : &g_initial_floater_legs[floater->type_index];
                     if (leg_art->frame_count != 0) {
-                        /* shapeinf.txt assigns worker hover/move to frames 0..15;
-                           later frames belong to pickup, carry, and training. */
                         draw_sprite(dc, leg_art,
-                            (g_menu.animation_ticks / 4u) % 16u,
+                            island_floater_legs_frame(floater),
                             info->pane.left + offset_x,
                             info->pane.top + offset_y);
                     }

@@ -28,6 +28,13 @@ typedef struct GameFloaterStart {
     /* FUN_0042520e's state-6/7 cadence, resolved from the draw ID's fltinf
        attack animation during session initialization. */
     uint16_t attack_period;
+    /* fltinf attack segment used by FUN_0042704b while state 6/7 is active. */
+    uint16_t attack_frame_first;
+    uint16_t attack_frame_last;
+    uint16_t attack_frame_ticks_per_frame;
+    uint16_t attack_frame_duration;
+    uint8_t attack_frame_ping_pong;
+    /* State +0x34's attack phase in the port; kept separate from impact slots. */
     uint16_t attack_timer;
     /* The source impact instance finishes after its frame span plus the
        completion-check update. It advances on odd global effect ticks. */
@@ -115,6 +122,9 @@ typedef struct GameSession {
     /* Shared LCG after modeled world-start draws; simulation randomness
        advances it, including FA_Wander destination generation. */
     ToneRng random_state;
+    /* Island simulation clock for source transitions keyed to the low byte
+       of the global tick. */
+    uint32_t simulation_tick;
     uint8_t island_count;
     GameStartSetup player_starts;
     GameStartToneDistribution tone_placements;

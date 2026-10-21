@@ -1,6 +1,7 @@
 #include "game_session.h"
 
 #include "building_render.h"
+#include "game_session_combat_internal.h"
 #include "game_session_internal.h"
 #include "island_render_rules.h"
 #include "game_session_world.h"
@@ -312,9 +313,13 @@ static void tick_source_staff_cycle(GameSession *session,
         increment = source->animation_rate;
         if (increment == 0) increment = 1;
         progress = (uint32_t)source->charge_source_value_30 + increment;
-        if (progress < 251U) {
-            source->charge_source_value_30 = (uint16_t)progress;
-            source->barg_progress = (double)progress / 250.0;
+        source->charge_source_value_30 = (uint16_t)progress;
+        if ((int16_t)source->charge_source_value_30 < 251) {
+            /* FUN_0045cd75 writes native BARG double +0x50 from +0x30 / 250
+               only below 251; at/above the threshold +0x30 still keeps the
+               incremented short while the training side effect runs. */
+            source->barg_progress =
+                (double)(int16_t)source->charge_source_value_30 / 250.0;
             continue;
         }
 
@@ -378,6 +383,8 @@ static void tick_source_staff_cycle(GameSession *session,
                 (session->floaters[(unsigned int)current].source_runtime_flags &
                  0x20U) != 0;
     }
+    /* FUN_0045cd75 fades +0x50 by 0.25 when its current worker is no longer
+       active; FUN_0040bf98 maps that normalized value onto BARG frames. */
     if (source->barg_progress > 0.0) {
         if (!current_worker_active) {
             source->barg_progress -= 0.25;
@@ -409,6 +416,7 @@ void game_session_tick_item_animations_with_floaters(
 {
     unsigned int island_index;
     if (session == NULL || catalog == NULL) return;
+    ++session->simulation_tick;
     for (island_index = 0; island_index < session->island_count; ++island_index) {
         GameRuntimeIsland *island = &session->islands[island_index];
         unsigned int location_index;
@@ -418,8 +426,74 @@ void game_session_tick_item_animations_with_floaters(
             uint32_t duration;
             int construction_completed = 0;
             int production_completed = 0;
+            int active_flag_changed;
 
             if (state->renderer_class > 2) continue;
+
+            /* FUN_00450a71's raw item 0x2a case generates one Build Tone
+               every 256 global ticks, capped at 20 in source +0x28. */
+            if (game_session_base_item_id(state) == 0x2a &&
+                (session->simulation_tick & 0xffU) == 0 &&
+                state->resource_stock[GAME_RESOURCE_BUILD_TONE] < 20U) {
+                ++state->resource_stock[GAME_RESOURCE_BUILD_TONE];
+            }
+
+            /* FUN_00450a71 shares +0x48 between the initial 0x010 timer and
+               the upgrade 0x020 timer. At exactly 100, FUN_00452fcb clears
+               layer counters and flags 1..3 before the caller clears 0x010. */
+            if ((state->source_flags & 0x010U) != 0) {
+                state->source_value_48 = (int16_t)(
+                    (uint16_t)state->source_value_48 + 1U);
+                if (state->source_value_48 == 100) {
+                    uint16_t preserved_chug = state->chug_progress;
+                    state->source_flags &= ~0x00eU;
+                    state->source_value_3a = 0;
+                    state->source_value_3c = 0;
+                    state->source_value_3e = -1;
+                    state->source_value_40 = 0;
+                    state->source_value_42 = 0;
+                    state->source_value_44 = 0;
+                    state->source_value_46 = 0;
+                    state->source_value_48 = 0;
+                    state->chug_progress = 0;
+                    if (state->renderer_class == 1 &&
+                        state->record_value_10 == 5) {
+                        state->source_value_3a = preserved_chug;
+                        state->chug_progress = preserved_chug;
+                    }
+                    state->glyph_progress = 0;
+                    state->inci_progress = 0;
+                    state->construction_progress = 0;
+                    state->production_progress = 0;
+                    state->source_flags &= ~0x010U;
+                    (void)game_session_recalculate_location_active_with_visibility(
+                        state);
+                }
+            }
+
+            /* FUN_00450a71 advances runtime +0x48 while upgrade bit 0x020 is
+               set, then clears the bit after the counter passes 0x17. BASE
+               rendering uses that bit to show the transition frame. */
+            if ((state->source_flags & 0x020U) != 0) {
+                state->source_value_48 = (int16_t)(
+                    (uint16_t)state->source_value_48 + 1U);
+                if (state->source_value_48 > 0x17)
+                    state->source_flags &= ~0x020U;
+            }
+
+            /* Lethal site damage sets 0x080 and resets +0x48. The native tick
+               clears the site once the shared short passes 100, through
+               FUN_00452ae7/FUN_00452a15. */
+            if ((state->source_flags & 0x080U) != 0) {
+                state->source_value_48 = (int16_t)(
+                    (uint16_t)state->source_value_48 + 1U);
+                if (state->source_value_48 > 100) {
+                    state->source_flags &= ~0x080U;
+                    game_session_clear_cast_site(session,
+                        (uint8_t)island_index, (uint16_t)location_index, state);
+                    continue;
+                }
+            }
 
             /* FUN_00450a71 has two POOL-specific class-1 counter sequences.
                ID 0 loops 0..89; ID 5 advances to 125 then restarts at 102.
@@ -511,6 +585,21 @@ void game_session_tick_item_animations_with_floaters(
                 }
             }
 
+            /* FUN_00450a71's 0x25..0x27 switch also advances raw +0x2c while
+               the producer is active. After eleven ticks it resets that
+               scratch counter and +0x36, allowing a waiting floater to retry
+               collection instead of remaining stuck on an earlier miss. */
+            if (producer_resource_code(state) != 0 &&
+                (state->source_flags & 0x001U) != 0) {
+                uint16_t *retry_counter = &state->resource_stock[
+                    GAME_RESOURCE_MAGIC_TONE];
+                ++*retry_counter;
+                if (*retry_counter > 10U) {
+                    *retry_counter = 0;
+                    state->resource_retry_tick_36 = 0;
+                }
+            }
+
             /* FUN_00450a71 starts producer PROD cycles from source +0x0c
                when the object is running, no output is pending, and PROD is
                idle. It adds +0x32 and starts at a strict value > 0x13. */
@@ -550,6 +639,43 @@ void game_session_tick_item_animations_with_floaters(
                 } else if (production_completed) {
                     (void)game_session_mark_bridge_constructed_at(
                         session, (uint8_t)island_index, (uint16_t)location_index);
+                }
+            }
+
+            /* FUN_00450a71 advances +0x46 every 16 updates while +0x58 is
+               positive. State 2 rechecks activity; state 3 clears the site.
+               The source tick skips ordinary empty pads unless another source
+               record or timed effect keeps the object in its update path. */
+            if (state->source_value_58 > 0 &&
+                (state->renderer_class != 0 ||
+                 (state->record_value_10 != 0 && state->record_value_10 != 1) ||
+                 state->source_value_14 != -1 ||
+                 (state->source_flags & 0x200U) != 0)) {
+                state->source_value_46 = (int16_t)(
+                    (uint16_t)state->source_value_46 + 1U);
+                if (state->source_value_46 >= 16) {
+                    state->source_value_46 = 0;
+                    if (state->source_value_58 == 2) {
+                        state->source_value_58 = 0;
+                        active_flag_changed =
+                            game_session_recalculate_location_active_with_visibility(
+                                state);
+                        if (active_flag_changed) {
+                            if (state->source_value_14 == 4) {
+                                game_session_recalculate_leviathan_island(session,
+                                    (uint8_t)island_index);
+                            } else {
+                                game_session_refresh_player_maintenance_budgets(
+                                    session);
+                            }
+                        }
+                    } else if (state->source_value_58 == 3) {
+                        state->source_value_58 = 0;
+                        game_session_clear_cast_site(session,
+                            (uint8_t)island_index, (uint16_t)location_index,
+                            state);
+                        continue;
+                    }
                 }
             }
         }

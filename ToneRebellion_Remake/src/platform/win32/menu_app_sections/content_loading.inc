@@ -516,6 +516,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_bildtone_art);
     free_sprite_sheet(&g_tone_crys_art);
     free_sprite_sheet(&g_magctone_art);
+    free_sprite_sheet(&g_crumble_art);
     free_sprite_sheet(&g_hall_stock_art);
     free_sprite_sheet(&g_repair_button_art);
     free_sprite_sheet(&g_upgrade_button_art);

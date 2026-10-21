@@ -24,6 +24,7 @@ static int load_island_surface(int island_id, int map_island_index,
     SpriteSheet bildtone_candidate = {0};
     SpriteSheet tone_crys_candidate = {0};
     SpriteSheet magctone_candidate = {0};
+    SpriteSheet crumble_candidate = {0};
     SpriteSheet hall_stock_candidate = {0};
     SpriteSheet repair_button_candidate = {0};
     SpriteSheet upgrade_button_candidate = {0};
@@ -127,6 +128,8 @@ static int load_island_surface(int island_id, int map_island_index,
                            &tone_crys_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\magctone.shp", palette,
                            &magctone_candidate, error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\crumble.shp", palette,
+                           &crumble_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\thbutt.shp", palette, &hall_stock_candidate,
                            error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\repair.shp", palette,
@@ -157,6 +160,11 @@ static int load_island_surface(int island_id, int map_island_index,
         magctone_candidate.frame_count <= 4) {
         (void)snprintf(error, error_capacity,
                        "Trade resource sheets must provide source frame 4");
+        goto done;
+    }
+    if (crumble_candidate.frame_count < 36) {
+        (void)snprintf(error, error_capacity,
+                       "data\\crumble.shp must provide 36 destruction frames");
         goto done;
     }
     /* Load only item sheets referenced by this island's actual runtime records.
@@ -359,6 +367,7 @@ static int load_island_surface(int island_id, int map_island_index,
     free_sprite_sheet(&g_bildtone_art);
     free_sprite_sheet(&g_tone_crys_art);
     free_sprite_sheet(&g_magctone_art);
+    free_sprite_sheet(&g_crumble_art);
     free_sprite_sheet(&g_hall_stock_art);
     free_sprite_sheet(&g_repair_button_art);
     free_sprite_sheet(&g_upgrade_button_art);
@@ -432,6 +441,8 @@ static int load_island_surface(int island_id, int map_island_index,
     memset(&tone_crys_candidate, 0, sizeof(tone_crys_candidate));
     g_magctone_art = magctone_candidate;
     memset(&magctone_candidate, 0, sizeof(magctone_candidate));
+    g_crumble_art = crumble_candidate;
+    memset(&crumble_candidate, 0, sizeof(crumble_candidate));
     g_hall_stock_art = hall_stock_candidate;
     memset(&hall_stock_candidate, 0, sizeof(hall_stock_candidate));
     g_repair_button_art = repair_button_candidate;
@@ -488,6 +499,7 @@ done:
     free_sprite_sheet(&bildtone_candidate);
     free_sprite_sheet(&tone_crys_candidate);
     free_sprite_sheet(&magctone_candidate);
+    free_sprite_sheet(&crumble_candidate);
     free_sprite_sheet(&hall_stock_candidate);
     free_sprite_sheet(&repair_button_candidate);
     free_sprite_sheet(&upgrade_button_candidate);

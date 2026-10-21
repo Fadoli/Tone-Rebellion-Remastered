@@ -53,6 +53,17 @@ int island_worker_realm_overlay_enabled(uint8_t flags,
 int island_worker_health_overlay_enabled(uint8_t flags,
                                          int renderer_allows_overlays);
 
+/* FUN_0042704b chooses fltinf.txt's hover or carry leg range from cargo
+   (+0x18), then wraps the source tick phase at the descriptor speed. The
+   remake's initial worker records do not yet retain native phase byte +0x14. */
+uint32_t island_worker_legs_frame(uint8_t worker_type, int has_cargo,
+                                  uint32_t animation_ticks);
+uint32_t island_worker_attack_legs_frame(uint16_t first_frame,
+                                         uint16_t last_frame,
+                                         uint16_t ticks_per_frame,
+                                         int ping_pong,
+                                         uint32_t attack_progress);
+
 /* FUN_0042704b's health badge for a class-0 worker is FLTINFO frame
    0x15-max_hp. Type 0/8 uses a +2 X offset; other types use +5 when normal
    and +0 when mirrored. */

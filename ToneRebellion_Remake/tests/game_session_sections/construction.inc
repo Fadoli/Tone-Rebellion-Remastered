@@ -63,7 +63,6 @@ static void test_building_placement_matches_source_runtime_initialization(void)
     runtime->source_value_58 = 1;
     runtime->source_value_44 = 12;
     runtime->source_value_58 = 1;
-    runtime->base_progress = 3;
     runtime->chug_progress = 4;
     runtime->glyph_progress = 5;
     runtime->inci_progress = 6;
@@ -104,7 +103,7 @@ static void test_building_placement_matches_source_runtime_initialization(void)
     assert(runtime->source_value_44 == 0);
     assert(runtime->source_value_58 == 1); /* native placement leaves +0x58 intact */
     assert(runtime->record_value_24 == 0);
-    assert(runtime->base_progress == 0 && runtime->producer_cadence == 22);
+    assert(runtime->producer_cadence == 22);
     assert(runtime->chug_progress == 0);
     assert(runtime->glyph_progress == 0 && runtime->inci_progress == 0);
     assert(runtime->construction_progress == 0 && runtime->production_progress == 0);
@@ -833,6 +832,10 @@ static void test_cancelled_construction_releases_assigned_floater(void)
     floater->island_index = 0;
     floater->source_link_0c = -1;
     floater->linked_task_slot = -1;
+    floater->handoff_target_island = 1;
+    floater->handoff_departure_location = 4;
+    floater->handoff_resume_action = 4;
+    floater->handoff_resume_state = 3;
 
     slot = game_session_pending_event_add(&session, 0, 0, 5, 0, 0, 0x25);
     assert(slot == 0);
@@ -852,6 +855,10 @@ static void test_cancelled_construction_releases_assigned_floater(void)
     assert(floater->order_target_location == -1);
     assert(floater->movement_state == 0);
     assert(floater->has_move_order == 0);
+    assert(floater->handoff_target_island == UINT8_MAX);
+    assert(floater->handoff_departure_location == -1);
+    assert(floater->handoff_resume_action == 0);
+    assert(floater->handoff_resume_state == 0);
     assert(floater->has_wander_order == 1);
     assert(site->owner_id == -1 && site->source_value_14 == -1);
     assert(site->record_value_10 == 0);
@@ -860,4 +867,15 @@ static void test_cancelled_construction_releases_assigned_floater(void)
     game_session_assign_local_resource_tasks(&session, &catalog);
     assert(floater->active_order_action == 0);
     assert(hall->resource_stock[GAME_RESOURCE_BUILD_TONE] == 1);
+
+    /* A fresh selection after cancellation reuses the released task slot and
+       the detached worker can claim the restarted construction task. */
+    assert(game_session_queue_build_selection(&session, 0, 0, 0, 0x25));
+    assert(game_session_dispatch_build_selections(&session) == 1);
+    assert(session.pending_event_count == 1);
+    assert(session.pending_events[slot].active == 1);
+    game_session_assign_local_resource_tasks(&session, &catalog);
+    assert(floater->active_order_action == 4);
+    assert(floater->linked_task_slot == slot);
+    assert(session.pending_events[slot].assigned_floater_count == 1);
 }

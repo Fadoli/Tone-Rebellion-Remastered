@@ -835,6 +835,11 @@ static int game_session_create_recruited_worker(GameSession *session,
     }
     floater->attack_range = stats->attack_range;
     floater->attack_period = stats->attack_period;
+    floater->attack_frame_first = stats->attack_frame_first;
+    floater->attack_frame_last = stats->attack_frame_last;
+    floater->attack_frame_ticks_per_frame = stats->attack_frame_ticks_per_frame;
+    floater->attack_frame_duration = stats->attack_frame_duration;
+    floater->attack_frame_ping_pong = stats->attack_frame_ping_pong;
     floater->source_link_0c = -1;
     floater->charge_source_island = UINT8_MAX;
     floater->charge_source_location = UINT16_MAX;

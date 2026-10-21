@@ -18,6 +18,11 @@ typedef struct FloaterStats {
     int16_t movement_speed;
     int16_t shape_info_index;
     uint16_t attack_period;
+    uint16_t attack_frame_first;
+    uint16_t attack_frame_last;
+    uint16_t attack_frame_ticks_per_frame;
+    uint16_t attack_frame_duration;
+    uint8_t attack_frame_ping_pong;
 } FloaterStats;
 
 typedef struct FloaterCatalog {

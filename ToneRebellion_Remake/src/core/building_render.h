@@ -58,7 +58,7 @@ const BuildingRenderItem *building_render_find(const BuildingRenderCatalog *cata
    index. This does not assume that FUN_0040ab42 animates arbitrary items. */
 uint32_t building_render_base_frame(const BuildingRenderItem *item);
 uint32_t building_render_base_frame_for_state(const BuildingRenderItem *item,
-                                              uint16_t base_progress,
+                                              int16_t source_value_4a,
                                               uint32_t source_flags);
 /* Returns the animated CHUG frame selected by FUN_0040bf98 from its runtime
    progress counter divided by the segment speed. `animation_ticks` models
@@ -85,9 +85,19 @@ uint32_t building_render_prod_frame(const BuildingRenderItem *item,
 BuildingRenderPoint building_render_prod_frame_position(int anchor_x, int anchor_y);
 BuildingRenderPoint building_render_prod_threshold_position(const BuildingRenderItem *item,
                                                             int anchor_x, int anchor_y);
+/* Returns the resource marker selected by FUN_0040bf98 when PROD reaches its
+   threshold, or when an inactive producer has a pending output. */
+int building_render_visible_resource_code(const BuildingRenderItem *item,
+                                          int32_t runtime_item_id,
+                                          int32_t owner_id,
+                                          uint32_t production_progress,
+                                          uint32_t source_flags,
+                                          int32_t pending_resource_code);
 /* BARG frame mapping observed in FUN_0040bf98: FISTP(round-to-even) of
    (last-first+2) * object[+0x50], offset from the first frame and clamped. */
 uint32_t building_render_barg_frame(const BuildingRenderItem *item,
                                     double barg_progress);
+uint32_t building_render_crumble_frame(uint8_t renderer_class, int8_t item_size,
+                                      int16_t destruction_ticks);
 
 #endif

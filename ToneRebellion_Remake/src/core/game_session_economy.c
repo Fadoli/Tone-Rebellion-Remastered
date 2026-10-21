@@ -371,7 +371,6 @@ int game_session_finish_location_move(GameSession *session,
     source->source_value_58 = 1;
     /* FUN_00452a15 and the subsequent placement initializer both leave
        source +0x0c untouched, so retain this raw cadence across a move. */
-    source->base_progress = 0;
     source->chug_progress = 0;
     source->glyph_progress = 0;
     source->inci_progress = 0;

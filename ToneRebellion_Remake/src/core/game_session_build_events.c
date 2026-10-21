@@ -104,6 +104,8 @@ unsigned int game_session_dispatch_build_selections(GameSession *session)
         for (other = 0; other < GAME_SESSION_MAX_PENDING_EVENTS; ++other) {
             const GamePendingEvent *candidate = &session->pending_events[other];
             if (candidate->active != 0 && candidate->action_type == 5 &&
+                candidate->player_id == (int16_t)request.player_slot &&
+                candidate->payload_0a == (int16_t)request.island_index_b &&
                 candidate->payload_0c == (int16_t)request.reserved_zero &&
                 candidate->payload_0e == (int16_t)request.location_index &&
                 candidate->payload_12 == (int16_t)request.item_id) {
@@ -114,8 +116,9 @@ unsigned int game_session_dispatch_build_selections(GameSession *session)
         if (already_pending) continue;
 
         /* FUN_004662b7 copies packet byte offsets +2/+4/+8/+10/+12/+14
-           into the task record, sets priority 1, and deduplicates type 5
-           records by payload_0c, payload_0e, and payload_12. */
+           into the task record and sets priority 1. A building task belongs
+           to one player and one island/site, so those fields participate in
+           duplicate detection along with the site and building IDs. */
         slot = game_session_pending_event_add(
             session, (int16_t)request.player_slot,
             (int16_t)request.island_index_b,
