@@ -65,10 +65,10 @@ static int choose_class1_item5_spawn(GameSession *session,
                                      unsigned int island_index)
 {
     static const int8_t first_type_by_shape[15] = {
-        0, 1, -1, 3, 2, 0, 2, 1, 1, 3, 3, 1, 2, -1, -1
+        0, 1, -1, -1, 3, 2, 0, 2, 1, 1, 3, 3, 1, 2, -1
     };
     static const int8_t second_type_by_shape[15] = {
-        -1, 2, 3, 1, 3, 1, 0, 2, 0, 0, 2, 3, 0, -1, -1
+        -1, -1, 2, 3, 1, 3, 1, 0, 2, 0, 0, 2, 3, 0, -1
     };
     uint8_t required_types[4] = {0, 0, 0, 0};
     uint16_t present_counts[4] = {0, 0, 0, 0};
@@ -113,9 +113,9 @@ static int choose_class1_item5_spawn(GameSession *session,
                 candidate_ids[candidate_count++] = (int)index;
         }
     }
-    /* Shape 13 has no configured pair in either native table. The original
-       then indexes an uninitialized stack candidate; use all four types to
-       keep the remaining class-1 item-5 sites playable and deterministic. */
+    /* Shape 14 has no configured pair in either native table, so the source
+       reads an uninitialized stack candidate. Use all four types to keep
+       these class-1 item-5 sites playable and deterministic. */
     if (candidate_count == 0) {
         candidate_ids[0] = 0;
         candidate_ids[1] = 1;
@@ -213,7 +213,7 @@ static int leviathan_spawn_threshold(const GameSession *session,
                                     const GameRuntimeIsland *island)
 {
     int difficulty = session->config.difficulty;
-    int active_floaters = 0;
+    int visible_markers = 0;
     int threshold;
     unsigned int index;
 
@@ -225,19 +225,18 @@ static int leviathan_spawn_threshold(const GameSession *session,
         if (late_game_reduction > 2400U) late_game_reduction = 2400U;
         threshold -= (int)late_game_reduction;
 
-        /* FUN_00450a71 tightens the interval as the island population grows;
-           its source scan is capped at five active floater records. */
-        for (index = 0; index < session->floater_count; ++index) {
-            const GameFloaterStart *floater = &session->floaters[index];
-            if (game_session_floater_is_active(floater) &&
-                floater->island_index == (uint8_t)(island - session->islands) &&
-                floater->current_hit_points != 0) {
-                ++active_floaters;
-                if (active_floaters == 5) break;
+        /* FUN_00450a71 scans island locations and counts class-1 markers
+           with a nonzero +0x22 visibility byte, capped at five. */
+        for (index = 0; index < island->location_count; ++index) {
+            const GameRuntimeLocation *location = &island->locations[index];
+            if (location->renderer_class == 1 &&
+                location->tribe_visibility_mask != 0) {
+                ++visible_markers;
+                if (visible_markers == 5) break;
             }
         }
         {
-            int multiplier = 14 - difficulty - active_floaters;
+            int multiplier = 14 - difficulty - visible_markers;
             if (multiplier < 5) multiplier = 5;
             if (multiplier > 10) multiplier = 10;
             threshold = (threshold * multiplier) / 10;
@@ -247,15 +246,23 @@ static int leviathan_spawn_threshold(const GameSession *session,
 }
 
 static int leviathan_spawn_subtype(GameSession *session,
+                                  const FloaterCatalog *catalog,
                                   const GameRuntimeIsland *island,
                                   const GameRuntimeLocation *site)
 {
+    static const int8_t even_subtype_family_by_level[15] = {
+        0, 1, -1, -1, 3, 2, 0, 2, 1, 1, 3, 3, 1, 2, -1
+    };
+    static const int8_t odd_subtype_family_by_level[15] = {
+        -1, -1, 2, 3, 1, 3, 1, 0, 2, 0, 0, 2, 3, 0, -1
+    };
     uint16_t site_counts[4] = {0, 0, 0, 0};
     uint16_t unit_counts[4] = {0, 0, 0, 0};
     unsigned int index;
     unsigned int group = site->record_value_10 - 6;
     unsigned int least_group = 0;
     uint32_t least_ratio = UINT32_MAX;
+    int source_level = island->leviathan_marker_shape_id;
 
     for (index = 0; index < island->location_count; ++index) {
         const GameRuntimeLocation *candidate = &island->locations[index];
@@ -264,11 +271,17 @@ static int leviathan_spawn_subtype(GameSession *session,
     }
     for (index = 0; index < session->floater_count; ++index) {
         const GameFloaterStart *floater = &session->floaters[index];
+        const FloaterStats *stats;
         unsigned int unit_group;
         if (!game_session_floater_is_active(floater) || floater->type_index != 4 ||
             floater->island_index != (uint8_t)(island - session->islands) ||
             floater->source_subtype < 10 || floater->source_subtype > 17) continue;
-        unit_group = (unsigned int)(floater->source_subtype - 10U) / 2U;
+        /* FUN_0042003c classifies each existing type-4 unit by its +2
+           floater-info field (the attack realm), not by its subtype pair. */
+        stats = floater_catalog_find(catalog, 4, floater->source_subtype);
+        if (stats == NULL || stats->attack_realm < 0 || stats->attack_realm > 3)
+            continue;
+        unit_group = (unsigned int)stats->attack_realm;
         ++unit_counts[unit_group];
     }
     for (index = 0; index < 4; ++index) {
@@ -283,8 +296,15 @@ static int leviathan_spawn_subtype(GameSession *session,
 
     /* The native selector emits subtype 9 when this site is not the least
        represented marker family. Otherwise it chooses the pair associated
-       with the family, with FUN_00467260 selecting between the pair. */
+       with the family's preferred source level; the remaining strategic
+       state and FUN_00467260 choice are only partly modeled. */
     if (group != least_group) return 9;
+    if (source_level < 0) source_level = 0;
+    if (source_level > 14) source_level = 14;
+    if (odd_subtype_family_by_level[source_level] == (int8_t)group)
+        return 11 + (int)(group * 2U);
+    if (even_subtype_family_by_level[source_level] == (int8_t)group)
+        return 10 + (int)(group * 2U);
     return 10 + (int)(group * 2U) +
         tone_rng_bounded(&session->random_state, 2);
 }
@@ -309,7 +329,7 @@ static int spawn_leviathan_floater(GameSession *session,
     }
     /* FUN_00462a87 refuses another category-4 floater above 128 records. */
     if (count > 128U) return -1;
-    subtype = leviathan_spawn_subtype(session, island, site);
+    subtype = leviathan_spawn_subtype(session, catalog, island, site);
     stats = floater_catalog_find(catalog, 4, subtype);
     if (stats == NULL || stats->hit_points <= 0 ||
         stats->hit_points > (int16_t)UINT8_MAX ||
@@ -329,6 +349,8 @@ static int spawn_leviathan_floater(GameSession *session,
     floater->type_index = 4;
     floater->source_subtype = (uint8_t)subtype;
     floater->owner_slot = 4;
+    floater->animation_seed = (uint8_t)tone_rng_bounded(
+        &session->random_state, 0x100);
     floater->current_hit_points = (uint8_t)stats->hit_points;
     floater->max_hit_points = (uint8_t)stats->hit_points;
     floater->attack_strength = (uint8_t)stats->attack_strength;
@@ -1202,8 +1224,8 @@ void game_session_tick_item_animations_with_floaters(
 
             /* FUN_00450a71 starts autonomous production on class-1 item IDs
                6..9 from +0x0c. Its interval contracts with world time,
-               difficulty and island population; the chosen type-4 unit stays
-               hidden under runtime flag 0x800 until PROD completes. */
+               difficulty and island population; the linked type-4 unit starts
+               at the marker and moves to the PROD output offset on completion. */
             if (state->renderer_class == 1 &&
                 state->record_value_10 >= 6 && state->record_value_10 <= 9 &&
                 (state->source_flags & 3U) == 1U) {

@@ -194,7 +194,6 @@ int game_session_recalculate_player_island_visibility(
 void game_session_tick_site_effect_timers(GameSession *session)
 {
     unsigned int island_index;
-    int recalculate_active = 0;
 
     if (session == NULL || session->island_count > WORLD_MAP_MAX_ISLANDS) return;
     for (island_index = 0; island_index < session->island_count;
@@ -208,16 +207,35 @@ void game_session_tick_site_effect_timers(GameSession *session)
             GameRuntimeLocation *location = &island->locations[location_index];
             uint32_t timer_flag;
 
-            /* FUN_00450a71 advances the 0x100/+0x44 state before its
-               mutually exclusive +0x38 timer chain. It recalculates activity
-               on every tick that began with 0x100 set, including expiry. */
+            /* FUN_00450a71 advances +0x44 before its mutually exclusive +0x38
+               timer chain. FUN_00453a5f then recalculates this site only on
+               every tick that began with 0x100 set, including expiry. */
             if ((location->source_flags & 0x100U) != 0) {
+                int active_flag_changed;
                 ++location->source_value_44;
                 if (location->source_value_44 > 999) {
                     location->source_value_44 = 0;
                     location->source_flags &= ~0x100U;
                 }
-                recalculate_active = 1;
+                active_flag_changed =
+                    game_session_recalculate_location_active_with_visibility(
+                        location);
+                if (active_flag_changed) {
+                    if (location->source_value_14 == 4) {
+                        game_session_recalculate_leviathan_island(
+                            session, (uint8_t)island_index);
+                    } else {
+                        if (location->renderer_class == 0 &&
+                            location->source_value_14 >= 0 &&
+                            location->source_value_14 < GAME_START_PLAYER_COUNT &&
+                            game_session_base_item_id(location) == 0x28) {
+                            (void)game_session_recalculate_player_island_visibility(
+                                session, (uint8_t)island_index,
+                                (uint8_t)location->source_value_14);
+                        }
+                        game_session_refresh_player_maintenance_budgets(session);
+                    }
+                }
             }
 
             /* FUN_00450a71 consumes one timed site state per update, in this
@@ -240,8 +258,6 @@ void game_session_tick_site_effect_timers(GameSession *session)
                 location->source_flags &= ~timer_flag;
         }
     }
-    if (recalculate_active)
-        (void)game_session_recalculate_active_locations(session);
 }
 
 static void game_session_recalculate_player_maintenance_budgets(

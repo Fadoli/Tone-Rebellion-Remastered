@@ -673,6 +673,9 @@ static int open_iw_construct(int location_index)
 {
     const IslandLocation *site;
     const GameRuntimeIsland *runtime_island;
+    uint16_t owned_island_count = 0;
+    uint16_t owner_bit;
+    unsigned int island_index;
     char error[96];
 
     if (!g_game_session_valid || g_menu.selected_map_island < 0 ||
@@ -685,11 +688,11 @@ static int open_iw_construct(int location_index)
     if (location_index >= runtime_island->location_count ||
         g_menu.selected_tribe < 0 ||
         g_menu.selected_tribe >= GAME_START_PLAYER_COUNT) return 0;
+    owner_bit = (uint16_t)(1U << g_menu.selected_tribe);
     {
         const GameRuntimeLocation *runtime_site =
             &runtime_island->locations[location_index];
         int16_t owner = (int16_t)g_menu.selected_tribe;
-        uint16_t owner_bit = (uint16_t)(1U << g_menu.selected_tribe);
         if (runtime_site->renderer_class != 0 ||
             (runtime_site->source_value_14 != -1 &&
              runtime_site->source_value_14 != owner) ||
@@ -698,11 +701,20 @@ static int open_iw_construct(int location_index)
             (runtime_site->source_value_22 & owner_bit) == 0) return 0;
     }
 
-    /* Initial new-game state gives each player one home island. The rule-set
-       selector is still unresolved; at owned-island count 1 the only gated
-       row that can pass is candidate 44, whose threshold is 1 in all tables. */
+    /* FUN_0045f121 counts one nonzero +0x29ac player-access dword per island,
+       then indexes the threshold table with DAT_006136b2. The session's
+       access_mask stores those same per-player island states; world_index
+       selects the corresponding world rule table. */
+    for (island_index = 0; island_index < g_game_session.island_count;
+         ++island_index) {
+        if ((g_game_session.islands[island_index].access_mask & owner_bit) != 0 &&
+            owned_island_count < UINT16_MAX) {
+            ++owned_island_count;
+        }
+    }
     if (!iw_construct_build_list_for_site(
-            &g_pad_catalog, g_game_session.config.selected_tribe, site, 0, 1,
+            &g_pad_catalog, g_game_session.config.selected_tribe, site,
+            g_game_session.config.world_index, owned_island_count,
             g_iw_construct_items,
             sizeof(g_iw_construct_items) / sizeof(g_iw_construct_items[0]),
             &g_iw_construct_item_count) || g_iw_construct_item_count == 0) return 0;

@@ -74,27 +74,27 @@ int main(void)
         int32_t x = 0;
         int32_t y = 0;
         /* Initial workers have 3 HP: source frame 21-3, left-edge anchor. */
-        assert(island_worker_health_badge_layout(0, 3, 0, 12, 27, 33,
+        assert(island_worker_stat_badge_layout(0, 3, 0, 12, 27, 33,
                                                  &frame, &x, &y));
         assert(frame == 18 && x == 6 && y == 27);
         /* Nonzero worker types use the source's separate health-badge offset. */
-        assert(island_worker_health_badge_layout(1, 3, 0, 12, 27, 33,
+        assert(island_worker_stat_badge_layout(1, 3, 0, 12, 27, 33,
                                                  &frame, &x, &y));
         assert(frame == 18 && x == 9 && y == 27);
         /* Mirrored nonzero types use the inclusive opaque right edge directly. */
-        assert(island_worker_health_badge_layout(1, 3, 1, 12, 27, 33,
+        assert(island_worker_stat_badge_layout(1, 3, 1, 12, 27, 33,
                                                  &frame, &x, &y));
         assert(frame == 18 && x == 32 && y == 27);
-        assert(island_worker_health_badge_layout(8, 3, 1, 12, 27, 33,
+        assert(island_worker_stat_badge_layout(8, 3, 1, 12, 27, 33,
                                                  &frame, &x, &y));
         assert(frame == 18 && x == 34 && y == 27);
         /* FUN_0042704b caps max HP at ten before selecting FLTINFO art. */
-        assert(island_worker_health_badge_layout(0, 255, 0, 12, 27, 33,
+        assert(island_worker_stat_badge_layout(0, 255, 0, 12, 27, 33,
                                                  &frame, &x, &y));
         assert(frame == 11);
-        assert(!island_worker_health_badge_layout(0, 3, 0, 12, 27, 12,
+        assert(!island_worker_stat_badge_layout(0, 3, 0, 12, 27, 12,
                                                   &frame, &x, &y));
-        assert(!island_worker_health_badge_layout(9, 3, 0, 12, 27, 33,
+        assert(!island_worker_stat_badge_layout(9, 3, 0, 12, 27, 33,
                                                  &frame, &x, &y));
     }
     {

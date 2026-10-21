@@ -84,6 +84,8 @@ typedef struct GameFloaterStart {
     /* FUN_00422d27's speed context is resolved before its coordinate step.
        Site bonuses come from the linked source and the owner's glyph mask. */
     uint8_t movement_state;
+    /* FUN_00466fe4 gives each new world floater a random +0x05 animation phase. */
+    uint8_t animation_seed;
     uint8_t near_target_speed_override;
     uint16_t stop_radius;
     /* FUN_0045d8b2's linked 100-byte record fields. FUN_0042219e copies a

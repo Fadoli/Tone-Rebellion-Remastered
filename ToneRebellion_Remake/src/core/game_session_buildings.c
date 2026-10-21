@@ -119,7 +119,7 @@ int game_session_construction_task_values(const GameSession *session,
     item_id = (int32_t)event->payload_12 + (int32_t)event->player_id * 16;
     if (item_id < 0 || item_id > 100) return 0;
     item = pad_catalog_find(pad_catalog, (uint16_t)item_id);
-    if (item == NULL || item->building_tone_cost <= 0) return 0;
+    if (item == NULL || item->building_tone_cost == -1) return 0;
     *current = (int16_t)location->resource_stock[0];
     *maximum = item->building_tone_cost;
     return *current >= 0;

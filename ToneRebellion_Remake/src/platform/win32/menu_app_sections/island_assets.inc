@@ -39,6 +39,10 @@ static int load_island_surface(int island_id, int map_island_index,
     SpriteSheet floater_leg_candidates[4] = {{0}};
     SpriteSheet floater_body_flipped_candidates[4] = {{0}};
     SpriteSheet floater_leg_flipped_candidates[4] = {{0}};
+    SpriteSheet leviathan_body_candidate = {0};
+    SpriteSheet leviathan_body_flipped_candidate = {0};
+    SpriteSheet leviathan_leg_candidates[9] = {{0}};
+    SpriteSheet leviathan_leg_flipped_candidates[9] = {{0}};
     SpriteSheet feature_candidate = {0};
     COLORREF palette[256];
     uint8_t palette_rgb6[ISLAND_HAZE_PALETTE_BYTES];
@@ -59,6 +63,17 @@ static int load_island_surface(int island_id, int map_island_index,
     };
     static const char *const floater_leg_names[4] = {
         "data\\plegs.shp", "data\\slegs.shp", "data\\mlegs.shp", "data\\llegs.shp"
+    };
+    static const char *const leviathan_leg_names[9] = {
+        "data\\v-spore.shp", "data\\vpclegs.shp", "data\\vprlegs.shp",
+        "data\\vsclegs.shp", "data\\vsrlegs.shp", "data\\veclegs.shp",
+        "data\\verlegs.shp", "data\\vnclegs.shp", "data\\vnrlegs.shp"
+    };
+    /* Require the frames used by the remake's movement animations. Some
+       shapeinf.txt attack ranges extend past the frames in the shipped
+       vsclegs.shp and verlegs.shp sheets; those attacks fall back to movement. */
+    static const uint8_t leviathan_leg_frame_counts[9] = {
+        10, 20, 37, 16, 16, 17, 11, 23, 25
     };
     static const char *const defense_impact_names[4] = {
         "data\\phy.shp", "data\\sup.shp", "data\\erealm.shp",
@@ -289,6 +304,32 @@ static int load_island_surface(int island_id, int map_island_index,
             goto done;
         }
     }
+    if (!load_sprite_sheet(&archive, "data\\vbod.shp", palette,
+                           &leviathan_body_candidate, error, error_capacity))
+        goto done;
+    if (leviathan_body_candidate.frame_count < 16 ||
+        !mirror_sprite_sheet_horizontally(&leviathan_body_candidate,
+            &leviathan_body_flipped_candidate, error, error_capacity)) {
+        (void)snprintf(error, error_capacity,
+                       "data\\vbod.shp lacks the Leviathan body frames");
+        goto done;
+    }
+    for (hall_index = 0; hall_index < 9; ++hall_index) {
+        if (!load_sprite_sheet(&archive, leviathan_leg_names[hall_index], palette,
+                               &leviathan_leg_candidates[hall_index],
+                               error, error_capacity)) goto done;
+        if (leviathan_leg_candidates[hall_index].frame_count <
+            leviathan_leg_frame_counts[hall_index] ||
+            !mirror_sprite_sheet_horizontally(
+                &leviathan_leg_candidates[hall_index],
+                &leviathan_leg_flipped_candidates[hall_index],
+                error, error_capacity)) {
+            (void)snprintf(error, error_capacity,
+                           "%s lacks the movement frames used by the remake",
+                           leviathan_leg_names[hall_index]);
+            goto done;
+        }
+    }
     if (template_candidate.frame_count != 1 ||
         template_candidate.frames[0].width != LOGICAL_WIDTH ||
         template_candidate.frames[0].height != 160) {
@@ -428,6 +469,24 @@ static int load_island_surface(int island_id, int map_island_index,
         memset(&floater_leg_flipped_candidates[hall_index], 0,
                sizeof(floater_leg_flipped_candidates[hall_index]));
     }
+    free_sprite_sheet(&g_leviathan_body_art);
+    g_leviathan_body_art = leviathan_body_candidate;
+    memset(&leviathan_body_candidate, 0, sizeof(leviathan_body_candidate));
+    free_sprite_sheet(&g_leviathan_body_art_flipped);
+    g_leviathan_body_art_flipped = leviathan_body_flipped_candidate;
+    memset(&leviathan_body_flipped_candidate, 0,
+           sizeof(leviathan_body_flipped_candidate));
+    for (hall_index = 0; hall_index < 9; ++hall_index) {
+        free_sprite_sheet(&g_leviathan_legs[hall_index]);
+        g_leviathan_legs[hall_index] = leviathan_leg_candidates[hall_index];
+        memset(&leviathan_leg_candidates[hall_index], 0,
+               sizeof(leviathan_leg_candidates[hall_index]));
+        free_sprite_sheet(&g_leviathan_legs_flipped[hall_index]);
+        g_leviathan_legs_flipped[hall_index] =
+            leviathan_leg_flipped_candidates[hall_index];
+        memset(&leviathan_leg_flipped_candidates[hall_index], 0,
+               sizeof(leviathan_leg_flipped_candidates[hall_index]));
+    }
     for (item_id = 0; item_id < PAD_CATALOG_MAX_ITEMS; ++item_id) {
         free_sprite_sheet(&g_building_art[item_id]);
         g_building_art[item_id] = building_candidates[item_id];
@@ -552,6 +611,12 @@ done:
         free_sprite_sheet(&floater_leg_candidates[hall_index]);
         free_sprite_sheet(&floater_body_flipped_candidates[hall_index]);
         free_sprite_sheet(&floater_leg_flipped_candidates[hall_index]);
+    }
+    free_sprite_sheet(&leviathan_body_candidate);
+    free_sprite_sheet(&leviathan_body_flipped_candidate);
+    for (hall_index = 0; hall_index < 9; ++hall_index) {
+        free_sprite_sheet(&leviathan_leg_candidates[hall_index]);
+        free_sprite_sheet(&leviathan_leg_flipped_candidates[hall_index]);
     }
     free_sprite_sheet(&feature_candidate);
     free(height_data);

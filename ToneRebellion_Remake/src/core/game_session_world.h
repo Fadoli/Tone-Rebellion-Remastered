@@ -27,7 +27,9 @@ int game_session_world_bridge_is_renderable(const GameSession *session,
                                             uint8_t bridge_count,
                                             uint8_t island_a,
                                             uint8_t island_b);
-/* Models the paired-object state change observed in FUN_004669bd. */
+/* Models the paired-object state change observed in FUN_004669bd; this direct
+   helper reads the contributor from the island_a endpoint. The completion
+   path below passes the contributor from the actual PROD-completing marker. */
 int game_session_mark_bridge_constructed(GameSession *session,
                                          uint8_t bridge_index,
                                          uint8_t bridge_count,

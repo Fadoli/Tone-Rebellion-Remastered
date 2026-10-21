@@ -298,7 +298,7 @@ static int construction_task_details(const GameSession *session,
        dispatch a worker to a pad that cannot fit this construction site. */
     if (item == NULL || item->size < 0 ||
         item->size > target->construction_site_size ||
-        item->building_tone_cost <= 0) return 0;
+        item->building_tone_cost == -1) return 0;
     /* FUN_004526de, called by FUN_00452794, also requires the pad's +0x0c
        maintenance cost to fit the player's remaining maintenance budget. */
     if (item->maintenance_tone_cost >

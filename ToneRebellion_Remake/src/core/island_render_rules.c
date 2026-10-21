@@ -159,22 +159,22 @@ uint32_t island_worker_attack_legs_frame(uint16_t first_frame,
     return first + phase % (span + 1U);
 }
 
-int island_worker_health_badge_layout(uint8_t worker_type,
-                                      uint8_t max_hit_points, int facing_left,
-                                      int32_t body_hit_left,
-                                      int32_t body_hit_top,
-                                      int32_t body_hit_right_exclusive,
-                                      uint32_t *frame,
-                                      int32_t *x, int32_t *y)
+int island_worker_stat_badge_layout(uint8_t worker_type,
+                                    int16_t combat_stat, int facing_left,
+                                    int32_t body_hit_left,
+                                    int32_t body_hit_top,
+                                    int32_t body_hit_right_exclusive,
+                                    uint32_t *frame,
+                                    int32_t *x, int32_t *y)
 {
-    uint8_t hp = max_hit_points;
+    int32_t stat = combat_stat;
     int horizontal_offset;
     if (worker_type > 8U || frame == NULL || x == NULL || y == NULL ||
         body_hit_right_exclusive <= body_hit_left) return 0;
-    if (hp > 10u) hp = 10u;
+    if (stat > 10) stat = 10;
     horizontal_offset = worker_type == 0U || worker_type == 8U
         ? 2 : (facing_left ? 0 : 5);
-    *frame = 0x15u - hp;
+    *frame = (uint32_t)(0x15 - stat);
     *x = (facing_left ? body_hit_right_exclusive - 1 : body_hit_left - 8) +
          horizontal_offset;
     *y = body_hit_top;

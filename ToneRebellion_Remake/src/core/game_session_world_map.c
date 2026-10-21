@@ -68,15 +68,12 @@ int game_session_world_bridge_is_renderable(const GameSession *session,
            marker_a->bridge_constructed && marker_b->bridge_constructed;
 }
 
-int game_session_mark_bridge_constructed(GameSession *session,
-                                         uint8_t bridge_index,
-                                         uint8_t bridge_count,
-                                         uint8_t island_a,
-                                         uint8_t island_b)
+static int mark_bridge_constructed_with_contributor(
+    GameSession *session, uint8_t bridge_index, uint8_t bridge_count,
+    uint8_t island_a, uint8_t island_b, uint16_t contributor_slot)
 {
     GameRuntimeLocation *marker_a;
     GameRuntimeLocation *marker_b;
-    uint16_t player_slot;
     int was_constructed;
     if (session == NULL || bridge_count > WORLD_MAP_MAX_BRIDGES ||
         bridge_index >= bridge_count || island_a >= session->island_count ||
@@ -98,12 +95,11 @@ int game_session_mark_bridge_constructed(GameSession *session,
     marker_b->source_flags |= 1U;
     if (!game_session_set_bridge_active(session, bridge_index, bridge_count, 1))
         return 0;
-    /* FUN_004669bd uses the contributor mType stored at raw site +0x2c by
-       FUN_004503bd; bridge markers do not acquire the ordinary +0x14 owner. */
-    player_slot = marker_a->resource_stock[GAME_RESOURCE_MAGIC_TONE];
-    if (player_slot < GAME_START_PLAYER_COUNT) {
+    /* FUN_004669bd reads +0x2c from the marker whose PROD just completed.
+       Class-2 markers store that contributor in the aliased third stock word. */
+    if (contributor_slot < GAME_START_PLAYER_COUNT) {
         (void)game_session_acquire_island_access(
-            session, (uint8_t)player_slot, island_a, island_b);
+            session, (uint8_t)contributor_slot, island_a, island_b);
     }
     /* FUN_004669bd refreshes both endpoint islands through FUN_00466c8b. */
     game_session_refresh_player_maintenance_budgets(session);
@@ -113,6 +109,25 @@ int game_session_mark_bridge_constructed(GameSession *session,
         (void)game_session_queue_audio_event(
             session, GAME_SESSION_AUDIO_BRIDGE, -1);
     return 1;
+}
+
+int game_session_mark_bridge_constructed(GameSession *session,
+                                         uint8_t bridge_index,
+                                         uint8_t bridge_count,
+                                         uint8_t island_a,
+                                         uint8_t island_b)
+{
+    int marker_index;
+    uint16_t contributor_slot;
+    if (session == NULL || island_a >= session->island_count) return 0;
+    marker_index = find_bridge_marker_index(&session->islands[island_a],
+                                            island_b);
+    if (marker_index < 0) return 0;
+    contributor_slot = session->islands[island_a]
+        .locations[marker_index].resource_stock[GAME_RESOURCE_MAGIC_TONE];
+    return mark_bridge_constructed_with_contributor(
+        session, bridge_index, bridge_count, island_a, island_b,
+        contributor_slot);
 }
 
 int game_session_mark_bridge_constructed_at(GameSession *session,
@@ -137,9 +152,10 @@ int game_session_mark_bridge_constructed_at(GameSession *session,
              bridge->island_b == marker->bridge_neighbor_island) ||
             (bridge->island_b == island_index &&
              bridge->island_a == marker->bridge_neighbor_island)) {
-            return game_session_mark_bridge_constructed(
+            return mark_bridge_constructed_with_contributor(
                 session, (uint8_t)bridge_index, session->world_bridge_count,
-                island_index, (uint8_t)marker->bridge_neighbor_island);
+                island_index, (uint8_t)marker->bridge_neighbor_island,
+                marker->resource_stock[GAME_RESOURCE_MAGIC_TONE]);
         }
     }
     return 0;

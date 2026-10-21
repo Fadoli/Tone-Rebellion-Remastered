@@ -42,10 +42,10 @@ int iw_construct_site_size(const IslandLocation *site, uint8_t *out_site_size);
 /* Rebuilds FUN_0045f121's ordered available-item list from the selected
    construction site's +0x0c size, the three observed global rule sets, and the
    local pad.txt metadata loaded by FUN_0046303b. `player_slot` selects the
-   matching 16-item tribe block through FUN_004641de. Owned-island count and
-   rule_set are explicit because the remake has not yet ported their live
-   world/player-state producers. `out_ids` contains the original base item
-   IDs used by the window messages. */
+   matching 16-item tribe block through FUN_004641de. Callers supply the live
+   rule_set and island-progression count; the island UI derives them from the
+   selected world and the player's accessible-island mask. `out_ids` contains
+   the original base item IDs used by the window messages. */
 int iw_construct_build_list(const PadCatalog *catalog, uint8_t player_slot,
                             int32_t site_size, uint8_t rule_set,
                             uint16_t owned_island_count,

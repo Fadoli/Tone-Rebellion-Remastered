@@ -63,8 +63,8 @@ typedef struct GameRuntimeLocation {
     int16_t charge_recent_floater;
     /* Source staffing row +0x50 task handle; -1 means no queued staff request. */
     int16_t charge_staff_task_handle;
-    /* Class-1 Leviathan markers keep the hidden type-4 floater created at
-       PROD start here until the production animation releases it. */
+    /* Class-1 Leviathan markers keep the type-4 floater created at PROD start
+       here until the production animation moves it to the output offset. */
     int16_t leviathan_spawned_floater;
     /* Raw +0x4a short: FUN_0045eaa7 uses it as the Hall stock threshold;
        FUN_0040bf98 also uses it as the BASE frame step. */
@@ -111,8 +111,8 @@ typedef struct GameRuntimeLocation {
 
 typedef struct GameRuntimeIsland {
     uint16_t location_count;
-    /* FUN_004642a3 retains the fourth data\\worldpos.txt value per island;
-       FUN_004535e4 uses it to choose replacement markers for class-1 item 5. */
+    /* FUN_004642a3 retains the fourth data\\worldpos.txt value per island.
+       FUN_004535e4 and FUN_00450a71 use it to select marker families. */
     int16_t leviathan_marker_shape_id;
     /* FUN_00460460's per-island Leviathan planning summary. */
     int16_t leviathan_marker_count;

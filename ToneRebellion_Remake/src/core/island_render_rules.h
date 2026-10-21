@@ -64,16 +64,16 @@ uint32_t island_worker_attack_legs_frame(uint16_t first_frame,
                                          int ping_pong,
                                          uint32_t attack_progress);
 
-/* FUN_0042704b's health badge for a class-0 worker is FLTINFO frame
-   0x15-max_hp. Type 0/8 uses a +2 X offset; other types use +5 when normal
-   and +0 when mirrored. */
-int island_worker_health_badge_layout(uint8_t worker_type,
-                                      uint8_t max_hit_points, int facing_left,
-                                      int32_t body_hit_left,
-                                      int32_t body_hit_top,
-                                      int32_t body_hit_right_exclusive,
-                                      uint32_t *frame,
-                                      int32_t *x, int32_t *y);
+/* FUN_0042704b draws a class-0 worker's combat-stat badge using
+   FUN_00420f28: FLTINFO frame 0x15-stat, with stat capped at ten. Type 0/8
+   uses a +2 X offset; other types use +5 when normal and +0 when mirrored. */
+int island_worker_stat_badge_layout(uint8_t worker_type,
+                                    int16_t combat_stat, int facing_left,
+                                    int32_t body_hit_left,
+                                    int32_t body_hit_top,
+                                    int32_t body_hit_right_exclusive,
+                                    uint32_t *frame,
+                                    int32_t *x, int32_t *y);
 
 /* FUN_0042003c resolves the starting *work row's realm to FLTINFO frames
    22..25. When a current location is available, 0x10000 increments the realm

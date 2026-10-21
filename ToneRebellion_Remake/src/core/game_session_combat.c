@@ -427,9 +427,38 @@ void game_session_clear_cast_site(GameSession *session, uint8_t island_index,
 
     for (slot = 0; slot < 8; ++slot) {
         int16_t floater_index = target->charge_floater_slots[slot];
-        if (floater_index >= 0 && (unsigned int)floater_index < session->floater_count)
+        if (floater_index >= 0 && (unsigned int)floater_index < session->floater_count) {
+            GameFloaterStart *floater = &session->floaters[
+                (unsigned int)floater_index];
+
+            /* FUN_0045c5b8 clears every worker row before dropping the source:
+               it resets the subtype and level, ends its source action (flag
+               mask 0x65), then clamps current combat values to the base row.
+               A bare unlink left former workers with their training bonuses. */
             (void)game_session_unlink_floater_charge(session,
                                                      (unsigned int)floater_index);
+            floater->source_subtype = 0;
+            floater->attack_level_flags &= 0xfff0U;
+            if (floater->owner_slot < GAME_START_PLAYER_COUNT) {
+                const FloaterStats *birth_stats =
+                    &session->worker_birth_stats[floater->owner_slot];
+                if (floater->max_attack_points > birth_stats->max_attack_points)
+                    floater->max_attack_points = birth_stats->max_attack_points;
+                if (floater->charge_current > birth_stats->attack_strength)
+                    floater->charge_current = birth_stats->attack_strength;
+            }
+            floater->source_runtime_flags &= ~0x065U;
+            floater->active_order_action = 0;
+            floater->movement_state = 0;
+            floater->order_target_floater = -1;
+            floater->order_target_location = -1;
+            floater->order_target_island = floater->island_index;
+            floater->order_progress = 0;
+            floater->source_order_pending = 0;
+            floater->has_move_order = 0;
+            floater->order_resource_code = 0;
+            floater->source_order_state_2c = 0;
+        }
         target->charge_floater_slots[slot] = -1;
     }
 

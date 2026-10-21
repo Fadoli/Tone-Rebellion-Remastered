@@ -14,6 +14,56 @@ static uint32_t island_floater_legs_frame(const GameFloaterStart *floater)
         g_menu.animation_ticks);
 }
 
+static unsigned int island_leviathan_leg_sheet(uint8_t subtype)
+{
+    return subtype >= 9U && subtype <= 17U
+        ? (unsigned int)(subtype - 9U) : 9U;
+}
+
+static uint32_t island_leviathan_legs_frame(const GameFloaterStart *floater,
+                                             unsigned int sheet_index)
+{
+    static const uint8_t move_last[9] = {9, 15, 15, 7, 7, 16, 10, 15, 24};
+    uint32_t phase;
+    if (floater == NULL || sheet_index >= 9U) return 0;
+    if ((floater->movement_state == 6 || floater->movement_state == 7) &&
+        floater->attack_timer != 0 && floater->attack_frame_duration != 0) {
+        uint32_t attack_frame = island_worker_attack_legs_frame(
+            floater->attack_frame_first, floater->attack_frame_last,
+            floater->attack_frame_ticks_per_frame,
+            floater->attack_frame_ping_pong, floater->attack_timer);
+        if (attack_frame < g_leviathan_legs[sheet_index].frame_count)
+            return attack_frame;
+    }
+    phase = (g_game_session.simulation_tick + floater->animation_seed) / 2U;
+    return phase % ((uint32_t)move_last[sheet_index] + 1U);
+}
+
+static void draw_island_leviathan_floater(HDC dc,
+                                          const GameFloaterStart *floater,
+                                          int x, int y)
+{
+    unsigned int sheet_index = island_leviathan_leg_sheet(
+        floater != NULL ? floater->source_subtype : 0);
+    const SpriteSheet *leg_art;
+    const SpriteSheet *body_art;
+    uint32_t leg_frame;
+    if (floater == NULL || sheet_index >= 9U) return;
+    leg_art = floater->facing_left
+        ? &g_leviathan_legs_flipped[sheet_index]
+        : &g_leviathan_legs[sheet_index];
+    leg_frame = island_leviathan_legs_frame(floater, sheet_index);
+    draw_sprite(dc, leg_art, leg_frame, x, y);
+    if (floater->source_subtype == 9U) return;
+    body_art = floater->facing_left
+        ? &g_leviathan_body_art_flipped : &g_leviathan_body_art;
+    if (body_art->frame_count >= 16U) {
+        uint32_t body_frame = 2U * (floater->source_subtype - 10U) +
+            (((g_game_session.simulation_tick + floater->animation_seed) / 8U) & 1U);
+        draw_sprite(dc, body_art, body_frame, x, y);
+    }
+}
+
 static void render_island_view(HDC dc)
 {
     const int image_top = 0;
@@ -210,10 +260,14 @@ static void render_island_view(HDC dc)
             const SpriteSheet *leg_art;
             if (!game_session_floater_is_active(floater) ||
                 floater->island_index != g_menu.selected_map_island ||
-                floater->type_index >= 4) continue;
+                floater->type_index > 4) continue;
             floater_x = (int)floater->x - g_island_scroll_x;
             if (floater_x < -64 || floater_x >= LOGICAL_WIDTH + 64) continue;
             floater_y = image_top + (int)floater->y;
+            if (floater->type_index == 4) {
+                draw_island_leviathan_floater(dc, floater, floater_x, floater_y);
+                continue;
+            }
             leg_frame = island_floater_legs_frame(floater);
             body_art = floater->facing_left
                            ? &g_initial_floater_bodies_flipped[floater->type_index]
@@ -225,8 +279,7 @@ static void render_island_view(HDC dc)
             draw_sprite(dc, body_art, 0, floater_x, floater_y);
             /* FUN_0042822b calls FUN_0042704b with param_5=1 for world
                floaters. The first overlay global gates FLTINFO realm frames
-               22..25; other overlay values need runtime state not modeled by
-               the startup-floater record. */
+               22..25; the second gates the combat-stat badge below. */
             if (island_worker_realm_overlay_enabled(
                     g_floater_overlay_flags, 1) &&
                 g_floater_info_art.frame_count >= 26 &&
@@ -250,7 +303,7 @@ static void render_island_view(HDC dc)
                                 badge_x, badge_y);
                 }
             }
-            /* FUN_0042704b gates health FLTINFO frames with the second
+            /* FUN_0042704b gates combat-stat FLTINFO frames with the second
                TOGREALM flag. Initial workers are created with +0x1c cleared
                by FUN_00466fe4/FUN_0041e4e4, so their world badge is eligible. */
             if (island_worker_health_overlay_enabled(
@@ -264,15 +317,15 @@ static void render_island_view(HDC dc)
                                    body_frame->hit_top;
                 int32_t body_right = floater_x + body_frame->x_offset +
                                      body_frame->hit_right;
-                uint32_t health_frame;
+                uint32_t stat_frame;
                 int32_t badge_x;
                 int32_t badge_y;
-                if (island_worker_health_badge_layout(
-                        floater->type_index, floater->max_hit_points,
+                if (island_worker_stat_badge_layout(
+                        floater->type_index, floater->max_attack_points,
                         floater->facing_left, body_left, body_top, body_right,
-                        &health_frame, &badge_x, &badge_y) &&
-                    health_frame < g_floater_info_art.frame_count) {
-                    draw_sprite(dc, &g_floater_info_art, health_frame,
+                        &stat_frame, &badge_x, &badge_y) &&
+                    stat_frame < g_floater_info_art.frame_count) {
+                    draw_sprite(dc, &g_floater_info_art, stat_frame,
                                 badge_x, badge_y);
                 }
             }
@@ -606,10 +659,10 @@ static void render_island_view(HDC dc)
                                     badge_x, badge_y);
                     }
                 }
-                /* Health frame and anchor are independently derived from
+                /* Combat-stat frame and anchor are independently derived from
                    FUN_0042704b / FUN_00420f28. */
                 if (g_floater_info_art.frame_count >= 26) {
-                    uint32_t health_frame;
+                    uint32_t stat_frame;
                     int32_t badge_x;
                     int32_t badge_y;
                     int32_t body_left = sprite_x + body_frame->x_offset +
@@ -618,14 +671,14 @@ static void render_island_view(HDC dc)
                                        body_frame->hit_top;
                     int32_t body_right = sprite_x + body_frame->x_offset +
                                          body_frame->hit_right;
-                    if (island_worker_health_badge_layout(
+                    if (island_worker_stat_badge_layout(
                             selected_floater->type_index,
-                            selected_floater->max_hit_points,
+                            selected_floater->max_attack_points,
                             selected_floater->facing_left,
                             body_left, body_top, body_right,
-                            &health_frame, &badge_x, &badge_y) &&
-                        health_frame < g_floater_info_art.frame_count) {
-                        draw_sprite(dc, &g_floater_info_art, health_frame,
+                            &stat_frame, &badge_x, &badge_y) &&
+                        stat_frame < g_floater_info_art.frame_count) {
+                        draw_sprite(dc, &g_floater_info_art, stat_frame,
                                     badge_x, badge_y);
                     }
                 }
