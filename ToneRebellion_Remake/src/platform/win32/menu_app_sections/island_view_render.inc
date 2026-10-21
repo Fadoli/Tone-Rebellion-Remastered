@@ -37,6 +37,37 @@ static const char *island_leviathan_info_name(uint8_t subtype,
     return index < 18U ? names[index] : "";
 }
 
+/* FUN_00439673 mode 0 for non-building sites: kind 1 (pool) starts at POOL;
+   owner 4 uses POOLINFECT for item 5 or SUPPLY(item - 6), otherwise the
+   viewing tribe's bit in the +0x22 visibility byte selects PRIMEPOOL.
+   Kind 2 (bridge) shows BRIDGE. Kind 3 (FEAT%02d) needs the per-island
+   feature table (DAT_005eebf8), which the port does not model. */
+static const char *island_site_info_text(const GameRuntimeLocation *location,
+                                         unsigned int tribe)
+{
+    unsigned int index = SITE_TEXT_POOL;
+    if (location == NULL) return NULL;
+    if (location->renderer_class == 2) {
+        index = SITE_TEXT_BRIDGE;
+    } else if (location->renderer_class == 1) {
+        if (location->owner_id == 4) {
+            if (location->record_value_10 == 5) {
+                index = SITE_TEXT_POOL_INFECT;
+            } else if (location->record_value_10 >= 6 &&
+                       location->record_value_10 <= 9) {
+                index = SITE_TEXT_SUPPLY0 +
+                    (unsigned int)(location->record_value_10 - 6);
+            }
+        } else if (tribe < 8U &&
+                   ((location->source_value_22 & 0xffU) & (1U << tribe)) != 0U) {
+            index = SITE_TEXT_PRIME_POOL;
+        }
+    } else {
+        return NULL;
+    }
+    return g_site_texts[index][0] != '\0' ? g_site_texts[index] : NULL;
+}
+
 static uint32_t island_leviathan_legs_frame(const GameFloaterStart *floater,
                                              unsigned int sheet_index)
 {
@@ -586,50 +617,25 @@ static void render_island_view(HDC dc)
             int saved_info_dc = SaveDC(dc);
             unsigned int item_frame = (unsigned int)(selected_ground_item -
                 GAME_INVENTORY_ITEM_FIRST_ID);
-            int description_index = selected_ground_item -
-                GAME_INVENTORY_ITEM_FIRST_ID;
-            char item_description[40];
-            size_t description_length = 0;
             (void)IntersectClipRect(dc, pane.left, pane.top,
                                     pane.right, pane.bottom);
             draw_sprite(dc, &g_temp_hole_art, 1,
                         info->pane.left, info->pane.top);
-            /* FUN_0044338b layout (stored Ghidra evidence only; REA session
-               was unavailable for live re-verification): a centred name row
-               at y=3, text rows at x=4, and the object sprite at
-               (W-50, H/2+5) at 100%. A ground object has owner -1, so
-               FUN_004207f2 returns null and the BLDNAME/LEVEL/CHARGE rows
-               are skipped. FUN_0040adb5 maps item>=4 to frame item-5 of
-               sheet DAT_0049acb4, so frame id-5 is observed. The native name
-               row is "%s %s" (xTark-table entry + WORKER/AWAKE) through a
-               label lookup that is not decoded; the inventory description's
-               first line stays an interpretation. */
-            if (description_index >= 0 &&
-                description_index < GAME_INVENTORY_ITEM_COUNT) {
-                const char *description =
-                    g_inventory_item_info_text[description_index];
-                description_length = strcspn(description, "\r\n");
-                if (description_length >= sizeof(item_description))
-                    description_length = sizeof(item_description) - 1U;
-                if (description_length != 0) {
-                    int label_width;
-                    memcpy(item_description, description, description_length);
-                    item_description[description_length] = '\0';
-                    label_width = measure_bitmap_text(NULL, item_description,
-                                                      description_length);
-                    draw_bitmap_label(dc, item_description,
-                        info->pane.left +
-                            ((info->pane.right - info->pane.left + 1) -
-                             label_width) / 2,
-                        info->pane.top + 3, RGB(230, 238, 255));
-                }
-            }
-            if (item_frame < g_inventory_item_art.frame_count) {
-                int icon_x = info->pane.right - 50;
+            /* FUN_00440567 sends P+4==0, P+0x10 in {0,1} sites to FUN_00441aae:
+               no text and no buttons, only the TRIGGERS (alltrigs.shp) frame
+               +0x24-5 centred in the pane by FUN_004119ba. FUN_0044338b is the
+               unit detail renderer and is not used here. */
+            if (item_frame < g_inventory_item_art.frame_count &&
+                g_inventory_item_art.frames[item_frame].bitmap != NULL) {
+                const SpriteFrame *icon = &g_inventory_item_art.frames[item_frame];
+                int icon_x = info->pane.left +
+                    ((info->pane.right - info->pane.left + 1) -
+                     (int)icon->width) / 2 - icon->x_offset;
                 int icon_y = info->pane.top +
-                    (info->pane.bottom - info->pane.top) / 2 + 5;
-                draw_sprite_scaled(dc, &g_inventory_item_art, item_frame,
-                                   icon_x, icon_y, 0x00010000U);
+                    ((info->pane.bottom - info->pane.top + 1) -
+                     (int)icon->height) / 2 - icon->y_offset;
+                draw_sprite(dc, &g_inventory_item_art, item_frame,
+                            icon_x, icon_y);
             }
             if (saved_info_dc != 0) RestoreDC(dc, saved_info_dc);
         }
@@ -1097,6 +1103,26 @@ static void draw_location_action_panel(HDC dc)
                 text_panel->pane.left + (pane_width - name_width) / 2,
                 text_panel->pane.top + pane_height / 2 - 10,
                 RGB(230, 238, 255));
+        }
+    } else if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL &&
+               island_site_info_text(selected_location,
+                                     g_menu.selected_tribe) != NULL) {
+        text_panel = window_catalog_find(&g_window_catalog, "IWTextInfo", 3);
+        if (text_panel != NULL && text_panel->shape_frame >= 0 &&
+            (uint32_t)text_panel->shape_frame < g_temp_hole_art.frame_count) {
+            int pane_width = text_panel->pane.right - text_panel->pane.left;
+            int pane_height = text_panel->pane.bottom - text_panel->pane.top;
+            int line_height = (int)g_bitmap_font.height + 2;
+            int max_lines = line_height > 0
+                ? (pane_height - 0x10) / line_height : 0;
+            draw_sprite(dc, &g_temp_hole_art,
+                        (uint32_t)text_panel->shape_frame,
+                        text_panel->pane.left, text_panel->pane.top);
+            draw_wrapped_bitmap_label(dc,
+                island_site_info_text(selected_location,
+                                      g_menu.selected_tribe),
+                text_panel->pane.left + 10, text_panel->pane.top + 0x10,
+                pane_width - 20, max_lines, RGB(230, 238, 255));
         }
     }
 

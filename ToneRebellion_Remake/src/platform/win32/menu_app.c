@@ -34,7 +34,10 @@
 
 enum { LOGICAL_WIDTH = 640, LOGICAL_HEIGHT = 480, ISLAND_NAME_COUNT = 15,
        BUILDING_NAME_COUNT = 64, BUILDING_NAME_CAPACITY = 128,
-       LEVIATHAN_NAME_COUNT = 17 };
+       LEVIATHAN_NAME_COUNT = 17, SITE_TEXT_COUNT = 8,
+       SITE_TEXT_CAPACITY = 768 };
+enum { SITE_TEXT_POOL, SITE_TEXT_POOL_INFECT, SITE_TEXT_PRIME_POOL,
+       SITE_TEXT_BRIDGE, SITE_TEXT_SUPPLY0 };
 enum { SCREEN_MAIN_MENU, SCREEN_NEW_GAME, SCREEN_WORLD_MAP, SCREEN_ISLAND, SCREEN_LOAD_GAME };
 enum { HELP_MAIN_NEWGAME, HELP_MAIN_RESUME, HELP_MAIN_LOAD, HELP_MAIN_EXIT,
        HELP_NEW_EXIT, HELP_NEW_WORLD, HELP_NEW_TRIBE0,
@@ -172,6 +175,8 @@ static char g_building_descriptions[PAD_CATALOG_MAX_ITEMS][768];
 static char g_building_names[BUILDING_NAME_COUNT][BUILDING_NAME_CAPACITY];
 /* bldname.txt LEVNAME entries, indexed by Leviathan pad item id - 5. */
 static char g_leviathan_names[LEVIATHAN_NAME_COUNT][BUILDING_NAME_CAPACITY];
+/* bldtxt.txt POOL, POOLINFECT, PRIMEPOOL, BRIDGE and SUPPLY0..3 entries. */
+static char g_site_texts[SITE_TEXT_COUNT][SITE_TEXT_CAPACITY];
 static char g_island_names[ISLAND_NAME_COUNT][32];
 static IslandData g_island_surface_data;
 static GameSession g_game_session;

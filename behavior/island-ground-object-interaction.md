@@ -105,31 +105,20 @@ Le rendu de sélection du remake a été corrigé séparément : la sélection d
 
 ## Vue IWLocInfo après sélection (état du port)
 
-Observation (pseudocode stocké de `FUN_0044338b`, REA live indisponible lors de
-cette passe, rien revérifié): pour un objet au sol (`owner=-1`),
-`FUN_004207f2` renvoie null, donc BLDNAME, LEVEL et CHARGE sont sautés. Ligne
-de nom centrée à y=3, lignes de texte à x=4 (y=23, 33), sprite à (W-50, H/2+5)
-à 100 % via `FUN_0042704b`. Aucun bouton créé par cette fonction.
-Le port applique cette géométrie (nom centré, icône à 100 %) et retire le
-libellé inventé « OBJET AU SOL ».
-Interprétation: le texte du nom (première ligne de la description d'inventaire)
-et la frame `id-5` de la feuille d'objets.
-Inconnues: chaîne native du nom (table xTark/0x4a0d38), valeurs des lignes 2–3
-pour un objet, feuille/frame choisie dans `FUN_0042704b`, mode de panneau ouvert
-par le clic île.
-
-### Complément REA (FUN_0042704b, chaînes)
-
-Observation (ev_7561f651, ev_18fc192b, ev_7a048a61, ev_f6810b9e, ev_f4da15d7):
-`FUN_0042704b` dessine l'icône d'objet via `FUN_0040adb5`: item >= 4 donne la
-feuille `DAT_0049acb4`, frame `item-5` (valeur statique initiale 0xffff, fixée
-à l'exécution; si feuille 0 et 4<item<0x22, texte `"%02d"` de `item-5`). Frame
-`id-5` du port confirmée; la feuille reste inconnue statiquement. Chaînes:
-`0x4a0d38`="HITS", `0x4a0d4c`="STRENGTH", `0x4a0d0c`="WORKER", `0x4a0d14`="AWAKE";
-table xTark (pas 12 @0x49cfc8): xTark, xZygon, xCephean, xDyla, xLeviathan.
-Ligne de nom native = `"%s %s"` (entrée xTark + WORKER/AWAKE), résolue par
-`thunk_FUN_00429ebe` (non décodé). Le texte final du nom d'un objet au sol
-reste donc inconnu; le port garde la description d'inventaire (interprétation).
-Écart à vérifier: le sous-agent attribue l'ID d'objet à `+0x18` et dit que
-`+0x24` n'est pas un sélecteur de forme (≥0x14 saute le corps), contrairement à
-la lecture de `FUN_0045f337` ci-dessus; non tranché.
+Observation (REA, ev_c7c37d99, ev_af5ecc43, ev_d6b45c8f, ev_2c439ff0):
+`FUN_00440567` (paint `mpLocInfo`) envoie les sites `P+4==0`, `P+0x10` ∈ {0,1}
+à `FUN_00441aae`. Pour `PIT_Object` (`P+0x10==1`), garde `4 < P+0x24 < 0x22`,
+puis une seule image: sprite `triggers` (alltrigs.shp), frame `P+0x24-5`,
+centrée dans le panneau par `FUN_004119ba` (`(W-largeur)/2 - origine`), sans
+échelle, sans texte, sans bouton. Le propriétaire (`+0x14`) n'est pas lu ici.
+`FUN_0044338b` est le détail d'unité (WORKER/AWAKE, HITS, STRENGTH, CHARGE;
+gamey.txt: Ouvrier, Le Sage, Coups, Puissance, Niveau, Charge) et ne sert pas
+aux objets au sol; la note précédente de cette section l'avait supposé à tort.
+Le port dessine donc seulement la frame centrée (l'ancien libellé inventé
+« OBJET AU SOL » et la description sont retirés).
+`FUN_0042704b` lit l'ID d'objet en `+0x18` (frame `id-5`, feuille `DAT_0049acb4`)
+pour les sprites d'unité; le chemin site utilise `+0x24`. Les deux champs
+coexistent; sémantique de `+0x24` (sous-ID ou compte) inconnue.
+Inconnues: appelants de `FUN_00440567`/`FUN_00441d3e` (dispatch non résolu),
+fond exact (`DAT_004c2b08`; le port garde `g_temp_hole_art` frame 1), sémantique
+du clic (`FUN_00441d3e` cas 6).

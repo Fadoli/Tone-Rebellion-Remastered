@@ -231,6 +231,21 @@ static int load_building_render_catalog(char *error, size_t error_capacity)
                                         LEVIATHAN_NAME_COUNT);
     memset(g_building_descriptions, 0, sizeof(g_building_descriptions));
     {
+        /* FUN_00439673 mode 0 reads these keys for pool, bridge and infected
+           site selections (bldtxt.txt). A missing key stays empty. */
+        static const char *const site_keys[SITE_TEXT_COUNT] = {
+            "POOL", "POOLINFECT", "PRIMEPOOL", "BRIDGE",
+            "SUPPLY0", "SUPPLY1", "SUPPLY2", "SUPPLY3"
+        };
+        unsigned int site_text;
+        memset(g_site_texts, 0, sizeof(g_site_texts));
+        for (site_text = 0; site_text < SITE_TEXT_COUNT; ++site_text) {
+            (void)extract_help_entry(description_bytes, description_member->length,
+                site_keys[site_text], g_site_texts[site_text],
+                sizeof(g_site_texts[site_text]));
+        }
+    }
+    {
         uint16_t item_index;
         for (item_index = 0; item_index < pads.item_count; ++item_index) {
             const PadCatalogItem *item = &pads.items[item_index];
