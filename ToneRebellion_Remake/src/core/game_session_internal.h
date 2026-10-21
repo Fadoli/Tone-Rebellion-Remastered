@@ -36,6 +36,11 @@ static inline int32_t game_session_base_item_id(
     return item_id;
 }
 
+void game_session_recalculate_floater_attack_points(
+    const GameSession *session, GameFloaterStart *floater);
+void game_session_refresh_player_attack_points(GameSession *session,
+                                               uint8_t player_slot);
+
 /* Shared runtime pad maximum used during session setup and building updates. */
 static inline int game_session_source_value_34_max(
     const PadCatalog *catalog, const GameRuntimeLocation *location,

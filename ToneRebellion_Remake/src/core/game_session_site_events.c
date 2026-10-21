@@ -65,6 +65,34 @@ static int game_session_recalculate_location_active(GameRuntimeLocation *locatio
     return ((previous_flags ^ current_flags) & 1U) != 0;
 }
 
+static void game_session_cancel_producer_resource_tasks(
+    GameSession *session, GameRuntimeLocation *location,
+    uint8_t player_slot, uint8_t island_index, uint16_t location_index)
+{
+    unsigned int event_slot;
+    unsigned int resource;
+
+    /* FUN_0045cbaa calls FUN_00466732 for source request slots 1, 2 and 3.
+       The latter cancels matching type-4 tasks through FUN_00466533, which
+       also releases an assigned floater's claim and movement order. */
+    for (event_slot = 0; event_slot < GAME_SESSION_MAX_PENDING_EVENTS;
+         ++event_slot) {
+        GamePendingEvent *event = &session->pending_events[event_slot];
+        GamePendingEvent expected;
+        if (event->active == 0 || event->action_type != 4 ||
+            event->player_id != (int16_t)player_slot ||
+            event->payload_0a != (int16_t)island_index ||
+            event->payload_0e != (int16_t)location_index ||
+            event->payload_12 < 1 || event->payload_12 > GAME_RESOURCE_TYPE_COUNT)
+            continue;
+        expected = *event;
+        (void)game_session_dispatch_task_command(
+            session, (uint8_t)event_slot, 12, &expected);
+    }
+    for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource)
+        location->source_task_slot[resource] = -1;
+}
+
 static int visibility_x_is_spanned(int32_t x, const int32_t *span_min,
                                    const int32_t *span_max, unsigned int count)
 {
@@ -263,32 +291,27 @@ void game_session_tick_site_effect_timers(GameSession *session)
 static void game_session_recalculate_player_maintenance_budgets(
     GameSession *session)
 {
-    /* FUN_00462285 counts each accessible class-1 Tone pool. FUN_0045e6d3
-       converts the summed count to gross maintenance capacity at 10 per pool. */
-    int32_t capacities[GAME_START_PLAYER_COUNT] = {0};
+    /* FUN_0045e6d3 makes a provisional regional sum, then FUN_00477599
+       overwrites gross capacity with 0.5 * 20.0 before charging maintenance. */
     int32_t maintenance[GAME_START_PLAYER_COUNT] = {0};
-    int32_t capacity_budget[GAME_START_PLAYER_COUNT] = {0};
     unsigned int island_index;
     unsigned int floater_index;
     unsigned int player_slot;
 
-    /* First finish all players' visibility updates so each budget observes
-       the final active bits for every island. */
+    /* Keep the regional visibility side effects; the sum itself is discarded. */
     for (player_slot = 0; player_slot < GAME_START_PLAYER_COUNT; ++player_slot) {
         for (island_index = 0; island_index < session->island_count;
              ++island_index) {
             GameRuntimeIsland *island = &session->islands[island_index];
             if (island->location_count > ISLAND_DATA_MAX_LOCATIONS) continue;
-            capacities[player_slot] +=
-                recalculate_island_visibility_for_player(
-                    session, island, (uint8_t)player_slot);
+            (void)recalculate_island_visibility_for_player(
+                session, island, (uint8_t)player_slot);
         }
     }
 
     for (player_slot = 0; player_slot < GAME_START_PLAYER_COUNT; ++player_slot) {
-        capacity_budget[player_slot] = capacities[player_slot] * 10;
         session->economy[player_slot].source_maintenance_capacity =
-            capacity_budget[player_slot];
+            10;
 
         uint32_t owned_flag = 0x800U << player_slot;
         for (island_index = 0; island_index < session->island_count;
@@ -318,10 +341,9 @@ static void game_session_recalculate_player_maintenance_budgets(
             if (game_session_floater_is_active(floater) &&
                 floater->type_index == player_slot) ++maintenance[player_slot];
         }
-        if (maintenance[player_slot] > capacity_budget[player_slot])
-            maintenance[player_slot] = capacity_budget[player_slot];
+        if (maintenance[player_slot] > 10) maintenance[player_slot] = 10;
         session->economy[player_slot].source_maintenance_budget =
-            capacity_budget[player_slot] - maintenance[player_slot];
+            10 - maintenance[player_slot];
     }
 }
 
@@ -358,13 +380,16 @@ int game_session_recalculate_location_active_with_visibility(
 void game_session_recalculate_leviathan_island(GameSession *session,
                                                uint8_t island_index)
 {
-    static const int16_t baseline_tables[3][4][6] = {
+    static const int16_t baseline_tables[3][5][6] = {
         {{2, 2, 2, 2, 2, 2}, {3, 3, 3, 4, 4, 5},
-         {3, 4, 4, 5, 5, 7}, {4, 5, 5, 6, 7, 8}},
+         {3, 4, 4, 5, 5, 7}, {4, 5, 5, 6, 7, 8},
+         {5, 5, 6, 7, 8, 9}},
         {{2, 3, 4, 4, 4, 5}, {4, 4, 5, 6, 7, 8},
-         {5, 6, 7, 9, 10, 11}, {7, 9, 11, 12, 13, 14}},
+         {5, 6, 7, 9, 10, 11}, {7, 9, 11, 12, 13, 14},
+         {6, 10, 13, 15, 16, 17}},
         {{2, 3, 4, 4, 4, 5}, {4, 4, 5, 7, 9, 10},
-         {5, 7, 9, 14, 16, 17}, {7, 9, 13, 17, 21, 23}}
+         {5, 7, 9, 14, 16, 17}, {7, 9, 13, 17, 21, 23},
+         {8, 10, 15, 21, 26, 30}}
     };
     GameRuntimeIsland *island;
     int16_t marker_locations[6];
@@ -386,7 +411,7 @@ void game_session_recalculate_leviathan_island(GameSession *session,
     previous_admissible = island->leviathan_admissible;
     difficulty = session->config.difficulty;
     if (difficulty < 0) difficulty = 0;
-    if (difficulty > 3) difficulty = 3;
+    if (difficulty > 4) difficulty = 4;
     island_tier = island_index / 4;
     if (island_tier > difficulty) island_tier = difficulty;
 
@@ -442,9 +467,67 @@ void game_session_recalculate_leviathan_island(GameSession *session,
                 island->leviathan_floater_budget == 0) interval = 0;
             for (index = 0; index < (unsigned int)marker_count; ++index) {
                 GameRuntimeLocation *location = &island->locations[marker_locations[index]];
-                location->leviathan_spawn_interval =
-                    location->record_value_10 == 5 ? 1 : (uint16_t)interval;
+                uint16_t spawn_rate = location->record_value_10 == 5
+                    ? 1U : (uint16_t)interval;
+                /* FUN_00460460 writes local_40 to raw +0x32; the producer
+                   tick adds this rate to its +0x0c cadence before comparing
+                   against the island's current spawn threshold. */
+                location->source_value_32 = (int16_t)spawn_rate;
             }
+        }
+    }
+}
+
+static void tick_leviathan_attack_rank(GameSession *session,
+                                      uint8_t island_index)
+{
+    int difficulty = session->config.difficulty;
+    unsigned int floater_index;
+
+    if (difficulty < 0) difficulty = 0;
+    if (difficulty > 4) difficulty = 4;
+    if (difficulty <= 1) return;
+
+    for (floater_index = 0; floater_index < session->floater_count;
+         ++floater_index) {
+        GameFloaterStart *floater = &session->floaters[floater_index];
+        unsigned int rank;
+        uint64_t interval;
+
+        if (!game_session_floater_is_active(floater) ||
+            floater->island_index != island_index || floater->type_index != 4 ||
+            floater->source_subtype < 10 || floater->source_subtype > 17 ||
+            (floater->source_runtime_flags & (0x008U | 0x800U)) != 0)
+            continue;
+
+        rank = (floater->attack_level_flags >> 4) & 0x0fU;
+        interval = UINT64_C(15000) +
+            (uint64_t)(7500 / (difficulty - 1)) * rank * rank;
+        if (((uint64_t)session->simulation_tick + floater_index) % interval != 0)
+            continue;
+
+        /* FUN_0041e569 advances FUN_0041ff56's high-nibble rank through
+           FUN_0042000b, whose setter clamps it at 11. At rank 11 with low
+           level 0, the observed zero DAT_0061f920 path converts rank into
+           level 1 and restores half of the previously missing HITS. */
+        if (rank == 11U &&
+            (floater->attack_level_flags & 0x000fU) == 0) {
+            int32_t old_maximum = floater->max_hit_points;
+            int32_t missing = old_maximum - floater->current_hit_points;
+            int32_t new_maximum;
+
+            if (missing < 0) missing = 0;
+            new_maximum = (old_maximum * 17) / 10;
+            if (new_maximum > INT16_MAX) new_maximum = INT16_MAX;
+            floater->attack_level_flags = 1U;
+            floater->source_progress_08 = 0;
+            floater->max_hit_points = (int16_t)new_maximum;
+            floater->current_hit_points = (int16_t)(
+                new_maximum - missing / 2);
+        } else {
+            if (rank > 10U) rank = 10U;
+            floater->attack_level_flags = (uint16_t)(
+                (floater->attack_level_flags & 0x000fU) | ((rank + 1U) << 4));
         }
     }
 }
@@ -455,9 +538,9 @@ void game_session_tick_leviathan_ai(GameSession *session)
     if (session == NULL) return;
     for (island_index = 0; island_index < session->island_count; ++island_index) {
         GameRuntimeIsland *island = &session->islands[island_index];
-        int floater_count = 0;
         unsigned int floater_index;
         if (island->location_count > ISLAND_DATA_MAX_LOCATIONS) continue;
+        tick_leviathan_attack_rank(session, (uint8_t)island_index);
         if (island->leviathan_periodic_timer != 0) {
             --island->leviathan_periodic_timer;
             if (island->leviathan_periodic_timer < 2) {
@@ -476,7 +559,7 @@ void game_session_tick_leviathan_ai(GameSession *session)
                 int island_tier = (int)island_index / 4;
                 int threshold;
                 int selected = 0;
-                if (difficulty > 3) difficulty = 3;
+                if (difficulty > 4) difficulty = 4;
                 if (island_tier > difficulty) island_tier = difficulty;
                 threshold = (island_tier + 2 + difficulty) / 2;
                 threshold += tone_rng_bounded(&session->random_state, threshold);
@@ -491,16 +574,10 @@ void game_session_tick_leviathan_ai(GameSession *session)
                     if (++selected >= threshold) break;
                 }
                 island->leviathan_wait_timer = -1;
-            } else {
-                for (floater_index = 0;
-                     floater_index < session->floater_count; ++floater_index) {
-                    const GameFloaterStart *floater = &session->floaters[floater_index];
-                    if (game_session_floater_is_active(floater) &&
-                        floater->island_index == island_index &&
-                        floater->type_index == 4 && floater->source_subtype != 9)
-                        ++floater_count;
-                }
-                if (floater_count > 2) --island->leviathan_wait_timer;
+            } else if (island->leviathan_floater_count > 2) {
+                /* FUN_00460989 reads the +0x15ba count cached by
+                   FUN_00460460; it does not rescan the floater table here. */
+                --island->leviathan_wait_timer;
             }
         }
     }
@@ -568,7 +645,6 @@ unsigned int game_session_dispatch_onoff_actions(GameSession *session,
         int catalog_item_id;
         int was_enabled;
         int active_flag_changed;
-        unsigned int subtype;
 
         if (request.player_slot >= GAME_START_PLAYER_COUNT ||
             request.island_index >= session->island_count ||
@@ -609,19 +685,16 @@ unsigned int game_session_dispatch_onoff_actions(GameSession *session,
             }
         }
 
-        /* FUN_00450385 resolves the linked row; FUN_0045cbaa releases its
-           subtype 1..3 task links only after the site has ended up OFF. */
-        if (location->source_location_slot_18 != -1 &&
-            (location->source_flags & 0x400U) == 0) {
-            for (subtype = 0; subtype < GAME_RESOURCE_TYPE_COUNT; ++subtype) {
-                int16_t linked_slot = location->source_task_slot[subtype];
-                if (linked_slot >= 0 &&
-                    linked_slot < GAME_SESSION_MAX_PENDING_EVENTS) {
-                    (void)game_session_pending_event_release(
-                        session, (uint8_t)linked_slot);
-                }
-                location->source_task_slot[subtype] = -1;
-            }
+        /* FUN_00450385 resolves the linked row; FUN_0045cbaa cancels each
+           type-4 request (and its assigned floater) when the site is OFF. */
+        /* FUN_00453bf6 calls FUN_0045cbaa only when the runtime +0x18 source
+           row exists. Fresh 0x25..0x27 producers have no such row, so their
+           in-flight pickup tasks are not cancelled by this button path. */
+        if ((location->source_flags & 0x400U) == 0 &&
+            location->source_location_slot_18 != -1) {
+            game_session_cancel_producer_resource_tasks(session, location,
+                request.player_slot, request.island_index,
+                request.location_index);
         }
         /* FUN_00453bf6 ends in FUN_00453a5f/FUN_004539e9, which also
            gates the active bit by the site's +0x22 owner visibility mask. */

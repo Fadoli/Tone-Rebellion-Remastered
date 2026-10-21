@@ -29,6 +29,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             }
             if (g_menu.screen == SCREEN_ISLAND && g_game_session_valid) {
                 GameSessionAudioEvent audio_event;
+                GameSessionWorldEvent world_event;
                 game_session_dispatch_island_events(&g_game_session);
                 (void)game_session_dispatch_trade_requests(&g_game_session);
                 (void)game_session_dispatch_build_selections(&g_game_session);
@@ -46,15 +47,32 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                                                 &g_pad_catalog);
                 (void)game_session_update_resource_requests(&g_game_session);
                 game_session_tick_leviathan_ai(&g_game_session);
+                while (game_session_pop_world_event(&g_game_session,
+                                                    &world_event)) {
+                    if (world_event.kind ==
+                        GAME_SESSION_WORLD_EVENT_ISLAND_REACHED) {
+                        g_island_access_notice_level = world_event.payload;
+                        g_island_access_notice_until =
+                            g_menu.animation_ticks + 90U;
+                    } else if (world_event.kind ==
+                        GAME_SESSION_WORLD_EVENT_BUILDING_DESTROYED) {
+                        g_building_destroyed_notice_until =
+                            g_menu.animation_ticks + 90U;
+                    }
+                }
                 if (game_session_pop_audio_event(&g_game_session, &audio_event)) {
                     const unsigned char *sound = NULL;
                     if (audio_event.kind == GAME_SESSION_AUDIO_BUILD) {
                         sound = audio_event.owner_id == 4
                             ? g_levbuild_sound : g_fltbuild_sound;
+                    } else if (audio_event.kind == GAME_SESSION_AUDIO_FLOATER_DEATH) {
+                        sound = audio_event.owner_id == 4
+                            ? g_levdeath_sound : g_fltdeath_sound;
                     } else if (audio_event.kind == GAME_SESSION_AUDIO_BRIDGE) {
                         sound = g_bridge_sound;
                     } else if (audio_event.kind == GAME_SESSION_AUDIO_FLOATER_BIRTH) {
-                        sound = g_fltbirth_sound;
+                        sound = audio_event.owner_id == 4
+                            ? g_levbirth_sound : g_fltbirth_sound;
                     }
                     if (sound != NULL)
                         (void)PlaySoundA((LPCSTR)sound, NULL,

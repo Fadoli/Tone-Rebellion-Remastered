@@ -143,8 +143,10 @@ static int tick_item5_spawn(GameSession *session,
         state->record_value_10 != 5 || island_index >= session->island_count)
         return 0;
     threshold = 0x4b0 - (int32_t)session->config.difficulty * 100;
+    /* FUN_00450a71 case 5 adds the runtime +0x32 word to +0x30. The render
+       cadence mirror is not consulted by the native growth counter. */
     next_progress = (int16_t)state->charge_source_value_30 +
-        (int16_t)state->animation_rate;
+        state->source_value_32;
     state->charge_source_value_30 = (uint16_t)next_progress;
     if ((int16_t)state->charge_source_value_30 < threshold) return 0;
 
@@ -164,9 +166,85 @@ static int tick_item5_spawn(GameSession *session,
     state->source_value_32 = 1;
     if (state->record_value_24 < 5 || state->record_value_24 > 0x21)
         state->record_value_24 = 0;
-    state->source_flags = (state->source_flags & ~0x0fU) | 0x410U;
+    /* FUN_004528ca initializes 0x410, then FUN_00452859 clears 0x10
+       specifically for item 5, leaving only the 0x400 replacement flag. */
+    state->source_flags = (state->source_flags & ~0x1fU) | 0x400U;
     state->source_value_34 = item->hit_points;
     state->maintenance_tone_cost = 0;
+    state->resource_stock[GAME_RESOURCE_BUILD_TONE] = 0;
+    state->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 0;
+    state->resource_stock[GAME_RESOURCE_MAGIC_TONE] = 0;
+    state->charge_source_value_30 = 0;
+    state->leviathan_spawned_floater = -1;
+    state->source_value_3a = 0;
+    state->source_value_3c = 0;
+    state->source_value_3e = -1;
+    state->source_value_40 = 0;
+    state->source_value_42 = 0;
+    state->source_value_44 = 0;
+    state->source_value_46 = 0;
+    state->source_value_48 = 0;
+    state->chug_progress = 0;
+    state->new_build_animation_ticks = 0;
+    state->glyph_progress = 0;
+    state->inci_progress = 0;
+    state->construction_progress = 0;
+    state->production_progress = 0;
+    state->animation_rate = 1;
+    if (state->renderer_class == 0)
+        state->source_value_22 &= 0xff00U;
+    state->tribe_visibility_mask = (uint8_t)state->source_value_22;
+    (void)game_session_recalculate_location_active_with_visibility(state);
+    (void)game_session_recalculate_active_locations(session);
+    /* Replacing an item-5 marker changes the source population scanned by
+       FUN_00460460; update the new building's +0x32 rate before its next tick. */
+    game_session_recalculate_leviathan_island(session, (uint8_t)island_index);
+    /* The native case reaches FUN_00452859(item_id, 4), which emits the same
+       build-world event as player placement after the replacement succeeds. */
+    (void)game_session_queue_audio_event(
+        session, GAME_SESSION_AUDIO_BUILD, 4);
+    return 1;
+}
+
+static int tick_neutral_item5_replacement(GameSession *session,
+                                         const PadCatalog *pad_catalog,
+                                         GameRuntimeLocation *state,
+                                         uint8_t island_index)
+{
+    const PadCatalogItem *item;
+    int allowed;
+
+    if (session == NULL || pad_catalog == NULL || state == NULL ||
+        (state->record_value_10 != 0 && state->record_value_10 != 1) ||
+        state->source_value_14 != 4) return 0;
+
+    /* FUN_00450a71 cases 0/1 call FUN_00452859(5, 4). Its validator accepts
+       item 5 unconditionally on class 1; class 0 also requires its Build Tone
+       cost to fit the site's raw +0x0c value (FUN_00452656). */
+    item = pad_catalog_find(pad_catalog, 5);
+    if (item == NULL) return 0;
+    if (state->renderer_class == 1) {
+        allowed = 1;
+    } else if (state->renderer_class == 0) {
+        allowed = item->building_tone_cost <=
+            (int16_t)state->producer_cadence;
+    } else {
+        allowed = 0;
+    }
+    if (!allowed) return 0;
+
+    /* Match FUN_004528ca followed by FUN_00452859's item-5 flag clear. */
+    state->record_value_10 = 5;
+    state->owner_id = 4;
+    state->source_value_14 = 4;
+    state->source_capacity_4a = 0;
+    state->source_value_32 = 1;
+    state->source_value_34 = item->hit_points;
+    if (state->record_value_24 < 5 || state->record_value_24 > 0x21)
+        state->record_value_24 = 0;
+    state->source_flags = (state->source_flags & ~0x1fU) | 0x400U;
+    if (state->renderer_class == 0)
+        state->source_value_22 &= 0xff00U;
     state->resource_stock[GAME_RESOURCE_BUILD_TONE] = 0;
     state->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 0;
     state->resource_stock[GAME_RESOURCE_MAGIC_TONE] = 0;
@@ -185,12 +263,17 @@ static int tick_item5_spawn(GameSession *session,
     state->inci_progress = 0;
     state->construction_progress = 0;
     state->production_progress = 0;
+    state->new_build_animation_ticks = 0;
     state->animation_rate = 1;
-    if (state->renderer_class == 0)
-        state->source_value_22 &= 0xff00U;
-    state->tribe_visibility_mask = (uint8_t)state->source_value_22;
+    state->resource_retry_tick_36 = -1;
     (void)game_session_recalculate_location_active_with_visibility(state);
     (void)game_session_recalculate_active_locations(session);
+    game_session_refresh_player_maintenance_budgets(session);
+    game_session_recalculate_leviathan_island(session, island_index);
+    /* FUN_00450a71 cases 0/1 call FUN_00452859(5, 4), so neutral POOL
+       replacement also emits the native Leviathan-build event. */
+    (void)game_session_queue_audio_event(
+        session, GAME_SESSION_AUDIO_BUILD, 4);
     return 1;
 }
 
@@ -226,11 +309,11 @@ static int leviathan_spawn_threshold(const GameSession *session,
         threshold -= (int)late_game_reduction;
 
         /* FUN_00450a71 scans island locations and counts class-1 markers
-           with a nonzero +0x22 visibility byte, capped at five. */
+           with a nonzero raw +0x22 visibility word, capped at five. */
         for (index = 0; index < island->location_count; ++index) {
             const GameRuntimeLocation *location = &island->locations[index];
             if (location->renderer_class == 1 &&
-                location->tribe_visibility_mask != 0) {
+                location->source_value_22 != 0) {
                 ++visible_markers;
                 if (visible_markers == 5) break;
             }
@@ -248,7 +331,8 @@ static int leviathan_spawn_threshold(const GameSession *session,
 static int leviathan_spawn_subtype(GameSession *session,
                                   const FloaterCatalog *catalog,
                                   const GameRuntimeIsland *island,
-                                  const GameRuntimeLocation *site)
+                                  const GameRuntimeLocation *site,
+                                  unsigned int total_type4_count)
 {
     static const int8_t even_subtype_family_by_level[15] = {
         0, 1, -1, -1, 3, 2, 0, 2, 1, 1, 3, 3, 1, 2, -1
@@ -298,7 +382,10 @@ static int leviathan_spawn_subtype(GameSession *session,
        represented marker family. Otherwise it chooses the pair associated
        with the family's preferred source level; the remaining strategic
        state and FUN_00467260 choice are only partly modeled. */
-    if (group != least_group) return 9;
+    /* FUN_00450a71 selects subtype 9 once FUN_0046562b(4, -1) reports more
+       than 123 registered category-4 floaters. Creation itself has a separate
+       refusal threshold above 128 in FUN_00462a87. */
+    if (group != least_group || total_type4_count > 123U) return 9;
     if (source_level < 0) source_level = 0;
     if (source_level > 14) source_level = 14;
     if (odd_subtype_family_by_level[source_level] == (int8_t)group)
@@ -307,6 +394,43 @@ static int leviathan_spawn_subtype(GameSession *session,
         return 10 + (int)(group * 2U);
     return 10 + (int)(group * 2U) +
         tone_rng_bounded(&session->random_state, 2);
+}
+
+static int leviathan_spawn_gets_level_bonus(GameSession *session,
+                                            const GameRuntimeIsland *island,
+                                            unsigned int group)
+{
+    static const int8_t even_bonus_by_level[15] = {
+        0, -1, 0, -1, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 1
+    };
+    static const int8_t odd_bonus_by_level[15] = {
+        -1, 0, -1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1
+    };
+    static const int8_t even_subtype_family_by_level[15] = {
+        0, 1, -1, -1, 3, 2, 0, 2, 1, 1, 3, 3, 1, 2, -1
+    };
+    static const int8_t odd_subtype_family_by_level[15] = {
+        -1, -1, 2, 3, 1, 3, 1, 0, 2, 0, 0, 2, 3, 0, -1
+    };
+    int source_level = island->leviathan_marker_shape_id;
+    int difficulty = session->config.difficulty;
+    int chance_threshold;
+    int eligible;
+
+    if (source_level < 0) source_level = 0;
+    if (source_level > 14) source_level = 14;
+    eligible = source_level == 14 ||
+        (odd_subtype_family_by_level[source_level] == (int8_t)group &&
+         odd_bonus_by_level[source_level] > 0) ||
+        (even_subtype_family_by_level[source_level] == (int8_t)group &&
+         even_bonus_by_level[source_level] > 0);
+    if (!eligible) return 0;
+
+    /* FUN_00450a71 computes this signed threshold from the quarter-level,
+       global difficulty and a 0..8 roll before promoting the new floater. */
+    chance_threshold = (source_level / 4 - 2 + difficulty) * 2;
+    if (difficulty < 2) chance_threshold /= 2;
+    return tone_rng_bounded(&session->random_state, 9) < chance_threshold;
 }
 
 static int spawn_leviathan_floater(GameSession *session,
@@ -329,7 +453,7 @@ static int spawn_leviathan_floater(GameSession *session,
     }
     /* FUN_00462a87 refuses another category-4 floater above 128 records. */
     if (count > 128U) return -1;
-    subtype = leviathan_spawn_subtype(session, catalog, island, site);
+    subtype = leviathan_spawn_subtype(session, catalog, island, site, count);
     stats = floater_catalog_find(catalog, 4, subtype);
     if (stats == NULL || stats->hit_points <= 0 ||
         stats->hit_points > (int16_t)UINT8_MAX ||
@@ -351,10 +475,11 @@ static int spawn_leviathan_floater(GameSession *session,
     floater->owner_slot = 4;
     floater->animation_seed = (uint8_t)tone_rng_bounded(
         &session->random_state, 0x100);
-    floater->current_hit_points = (uint8_t)stats->hit_points;
-    floater->max_hit_points = (uint8_t)stats->hit_points;
+    floater->current_hit_points = stats->hit_points;
+    floater->max_hit_points = stats->hit_points;
     floater->attack_strength = (uint8_t)stats->attack_strength;
     floater->max_attack_points = stats->max_attack_points;
+    floater->base_max_attack_points = stats->max_attack_points;
     floater->attack_realm = stats->attack_realm;
     floater->attack_range = stats->attack_range;
     floater->attack_period = stats->attack_period;
@@ -368,6 +493,15 @@ static int spawn_leviathan_floater(GameSession *session,
                catalog->impact_frame_counts[stats->attack_realm],
                sizeof(floater->attack_impact_frame_counts));
     }
+    if (leviathan_spawn_gets_level_bonus(session, island,
+            (unsigned int)(site->record_value_10 - 6))) {
+        int32_t leveled_hit_points = ((int32_t)stats->hit_points * 17) / 10;
+        floater->attack_level_flags = 1;
+        if (leveled_hit_points > INT16_MAX) leveled_hit_points = INT16_MAX;
+        floater->max_hit_points = (int16_t)leveled_hit_points;
+        floater->current_hit_points = floater->max_hit_points;
+    }
+    game_session_recalculate_floater_attack_points(session, floater);
     floater->source_link_0c = -1;
     floater->charge_source_island = UINT8_MAX;
     floater->charge_source_location = UINT16_MAX;
@@ -386,8 +520,11 @@ static int spawn_leviathan_floater(GameSession *session,
     floater->source_runtime_flags = 0x801U;
     if (index >= session->floater_count)
         session->floater_count = (uint16_t)(index + 1U);
+    /* FUN_00462a87 recalculates the source island immediately after creating
+       a type-4 floater; this updates its remaining population budget/rates. */
+    game_session_recalculate_leviathan_island(session, floater->island_index);
     (void)game_session_queue_audio_event(
-        session, GAME_SESSION_AUDIO_BUILD, 4);
+        session, GAME_SESSION_AUDIO_FLOATER_BIRTH, 4);
     return (int)index;
 }
 
@@ -430,6 +567,22 @@ static int32_t chebyshev_distance(uint16_t ax, uint16_t ay,
     if (dx < 0) dx = -dx;
     if (dy < 0) dy = -dy;
     return dx > dy ? dx : dy;
+}
+
+static int32_t leviathan_defense_target_power(
+    const PadCatalog *pad_catalog, const GameFloaterStart *target)
+{
+    const PadCatalogItem *target_pad;
+    uint16_t target_pad_id;
+
+    if (target == NULL) return 0;
+    target_pad_id = (uint16_t)target->owner_slot * 16U +
+        target->source_subtype;
+    target_pad = pad_catalog_find(pad_catalog, target_pad_id);
+    /* FUN_004533a8 resolves the selected floater's own PAD row by owner and
+       item ID, then passes row +0x0a to FUN_00420217. */
+    return target_pad != NULL ? target_pad->movement_cost[2] :
+        target->attack_strength;
 }
 
 static uint8_t leviathan_projectile_sheet(int32_t item_id)
@@ -614,36 +767,41 @@ static void tick_leviathan_defense(GameSession *session,
     const PadCatalogItem *pad = pad_catalog_find(
         pad_catalog, (uint16_t)state->record_value_10);
     int32_t reach = pad != NULL ? pad->movement_cost[0] : 0;
-    int32_t attack_tick = item->prod.present
-        ? (int32_t)item->prod.ticks_per_frame : 30;
-    int32_t cycle_limit = item->prod.present
-        ? (int32_t)item->prod.threshold : 40;
+    int has_prod = item != NULL && item->prod.present;
+    int32_t fire_tick = has_prod ? (int32_t)item->prod.threshold : 30;
+    int32_t cycle_limit = has_prod
+        ? (int32_t)building_render_prod_duration(item) : 0x28;
     uint8_t island_index = (uint8_t)(island - session->islands);
     int started_cycle = 0;
 
     if (reach < 0) reach = 0;
     if ((state->source_flags & 1U) == 0) return;
 
-    /* FUN_00450a71 scans this island's active floater table. Its target
-       record +0x36 is a floater slot, not a pad/location index. */
+    /* FUN_00450a71 locks a ranged tower's floater slot at cycle start in
+       +0x36. V-ATTCK cycles instead reacquire a random target when firing. */
     if ((state->source_flags & 0x002U) == 0 &&
-        state->resource_retry_tick_36 == -1 &&
+        (item_id < 0x10 || state->resource_retry_tick_36 == -1) &&
         (session->simulation_tick + 10U - (location_index % 10U)) % 10U == 0) {
         for (candidate_index = 0; candidate_index < session->floater_count;
              ++candidate_index) {
             const GameFloaterStart *target = &session->floaters[candidate_index];
+            int32_t target_distance;
             if (!game_session_floater_is_active(target) ||
                 target->owner_slot >= GAME_START_PLAYER_COUNT ||
-                target->type_index >= 4U || target->island_index != island_index ||
-                (target->source_runtime_flags & 0x108U) != 0 ||
-                chebyshev_distance(state->x, state->y,
-                                   target->x, target->y) > reach) continue;
-            candidate_floaters[candidate_count++] = (int16_t)candidate_index;
+                target->type_index >= 4U || target->island_index != island_index)
+                continue;
+            target_distance = chebyshev_distance(state->x, state->y,
+                                                  target->x, target->y);
+            /* V-ATTCK uses the strict fixed <0x3c gate. V-SHOT/V-ROD use
+               their PAD range and retain the first matching target in +0x36. */
+            if ((item_id < 0x10 && target_distance >= 0x3c) ||
+                (item_id >= 0x10 && target_distance > reach)) continue;
+            if (item_id >= 0x10)
+                state->resource_retry_tick_36 = (int16_t)candidate_index;
+            candidate_count = 1;
             break;
         }
         if (candidate_count != 0) {
-            if (item_id >= 0x10) state->resource_retry_tick_36 =
-                candidate_floaters[0];
             state->source_flags |= 0x002U;
             state->production_progress = 0;
             state->source_value_42 = 0;
@@ -655,28 +813,13 @@ static void tick_leviathan_defense(GameSession *session,
        start a new cycle, so the first progress tick is the following update. */
     if (started_cycle) return;
     if ((state->source_flags & 0x002U) == 0) return;
-    if (item_id >= 0x10 && (state->resource_retry_tick_36 < 0 ||
-        (unsigned int)state->resource_retry_tick_36 >= session->floater_count ||
-        !game_session_floater_is_active(&session->floaters[
-            (unsigned int)state->resource_retry_tick_36]) ||
-        session->floaters[(unsigned int)state->resource_retry_tick_36].owner_slot >=
-            GAME_START_PLAYER_COUNT ||
-        session->floaters[(unsigned int)state->resource_retry_tick_36].type_index >= 4U ||
-        session->floaters[(unsigned int)state->resource_retry_tick_36].island_index !=
-            island_index ||
-        (session->floaters[(unsigned int)state->resource_retry_tick_36].source_runtime_flags &
-         0x108U) != 0)) {
-        state->resource_retry_tick_36 = -1;
-        state->source_flags &= ~0x002U;
-        state->production_progress = 0;
-        state->source_value_42 = 0;
-        return;
-    }
 
     if (state->production_progress < UINT16_MAX) ++state->production_progress;
     state->source_value_42 = (int16_t)state->production_progress;
-    if (cycle_limit <= 0) cycle_limit = 30;
-    if ((int32_t)state->production_progress == attack_tick) {
+    /* FUN_00450a71 fires at descriptor +4 (already converted to ticks by
+       the loader), while descriptor +0x0c controls cycle completion. */
+    if (fire_tick > 0 &&
+        (int32_t)state->production_progress == fire_tick) {
         unsigned int target_index = (unsigned int)state->resource_retry_tick_36;
         if (item_id < 0x10) {
             candidate_count = 0;
@@ -688,12 +831,13 @@ static void tick_leviathan_defense(GameSession *session,
                     target->owner_slot >= GAME_START_PLAYER_COUNT ||
                     target->type_index >= 4U ||
                     target->island_index != island_index ||
-                    (target->source_runtime_flags & 0x108U) != 0 ||
                     chebyshev_distance(state->x, state->y,
-                                       target->x, target->y) > reach) continue;
+                                       target->x, target->y) >= 0x3c) continue;
                 if (candidate_count < 5U)
                     candidate_floaters[candidate_count++] =
                         (int16_t)candidate_index;
+                else
+                    break;
             }
             if (candidate_count != 0) {
                 target_index = (unsigned int)candidate_floaters[
@@ -702,7 +846,8 @@ static void tick_leviathan_defense(GameSession *session,
                 {
                     GameFloaterStart *target = &session->floaters[target_index];
                     int32_t damage = game_session_damage_floater_from_power(
-                        session, target_index, target->attack_strength);
+                        session, target_index,
+                        leviathan_defense_target_power(pad_catalog, target));
                     GameDefenseProjectile *impact =
                         damage > 0 ? allocate_defense_projectile(session) : NULL;
                     if (impact != NULL) {
@@ -721,9 +866,19 @@ static void tick_leviathan_defense(GameSession *session,
                 }
             }
         } else {
+            if (state->resource_retry_tick_36 < 0 ||
+                (unsigned int)state->resource_retry_tick_36 >=
+                    session->floater_count) goto finish_attack_tick;
+            target_index = (unsigned int)state->resource_retry_tick_36;
+            if (!game_session_floater_is_active(
+                    &session->floaters[target_index])) {
+                state->resource_retry_tick_36 = -1;
+                goto finish_attack_tick;
+            }
             uint8_t sheet = leviathan_projectile_sheet(item_id);
-            int32_t attack_power =
-                session->floaters[target_index].attack_strength;
+            int32_t attack_power = leviathan_defense_target_power(
+                pad_catalog, &session->floaters[target_index]);
+            state->resource_retry_tick_36 = -1;
             if (sheet != UINT8_MAX) {
                 GameDefenseProjectile *projectile =
                     allocate_defense_projectile(session);
@@ -755,6 +910,9 @@ static void tick_leviathan_defense(GameSession *session,
             }
         }
     }
+finish_attack_tick:
+    if (state->renderer_class == 1 && state->source_value_14 != 4)
+        cycle_limit = 100;
     if ((int32_t)state->production_progress >= cycle_limit) {
         state->resource_retry_tick_36 = -1;
         state->source_flags &= ~0x002U;
@@ -793,6 +951,87 @@ static void tick_inci_animation(GameSession *session,
        source sentinel, which means the INCI layer is currently inactive. */
     state->inci_progress = state->source_value_3e < 0
         ? 0U : (uint16_t)state->source_value_3e;
+}
+
+static void release_source_staff_task(GameSession *session,
+                                      GameRuntimeLocation *source,
+                                      uint8_t island_index,
+                                      unsigned int location_index)
+{
+    int16_t task_slot = source->charge_staff_task_handle;
+
+    if (task_slot >= 0 && task_slot < GAME_SESSION_MAX_PENDING_EVENTS) {
+        GamePendingEvent *event =
+            &session->pending_events[(unsigned int)task_slot];
+        if (event->active != 0 && event->player_id == source->owner_id &&
+            event->payload_0a == (int16_t)island_index &&
+            event->action_type == 0x0b &&
+            event->payload_0c == (int16_t)location_index) {
+            GamePendingEvent expected = *event;
+            /* FUN_00466533 cancels matching floater orders before freeing the
+               event, so an en-route trainee no longer targets this building. */
+            (void)game_session_dispatch_task_command(
+                session, (uint8_t)task_slot, 12, &expected);
+        }
+    }
+    source->charge_staff_task_handle = -1;
+}
+
+void game_session_recalculate_floater_attack_points(
+    const GameSession *session, GameFloaterStart *floater)
+{
+    int32_t value;
+    uint16_t level;
+    uint16_t island_mask = 0;
+
+    if (session == NULL || floater == NULL) return;
+    if (floater->base_max_attack_points == -1) {
+        floater->max_attack_points = -1;
+        return;
+    }
+    level = (uint16_t)(floater->attack_level_flags & 0x0fU);
+    if (floater->type_index == 4U) {
+        value = ((int32_t)floater->base_max_attack_points *
+                 ((int32_t)level * 7 + 10)) / 10;
+    } else {
+        value = ((int32_t)floater->base_max_attack_points *
+                 ((int32_t)level + 2)) / 2;
+        if (floater->owner_slot < GAME_START_PLAYER_COUNT)
+            island_mask = session->economy[floater->owner_slot]
+                .special_feature_island_mask;
+        if (floater->source_subtype == 0U && (island_mask & 0x10U) != 0)
+            ++value;
+        if (floater->source_link_0c >= 0 &&
+            floater->charge_source_island < session->island_count &&
+            floater->charge_source_location <
+                session->islands[floater->charge_source_island].location_count) {
+            const GameRuntimeLocation *building = &session->islands[
+                floater->charge_source_island].locations[
+                    floater->charge_source_location];
+            int32_t item_id = game_session_base_item_id(building);
+            uint16_t island_bit = item_id == 0x2c ? 0x0002U :
+                item_id == 0x2d ? 0x0080U :
+                item_id == 0x2e ? 0x0800U : 0;
+            if (island_bit != 0 && (island_mask & island_bit) != 0)
+                value = (int32_t)(int16_t)(value * 5) / 4;
+        }
+    }
+    if (value > INT16_MAX) value = INT16_MAX;
+    if (value < INT16_MIN) value = INT16_MIN;
+    floater->max_attack_points = (int16_t)value;
+}
+
+void game_session_refresh_player_attack_points(GameSession *session,
+                                               uint8_t player_slot)
+{
+    unsigned int i;
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT) return;
+    for (i = 0; i < session->floater_count; ++i) {
+        GameFloaterStart *floater = &session->floaters[i];
+        if (!game_session_floater_is_active(floater) ||
+            floater->owner_slot != player_slot) continue;
+        game_session_recalculate_floater_attack_points(session, floater);
+    }
 }
 
 static void tick_source_staff_cycle(GameSession *session,
@@ -845,8 +1084,8 @@ static void tick_source_staff_cycle(GameSession *session,
         int16_t index = source->charge_floater_slots[slot];
         GameFloaterStart *floater;
         const FloaterStats *stats;
-        uint32_t progress;
-        uint32_t increment;
+        uint16_t progress;
+        uint16_t increment;
         uint16_t level;
 
         if (index < 0 || (unsigned int)index >= session->floater_count) continue;
@@ -882,10 +1121,9 @@ static void tick_source_staff_cycle(GameSession *session,
 
         /* FUN_0045cd75 adds source +0x32 (initialized to 1 by FUN_004528ca)
            for each linked worker in the active-work branch. */
-        increment = source->animation_rate;
-        if (increment == 0) increment = 1;
-        progress = (uint32_t)source->charge_source_value_30 + increment;
-        source->charge_source_value_30 = (uint16_t)progress;
+        increment = (uint16_t)source->source_value_32;
+        progress = (uint16_t)(source->charge_source_value_30 + increment);
+        source->charge_source_value_30 = progress;
         if ((int16_t)source->charge_source_value_30 < 251) {
             /* FUN_0045cd75 writes native BARG double +0x50 from +0x30 / 250
                only below 251; at/above the threshold +0x30 still keeps the
@@ -911,24 +1149,8 @@ static void tick_source_staff_cycle(GameSession *session,
         stats = floater_catalog_find(floater_catalog, floater->type_index,
                                      floater->source_subtype);
         if (stats != NULL) {
-            int32_t trained_strength;
-            level = (uint16_t)(floater->attack_level_flags & 0x0fU);
             floater->charge_current = stats->attack_strength;
-            /* FUN_00420f28 scales max-attack-points with the trained level.
-               Category 4 uses its distinct 7n+10 multiplier. Its tribe and
-               linked-building bonuses require mask bits from DAT_00619242;
-               that table is zero in the loaded image, and no runtime writer
-               is established, so those conditional bonuses remain unmodeled. */
-            if (floater->type_index == 4) {
-                trained_strength = (stats->max_attack_points *
-                                    ((int32_t)level * 7 + 10)) / 10;
-            } else {
-                trained_strength = (stats->max_attack_points *
-                                    ((int32_t)level + 2)) / 2;
-            }
-            if (trained_strength > INT16_MAX) trained_strength = INT16_MAX;
-            if (trained_strength < INT16_MIN) trained_strength = INT16_MIN;
-            floater->max_attack_points = (int16_t)trained_strength;
+            game_session_recalculate_floater_attack_points(session, floater);
             level = (uint16_t)(floater->attack_level_flags & 0x0fU);
             if (level > 0 && level <= 3U)
                 --need_by_level[level - 1U];
@@ -940,12 +1162,8 @@ static void tick_source_staff_cycle(GameSession *session,
         floater->active_order_action = 0;
         floater->has_move_order = 0;
         source->charge_recent_floater = -1;
-        if (source->charge_staff_task_handle >= 0 &&
-            source->charge_staff_task_handle < GAME_SESSION_MAX_PENDING_EVENTS) {
-            (void)game_session_pending_event_release(
-                session, (uint8_t)source->charge_staff_task_handle);
-            source->charge_staff_task_handle = -1;
-        }
+        release_source_staff_task(session, source, island_index,
+                                  location_index);
     }
 
     {
@@ -967,9 +1185,8 @@ static void tick_source_staff_cycle(GameSession *session,
     if (source->resource_stock[1] <= 9U &&
         source->charge_staff_task_handle >= 0 &&
         !current_worker_active) {
-        (void)game_session_pending_event_release(
-            session, (uint8_t)source->charge_staff_task_handle);
-        source->charge_staff_task_handle = -1;
+        release_source_staff_task(session, source, island_index,
+                                  location_index);
     } else if (need_by_level[0] != 0 &&
                source->charge_recent_floater == -1 &&
                source->charge_staff_task_handle == -1 && stock_available) {
@@ -995,20 +1212,34 @@ void game_session_tick_item_animations_with_floaters(
         unsigned int location_index;
         for (location_index = 0; location_index < island->location_count; ++location_index) {
             GameRuntimeLocation *state = &island->locations[location_index];
+            int32_t base_item_id;
             const BuildingRenderItem *item;
             uint32_t duration;
             int construction_completed = 0;
             int production_completed = 0;
             int active_flag_changed;
 
-            if (state->renderer_class > 2) continue;
+            /* Class 3 holds special island locations (features and level
+               hubs) whose raw +0x10 variants also pass through the
+               common FUN_00450a71 item switch. */
+            if (state->renderer_class > 3) continue;
+            base_item_id = game_session_base_item_id(state);
 
             /* FUN_00450a71's raw item 0x2a case generates one Build Tone
                every 256 global ticks, capped at 20 in source +0x28. */
-            if (game_session_base_item_id(state) == 0x2a &&
+            if (base_item_id == 0x2a &&
                 (session->simulation_tick & 0xffU) == 0 &&
                 state->resource_stock[GAME_RESOURCE_BUILD_TONE] < 20U) {
                 ++state->resource_stock[GAME_RESOURCE_BUILD_TONE];
+            }
+
+            /* FUN_0045cd75 completes an active +0x4e staff upgrade request
+               once its local Build Tone stock passes the strict 19 threshold. */
+            if (state->upgrade_task_handle >= 0 && pad_catalog != NULL &&
+                state->resource_stock[GAME_RESOURCE_BUILD_TONE] > 19U) {
+                (void)game_session_complete_staff_upgrade(session,
+                    pad_catalog, (uint8_t)island_index,
+                    (uint16_t)location_index);
             }
 
             /* FUN_00450a71 shares +0x48 between the initial 0x010 timer and
@@ -1062,83 +1293,100 @@ void game_session_tick_item_animations_with_floaters(
                     (uint16_t)state->source_value_48 + 1U);
                 if (state->source_value_48 > 100) {
                     state->source_flags &= ~0x080U;
+                    /* FUN_00452ae7 queues type 8 with (island << 16) | site
+                       before running the shared site destruction cleanup. */
+                    (void)game_session_queue_world_event(session,
+                        GAME_SESSION_WORLD_EVENT_BUILDING_DESTROYED,
+                        (uint8_t)island_index,
+                        (int32_t)(((uint32_t)island_index << 16) |
+                                  (uint32_t)location_index));
                     game_session_clear_cast_site(session,
                         (uint8_t)island_index, (uint16_t)location_index, state);
-                    continue;
+            continue;
                 }
             }
 
             /* FUN_00450a71 has two POOL-specific class-1 counter sequences.
                ID 0 loops 0..89; ID 5 advances to 125 then restarts at 102.
-               FUN_0040bf98 later maps each counter through POOL's CHUG segment. */
-            if (state->renderer_class == 1 &&
-                (state->record_value_10 == 0 ||
-                 state->record_value_10 == ISLAND_TONE_POOL_ITEM_ALTERNATE)) {
+               Both still pass through the shared CONS/PROD counters and item
+               switch after this CHUG update. */
+            if (state->renderer_class == 1 && state->record_value_10 == 0) {
                 state->chug_progress = island_tone_pool_next_counter(
                     state->record_value_10, state->chug_progress);
-                continue;
             }
 
             if (state->renderer_class == 0 && floater_catalog != NULL)
                 tick_source_staff_cycle(session, state, floater_catalog,
                                         (uint8_t)island_index, location_index);
 
-            /* FUN_00450a71's item-5 growth switch runs for both class-0 and
-               class-1 sites. Class-1 POOL animation has its own early path
-               below, so resolve the spawn before that path can return. */
-            if (tick_item5_spawn(session, pad_catalog, state,
-                                 island_index)) continue;
-
             /* FUN_00450a71 advances raw +0x30 for runtime item IDs 4 and
                0x16 while active, stopping at 0x20. */
-            if ((state->record_value_10 == 4 ||
-                 state->record_value_10 == 0x16) &&
+            if ((base_item_id == 4 || base_item_id == 0x16) &&
                 (state->source_flags & 1U) != 0 &&
                 (int16_t)state->charge_source_value_30 < 0x20) {
                 state->charge_source_value_30 = (uint16_t)(
                     state->charge_source_value_30 + 1U);
             }
 
-            if (state->record_value_10 <= 0 ||
-                state->record_value_10 >= catalog->item_count) continue;
+            if (state->record_value_10 < 0 ||
+                (state->record_value_10 == 0 && state->renderer_class != 1) ||
+                state->record_value_10 >= catalog->item_count)
+                goto tick_location_done;
             item = building_render_find(catalog, (uint16_t)state->record_value_10);
-            if (item == NULL) continue;
+            if (item == NULL) {
+                if (is_leviathan_defense(state))
+                    tick_leviathan_defense(session, pad_catalog, island,
+                                           state, NULL, location_index);
+                goto tick_location_done;
+            }
+
+            /* REA establishes the data-driven CONS layer and its per-item
+               frame speed, but not a native post-placement intro. The remake
+               plays one CONS cycle after placement, independently of the
+               native CONS flag used by bridge construction. */
+            if (state->new_build_animation_ticks != 0) {
+                duration = building_render_cons_duration(item);
+                if (duration == 0 ||
+                    state->new_build_animation_ticks > duration) {
+                    state->new_build_animation_ticks = 0;
+                } else {
+                    ++state->new_build_animation_ticks;
+                }
+            }
 
             /* INCI (+0x3e) is advanced before the class-specific item switch
                in FUN_00450a71, independently of CHUG/CONS/PROD handling. */
             tick_inci_animation(session, state, item);
 
-            if (is_leviathan_defense(state)) {
-                tick_leviathan_defense(session, pad_catalog, island,
-                                       state, item, location_index);
-                /* Defense PROD is the visible projectile/charge animation;
-                   the specialized cycle above owns its threshold and impact. */
-                continue;
-            }
-
-            /* FUN_00450a71 has a separate class-1 path: items 6..9 animate
-               their CHUG layer every source tick and wrap at the descriptor
-               duration. They do not use the class-0 construction flag gate. */
+            /* FUN_00450a71 has a separate class-1 path: IDs 6..9 animate
+               CHUG from their descriptor, while POOL item 5 uses its own
+               loop/ping-pong counter before the common CONS/PROD updates. */
             if (state->renderer_class == 1) {
-                if (item->chug.present) {
+                if (state->record_value_10 == 5) {
+                    state->chug_progress = island_tone_pool_next_counter(
+                        state->record_value_10, state->chug_progress);
+                } else if (state->record_value_10 != 0 && item->chug.present) {
                     duration = building_render_chug_duration(item);
                     if (duration != 0) {
                         state->chug_progress = (uint16_t)(state->chug_progress + 1U);
                         if (state->chug_progress >= duration) state->chug_progress = 0;
                     }
                 }
-                /* IDs 6..9 continue into the common CONS/PROD counters and
-                   their item switch in FUN_00450a71 after the class-1 CHUG
-                   update. POOL IDs 0 and 5 have already taken their own path. */
-                if (state->record_value_10 < 6 || state->record_value_10 > 9)
-                    continue;
+                /* IDs 1, 5 and 6..9 continue into the common CONS/PROD
+                   counters and their item switch in FUN_00450a71. */
+                if ((state->record_value_10 < 6 &&
+                     state->record_value_10 != 0 &&
+                     state->record_value_10 != 1 &&
+                     state->record_value_10 != 5) ||
+                    state->record_value_10 > 9)
+                    goto tick_location_done;
             }
 
             /* FUN_00450a71 increments class-0 CHUG only while source flag bit 0
                is set; objects created by FUN_004528ca begin with it clear. */
             if (state->renderer_class == 0 &&
                 (state->source_flags & 1U) != 0 && item->chug.present) {
-                uint32_t increment = state->owner_id == 4 || state->animation_rate < 2
+                uint32_t increment = state->owner_id == 4 || state->source_value_32 < 2
                     ? 1U : item->chug.ticks_per_frame;
                 duration = building_render_chug_duration(item);
                 if (duration != 0) {
@@ -1156,14 +1404,25 @@ void game_session_tick_item_animations_with_floaters(
                 if (state->glyph_progress == 40) state->glyph_progress = 0;
             }
 
-            /* FUN_00450a71 advances PROD (+0x42) while flag 0x002 is set,
-               then clears that flag at the item's +0x0c limit. The catalog's
-               PROD threshold is that value. A missing descriptor uses the
-               observed fallback limit 0x28. Completion side effects later in
-               the source switch are still outside this animation tick port. */
+            /* FUN_00450a71 advances class-0 CHUG/GLYP before dispatching the
+               defense-item switch. Keep those visual layers ticking while
+               the specialized defense path owns PROD's attack cadence. */
+            if (is_leviathan_defense(state)) {
+                tick_leviathan_defense(session, pad_catalog, island,
+                                       state, item, location_index);
+                goto tick_location_done;
+            }
+
+            /* FUN_00450a71 advances both the native +0x42 short and the
+               render-facing PROD counter while flag 0x002 is set. Descriptor
+               +0x0c supplies the cycle duration; missing rows use 0x28. */
             if ((state->source_flags & 0x002U) != 0) {
-                uint32_t limit = item->prod.present ? item->prod.threshold : 0x28U;
+                uint32_t limit = item->prod.present
+                    ? building_render_prod_duration(item) : 0x28U;
+                if (state->renderer_class == 1 && state->source_value_14 != 4)
+                    limit = 100U;
                 ++state->production_progress;
+                state->source_value_42 = (int16_t)state->production_progress;
                 if (limit <= state->production_progress) {
                     state->source_flags &= ~0x002U;
                     production_completed = 1;
@@ -1192,11 +1451,13 @@ void game_session_tick_item_animations_with_floaters(
                 state->record_value_24 == 0 &&
                 (state->source_flags & 0x001U) != 0 &&
                 (state->source_flags & 0x002U) == 0) {
-                state->producer_cadence = (uint16_t)(state->producer_cadence +
-                                                     state->animation_rate);
-                if (state->producer_cadence > 0x13U) {
+                int16_t cadence = (int16_t)state->producer_cadence +
+                    state->source_value_32;
+                state->producer_cadence = (uint16_t)cadence;
+                if (cadence > 0x13) {
                     state->source_flags |= 0x002U;
                     state->production_progress = 0;
+                    state->source_value_42 = 0;
                     state->producer_cadence = 0;
                 }
             }
@@ -1215,12 +1476,20 @@ void game_session_tick_item_animations_with_floaters(
                threshold is stored as CONS's first parameter by bldinf.txt. */
             if ((state->source_flags & 0x004U) != 0) {
                 ++state->construction_progress;
+                state->source_value_40 = (int16_t)state->construction_progress;
                 if (item->cons.present &&
                     item->cons.fallback_frame <= state->construction_progress) {
                     state->source_flags &= ~0x004U;
                     construction_completed = 1;
                 }
             }
+
+            /* FUN_00450a71 handles item 5 after its shared PROD/CONS counters.
+               Keep the replacement after those updates so reinitializing the
+               runtime record cannot discard a cycle that completed this tick. */
+            if (state->record_value_10 == 5 &&
+                tick_item5_spawn(session, pad_catalog, state, island_index))
+                goto tick_location_done;
 
             /* FUN_00450a71 starts autonomous production on class-1 item IDs
                6..9 from +0x0c. Its interval contracts with world time,
@@ -1230,20 +1499,23 @@ void game_session_tick_item_animations_with_floaters(
                 state->record_value_10 >= 6 && state->record_value_10 <= 9 &&
                 (state->source_flags & 3U) == 1U) {
                 int16_t rate = state->source_value_32;
-                int16_t cadence;
+                int16_t cadence = (int16_t)state->producer_cadence;
                 int threshold;
                 if (rate != 0) {
                     cadence = (int16_t)(state->producer_cadence + rate);
                     state->producer_cadence = (uint16_t)cadence;
-                    threshold = leviathan_spawn_threshold(session, island);
-                    if (threshold <= cadence) {
-                        state->source_flags |= 0x002U;
-                        state->production_progress = 0;
-                        state->producer_cadence = 0;
-                        state->leviathan_spawned_floater =
-                            (int16_t)spawn_leviathan_floater(
-                                session, floater_catalog, island, state);
-                    }
+                }
+                /* Native gates only the +0x32 increment; it still compares
+                   the preserved +0x0c cadence when the rate is zero. */
+                threshold = leviathan_spawn_threshold(session, island);
+                if (threshold <= cadence) {
+                    state->source_flags |= 0x002U;
+                    state->production_progress = 0;
+                    state->source_value_42 = 0;
+                    state->producer_cadence = 0;
+                    state->leviathan_spawned_floater =
+                        (int16_t)spawn_leviathan_floater(
+                            session, floater_catalog, island, state);
                 }
             }
 
@@ -1251,6 +1523,14 @@ void game_session_tick_item_animations_with_floaters(
                output offset and clears hidden/queued bits on completion. */
             if (production_completed && state->renderer_class == 1 &&
                 state->record_value_10 >= 6 && state->record_value_10 <= 9)
+                release_leviathan_floater(session, state, item);
+
+            /* Class-1 POOL IDs 0/1 also release their linked floater when
+               PROD completes. FUN_00450a71 performs this after the item
+               switch; retain base_item_id because the neutral branch below
+               can replace the site with item 5. */
+            if (production_completed && state->renderer_class == 1 &&
+                (base_item_id == 0 || base_item_id == 1))
                 release_leviathan_floater(session, state, item);
 
             /* FUN_00450a71 case 2 chains CONS into PROD for an unbuilt class-2
@@ -1261,11 +1541,19 @@ void game_session_tick_item_animations_with_floaters(
                 if (construction_completed) {
                     state->source_flags |= 0x002U;
                     state->production_progress = 0;
+                    state->source_value_42 = 0;
                 } else if (production_completed) {
                     (void)game_session_mark_bridge_constructed_at(
                         session, (uint8_t)island_index, (uint16_t)location_index);
                 }
             }
+
+            /* FUN_00450a71 cases 0/1 can replace a neutral pool record with
+               item 5 after its common CONS/PROD counters have advanced. */
+            if ((state->record_value_10 == 0 || state->record_value_10 == 1) &&
+                tick_neutral_item5_replacement(session, pad_catalog, state,
+                    (uint8_t)island_index))
+                goto tick_location_done;
 
             /* FUN_00450a71 advances +0x46 every 16 updates while +0x58 is
                positive. State 2 rechecks activity; state 3 clears the site.
@@ -1299,9 +1587,17 @@ void game_session_tick_item_animations_with_floaters(
                         game_session_clear_cast_site(session,
                             (uint8_t)island_index, (uint16_t)location_index,
                             state);
-                        continue;
+                        goto tick_location_done;
                     }
                 }
+            }
+
+tick_location_done:
+            /* FUN_00450a71 resets raw +0x32 only after its item-specific
+               update, so a boundary tick still uses the old cadence once. */
+            if (state->owner_id != 4 && state->source_value_32 > 1 &&
+                (session->simulation_tick & 0x3ffU) == 0) {
+                state->source_value_32 = 1;
             }
         }
     }

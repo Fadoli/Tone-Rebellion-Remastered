@@ -78,8 +78,13 @@ uint32_t building_render_inci_frame(const BuildingRenderItem *item,
                                     uint32_t animation_ticks);
 uint32_t building_render_cons_frame(const BuildingRenderItem *item,
                                     uint32_t animation_ticks, uint32_t source_flags);
+/* Duration of one complete CONS cycle in object ticks. */
+uint32_t building_render_cons_duration(const BuildingRenderItem *item);
 uint32_t building_render_prod_frame(const BuildingRenderItem *item,
                                     uint32_t animation_ticks, uint32_t source_flags);
+/* Native PROD descriptor +0x0c: total frame-cycle ticks, used as the
+   Leviathan spawn/reveal mask divisor. */
+uint32_t building_render_prod_duration(const BuildingRenderItem *item);
 /* FUN_0040bf98 draws the animated PROD layer at the item anchor. The
    descriptor offset belongs to its conditional threshold effect instead. */
 BuildingRenderPoint building_render_prod_frame_position(int anchor_x, int anchor_y);

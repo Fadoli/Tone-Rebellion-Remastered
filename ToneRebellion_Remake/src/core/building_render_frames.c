@@ -134,6 +134,22 @@ uint32_t building_render_cons_frame(const BuildingRenderItem *item,
     return segment_frame(&item->cons, animation_ticks);
 }
 
+uint32_t building_render_cons_duration(const BuildingRenderItem *item)
+{
+    const BuildingRenderSegment *segment;
+    uint32_t span;
+    uint32_t frame_steps;
+
+    if (item == NULL || !item->cons.present || item->cons.first_frame == 0 ||
+        item->cons.last_frame < item->cons.first_frame ||
+        item->cons.ticks_per_frame == 0) return 0;
+    segment = &item->cons;
+    span = (uint32_t)segment->last_frame - segment->first_frame;
+    frame_steps = segment->ping_pong != 0 && span != 0
+        ? span * 2U : span + 1U;
+    return frame_steps * segment->ticks_per_frame;
+}
+
 uint32_t building_render_prod_frame(const BuildingRenderItem *item,
                                     uint32_t animation_ticks, uint32_t source_flags)
 {
@@ -143,6 +159,21 @@ uint32_t building_render_prod_frame(const BuildingRenderItem *item,
                                                : (uint32_t)item->prod.fallback_frame - 1U;
     }
     return segment_frame(&item->prod, animation_ticks);
+}
+
+uint32_t building_render_prod_duration(const BuildingRenderItem *item)
+{
+    const BuildingRenderSegment *segment;
+    uint32_t span;
+    uint32_t frame_steps;
+
+    if (item == NULL || !item->prod.present || item->prod.first_frame == 0 ||
+        item->prod.last_frame < item->prod.first_frame ||
+        item->prod.ticks_per_frame == 0) return 0;
+    segment = &item->prod;
+    span = (uint32_t)segment->last_frame - segment->first_frame;
+    frame_steps = segment->ping_pong != 0 ? span * 2U : span + 1U;
+    return frame_steps * segment->ticks_per_frame;
 }
 
 BuildingRenderPoint building_render_prod_frame_position(int anchor_x, int anchor_y)

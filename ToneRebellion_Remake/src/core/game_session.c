@@ -146,6 +146,7 @@ int game_session_initialize(const WorldDefinition *world,
             }
             state->maintenance_tone_cost = pad_item != NULL
                 ? pad_item->maintenance_tone_cost : 0;
+            state->new_build_animation_ticks = 0;
             if (state->record_value_10 > 0 && state->renderer_class <= 1) {
                 state->source_flags = 0x410;
                 state->chug_progress = 0;

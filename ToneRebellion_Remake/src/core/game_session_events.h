@@ -36,6 +36,16 @@ int game_session_queue_inventory_action(GameSession *session,
 int game_session_cycle_source_capacity(GameSession *session,
                                        uint8_t island_index,
                                        uint16_t location_index);
+/* FUN_0045c9b5 / FUN_0045ca1e toggle a Build Tone task on staff sources;
+   completion is applied by the source tick once local stock exceeds 19. */
+int game_session_toggle_staff_upgrade_request(GameSession *session,
+                                              uint8_t player_slot,
+                                              uint8_t island_index,
+                                              uint16_t location_index);
+int game_session_complete_staff_upgrade(GameSession *session,
+                                        const PadCatalog *catalog,
+                                        uint8_t island_index,
+                                        uint16_t location_index);
 /* Applies FUN_00450847 to a resolved FA_Cast target using the effect amount
    chosen by the cast substep. Also mirrors the known FUN_00452ae7/
    FUN_00452a15 location reset when the effect consumes the site. */
@@ -47,11 +57,11 @@ int32_t game_session_apply_cast_site_effect(GameSession *session,
    and route nearby sites through FUN_00450817. Returns affected targets. */
 unsigned int game_session_apply_cast_blast(GameSession *session,
                                            unsigned int caster_index);
-/* FUN_004239e9 cases 1 and 3..9 plus 0x10..0x13 apply reconstructed site
-   state, refill, timer, area-damage, pickup and selected-site effects; case 2
-   restores eligible floater HP; case 0x14 refreshes the island's Leviathan
-   reevaluation; case 0x15 boosts owner subtype-0 floaters; case 0x16 applies
-   its site effect. */
+/* FUN_004239e9 cases 1 and 3..9, 0xc..0x13 apply reconstructed site state,
+   source pulses, charge buffs, refill, timer, area-damage, pickup and
+   selected-site effects; case 2 restores eligible floater HP; case 0x14
+   refreshes the island's Leviathan reevaluation; case 0x15 boosts owner
+   subtype-0 floaters; case 0x16 applies its site effect. */
 unsigned int game_session_resolve_cast_effect_step(
     GameSession *session, const PadCatalog *catalog,
     unsigned int caster_index, uint8_t step,
@@ -87,6 +97,12 @@ int game_session_queue_cast_action(GameSession *session,
                                    uint8_t island_index,
                                    uint16_t location_index,
                                    uint8_t action_subtype);
+int game_session_queue_cast_action_target(GameSession *session,
+                                          uint8_t player_slot,
+                                          uint8_t island_index,
+                                          uint16_t location_index,
+                                          uint8_t action_subtype,
+                                          int16_t target_floater_index);
 int game_session_cast_kind_for_action(uint8_t owner, uint8_t action_subtype);
 unsigned int game_session_dispatch_cast_actions(GameSession *session);
 /* BC_OnOff's established message route. */
@@ -116,6 +132,12 @@ int game_session_queue_audio_event(GameSession *session, uint8_t kind,
                                    int16_t owner_id);
 int game_session_pop_audio_event(GameSession *session,
                                  GameSessionAudioEvent *out);
+/* FUN_004655b2 queues world events; type 12 is emitted when a player reaches
+   a new island and carries that island's WORLDPOS level in payload. */
+int game_session_queue_world_event(GameSession *session, uint8_t kind,
+                                   uint8_t island_index, int32_t payload);
+int game_session_pop_world_event(GameSession *session,
+                                 GameSessionWorldEvent *out);
 /* Rebuild all player budgets after glyph, ownership, or site state changes. */
 void game_session_refresh_player_maintenance_budgets(GameSession *session);
 /* FUN_004539e9 updates one site's active bit, including its visibility gate. */

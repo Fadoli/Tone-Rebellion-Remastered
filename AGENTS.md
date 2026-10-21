@@ -15,7 +15,7 @@ Contribuer à la décompilation statique de `C:\Program Files\Tone\FLOAT.EXE` en
 
 ## Analyse REA et documentation
 
-- Pour toute nouvelle analyse REA, déléguer la lecture ciblée des preuves à un sous-agent `gpt-6-luna`, effort `medium`. Lui demander un résultat bref avec Evidence IDs, faits directs et inconnues; garder la coordination et les échanges au minimum. Ne pas déléguer les modifications du remake sans besoin explicite.
+- Pour toute nouvelle analyse REA, déléguer la lecture ciblée des preuves à un sous-agent `haiku 5.5` (`claude-haiku-5-5`, sous Claude Code; `gpt-6-luna` sous Codex), effort `medium`. Lui demander un résultat bref avec Evidence IDs, faits directs et inconnues; garder la coordination et les échanges au minimum. Ne pas déléguer les modifications du remake sans besoin explicite.
 - Garder la documentation concise : ne répéter ni pseudocode ni faits déjà consignés. Ajouter les observations, Evidence IDs, interprétations et limites nécessaires à la décision; mettre le détail de fonction dans `functions/` et résumer les ports dans le guide et le TODO.
 
 ## Inventaire et décompilation

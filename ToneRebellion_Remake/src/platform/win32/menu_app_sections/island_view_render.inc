@@ -39,6 +39,26 @@ static uint32_t island_leviathan_legs_frame(const GameFloaterStart *floater,
     return phase % ((uint32_t)move_last[sheet_index] + 1U);
 }
 
+static void draw_island_access_notice(HDC dc)
+{
+    char label[96];
+    const char *island_name;
+    int level = g_island_access_notice_level;
+    if (g_menu.animation_ticks < g_building_destroyed_notice_until) {
+        (void)snprintf(label, sizeof(label), "BATIMENT DETRUIT");
+    } else {
+        if (level < 0 || level >= ISLAND_NAME_COUNT ||
+            g_menu.animation_ticks >= g_island_access_notice_until) return;
+        island_name = g_island_names[level][0] != '\0'
+            ? g_island_names[level] : "?";
+        /* The bundled bitmap font is byte-oriented; keep this caption ASCII. */
+        (void)snprintf(label, sizeof(label), "ACCES OUVERT : %.32s", island_name);
+    }
+    fill_rect(dc, 176, 10, 464, 34, RGB(20, 30, 35));
+    fill_rect(dc, 178, 12, 462, 32, RGB(47, 77, 75));
+    draw_bitmap_label(dc, label, 188, 18, RGB(238, 226, 177));
+}
+
 static void draw_island_leviathan_floater(HDC dc,
                                           const GameFloaterStart *floater,
                                           int x, int y)
@@ -62,6 +82,74 @@ static void draw_island_leviathan_floater(HDC dc,
             (((g_game_session.simulation_tick + floater->animation_seed) / 8U) & 1U);
         draw_sprite(dc, body_art, body_frame, x, y);
     }
+}
+
+static void draw_leviathan_sprite_revealed(HDC dc, const SpriteSheet *art,
+                                           uint32_t frame, int x, int y,
+                                           int mask_progress)
+{
+    if (art == NULL || frame >= art->frame_count) return;
+    if (mask_progress >= 8) draw_sprite(dc, art, frame, x, y);
+    else if (mask_progress > 0)
+        draw_feature_reveal(dc, art, g_island_surface_id, frame,
+                            x, y, mask_progress);
+}
+
+/* FUN_0040bf98's item-6, -8 and -9 branches call FUN_00428191 on the floater
+   linked at raw +0x2e, drawing its body/legs at the PROD output point. */
+static int draw_island_leviathan_spawn_effect(
+    HDC dc, const GameRuntimeLocation *location,
+    const BuildingRenderItem *item, int x, int y, int full_reveal)
+{
+    int32_t spawned_index;
+    const GameFloaterStart *floater;
+    unsigned int sheet_index;
+    const SpriteSheet *leg_art;
+    uint32_t leg_frame;
+    uint64_t mask_progress_raw;
+    uint32_t prod_duration;
+    int mask_progress;
+    BuildingRenderPoint output;
+
+    if (location == NULL || item == NULL || !g_game_session_valid ||
+        location->leviathan_spawned_floater < 0 ||
+        (unsigned int)location->leviathan_spawned_floater >=
+            g_game_session.floater_count) return 0;
+    spawned_index = location->leviathan_spawned_floater;
+    floater = &g_game_session.floaters[(unsigned int)spawned_index];
+    if (!game_session_floater_is_active(floater) || floater->type_index != 4)
+        return 0;
+
+    /* FUN_00455833 initializes PROD +0x0c as its complete animation-cycle
+       duration; use that native divisor for item 8's reveal mask. */
+    prod_duration = building_render_prod_duration(item);
+    if (full_reveal) {
+        mask_progress = 8;
+    } else {
+        if (prod_duration == 0U) return 0;
+        mask_progress_raw = ((uint64_t)location->production_progress * 8U) /
+                            prod_duration;
+        if (mask_progress_raw == 0U) return 0;
+        mask_progress = mask_progress_raw >= 8U ? 8 : (int)mask_progress_raw;
+    }
+    output = building_render_prod_threshold_position(item, x, y);
+    sheet_index = island_leviathan_leg_sheet(floater->source_subtype);
+    if (sheet_index >= 9U) return 0;
+    leg_art = floater->facing_left
+        ? &g_leviathan_legs_flipped[sheet_index]
+        : &g_leviathan_legs[sheet_index];
+    leg_frame = island_leviathan_legs_frame(floater, sheet_index);
+    draw_leviathan_sprite_revealed(dc, leg_art, leg_frame,
+                                   output.x, output.y, mask_progress);
+    if (floater->source_subtype >= 10U && floater->source_subtype <= 17U) {
+        const SpriteSheet *body_art = floater->facing_left
+            ? &g_leviathan_body_art_flipped : &g_leviathan_body_art;
+        uint32_t body_frame = 2U * (floater->source_subtype - 10U) +
+            (((g_game_session.simulation_tick + floater->animation_seed) / 8U) & 1U);
+        draw_leviathan_sprite_revealed(dc, body_art, body_frame,
+                                       output.x, output.y, mask_progress);
+    }
+    return 1;
 }
 
 static void render_island_view(HDC dc)
@@ -105,6 +193,7 @@ static void render_island_view(HDC dc)
     if (g_island_height_data == NULL ||
         g_island_height_length != ISLAND_HAZE_FILE_BYTES) {
         draw_sprite(dc, &g_island_template_art, 0, 0, status_top);
+        draw_island_access_notice(dc);
         return;
     }
     draw_sprite_region(dc, &g_island_surface_art, 0, g_island_scroll_x, 0,
@@ -133,7 +222,8 @@ static void render_island_view(HDC dc)
         if (location->renderer_class == 3 &&
             (location->renderer_variant == 4 || location->renderer_variant == 0x16)) {
             draw_island_feature(dc, g_island_surface_id, location,
-                                -g_island_scroll_x, image_top);
+                                runtime_location, -g_island_scroll_x,
+                                image_top);
             continue;
         }
         /* FUN_00461859 demotes unmatched class-2 records to class 0 at game
@@ -836,6 +926,7 @@ static void render_island_view(HDC dc)
             }
         }
     }
+    draw_island_access_notice(dc);
 }
 
 static void draw_location_action_panel(HDC dc)

@@ -293,6 +293,9 @@ static int load_menu_art(char *error, size_t error_capacity)
         const CobMember *floater_build = cob_archive_find(&archive, "data\\fltbuild.wav");
         const CobMember *leviathan_build = cob_archive_find(&archive, "data\\levbuild.wav");
         const CobMember *floater_birth = cob_archive_find(&archive, "data\\fltbirth.wav");
+        const CobMember *leviathan_birth = cob_archive_find(&archive, "data\\levbirth.wav");
+        const CobMember *floater_death = cob_archive_find(&archive, "data\\fltdeath.wav");
+        const CobMember *leviathan_death = cob_archive_find(&archive, "data\\levdeath.wav");
         const CobMember *bridge = cob_archive_find(&archive, "data\\bridge.wav");
         if (button != NULL && button->length >= 44) {
             g_button_sound = (unsigned char *)malloc(button->length);
@@ -328,6 +331,33 @@ static int load_menu_art(char *error, size_t error_capacity)
                                          floater_birth->length, error, error_capacity)) {
                 free(g_fltbirth_sound);
                 g_fltbirth_sound = NULL;
+            }
+        }
+        if (leviathan_birth != NULL && leviathan_birth->length >= 44) {
+            g_levbirth_sound = (unsigned char *)malloc(leviathan_birth->length);
+            if (g_levbirth_sound == NULL ||
+                !cob_archive_read_member(&archive, leviathan_birth, g_levbirth_sound,
+                                         leviathan_birth->length, error, error_capacity)) {
+                free(g_levbirth_sound);
+                g_levbirth_sound = NULL;
+            }
+        }
+        if (floater_death != NULL && floater_death->length >= 44) {
+            g_fltdeath_sound = (unsigned char *)malloc(floater_death->length);
+            if (g_fltdeath_sound == NULL ||
+                !cob_archive_read_member(&archive, floater_death, g_fltdeath_sound,
+                                         floater_death->length, error, error_capacity)) {
+                free(g_fltdeath_sound);
+                g_fltdeath_sound = NULL;
+            }
+        }
+        if (leviathan_death != NULL && leviathan_death->length >= 44) {
+            g_levdeath_sound = (unsigned char *)malloc(leviathan_death->length);
+            if (g_levdeath_sound == NULL ||
+                !cob_archive_read_member(&archive, leviathan_death, g_levdeath_sound,
+                                         leviathan_death->length, error, error_capacity)) {
+                free(g_levdeath_sound);
+                g_levdeath_sound = NULL;
             }
         }
         if (bridge != NULL && bridge->length >= 44) {
@@ -383,6 +413,12 @@ done:
         g_levbuild_sound = NULL;
         free(g_fltbirth_sound);
         g_fltbirth_sound = NULL;
+        free(g_levbirth_sound);
+        g_levbirth_sound = NULL;
+        free(g_fltdeath_sound);
+        g_fltdeath_sound = NULL;
+        free(g_levdeath_sound);
+        g_levdeath_sound = NULL;
         free(g_bridge_sound);
         g_bridge_sound = NULL;
     }
@@ -547,6 +583,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
         }
     }
     free_sprite_sheet(&g_island_feature_art);
+    free_sprite_sheet(&g_leviathan_reveal_art);
     free_sprite_sheet(&g_island_names_art);
     free_sprite_sheet(&g_load_save_art);
     free_sprite_sheet(&g_menu_help);
@@ -559,6 +596,9 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free(g_fltbuild_sound);
     free(g_levbuild_sound);
     free(g_fltbirth_sound);
+    free(g_levbirth_sound);
+    free(g_fltdeath_sound);
+    free(g_levdeath_sound);
     free(g_bridge_sound);
     free(g_island_height_data);
     return (int)message.wParam;

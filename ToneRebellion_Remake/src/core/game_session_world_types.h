@@ -10,7 +10,7 @@ typedef struct GameRuntimeLocation {
        the placing player, and subtype-9 selection/arrival also use it. */
     int32_t source_value_14;
     /* Source signed short +0x18. FUN_004528ca stores the owning player's
-       100-byte source-record index here for item IDs 0x2c..0x32. */
+       100-byte source-row index here for item IDs 0x2c..0x32. */
     int16_t source_location_slot_18;
     /* Cached pad.txt maintenance cost; lets active-state transitions refresh
        player budgets without threading the catalog through every tick path. */
@@ -33,9 +33,6 @@ typedef struct GameRuntimeLocation {
        recomputing active bit 0. Their field meanings are not established. */
     int16_t source_value_44;
     int16_t source_value_58;
-    /* FUN_00460460 writes a spawn interval to source +0x5a for selected
-       Leviathan marker sites. */
-    uint16_t leviathan_spawn_interval;
     /* FUN_0045cbaa clears the three subtype 1..3 links when a site is turned
        off. -1 means the source has no linked task for that subtype. */
     int16_t source_task_slot[GAME_RESOURCE_TYPE_COUNT];
@@ -63,11 +60,14 @@ typedef struct GameRuntimeLocation {
     int16_t charge_recent_floater;
     /* Source staffing row +0x50 task handle; -1 means no queued staff request. */
     int16_t charge_staff_task_handle;
+    /* FUN_0045c9b5's resource-funded source upgrade request (+0x4e). */
+    int16_t upgrade_task_handle;
     /* Class-1 Leviathan markers keep the type-4 floater created at PROD start
        here until the production animation moves it to the output offset. */
     int16_t leviathan_spawned_floater;
     /* Raw +0x4a short: FUN_0045eaa7 uses it as the Hall stock threshold;
-       FUN_0040bf98 also uses it as the BASE frame step. */
+       FUN_0040bf98 also uses it as the BASE frame step. Feature triggers use
+       it as their required pair side, while IslandFeat uses it as pair bits. */
     int16_t source_capacity_4a;
     /* FUN_004528ca initializes runtime +0x34 from FUN_00450978; repair task
        rows later read this mutable short from their target location. */
@@ -93,6 +93,9 @@ typedef struct GameRuntimeLocation {
     uint16_t construction_progress;
     uint16_t production_progress;
     uint16_t animation_rate;
+    /* One-shot CONS-layer presentation started when a building is placed.
+       Stored as ticks + 1 so zero means inactive and the first frame is visible. */
+    uint32_t new_build_animation_ticks;
     /* BARG double at +0x50: FUN_0045cd75 mirrors +0x30 / 250 while a staff
        floater trains, then fades it by 0.25 per tick without an active trainee.
        FUN_004528ca leaves this value untouched when a site is reused. */
@@ -112,7 +115,8 @@ typedef struct GameRuntimeLocation {
 typedef struct GameRuntimeIsland {
     uint16_t location_count;
     /* FUN_004642a3 retains the fourth data\\worldpos.txt value per island.
-       FUN_004535e4 and FUN_00450a71 use it to select marker families. */
+       FUN_004535e4 / FUN_00450a71 select marker families with it, and
+       FUN_004503bd uses it to decode the island's paired artifact IDs. */
     int16_t leviathan_marker_shape_id;
     /* FUN_00460460's per-island Leviathan planning summary. */
     int16_t leviathan_marker_count;

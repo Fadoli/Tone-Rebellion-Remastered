@@ -13,16 +13,19 @@ typedef struct GameFloaterStart {
     /* Initial stats come from the four local *work rows. Current HP is
        mutable; XP is not exposed by IWLocInfo's worker branch and is not
        modeled here. */
-    uint8_t current_hit_points;
-    uint8_t max_hit_points;
+    int16_t current_hit_points;
+    int16_t max_hit_points;
     uint8_t attack_strength;
     /* Raw short +0x08; FUN_004200d2 increments it after a positive attack
        result. Its gameplay meaning is not established yet. */
     uint16_t source_progress_08;
     int16_t max_attack_points;
+    /* Immutable catalog row used to recalculate FUN_00420f28 after level or
+       island-feature bonus state changes. */
+    int16_t base_max_attack_points;
     int16_t attack_realm;
-    /* Raw source +0x0a: low nibble is the level and the high nibble is its
-       attack modifier. Initial runtime floaters currently start at zero. */
+    /* Raw source +0x0a: low nibble is unit level; high nibble is the Leviathan
+       attack rank that FUN_0042000b advances up to 11. */
     uint16_t attack_level_flags;
     int16_t attack_range;
     /* FUN_0042520e's state-6/7 cadence, resolved from the draw ID's fltinf
@@ -181,6 +184,11 @@ typedef struct GameSession {
     uint8_t audio_event_head;
     uint8_t audio_event_count;
     GameSessionAudioEvent audio_events[GAME_SESSION_MAX_AUDIO_EVENTS];
+    /* FUN_004655b2 discovery events drained by FUN_0046bdee's active-window
+       type-5 callback. */
+    uint8_t world_event_head;
+    uint8_t world_event_count;
+    GameSessionWorldEvent world_events[GAME_SESSION_MAX_WORLD_EVENTS];
     GamePlayerEconomy economy[GAME_START_PLAYER_COUNT];
     /* FUN_004662b7's 64-slot deferred-action table, initially zeroed by
        FUN_004637fc. This stores requests only; effect processing is separate. */
@@ -203,6 +211,8 @@ typedef struct GameSession {
     uint8_t location_move_player;
     uint8_t location_move_source_island;
     uint16_t location_move_source_index;
+    int16_t location_move_previous_source_46;
+    int16_t location_move_previous_source_58;
     uint16_t build_selection_count;
     GameBuildSelectionRequest build_selections[GAME_SESSION_MAX_BUILD_SELECTIONS];
     uint16_t class0_assignments;

@@ -3,6 +3,7 @@
 
 #include "game_session_economy_internal.h"
 #include "game_session_internal.h"
+#include "game_session_delivery_internal.h"
 
 #include <string.h>
 
@@ -116,6 +117,148 @@ int game_session_cycle_source_capacity(GameSession *session,
     return 1;
 }
 
+static const uint8_t staff_upgrade_max_tier[4] = {2, 2, 1, 2};
+static const uint8_t staff_upgrade_island_thresholds[3][12] = {
+    {1, 4, 6, 2, 5, 20, 20, 20, 3, 20, 20, 20},
+    {1, 4, 7, 2, 5, 9, 8, 20, 20, 3, 6, 20},
+    {1, 4, 7, 2, 5, 9, 8, 11, 20, 3, 6, 10}
+};
+
+static int staff_upgrade_eligible(const GameSession *session,
+                                  uint8_t player_slot,
+                                  uint8_t island_index,
+                                  const GameRuntimeLocation *location)
+{
+    int32_t base_item_id;
+    int32_t next_tier;
+    unsigned int accessible_islands = 0;
+    unsigned int i;
+    unsigned int type_index;
+    unsigned int world_index;
+
+    if (session == NULL || location == NULL ||
+        player_slot >= GAME_START_PLAYER_COUNT ||
+        island_index >= session->island_count || location->owner_id != player_slot ||
+        location->renderer_class != 0) return 0;
+    base_item_id = game_session_base_item_id(location);
+    if (base_item_id < 0x2c || base_item_id > 0x2f) return 0;
+    type_index = (unsigned int)(base_item_id - 0x2c);
+    next_tier = (int32_t)location->source_capacity_4a + 1;
+    world_index = session->config.world_index;
+    if (next_tier < 1 || next_tier > staff_upgrade_max_tier[type_index] ||
+        world_index >= 3) return 0;
+
+    for (i = 0; i < session->island_count; ++i) {
+        if ((session->islands[i].access_mask &
+             (uint8_t)(1U << player_slot)) != 0) ++accessible_islands;
+    }
+    return accessible_islands >= staff_upgrade_island_thresholds[world_index]
+        [type_index * 3U + (unsigned int)next_tier];
+}
+
+static int staff_upgrade_task_matches(const GameSession *session,
+                                      const GameRuntimeLocation *location,
+                                      uint8_t player_slot,
+                                      uint8_t island_index,
+                                      uint16_t location_index)
+{
+    int16_t slot;
+    const GamePendingEvent *event;
+
+    if (session == NULL || location == NULL) return 0;
+    slot = location->upgrade_task_handle;
+    if (slot < 0 || slot >= GAME_SESSION_MAX_PENDING_EVENTS) return 0;
+    event = &session->pending_events[(uint8_t)slot];
+    return event->active != 0 && event->player_id == player_slot &&
+        event->payload_0a == (int16_t)island_index &&
+        event->action_type == 4 &&
+        event->payload_0e == (int16_t)location_index &&
+        event->payload_12 == 1;
+}
+
+int game_session_toggle_staff_upgrade_request(GameSession *session,
+                                              uint8_t player_slot,
+                                              uint8_t island_index,
+                                              uint16_t location_index)
+{
+    GameRuntimeLocation *location;
+    GamePendingEvent expected;
+    int16_t task_slot;
+
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count)
+        return 0;
+    location = &session->islands[island_index].locations[location_index];
+    task_slot = location->upgrade_task_handle;
+    if (task_slot >= 0 && task_slot < GAME_SESSION_MAX_PENDING_EVENTS &&
+        staff_upgrade_task_matches(session, location, player_slot,
+                                   island_index, location_index)) {
+        expected = session->pending_events[(uint8_t)task_slot];
+        (void)game_session_dispatch_task_command(session, (uint8_t)task_slot,
+                                                 12, &expected);
+        location->upgrade_task_handle = -1;
+        return 1;
+    }
+    location->upgrade_task_handle = -1;
+    if (!staff_upgrade_eligible(session, player_slot, island_index, location))
+        return 0;
+    task_slot = (int16_t)game_session_pending_event_add(session,
+        (int16_t)player_slot, (int16_t)island_index, 4, 0,
+        (int16_t)location_index, 1);
+    if (task_slot < 0) return 0;
+    location->upgrade_task_handle = task_slot;
+    return 1;
+}
+
+int game_session_complete_staff_upgrade(GameSession *session,
+                                        const PadCatalog *catalog,
+                                        uint8_t island_index,
+                                        uint16_t location_index)
+{
+    GameRuntimeLocation *location;
+    GamePendingEvent expected;
+    int16_t old_maximum;
+    int16_t new_maximum;
+    int16_t next_tier;
+    int16_t task_slot;
+
+    if (session == NULL || catalog == NULL || island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count) return 0;
+    location = &session->islands[island_index].locations[location_index];
+    task_slot = location->upgrade_task_handle;
+    if (location->owner_id < 0 || location->owner_id >= GAME_START_PLAYER_COUNT ||
+        !staff_upgrade_task_matches(session, location,
+            (uint8_t)location->owner_id, island_index, location_index) ||
+        location->resource_stock[GAME_RESOURCE_BUILD_TONE] <= 19U ||
+        !staff_upgrade_eligible(session, (uint8_t)location->owner_id,
+                                island_index, location) ||
+        !game_session_source_value_34_max(catalog, location, &old_maximum))
+        return 0;
+
+    next_tier = (int16_t)(location->source_capacity_4a + 1);
+    location->source_capacity_4a = next_tier;
+    if (!game_session_source_value_34_max(catalog, location, &new_maximum)) {
+        --location->source_capacity_4a;
+        return 0;
+    }
+    if (location->source_value_34 >= 0) {
+        int32_t durability = (int32_t)location->source_value_34 +
+            ((int32_t)new_maximum - old_maximum);
+        if (durability > INT16_MAX) durability = INT16_MAX;
+        if (durability < INT16_MIN) durability = INT16_MIN;
+        location->source_value_34 = (int16_t)durability;
+    }
+    location->source_flags |= 0x020U;
+    location->source_value_48 = 0;
+    location->resource_stock[GAME_RESOURCE_BUILD_TONE] = 0;
+    expected = session->pending_events[(uint8_t)task_slot];
+    (void)game_session_dispatch_task_command(session, (uint8_t)task_slot,
+                                             12, &expected);
+    location->upgrade_task_handle = -1;
+    return 1;
+}
+
 int game_session_queue_glyph_action(GameSession *session,
                                     uint8_t player_slot,
                                     uint8_t island_index,
@@ -188,10 +331,38 @@ unsigned int game_session_dispatch_glyph_actions(GameSession *session)
         for (floater_index = 0; floater_index < session->floater_count;
              ++floater_index) {
             GameFloaterStart *floater = &session->floaters[floater_index];
+            int16_t old_task_slot;
+            int release_old_task;
+            GamePendingEvent expected;
+
             if (!game_session_floater_is_active(floater) ||
-                (floater->source_runtime_flags & 0x008U) != 0 ||
                 floater->owner_slot != request.player_slot ||
                 floater->source_subtype != 8) continue;
+
+            /* FUN_00465793 calls FUN_00421ec1(-1) before replacing this
+               order. Besides dropping the linked claim, that reset cancels
+               an old resource task for carried inventory items. */
+            old_task_slot = floater->linked_task_slot;
+            release_old_task = floater->carried_resource_code > 4 &&
+                floater->carried_resource_code < 0x22 && old_task_slot >= 0 &&
+                old_task_slot < GAME_SESSION_MAX_PENDING_EVENTS &&
+                (floater->active_order_action == 4 ||
+                 floater->active_order_action == 0x0d);
+            if (release_old_task != 0)
+                expected = session->pending_events[(uint8_t)old_task_slot];
+            release_task_claim(session, floater);
+            floater->active_order_action = 0;
+            floater->order_target_floater = -1;
+            floater->order_target_location = -1;
+            floater->order_target_island = UINT8_MAX;
+            floater->source_order_state_2c = 0;
+            floater->source_order_coordinate_30 = 0;
+            floater->source_order_pending = 0;
+            floater->source_runtime_flags &= ~0x065U;
+            floater->has_move_order = 0;
+            if (release_old_task != 0 && expected.active != 0)
+                (void)game_session_dispatch_task_command(session,
+                    (uint8_t)old_task_slot, 12, &expected);
 
             floater->active_order_action = 0x13;
             floater->order_target_island = request.island_index;
@@ -246,6 +417,17 @@ int game_session_queue_cast_action(GameSession *session,
                                    uint16_t location_index,
                                    uint8_t action_subtype)
 {
+    return game_session_queue_cast_action_target(session, player_slot,
+        island_index, location_index, action_subtype, -1);
+}
+
+int game_session_queue_cast_action_target(GameSession *session,
+                                          uint8_t player_slot,
+                                          uint8_t island_index,
+                                          uint16_t location_index,
+                                          uint8_t action_subtype,
+                                          int16_t target_floater_index)
+{
     GameCastActionRequest *request;
     if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
         island_index >= session->island_count ||
@@ -266,6 +448,7 @@ int game_session_queue_cast_action(GameSession *session,
     request->action_subtype = action_subtype;
     request->island_index = island_index;
     request->location_index = location_index;
+    request->target_floater_index = target_floater_index;
     return 1;
 }
 
@@ -299,8 +482,16 @@ unsigned int game_session_dispatch_cast_actions(GameSession *session)
             continue;
         kind = (uint8_t)game_session_cast_kind_for_action(
             (uint8_t)building->source_value_14, request.action_subtype);
-        /* These kinds have a reconstructed FA_Cast tick and impact path. */
-        if (!((kind <= 9) || (kind >= 0x10 && kind <= 0x15))) continue;
+        /* Kinds 0..0x16 now have reconstructed FA_Cast tick and impact
+           effects, except kind 0x0a requests its target floater from the UI. */
+        if (kind > 0x16) continue;
+        if (kind == 0x0a &&
+            (request.target_floater_index < 0 ||
+             (unsigned int)request.target_floater_index >= session->floater_count ||
+             !game_session_floater_is_active(
+                 &session->floaters[(unsigned int)request.target_floater_index]) ||
+             session->floaters[(unsigned int)request.target_floater_index]
+                 .owner_slot != 4U)) continue;
 
         magic_cost = cast_magic_costs[kind];
         crystal_cost = cast_crystal_costs[kind];
@@ -344,7 +535,8 @@ unsigned int game_session_dispatch_cast_actions(GameSession *session)
            packet words +0x0e/+0x10 for FUN_0045da80. */
         caster->order_target_island = request.island_index;
         caster->order_target_location = (int16_t)request.location_index;
-        caster->order_target_floater = -1;
+        caster->order_target_floater = kind == 0x0a
+            ? request.target_floater_index : -1;
         caster->order_progress = UINT8_MAX;
         caster->order_timer = 0;
         caster->source_runtime_flags &= ~0x200U;

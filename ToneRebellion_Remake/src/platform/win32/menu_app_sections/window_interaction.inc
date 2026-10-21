@@ -249,10 +249,11 @@ static void handle_click(HWND window, int x, int y)
             }
             int cast_action = selected_cast_action_at(x, y);
             if (cast_action >= 0) {
-                (void)game_session_queue_cast_action(&g_game_session,
+                (void)game_session_queue_cast_action_target(&g_game_session,
                     (uint8_t)g_menu.selected_tribe,
                     (uint8_t)g_menu.selected_map_island,
-                    (uint16_t)g_selected_location, (uint8_t)cast_action);
+                    (uint16_t)g_selected_location, (uint8_t)cast_action,
+                    (int16_t)g_selected_floater);
                 InvalidateRect(window, NULL, FALSE);
                 return;
             }
@@ -278,9 +279,20 @@ static void handle_click(HWND window, int x, int y)
                     upgrade_names,
                     sizeof(upgrade_names) / sizeof(upgrade_names[0])) : NULL;
             if (upgrade_control != NULL) {
-                (void)game_session_cycle_source_capacity(&g_game_session,
-                    (uint8_t)g_menu.selected_map_island,
-                    (uint16_t)g_selected_location);
+                const GameRuntimeLocation *location = &g_game_session.islands[
+                    g_menu.selected_map_island].locations[g_selected_location];
+                int32_t base_item_id = location->record_value_10 -
+                    (int32_t)g_menu.selected_tribe * 16;
+                if (base_item_id >= 0x2c && base_item_id <= 0x2f) {
+                    (void)game_session_toggle_staff_upgrade_request(
+                        &g_game_session, (uint8_t)g_menu.selected_tribe,
+                        (uint8_t)g_menu.selected_map_island,
+                        (uint16_t)g_selected_location);
+                } else {
+                    (void)game_session_cycle_source_capacity(&g_game_session,
+                        (uint8_t)g_menu.selected_map_island,
+                        (uint16_t)g_selected_location);
+                }
                 InvalidateRect(window, NULL, FALSE);
                 return;
             }

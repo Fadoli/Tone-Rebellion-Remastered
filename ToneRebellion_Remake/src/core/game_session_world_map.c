@@ -179,6 +179,11 @@ int game_session_acquire_island_access(GameSession *session,
     if ((target->access_mask & player_bit) != 0) return 0;
 
     target->access_mask |= player_bit;
+    /* FUN_00466b09 appends world event (12, destination WORLDPOS level) on
+       the first acquisition; retain the destination index for the UI adapter. */
+    (void)game_session_queue_world_event(session,
+        GAME_SESSION_WORLD_EVENT_ISLAND_REACHED, target_island,
+        target->leviathan_marker_shape_id);
     marker_index = find_bridge_marker_index(target, source_island);
     if (marker_index >= 0) {
         int32_t min_x = (int32_t)target->locations[marker_index].x - 0x140;

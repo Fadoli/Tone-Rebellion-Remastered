@@ -3,11 +3,34 @@
 #include "game_session_action9.h"
 #include "game_session_events.h"
 #include "game_session_internal.h"
+#include "game_session_delivery_internal.h"
 
 #include <math.h>
 #include <stdint.h>
 
 enum { GAME_FLOATER_STATE_ATTACK = 6, GAME_FLOATER_STATE_ATTACK_SITE = 7 };
+
+static void record_floater_death(GameSession *session,
+                                 const GameFloaterStart *floater,
+                                 int32_t killer_faction)
+{
+    if (session == NULL || floater == NULL) return;
+    /* FUN_00416a9a selects levdeath for raw type 4, fltdeath otherwise. */
+    (void)game_session_queue_audio_event(session,
+        GAME_SESSION_AUDIO_FLOATER_DEATH, (int16_t)floater->type_index);
+    if (floater->type_index < GAME_START_PLAYER_COUNT) {
+        ++session->economy[floater->type_index].floater_losses;
+    }
+    if (killer_faction < 0 || killer_faction >= GAME_START_PLAYER_COUNT) return;
+    if (floater->type_index == 4U) {
+        if (floater->source_subtype < 18U)
+            ++session->economy[killer_faction]
+                .leviathan_kills_by_subtype[floater->source_subtype];
+    } else if (floater->type_index < GAME_START_PLAYER_COUNT) {
+        ++session->economy[killer_faction]
+            .floater_kills_by_faction[floater->type_index];
+    }
+}
 
 static int attack_calls_charge_helper(const GameFloaterStart *attacker)
 {
@@ -66,6 +89,9 @@ void game_session_tick_floater_combat(GameSession *session,
                     floater->island_index,
                     (uint16_t)floater->order_target_location, target);
                 if (damage > 0) ++target->source_progress_08;
+                /* FUN_00420188 decrements raw +0x22 after every state-7
+                   site attack, even though its low byte also backs the
+                   remake's visibility mirror. */
                 if (target->source_value_22 > 0) {
                     --target->source_value_22;
                     target->tribe_visibility_mask =
@@ -222,13 +248,14 @@ int32_t game_session_damage_floater(GameSession *session,
               tone_rng_bounded(&session->random_state, random_range)) / 3;
     if (damage > 10) damage = 10;
     if (damage < 0) damage = 0;
-    if (target->current_hit_points > (uint8_t)damage) {
-        target->current_hit_points =
-            (uint8_t)(target->current_hit_points - (uint8_t)damage);
+    if ((int32_t)target->current_hit_points > damage) {
+        target->current_hit_points = (int16_t)(
+            target->current_hit_points - damage);
     } else if ((target->source_runtime_flags & 0x008U) == 0) {
         target->current_hit_points = 0;
         target->source_runtime_flags |= 0x008U;
         target->source_death_timer = 0;
+        record_floater_death(session, target, attacker->type_index);
     }
     return damage;
 }
@@ -280,13 +307,14 @@ int32_t game_session_damage_floater_from_power(GameSession *session,
               tone_rng_bounded(&session->random_state, random_range)) / 3;
     if (damage > 10) damage = 10;
     if (damage < 0) damage = 0;
-    if (target->current_hit_points > (uint8_t)damage) {
-        target->current_hit_points =
-            (uint8_t)(target->current_hit_points - (uint8_t)damage);
+    if ((int32_t)target->current_hit_points > damage) {
+        target->current_hit_points = (int16_t)(
+            target->current_hit_points - damage);
     } else {
         target->current_hit_points = 0;
         target->source_runtime_flags |= 0x008U;
         target->source_death_timer = 0;
+        record_floater_death(session, target, -1);
     }
     return damage;
 }
@@ -395,6 +423,74 @@ int32_t game_session_damage_site_from_power(GameSession *session,
     return damage;
 }
 
+static void clear_destroyed_staff_worker(GameSession *session,
+                                         GameRuntimeLocation *source,
+                                         unsigned int floater_index,
+                                         int32_t source_owner)
+{
+    GameFloaterStart *floater;
+    int released_task = 0;
+
+    if (session == NULL || source == NULL ||
+        floater_index >= session->floater_count ||
+        floater_index >= GAME_SESSION_MAX_FLOATERS) return;
+    floater = &session->floaters[floater_index];
+    if (floater->owner_slot != (uint8_t)source_owner) return;
+
+    /* FUN_00421ec1(-1) also removes a carried-artifact task when the worker
+       is replacing a resource/pickup order. Validate the reused slot first. */
+    if (floater->carried_resource_code >= GAME_INVENTORY_ITEM_FIRST_ID &&
+        floater->carried_resource_code < GAME_INVENTORY_ITEM_FIRST_ID +
+            GAME_INVENTORY_ITEM_COUNT &&
+        (floater->active_order_action == 4 ||
+         floater->active_order_action == 0x0d) &&
+        floater->linked_task_slot >= 0 &&
+        floater->linked_task_slot < GAME_SESSION_MAX_PENDING_EVENTS) {
+        uint8_t task_slot = (uint8_t)floater->linked_task_slot;
+        GamePendingEvent *event = &session->pending_events[task_slot];
+        if (event->active != 0 &&
+            (event->action_type == 4 || event->action_type == 0x0d) &&
+            event->player_id == floater->owner_slot &&
+            event->payload_0a == floater->order_target_island &&
+            event->payload_0e == floater->order_target_location) {
+            GamePendingEvent expected = *event;
+            released_task = game_session_dispatch_task_command(
+                session, task_slot, 12, &expected);
+        }
+    }
+    if (!released_task) release_task_claim(session, floater);
+
+    if (floater->source_link_0c == source->source_location_slot_18 &&
+        floater->source_link_0c >= 0) {
+        if (!game_session_unlink_floater_charge(session, floater_index)) {
+            floater->source_link_0c = -1;
+            floater->charge_source_island = UINT8_MAX;
+            floater->charge_source_location = UINT16_MAX;
+        }
+    }
+    floater->source_subtype = 0;
+    floater->attack_level_flags &= 0xfff0U;
+    if (floater->owner_slot < GAME_START_PLAYER_COUNT) {
+        const FloaterStats *birth_stats =
+            &session->worker_birth_stats[floater->owner_slot];
+        if (floater->current_hit_points > birth_stats->hit_points)
+            floater->current_hit_points = birth_stats->hit_points;
+        if (floater->charge_current > birth_stats->attack_strength)
+            floater->charge_current = birth_stats->attack_strength;
+    }
+    floater->source_runtime_flags &= ~0x065U;
+    floater->active_order_action = 0;
+    floater->movement_state = 0;
+    floater->order_target_floater = -1;
+    floater->order_target_location = -1;
+    floater->order_target_island = floater->island_index;
+    floater->order_progress = 0;
+    floater->source_order_pending = 0;
+    floater->has_move_order = 0;
+    floater->order_resource_code = 0;
+    floater->source_order_state_2c = 0;
+}
+
 void game_session_clear_cast_site(GameSession *session, uint8_t island_index,
                                   uint16_t location_index,
                                   GameRuntimeLocation *target)
@@ -416,6 +512,17 @@ void game_session_clear_cast_site(GameSession *session, uint8_t island_index,
             session, (uint8_t)target->charge_staff_task_handle);
         target->charge_staff_task_handle = -1;
     }
+    if (target->upgrade_task_handle >= 0 &&
+        target->upgrade_task_handle < GAME_SESSION_MAX_PENDING_EVENTS) {
+        GamePendingEvent *event = &session->pending_events[
+            (uint8_t)target->upgrade_task_handle];
+        if (event->active != 0) {
+            GamePendingEvent expected = *event;
+            (void)game_session_dispatch_task_command(session,
+                (uint8_t)target->upgrade_task_handle, 12, &expected);
+        }
+        target->upgrade_task_handle = -1;
+    }
     for (task_type = 0; task_type < GAME_RESOURCE_TYPE_COUNT; ++task_type) {
         int16_t task_slot = target->source_task_slot[task_type];
         if (task_slot >= 0 && task_slot < GAME_SESSION_MAX_PENDING_EVENTS) {
@@ -425,41 +532,28 @@ void game_session_clear_cast_site(GameSession *session, uint8_t island_index,
         target->source_task_slot[task_type] = -1;
     }
 
+    /* FUN_0045efd2 resolves the site's owner source row by island/location;
+       FUN_0045c5b8 then clears its current worker and all eight row links.
+       The remake keeps both views, so reconcile the current pointer, slots,
+       and row-linked floaters before releasing the source record. */
+    if (target->charge_recent_floater >= 0)
+        clear_destroyed_staff_worker(session, target,
+            (unsigned int)target->charge_recent_floater, previous_owner);
     for (slot = 0; slot < 8; ++slot) {
         int16_t floater_index = target->charge_floater_slots[slot];
-        if (floater_index >= 0 && (unsigned int)floater_index < session->floater_count) {
-            GameFloaterStart *floater = &session->floaters[
-                (unsigned int)floater_index];
-
-            /* FUN_0045c5b8 clears every worker row before dropping the source:
-               it resets the subtype and level, ends its source action (flag
-               mask 0x65), then clamps current combat values to the base row.
-               A bare unlink left former workers with their training bonuses. */
-            (void)game_session_unlink_floater_charge(session,
-                                                     (unsigned int)floater_index);
-            floater->source_subtype = 0;
-            floater->attack_level_flags &= 0xfff0U;
-            if (floater->owner_slot < GAME_START_PLAYER_COUNT) {
-                const FloaterStats *birth_stats =
-                    &session->worker_birth_stats[floater->owner_slot];
-                if (floater->max_attack_points > birth_stats->max_attack_points)
-                    floater->max_attack_points = birth_stats->max_attack_points;
-                if (floater->charge_current > birth_stats->attack_strength)
-                    floater->charge_current = birth_stats->attack_strength;
-            }
-            floater->source_runtime_flags &= ~0x065U;
-            floater->active_order_action = 0;
-            floater->movement_state = 0;
-            floater->order_target_floater = -1;
-            floater->order_target_location = -1;
-            floater->order_target_island = floater->island_index;
-            floater->order_progress = 0;
-            floater->source_order_pending = 0;
-            floater->has_move_order = 0;
-            floater->order_resource_code = 0;
-            floater->source_order_state_2c = 0;
-        }
+        if (floater_index >= 0)
+            clear_destroyed_staff_worker(session, target,
+                (unsigned int)floater_index, previous_owner);
         target->charge_floater_slots[slot] = -1;
+    }
+    if (target->source_location_slot_18 >= 0) {
+        for (slot = 0; slot < session->floater_count &&
+             slot < GAME_SESSION_MAX_FLOATERS; ++slot) {
+            GameFloaterStart *floater = &session->floaters[slot];
+            if (floater->source_link_0c != target->source_location_slot_18 ||
+                floater->owner_slot != (uint8_t)previous_owner) continue;
+            clear_destroyed_staff_worker(session, target, slot, previous_owner);
+        }
     }
 
     /* FUN_00452a15 releases owner/source links and keeps item 1 only for the
@@ -477,6 +571,7 @@ void game_session_clear_cast_site(GameSession *session, uint8_t island_index,
     target->source_location_slot_18 = -1;
     target->source_category_slot_60 = -1;
     target->charge_source_value_30 = 0;
+    target->new_build_animation_ticks = 0;
     target->charge_floater_count = 0;
     target->charge_recent_floater = -1;
     if (target->leviathan_spawned_floater >= 0 &&
@@ -488,11 +583,19 @@ void game_session_clear_cast_site(GameSession *session, uint8_t island_index,
     target->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 0;
     target->resource_stock[GAME_RESOURCE_MAGIC_TONE] = 0;
     (void)game_session_recalculate_active_locations(session);
+    /* FUN_00452a15 invokes FUN_00466c8b after clearing the record; that
+       callback refreshes Leviathan budgets and marker rates for this island. */
+    game_session_recalculate_leviathan_island(session, island_index);
+    /* FUN_00466c8b also rebuilds player maintenance budgets. A destroyed
+       building can remain marked for its crumble animation for 100 ticks;
+       when the record is finally cleared here, release its maintenance even
+       if the site's active bit did not change in the earlier damage update. */
+    if (previous_owner >= 0 && previous_owner < GAME_START_PLAYER_COUNT)
+        game_session_refresh_player_maintenance_budgets(session);
     if (previous_base_item_id == 0x28 && previous_owner >= 0 &&
         previous_owner < GAME_START_PLAYER_COUNT) {
         (void)game_session_recalculate_player_island_visibility(
             session, island_index, (uint8_t)previous_owner);
-        game_session_refresh_player_maintenance_budgets(session);
     }
 }
 
@@ -594,8 +697,9 @@ static unsigned int game_session_apply_cast_area_damage(
             target->current_hit_points = 0;
             target->source_runtime_flags |= 0x008U;
             target->source_death_timer = 0;
+            record_floater_death(session, target, caster->type_index);
         } else {
-            target->current_hit_points = (uint8_t)remaining_hp;
+            target->current_hit_points = (int16_t)remaining_hp;
         }
         ++affected;
     }
@@ -627,6 +731,47 @@ static unsigned int game_session_apply_cast_area_damage(
     return affected;
 }
 
+static GameRuntimeLocation *game_session_cast_source_site(
+    GameSession *session, const GameFloaterStart *caster)
+{
+    GameRuntimeLocation *source;
+
+    if (session == NULL || caster == NULL ||
+        caster->owner_slot >= GAME_START_PLAYER_COUNT ||
+        caster->source_link_0c < 0 ||
+        caster->charge_source_island >= session->island_count ||
+        caster->charge_source_location >=
+            session->islands[caster->charge_source_island].location_count)
+        return NULL;
+    source = &session->islands[caster->charge_source_island].locations[
+        caster->charge_source_location];
+    if (source->owner_id != caster->owner_slot ||
+        source->source_location_slot_18 != caster->source_link_0c)
+        return NULL;
+    return source;
+}
+
+static unsigned int game_session_pulse_cast_source_floaters(
+    GameSession *session, const GameRuntimeLocation *source)
+{
+    unsigned int slot;
+    unsigned int affected = 0;
+
+    for (slot = 0; slot < 8; ++slot) {
+        int16_t floater_index = source->charge_floater_slots[slot];
+        GameFloaterStart *linked;
+        if (floater_index < 0 ||
+            (unsigned int)floater_index >= session->floater_count) continue;
+        linked = &session->floaters[(unsigned int)floater_index];
+        if (!game_session_floater_is_active(linked) ||
+            (linked->source_runtime_flags & 0x908U) != 0) continue;
+        linked->source_runtime_flags |= 0x2000U;
+        linked->source_death_timer = 0;
+        ++affected;
+    }
+    return affected;
+}
+
 unsigned int game_session_apply_cast_blast(
     GameSession *session, unsigned int caster_index)
 {
@@ -652,6 +797,7 @@ unsigned int game_session_apply_cast_blast(
         caster->current_hit_points = 0;
         caster->source_runtime_flags |= 0x008U;
         caster->source_death_timer = 0;
+        record_floater_death(session, caster, caster->type_index);
         ++affected;
     }
     return affected;
@@ -692,22 +838,22 @@ unsigned int game_session_resolve_cast_effect_step(
         for (slot = 0; slot < 8; ++slot) {
             int16_t target_index = source->charge_floater_slots[slot];
             GameFloaterStart *target;
-            uint32_t maximum;
+            int32_t maximum;
             uint32_t restored;
 
             if (target_index < 0 ||
                 (unsigned int)target_index >= session->floater_count) continue;
             target = &session->floaters[(unsigned int)target_index];
             maximum = target->max_hit_points;
-            if (!game_session_floater_is_active(target) || maximum == 0 ||
+            if (!game_session_floater_is_active(target) || maximum <= 0 ||
                 target->current_hit_points >= maximum) continue;
 
             caster->order_target_floater = target_index;
             restored = (uint32_t)target->current_hit_points +
                 (((uint32_t)(caster->attack_level_flags & 0x000fU) + 2U) *
-                 maximum >> 2);
-            if (restored > maximum) restored = maximum;
-            target->current_hit_points = (uint8_t)restored;
+                 (uint32_t)maximum >> 2);
+            if (restored > (uint32_t)maximum) restored = (uint32_t)maximum;
+            target->current_hit_points = (int16_t)restored;
             if ((target->source_runtime_flags & 0x908U) == 0) {
                 target->source_runtime_flags |= 0x2000U;
                 target->source_death_timer = 0;
@@ -889,7 +1035,7 @@ unsigned int game_session_resolve_cast_effect_step(
            record. The native code has no bounds checks; keep malformed links
            from indexing outside the remake's modeled table. */
         if (owner < 0 || owner >= GAME_START_PLAYER_COUNT ||
-            record_slot < 0 || record_slot >= GAME_SOURCE_RECORDS_PER_ISLAND)
+            record_slot < 0 || record_slot >= GAME_SOURCE_RECORDS_PER_PLAYER)
             return 0;
 
         level = caster->attack_level_flags & 0x000fU;
@@ -948,6 +1094,148 @@ unsigned int game_session_resolve_cast_effect_step(
             ++affected;
         }
         caster->source_runtime_flags |= 0x200U;
+        return affected + 1U;
+    }
+    if (step == 0x0c || step == 0x0d) {
+        GameRuntimeLocation *source;
+        uint32_t level;
+        uint32_t flag = step == 0x0c ? 0x8000U : 0x10000U;
+
+        if (caster->cast_spell_kind != step) return 0;
+        caster->source_runtime_flags |= 0x200U;
+        source = game_session_cast_source_site(session, caster);
+        if (source == NULL) return 0;
+        level = caster->attack_level_flags & 0x000fU;
+        /* FUN_00453b38/00453b76 set distinct timed source flags; both then
+           pulse every linked floater through FUN_0045d53c. */
+        source->source_flags |= flag;
+        source->source_effect_timer_38 = level * 500U + 1000U;
+        return game_session_pulse_cast_source_floaters(session, source) + 1U;
+    }
+    if (step == 0x0e) {
+        unsigned int floater_index;
+        unsigned int affected = 0;
+        uint32_t level;
+
+        if (caster->cast_spell_kind != 0x0e ||
+            caster->owner_slot >= GAME_START_PLAYER_COUNT) return 0;
+        caster->source_runtime_flags |= 0x200U;
+        level = caster->attack_level_flags & 0x000fU;
+        /* FUN_004239e9 case 0xe marks eligible owned subtype-0 floaters;
+           at level 2 it adds both source flags, and always resets +0x24. */
+        for (floater_index = 0; floater_index < session->floater_count;
+             ++floater_index) {
+            GameFloaterStart *target = &session->floaters[floater_index];
+            if (!game_session_floater_is_active(target) ||
+                target->owner_slot != caster->owner_slot ||
+                target->source_subtype != 0 ||
+                (target->source_runtime_flags & 0x808U) != 0) continue;
+            if (level < 2U) target->source_runtime_flags |= 0x100U;
+            else if (level == 2U)
+                target->source_runtime_flags |= 0x1100U;
+            target->source_death_timer = 0;
+            ++affected;
+        }
+        return affected + 1U;
+    }
+    if (step == 0x0f) {
+        GameRuntimeLocation *source;
+        unsigned int slot;
+        unsigned int affected = 0;
+        int32_t multiplier;
+
+        if (caster->cast_spell_kind != 0x0f) return 0;
+        caster->source_runtime_flags |= 0x200U;
+        source = game_session_cast_source_site(session, caster);
+        if (source == NULL) return 0;
+        multiplier = (int32_t)(caster->attack_level_flags & 0x000fU) + 3;
+        /* FUN_004239e9 case 0xf multiplies each linked floater's +0x2a,
+           capped at four times its raw max-attack-points catalog value. */
+        for (slot = 0; slot < 8; ++slot) {
+            int16_t floater_index = source->charge_floater_slots[slot];
+            GameFloaterStart *linked;
+            int32_t value;
+            int32_t maximum;
+            if (floater_index < 0 ||
+                (unsigned int)floater_index >= session->floater_count) continue;
+            linked = &session->floaters[(unsigned int)floater_index];
+            if (!game_session_floater_is_active(linked) ||
+                linked->owner_slot >= GAME_START_PLAYER_COUNT ||
+                linked->source_subtype > 8U) continue;
+            value = (int16_t)((uint32_t)(uint16_t)linked->charge_current *
+                              (uint32_t)multiplier);
+            maximum = (int32_t)linked->base_max_attack_points * 4;
+            if (maximum < value) value = maximum;
+            linked->charge_current = (int16_t)value;
+            if ((linked->source_runtime_flags & 0x908U) == 0) {
+                linked->source_runtime_flags |= 0x2000U;
+                linked->source_death_timer = 0;
+            }
+            ++affected;
+        }
+        return affected + 1U;
+    }
+    if (step == 0x0a) {
+        int16_t target_index;
+        GameFloaterStart *target_floater;
+
+        if (caster->cast_spell_kind != 0x0a) return 0;
+        caster->source_runtime_flags |= 0x200U;
+        target_index = caster->order_target_floater;
+        if (target_index < 0 ||
+            (unsigned int)target_index >= session->floater_count) return 0;
+        target_floater = &session->floaters[(unsigned int)target_index];
+        /* FUN_004239e9 case 0xa only calls FUN_004204bc for owner/faction 4,
+           passing the target's full current HP so the target dies at impact. */
+        if (!game_session_floater_is_active(target_floater) ||
+            target_floater->owner_slot != 4U) return 0;
+        if (target_floater->current_hit_points > 0) {
+            target_floater->current_hit_points = 0;
+            target_floater->source_runtime_flags |= 0x008U;
+            target_floater->source_death_timer = 0;
+            record_floater_death(session, target_floater, caster->type_index);
+            return 2;
+        }
+        return 1;
+    }
+    if (step == 0x0b) {
+        GameRuntimeLocation *source;
+        unsigned int slot;
+        unsigned int affected = 0;
+        uint32_t multiplier;
+
+        if (caster->cast_spell_kind != 0x0b) return 0;
+        caster->source_runtime_flags |= 0x200U;
+        source = game_session_cast_source_site(session, caster);
+        if (source == NULL) return 0;
+        multiplier = (uint32_t)(caster->attack_level_flags & 0x000fU) + 1U;
+        /* FUN_004239e9 case 0xb multiplies each linked floater's charge by
+           level + 1, then caps it at twice FUN_00420f28's max-HP result. */
+        for (slot = 0; slot < 8; ++slot) {
+            int16_t floater_index = source->charge_floater_slots[slot];
+            GameFloaterStart *linked;
+            int32_t value;
+            int32_t maximum;
+
+            if (floater_index < 0 ||
+                (unsigned int)floater_index >= session->floater_count) continue;
+            linked = &session->floaters[(unsigned int)floater_index];
+            if (!game_session_floater_is_active(linked) ||
+                linked->owner_slot >= GAME_START_PLAYER_COUNT ||
+                linked->max_hit_points <= 0) continue;
+
+            caster->order_target_floater = floater_index;
+            value = (int16_t)((uint32_t)(uint16_t)linked->charge_current *
+                              multiplier);
+            maximum = (int32_t)linked->max_hit_points * 2;
+            if (value > maximum) value = maximum;
+            linked->charge_current = (int16_t)value;
+            if ((linked->source_runtime_flags & 0x908U) == 0) {
+                linked->source_runtime_flags |= 0x2000U;
+                linked->source_death_timer = 0;
+            }
+            ++affected;
+        }
         return affected + 1U;
     }
     if (step == 8) {
@@ -1031,6 +1319,7 @@ int game_session_schedule_cast_effect_step(
     if (session == NULL || caster_index >= session->floater_count ||
         (step != 0 && step != 1 && step != 2 && step != 3 && step != 4 && step != 5 && step != 6 &&
          step != 7 && step != 8 && step != 9 &&
+         step != 0x0a && step != 0x0b && step != 0x0c && step != 0x0d && step != 0x0e && step != 0x0f &&
          step != 0x10 &&
          step != 0x11 && step != 0x12 && step != 0x13 &&
          step != 0x14 && step != 0x15 && step != 0x16) ||

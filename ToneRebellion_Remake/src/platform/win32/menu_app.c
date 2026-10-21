@@ -69,6 +69,9 @@ typedef struct MenuState {
 } MenuState;
 
 static MenuState g_menu;
+static int g_island_access_notice_level = -1;
+static unsigned int g_island_access_notice_until;
+static unsigned int g_building_destroyed_notice_until;
 static SpriteSheet g_title_art;
 static SpriteSheet g_new_background;
 static SpriteSheet g_new_buttons;
@@ -117,6 +120,7 @@ static SpriteSheet g_leviathan_legs[9];
 static SpriteSheet g_leviathan_legs_flipped[9];
 static SpriteSheet g_floater_info_art;
 static SpriteSheet g_island_feature_art;
+static SpriteSheet g_leviathan_reveal_art;
 static SpriteSheet g_island_names_art;
 static SpriteSheet g_load_save_art;
 static SpriteSheet g_newgame_captions;
@@ -132,6 +136,9 @@ static unsigned char *g_button_sound;
 static unsigned char *g_fltbuild_sound;
 static unsigned char *g_levbuild_sound;
 static unsigned char *g_fltbirth_sound;
+static unsigned char *g_levbirth_sound;
+static unsigned char *g_fltdeath_sound;
+static unsigned char *g_levdeath_sound;
 static unsigned char *g_bridge_sound;
 static char g_music_directory[MAX_PATH];
 static char g_current_tune[16];

@@ -123,6 +123,13 @@ static int island_pad_group(const IslandLocation *location)
     return island_pad_size_group(location->kind);
 }
 
+static void draw_feature_reveal(HDC dc, const SpriteSheet *art,
+                                int island_id, uint32_t frame_index,
+                                int x, int y, int progress);
+static int draw_island_leviathan_spawn_effect(
+    HDC dc, const GameRuntimeLocation *location,
+    const BuildingRenderItem *item, int x, int y, int full_reveal);
+
 static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_location,
                                     int x, int y, uint32_t scale_16_16)
 {
@@ -180,7 +187,8 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
        +0x3e; CONS uses +0x40 and flag 0x004; PROD uses +0x42 and flag 0x002.
        The animated PROD frame stays at the item anchor; only its separate
        threshold effect uses the descriptor offset. OCCU is gated by flag 8.
-       Initial counters remain zero until their game events are ported. */
+       Simulation ticks advance these counters from deliveries, production,
+       placement and staff actions. */
     if (item->inci.present) {
         frame = building_render_inci_frame(item, runtime_location->inci_progress);
         if (frame < sheet->frame_count) {
@@ -189,8 +197,16 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
         }
     }
     if (item->cons.present) {
-        frame = building_render_cons_frame(item, runtime_location->construction_progress,
-                                           runtime_location->source_flags);
+        if (runtime_location->new_build_animation_ticks != 0) {
+            frame = building_render_cons_frame(
+                item, runtime_location->new_build_animation_ticks > 1U
+                    ? runtime_location->new_build_animation_ticks - 2U : 0U,
+                4U);
+        } else {
+            frame = building_render_cons_frame(item,
+                runtime_location->construction_progress,
+                runtime_location->source_flags);
+        }
         if (frame < sheet->frame_count) {
             draw_sprite_scaled(dc, sheet, frame, x, y, scale_16_16);
             drew = 1;
@@ -224,6 +240,60 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
                                    effect_position.y, scale_16_16);
                 drew = 1;
             }
+        }
+        /* FUN_0040bf98 reveals the linked type-4 floater at item 6's PROD
+           output point before overlaying the late-production building frame. */
+        if (scale_16_16 == 0x10000U &&
+            runtime_location->renderer_class == 1 &&
+            runtime_location->record_value_10 == 6 &&
+            (runtime_location->source_flags & 0x002U) != 0) {
+            if (draw_island_leviathan_spawn_effect(
+                    dc, runtime_location, item, x, y, 1))
+                drew = 1;
+            if (frame > 0x17U && frame < 0x27U &&
+                frame + 0x13U < sheet->frame_count) {
+                draw_sprite(dc, sheet, frame + 0x13U, x, y);
+                drew = 1;
+            }
+        }
+        /* FUN_0040bf98 reveals V-NSUPP frame 0 through a stipple mask while
+           class-1 item 9 is running its PROD cycle. */
+        if (scale_16_16 == 0x10000U && runtime_location->renderer_class == 1 &&
+            runtime_location->record_value_10 == 9 &&
+            (runtime_location->source_flags & 0x002U) != 0 &&
+            draw_island_leviathan_spawn_effect(
+                dc, runtime_location, item, x, y, 1)) {
+            drew = 1;
+        }
+        if (scale_16_16 == 0x10000U && runtime_location->renderer_class == 1 &&
+            runtime_location->record_value_10 == 9 &&
+            (runtime_location->source_flags & 0x002U) != 0 &&
+            g_leviathan_reveal_art.frame_count != 0) {
+            uint32_t prod_duration = building_render_prod_duration(item);
+            if (prod_duration != 0U) {
+                uint64_t mask_progress =
+                    ((uint64_t)runtime_location->production_progress * 15U) /
+                    prod_duration + 1U;
+                if (mask_progress > 8U && mask_progress < 16U)
+                    mask_progress = 16U - mask_progress;
+                if (mask_progress > 0U && mask_progress < 16U) {
+                    if (mask_progress >= 8U) {
+                        draw_sprite(dc, &g_leviathan_reveal_art, 0, x + 1,
+                                    y - 0x5a);
+                    } else {
+                        draw_feature_reveal(dc, &g_leviathan_reveal_art,
+                            g_island_surface_id, 0, x + 1, y - 0x5a,
+                            (int)mask_progress);
+                    }
+                    drew = 1;
+                }
+            }
+        }
+        if (scale_16_16 == 0x10000U && runtime_location->renderer_class == 1 &&
+            runtime_location->record_value_10 == 8 &&
+            (runtime_location->source_flags & 0x002U) != 0 &&
+            draw_island_leviathan_spawn_effect(dc, runtime_location, item, x, y, 0)) {
+            drew = 1;
         }
     }
     if (item->occu.present && (runtime_location->source_flags & 8U) != 0) {
@@ -354,21 +424,198 @@ static int draw_building_preview(HDC dc, uint16_t item_id, uint8_t player_slot,
     return draw_runtime_item_scaled(dc, &preview, x, y, scale_16_16);
 }
 
+static int feature_reveal_pixel(uint8_t pattern, int x, int origin_x)
+{
+    int high = ((int)(int8_t)pattern >> 4) & 0x0f;
+    int low = pattern & 0x0f;
+    int phase = (origin_x + x) & 3;
+    int visible = 0;
+    if (low == 0) return 0;
+    if (low == 4) return 1;
+    if ((pattern & 2U) != 0 && ((phase - high) & 1) == 0) visible = 1;
+    if ((pattern & 1U) != 0 &&
+        phase == ((high + (low == 3)) & 3)) visible = 1;
+    return visible;
+}
+
+/* FUN_00410bd2 applies DAT_0049b444's 4x4 reveal mask for progress 1..7.
+   Cache local-coordinate clip regions by island, stage, and horizontal
+   phase; the feature art does not change during a session, so scrolling only
+   selects one of four prebuilt GDI regions. */
+static HRGN feature_reveal_region(int island_id, int progress,
+                                  int width, int height,
+                                  int origin_x, int origin_y)
+{
+    static const uint8_t masks[8][4] = {
+        {0x00, 0x00, 0x00, 0x00},
+        {0x01, 0x00, 0x21, 0x00},
+        {0x02, 0x00, 0x02, 0x00},
+        {0x02, 0x11, 0x02, 0x31},
+        {0x02, 0x12, 0x02, 0x12},
+        {0x03, 0x12, 0x23, 0x12},
+        {0x04, 0x12, 0x04, 0x12},
+        {0x04, 0x13, 0x04, 0x33}
+    };
+    static HRGN regions[15][7][4];
+    static int cached_width[15][7][4];
+    static int cached_height[15][7][4];
+    static int cached_origin_phase[15][7][4];
+    RGNDATA *region_data;
+    RGNDATAHEADER *header;
+    RECT *rects;
+    HRGN region;
+    size_t rect_count = 0;
+    size_t rect_bytes;
+    size_t data_bytes;
+    int mask_stage;
+    int stage_index;
+    int x_phase_index;
+    int y;
+    int min_x = width;
+    int min_y = height;
+    int max_x = 0;
+    int max_y = 0;
+    int origin_x_phase = origin_x & 3;
+    int origin_phase = origin_y & 3;
+
+    if (island_id < 0 || island_id >= 15 || progress < 1 || progress > 7 ||
+        width <= 0 || height <= 0) return NULL;
+    stage_index = progress - 1;
+    x_phase_index = origin_x_phase;
+    region = regions[island_id][stage_index][x_phase_index];
+    if (region != NULL &&
+        cached_width[island_id][stage_index][x_phase_index] == width &&
+        cached_height[island_id][stage_index][x_phase_index] == height &&
+        cached_origin_phase[island_id][stage_index][x_phase_index] == origin_phase)
+        return region;
+
+    mask_stage = progress;
+    for (y = 0; y < height; ++y) {
+        uint8_t pattern = masks[mask_stage][(origin_y + y) & 3];
+        int x = 0;
+        while (x < width) {
+            int begin;
+            if (!feature_reveal_pixel(pattern, x, origin_x)) {
+                ++x;
+                continue;
+            }
+            begin = x++;
+            while (x < width && feature_reveal_pixel(pattern, x, origin_x)) ++x;
+            ++rect_count;
+            if (begin < min_x) min_x = begin;
+            if (y < min_y) min_y = y;
+            if (x > max_x) max_x = x;
+            if (y + 1 > max_y) max_y = y + 1;
+        }
+    }
+    if (rect_count == 0) {
+        region = CreateRectRgn(0, 0, 0, 0);
+        if (region == NULL) return NULL;
+        goto cache_region;
+    }
+    if (rect_count > (SIZE_MAX - sizeof(RGNDATAHEADER)) / sizeof(RECT))
+        return NULL;
+    rect_bytes = rect_count * sizeof(RECT);
+    data_bytes = sizeof(RGNDATAHEADER) + rect_bytes;
+    if (rect_count > UINT32_MAX || rect_bytes > UINT32_MAX ||
+        data_bytes > UINT32_MAX) return NULL;
+    region_data = (RGNDATA *)malloc(data_bytes);
+    if (region_data == NULL) return NULL;
+    header = (RGNDATAHEADER *)region_data;
+    header->dwSize = sizeof(RGNDATAHEADER);
+    header->iType = RDH_RECTANGLES;
+    header->nCount = (DWORD)rect_count;
+    header->nRgnSize = (DWORD)rect_bytes;
+    header->rcBound.left = min_x;
+    header->rcBound.top = min_y;
+    header->rcBound.right = max_x;
+    header->rcBound.bottom = max_y;
+    rects = (RECT *)region_data->Buffer;
+    rect_count = 0;
+    for (y = 0; y < height; ++y) {
+        uint8_t pattern = masks[mask_stage][(origin_y + y) & 3];
+        int x = 0;
+        while (x < width) {
+            int begin;
+            if (!feature_reveal_pixel(pattern, x, origin_x)) {
+                ++x;
+                continue;
+            }
+            begin = x++;
+            while (x < width && feature_reveal_pixel(pattern, x, origin_x)) ++x;
+            rects[rect_count].left = begin;
+            rects[rect_count].top = y;
+            rects[rect_count].right = x;
+            rects[rect_count].bottom = y + 1;
+            ++rect_count;
+        }
+    }
+    region = ExtCreateRegion(NULL, (DWORD)data_bytes, region_data);
+    free(region_data);
+    if (region == NULL) return NULL;
+
+cache_region:
+    if (regions[island_id][stage_index][x_phase_index] != NULL)
+        DeleteObject(regions[island_id][stage_index][x_phase_index]);
+    regions[island_id][stage_index][x_phase_index] = region;
+    cached_width[island_id][stage_index][x_phase_index] = width;
+    cached_height[island_id][stage_index][x_phase_index] = height;
+    cached_origin_phase[island_id][stage_index][x_phase_index] = origin_phase;
+    return region;
+}
+
+static void draw_feature_reveal(HDC dc, const SpriteSheet *art,
+                                int island_id, uint32_t frame_index,
+                                int x, int y, int progress)
+{
+    const SpriteFrame *frame;
+    HRGN region;
+    int destination_x;
+    int destination_y;
+    if (art == NULL || frame_index >= art->frame_count || progress < 1 ||
+        progress > 7) return;
+    frame = &art->frames[frame_index];
+    if (frame->bitmap == NULL) return;
+    destination_x = x + frame->x_offset;
+    destination_y = y + frame->y_offset;
+    region = feature_reveal_region(island_id, progress, frame->width,
+                                   frame->height, destination_x,
+                                   destination_y);
+    if (region == NULL) return;
+    if (SaveDC(dc) == 0) return;
+    OffsetRgn(region, destination_x, destination_y);
+    (void)ExtSelectClipRgn(dc, region, RGN_AND);
+    draw_sprite(dc, art, frame_index, x, y);
+    OffsetRgn(region, -destination_x, -destination_y);
+    RestoreDC(dc, -1);
+}
+
 /* FUN_0040b345 draws feature layers at fixed world coordinates from the
-   island-window origin. The object contributes its special-value bits. This
-   renders only the static branch (object flag bit 0 clear); triggered and
-   altitude-hazed variants depend on live game state. */
+   island-window origin. Pair bits come from the live object's +0x4a mask;
+   retain the layout special value for the pre-session/static presentation. */
 static void draw_island_feature(HDC dc, int island_id, const IslandLocation *site,
+                                const GameRuntimeLocation *runtime_site,
                                 int world_origin_x, int world_origin_y)
 {
-    const int bit0 = (site->special_value & 1) != 0;
-    const int bit1 = (site->special_value & 2) != 0;
+    uint16_t feature_bits = (uint16_t)site->special_value;
+    if (runtime_site != NULL)
+        feature_bits |= (uint16_t)runtime_site->source_capacity_4a;
+    const int bit0 = (feature_bits & 1U) != 0;
+    const int bit1 = (feature_bits & 2U) != 0;
     const SpriteSheet *art = &g_island_feature_art;
 
 #define FEATURE_FRAME(frame, dx, dy) \
     do { if ((uint32_t)(frame) < art->frame_count) \
         draw_sprite(dc, art, (uint32_t)(frame), world_origin_x + (dx), \
                     world_origin_y + (dy)); } while (0)
+#define FEATURE_ACTIVE(frame, dx, dy) \
+    do { \
+        int reveal = (int)(runtime_site->charge_source_value_30 / 4U); \
+        if (reveal >= 8) FEATURE_FRAME(frame, dx, dy); \
+        else if (reveal > 0) draw_feature_reveal(dc, art, island_id, \
+            (uint32_t)(frame), world_origin_x + (dx), world_origin_y + (dy), \
+            reveal); \
+    } while (0)
 
     switch (island_id) {
     case 0:
@@ -430,6 +677,30 @@ static void draw_island_feature(HDC dc, int island_id, const IslandLocation *sit
     default:
         break;
     }
+
+    /* FUN_00410bd2 switches to a normal frame blit once the active feature's
+       +0x30 counter reaches 32 (the caller passes +0x30 / 4). */
+    if (runtime_site != NULL && (runtime_site->source_flags & 1U) != 0) {
+        switch (island_id) {
+        case 0: FEATURE_ACTIVE(4, 0x6b3, 100); break;
+        case 1: FEATURE_ACTIVE(2, 0x131, 0xae); break;
+        case 2: FEATURE_ACTIVE(2, 0x2d, 0); break;
+        case 3: FEATURE_ACTIVE(1, 0x3e, 0); break;
+        case 4: FEATURE_ACTIVE(2, 0x4a5, 0); break;
+        case 5: FEATURE_ACTIVE(2, 0x25e, 0x23); break;
+        case 6: FEATURE_ACTIVE(2, 0x26, 9); break;
+        case 7: FEATURE_ACTIVE(2, 0x61, 0); break;
+        case 8: FEATURE_ACTIVE(2, 0x47b, 0x33); break;
+        case 9: FEATURE_ACTIVE(2, 0x460, 0); break;
+        case 10: FEATURE_ACTIVE(2, 0x3bc, 0x60); break;
+        case 11: FEATURE_ACTIVE(3, 0x58e, 0x75); break;
+        case 12: FEATURE_ACTIVE(2, 0x4e7, 0xa0); break;
+        case 13: FEATURE_ACTIVE(2, 0x463, 0x82); break;
+        case 14: FEATURE_ACTIVE(0, 0x45d, 0); break;
+        default: break;
+        }
+    }
+#undef FEATURE_ACTIVE
 #undef FEATURE_FRAME
 }
 

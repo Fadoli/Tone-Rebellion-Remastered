@@ -241,7 +241,15 @@ static int selected_cast_action_at(int x, int y)
             int kind = game_session_cast_kind_for_action(
                 (uint8_t)location->source_value_14,
                 (uint8_t)(0x15U + index));
+            if (kind == 0x0a &&
+                (g_selected_floater < 0 ||
+                 (unsigned int)g_selected_floater >= g_game_session.floater_count ||
+                 !game_session_floater_is_active(
+                     &g_game_session.floaters[(unsigned int)g_selected_floater]) ||
+                 g_game_session.floaters[(unsigned int)g_selected_floater]
+                     .owner_slot != 4U)) return -1;
             return kind == 4 || kind == 7 || kind == 8 || kind == 9 ||
+                   kind == 0x0a || kind == 0x0b ||
                    kind == 0x14 || kind == 0x16
                 ? (int)(0x15U + index) : -1;
         }

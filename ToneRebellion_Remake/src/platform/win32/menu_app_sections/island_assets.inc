@@ -44,6 +44,7 @@ static int load_island_surface(int island_id, int map_island_index,
     SpriteSheet leviathan_leg_candidates[9] = {{0}};
     SpriteSheet leviathan_leg_flipped_candidates[9] = {{0}};
     SpriteSheet feature_candidate = {0};
+    SpriteSheet leviathan_reveal_candidate = {0};
     COLORREF palette[256];
     uint8_t palette_rgb6[ISLAND_HAZE_PALETTE_BYTES];
     IslandData parsed;
@@ -179,8 +180,15 @@ static int load_island_surface(int island_id, int map_island_index,
                            &defense_impact_candidates[2], error, error_capacity) ||
         !load_sprite_sheet(&archive, defense_impact_names[3], palette,
                            &defense_impact_candidates[3], error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\v-nsupfx.shp", palette,
+                           &leviathan_reveal_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, feature_name, palette, &feature_candidate,
                            error, error_capacity)) {
+        goto done;
+    }
+    if (leviathan_reveal_candidate.frame_count == 0) {
+        (void)snprintf(error, error_capacity,
+                       "data\\v-nsupfx.shp lacks the Leviathan reveal frame");
         goto done;
     }
     if (inventory_item_candidate.frame_count < GAME_INVENTORY_ITEM_COUNT) {
@@ -493,6 +501,7 @@ static int load_island_surface(int island_id, int map_island_index,
         memset(&building_candidates[item_id], 0, sizeof(building_candidates[item_id]));
     }
     free_sprite_sheet(&g_island_feature_art);
+    free_sprite_sheet(&g_leviathan_reveal_art);
     free(g_island_height_data);
     g_island_surface_art = candidate;
     memset(&candidate, 0, sizeof(candidate));
@@ -550,6 +559,8 @@ static int load_island_surface(int island_id, int map_island_index,
     memset(&diplomacy_candidate, 0, sizeof(diplomacy_candidate));
     g_island_feature_art = feature_candidate;
     memset(&feature_candidate, 0, sizeof(feature_candidate));
+    g_leviathan_reveal_art = leviathan_reveal_candidate;
+    memset(&leviathan_reveal_candidate, 0, sizeof(leviathan_reveal_candidate));
     g_island_height_data = height_data;
     g_island_height_length = height_member->length;
     height_data = NULL;
@@ -619,6 +630,7 @@ done:
         free_sprite_sheet(&leviathan_leg_flipped_candidates[hall_index]);
     }
     free_sprite_sheet(&feature_candidate);
+    free_sprite_sheet(&leviathan_reveal_candidate);
     free(height_data);
     free(text_data);
     cob_archive_close(&archive);

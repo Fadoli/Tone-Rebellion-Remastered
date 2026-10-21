@@ -11,12 +11,13 @@
 
 enum { GAME_SESSION_MAX_FLOATERS = 256,
        GAME_FLOATER_CATEGORY_COUNT = GAME_START_PLAYER_COUNT + 1 };
-/* FUN_0045ee26 scans 48 rows inside the current island runtime record. */
-enum { GAME_SOURCE_RECORDS_PER_ISLAND = 48,
+/* FUN_0045ee26 scans 48 100-byte source rows in each player's record. */
+enum { GAME_SOURCE_RECORDS_PER_PLAYER = 48,
        GAME_SOURCE_SUBSLOTS_PER_ITEM = 10 };
 enum { GAME_SESSION_MAX_PENDING_EVENTS = 64,
        GAME_SESSION_MAX_TASKS = GAME_SESSION_MAX_PENDING_EVENTS };
 enum { GAME_SESSION_MAX_AUDIO_EVENTS = 128 };
+enum { GAME_SESSION_MAX_WORLD_EVENTS = 32 };
 enum { GAME_SESSION_MAX_CAST_EFFECTS = 32 };
 enum { GAME_SESSION_MAX_CAST_ACTIONS = 64 };
 enum { GAME_SESSION_MAX_GLYPH_ACTIONS = 64 };
@@ -37,6 +38,7 @@ typedef enum GameResourceType {
 } GameResourceType;
 
 typedef enum GameSessionAudioEventKind {
+    GAME_SESSION_AUDIO_FLOATER_DEATH = 1,
     GAME_SESSION_AUDIO_BUILD = 2,
     GAME_SESSION_AUDIO_BRIDGE = 3,
     GAME_SESSION_AUDIO_FLOATER_BIRTH = 4
@@ -46,6 +48,17 @@ typedef struct GameSessionAudioEvent {
     uint8_t kind;
     int16_t owner_id;
 } GameSessionAudioEvent;
+
+typedef enum GameSessionWorldEventKind {
+    GAME_SESSION_WORLD_EVENT_BUILDING_DESTROYED = 8,
+    GAME_SESSION_WORLD_EVENT_ISLAND_REACHED = 12
+} GameSessionWorldEventKind;
+
+typedef struct GameSessionWorldEvent {
+    uint8_t kind;
+    uint8_t island_index;
+    int32_t payload;
+} GameSessionWorldEvent;
 
 typedef struct GamePlayerEconomy {
     /* FUN_0046466f assigns one initial hall per player. These indices bind
@@ -57,14 +70,10 @@ typedef struct GamePlayerEconomy {
     /* DAT_0061a654 per-player override makes FUN_00462285 expose all
        non-Leviathan sites. No native writer has been identified yet. */
     uint8_t island_visibility_override;
-    /* The remake currently models +0x40 from accessible class-1 regions.
-       Native assembly evidence instead shows FUN_0045e6d3 overwriting +0x3c
-       with 0.5 * 20.0 = 10 before calculating +0x40; see
-       behavior/player-tone-budget.md for this unresolved parity discrepancy. */
+    /* FUN_0045e6d3/FUN_00477599 set native gross maintenance capacity +0x3c
+       to 0.5 * 20.0 = 10 before calculating +0x40. */
     int32_t source_maintenance_budget;
-    /* FUN_0045eaa7 compares subtype-0 worker count against half of +0x3c.
-       The remake's per-region capacity currently differs from the native
-       writer's observed constant value of 10. */
+    /* FUN_0045eaa7 compares subtype-0 worker count against half of +0x3c. */
     int32_t source_maintenance_capacity;
     /* FUN_0045eaa7's per-player +0x8c recruiter delay, in island updates. */
     uint32_t floater_birth_timer;
@@ -73,6 +82,9 @@ typedef struct GamePlayerEconomy {
     uint16_t inventory_count[GAME_INVENTORY_ITEM_COUNT];
     /* FUN_0043dee3 reads the player's 14-bit glyph-ownership mask. */
     uint16_t glyph_mask;
+    /* FUN_00420f28 reads DAT_00619242 after the paired island-feature sites
+       are completed (FUN_004503bd case 3). Bits are island indices. */
+    uint16_t special_feature_island_mask;
     /* FUN_004239e9 kind 0x15 stores the owner's DAT_00618f5a speed timer. */
     int16_t floater_speed_boost_timer;
     /* FUN_00465793 stores the last glyph accepted by the subtype-3 action. */
@@ -83,10 +95,19 @@ typedef struct GamePlayerEconomy {
     /* FUN_0045eaa7 stores the slot reserved for each of its three type-4
        stock requests; -1 means no request is linked. */
     int16_t resource_task_slot[GAME_RESOURCE_TYPE_COUNT];
+    /* FUN_00452ceb only exposes Hall stock as a refill source while the
+       matching player/resource pickup lock at DAT_0061a588 is clear. */
+    uint8_t hall_resource_source_busy[GAME_RESOURCE_TYPE_COUNT];
     /* IWTrade keeps three resource amounts for each of the three other
        players. Columns use the source display order with the local player
        omitted (FUN_0043edac / FUN_0043ec78). */
     uint16_t trade_offer[GAME_RESOURCE_TYPE_COUNT][GAME_TRADE_TARGET_COUNT];
+    /* FUN_004204bc's per-player score row: kills against each player faction,
+       and against each Leviathan subtype (native indices 0..17). */
+    uint16_t floater_kills_by_faction[GAME_START_PLAYER_COUNT];
+    uint16_t leviathan_kills_by_subtype[18];
+    /* FUN_004204bc increments the victim faction's loss counter on death. */
+    uint16_t floater_losses;
 } GamePlayerEconomy;
 
 /* FUN_0042fa0f's TradeDOIT path emits category-3/type-0xb requests. The
@@ -123,6 +144,7 @@ typedef struct GameCastActionRequest {
     uint8_t action_subtype;
     uint8_t island_index;
     uint16_t location_index;
+    int16_t target_floater_index;
 } GameCastActionRequest;
 
 /* FUN_0042fa0f's BC_OnOff command reaches FUN_00465793 as type-1/subtype-0.

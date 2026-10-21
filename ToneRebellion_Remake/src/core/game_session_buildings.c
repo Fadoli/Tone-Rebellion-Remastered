@@ -15,27 +15,29 @@ static void set_error(char *error, size_t capacity, const char *message)
 }
 
 static int reserve_source_record(const GameSession *session,
-                                 uint8_t island_index, uint8_t owner,
+                                 uint8_t owner,
                                  uint16_t item_id, int16_t *record_index,
                                  int16_t *category_slot)
 {
-    uint8_t used_records[GAME_SOURCE_RECORDS_PER_ISLAND] = {0};
+    uint8_t used_records[GAME_SOURCE_RECORDS_PER_PLAYER] = {0};
     uint8_t used_categories[GAME_SOURCE_SUBSLOTS_PER_ITEM] = {0};
     unsigned int record_candidate;
     unsigned int category_candidate;
+    unsigned int island_index;
 
-    {
+    for (island_index = 0; island_index < session->island_count;
+         ++island_index) {
         const GameRuntimeIsland *island = &session->islands[island_index];
         unsigned int location_index;
         for (location_index = 0; location_index < island->location_count;
              ++location_index) {
             const GameRuntimeLocation *location = &island->locations[location_index];
+            if (location->owner_id != owner) continue;
             if (location->source_location_slot_18 >= 0 &&
-                location->source_location_slot_18 < GAME_SOURCE_RECORDS_PER_ISLAND) {
+                location->source_location_slot_18 < GAME_SOURCE_RECORDS_PER_PLAYER) {
                 used_records[location->source_location_slot_18] = 1;
             }
-            if (location->owner_id == owner &&
-                location->record_value_10 == item_id &&
+            if (location->record_value_10 == item_id &&
                 location->source_category_slot_60 >= 0 &&
                 location->source_category_slot_60 < GAME_SOURCE_SUBSLOTS_PER_ITEM) {
                 used_categories[location->source_category_slot_60] = 1;
@@ -43,16 +45,16 @@ static int reserve_source_record(const GameSession *session,
         }
     }
 
-    for (record_candidate = 0; record_candidate < GAME_SOURCE_RECORDS_PER_ISLAND;
+    for (record_candidate = 0; record_candidate < GAME_SOURCE_RECORDS_PER_PLAYER;
          ++record_candidate) {
         if (!used_records[record_candidate]) break;
     }
-    if (record_candidate == GAME_SOURCE_RECORDS_PER_ISLAND) return 0;
+    if (record_candidate == GAME_SOURCE_RECORDS_PER_PLAYER) return 0;
     for (category_candidate = 0; category_candidate < GAME_SOURCE_SUBSLOTS_PER_ITEM;
          ++category_candidate) {
         if (!used_categories[category_candidate]) break;
     }
-    /* FUN_0045ee26 returns the free island source row even when all ten item
+    /* FUN_0045ee26 returns the free player source row even when all ten item
        subslots are occupied; its category field remains initialized to 0. */
     if (category_candidate == GAME_SOURCE_SUBSLOTS_PER_ITEM) category_candidate = 0;
     *record_index = (int16_t)record_candidate;
@@ -182,17 +184,17 @@ int game_session_place_building(GameSession *session,
         return 0;
     }
     if (item->maintenance_tone_cost >
-        session->economy[player_slot].source_maintenance_budget) {
+        session->economy[player_slot].source_maintenance_capacity) {
         set_error(error, error_capacity,
-                  "player maintenance budget is too small for this building");
+                  "player maintenance capacity is too small for this building");
         return 0;
     }
     if (base_item_id >= 0x2c && base_item_id <= 0x32) {
         /* FUN_004528ca initializes the building before attempting this
-           allocation, then returns early if the current island's 48-row
-           source table is full.
+           allocation, then returns early if this player's 48-row source
+           table is full across all islands.
            FUN_004527ee ignores that return and still completes the placement. */
-        (void)reserve_source_record(session, island_index, player_slot,
+        (void)reserve_source_record(session, player_slot,
                                     runtime_item_id,
                                     &source_record_index, &source_category_slot);
     }
@@ -231,6 +233,7 @@ int game_session_place_building(GameSession *session,
     runtime->source_value_32 = 1;
     runtime->source_value_34 = source_value_34_maximum;
     runtime->leviathan_spawned_floater = -1;
+    runtime->upgrade_task_handle = -1;
     runtime->record_value_24 = 0;
     runtime->resource_stock[GAME_RESOURCE_BUILD_TONE] = 0;
     runtime->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 0;
@@ -257,9 +260,13 @@ int game_session_place_building(GameSession *session,
     runtime->construction_progress = 0;
     runtime->production_progress = 0;
     runtime->animation_rate = 1;
+    runtime->new_build_animation_ticks = 1;
     /* The native initializer leaves BARG's double at +0x50 untouched. */
     (void)game_session_recalculate_active_locations(session);
     game_session_refresh_player_maintenance_budgets(session);
+    /* FUN_004528ca finishes through FUN_00466c8b, which recalculates all
+       player budgets and then FUN_00460460's island Leviathan rates. */
+    game_session_recalculate_leviathan_island(session, island_index);
     (void)game_session_queue_audio_event(
         session, GAME_SESSION_AUDIO_BUILD, player_slot);
     return 1;

@@ -24,8 +24,10 @@ int game_session_initialize_start_players(
         unsigned int location_index = start->nearest_site_location_index;
         unsigned int unit;
 
-        for (unit = 0; unit < GAME_RESOURCE_TYPE_COUNT; ++unit)
+        for (unit = 0; unit < GAME_RESOURCE_TYPE_COUNT; ++unit) {
             session->economy[island_index].resource_task_slot[unit] = -1;
+            session->economy[island_index].hall_resource_source_busy[unit] = 0;
+        }
 
         /* FUN_0046466f sets island runtime +0x29ac + player*4 for each
            player's assigned starting island; FUN_0047117d reads this flag. */
@@ -104,11 +106,12 @@ int game_session_initialize_start_players(
             floater->owner_slot = (uint8_t)island_index;
             /* FUN_00466fe4 initializes current hits to the loaded max HP.
                The type/subtype lookup uses the *work row in floater.txt. */
-            floater->current_hit_points = (uint8_t)stats->hit_points;
-            floater->max_hit_points = (uint8_t)stats->hit_points;
+            floater->current_hit_points = stats->hit_points;
+            floater->max_hit_points = stats->hit_points;
             floater->attack_strength = (uint8_t)stats->attack_strength;
             floater->source_progress_08 = 0;
             floater->max_attack_points = stats->max_attack_points;
+            floater->base_max_attack_points = stats->max_attack_points;
             floater->attack_realm = stats->attack_realm;
             if (stats->attack_realm >= 0 && stats->attack_realm < 4) {
                 memcpy(floater->attack_impact_frame_counts,
@@ -208,6 +211,11 @@ int game_session_initialize_start_islands(
             state->record_value_10 = location->renderer_class == 3 ? location->renderer_variant : 0;
             state->owner_id = -1;
             state->source_value_14 = -1;
+            /* Feature-trigger rows carry the side (0 or 1) they accept at
+               raw +0x4a; FUN_004503bd compares it with the world-item pair. */
+            if (location->renderer_class == 3 &&
+                location->renderer_variant == 3)
+                state->source_capacity_4a = (int16_t)location->special_value;
             state->source_location_slot_18 = -1;
             state->source_category_slot_60 = -1;
             state->source_value_34 = -1;
@@ -224,6 +232,7 @@ int game_session_initialize_start_islands(
             state->charge_floater_count = 0;
             state->charge_recent_floater = -1;
             state->charge_staff_task_handle = -1;
+            state->upgrade_task_handle = -1;
             state->leviathan_spawned_floater = -1;
             state->record_value_24 = 0;
             state->bridge_neighbor_island = bridge_neighbors[island_index][location_index];

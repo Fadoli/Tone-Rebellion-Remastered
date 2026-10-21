@@ -72,11 +72,16 @@ int game_session_consume_location_resource(GameSession *session,
         location->record_value_24 = 0;
         return 1;
     }
-    if (location_is_player_hall(location)) {
+    if (game_session_base_item_id(location) == 0x2a) {
         if (resource_code >= 1 && resource_code <= GAME_RESOURCE_TYPE_COUNT) {
             uint16_t *stock = &location->resource_stock[resource_code - 1];
             if (*stock > 0) {
                 --*stock;
+                /* Only a player Hall owns a DAT_0061a588 reservation; other
+                   item-0x2a sites expose the same native +0x28..+0x2c stock. */
+                if (location_is_player_hall(location))
+                    game_session_release_hall_resource_source(session,
+                        (uint8_t)location->owner_id, (int16_t)resource_code);
                 return 1;
             }
         }
@@ -105,7 +110,7 @@ int game_session_location_resource_available(const GameSession *session,
         location_index >= session->islands[island_index].location_count) return 0;
     location = &session->islands[island_index].locations[location_index];
     if (location->record_value_24 == resource_code) return 1;
-    if (location_is_player_hall(location) &&
+    if (game_session_base_item_id(location) == 0x2a &&
         resource_code >= 1 && resource_code <= GAME_RESOURCE_TYPE_COUNT &&
         location->resource_stock[resource_code - 1] > 0) return 1;
     if (location->owner_id >= 0 && location->owner_id < GAME_START_PLAYER_COUNT &&
@@ -116,6 +121,59 @@ int game_session_location_resource_available(const GameSession *session,
         session->economy[location->owner_id].inventory_count[
             resource_code - GAME_INVENTORY_ITEM_FIRST_ID] > 0) return 1;
     return 0;
+}
+
+int game_session_hall_resource_source_available(const GameSession *session,
+                                                uint8_t player_slot,
+                                                int16_t resource_code)
+{
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        resource_code < 1 || resource_code > GAME_RESOURCE_TYPE_COUNT)
+        return 0;
+    return session->economy[player_slot].hall_resource_source_busy[
+        (unsigned int)resource_code - 1U] == 0;
+}
+
+void game_session_release_hall_resource_source(GameSession *session,
+                                               uint8_t player_slot,
+                                               int16_t resource_code)
+{
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        resource_code < 1 || resource_code > GAME_RESOURCE_TYPE_COUNT)
+        return;
+    session->economy[player_slot].hall_resource_source_busy[
+        (unsigned int)resource_code - 1U] = 0;
+}
+
+static void update_player_hall_tier(const GameSession *session,
+                                    uint8_t player_slot,
+                                    GameRuntimeLocation *hall)
+{
+    unsigned int accessible_islands = 0;
+    unsigned int island_index;
+    int16_t next_tier;
+
+    if (hall == NULL || !location_is_player_hall(hall)) return;
+    for (island_index = 0; island_index < session->island_count;
+         ++island_index) {
+        if ((session->islands[island_index].access_mask &
+             (uint8_t)(1U << player_slot)) != 0)
+            ++accessible_islands;
+    }
+
+    /* FUN_0045eaa7 raises the Hall to tier 1 after island four and tier 2
+       after island six. At three or fewer it leaves the existing tier alone. */
+    if (accessible_islands >= 6U) next_tier = 2;
+    else if (accessible_islands > 3U) next_tier = 1;
+    else return;
+
+    /* FUN_00453cba starts the BASE transition only for an increase, then
+       always writes the requested Hall capacity tier. */
+    if (next_tier > hall->source_capacity_4a) {
+        hall->source_flags |= 0x20U;
+        hall->source_value_48 = 0;
+    }
+    hall->source_capacity_4a = next_tier;
 }
 
 int game_session_location_move_costs(const GameSession *session,
@@ -220,6 +278,48 @@ int game_session_begin_location_move(GameSession *session,
     session->location_move_player = player_slot;
     session->location_move_source_island = island_index;
     session->location_move_source_index = location_index;
+    session->location_move_previous_source_46 = location->source_value_46;
+    session->location_move_previous_source_58 = location->source_value_58;
+    /* FUN_004533fb runs on grab, before the held state is set: it restarts
+       the transition cadence and removes the site from active production. */
+    location->source_value_58 = 1;
+    location->source_value_46 = 0;
+    if (game_session_recalculate_location_active_with_visibility(location))
+        game_session_refresh_player_maintenance_budgets(session);
+    /* FUN_004533fb delegates linked-source cleanup before marking the old
+       site inactive. The source row's three resource requests and staff /
+       upgrade handles must not keep targeting a building while held. */
+    if (location->source_location_slot_18 != -1) {
+        unsigned int task_type;
+        (void)game_session_cancel_tasks_for_location(session, island_index,
+                                                      location_index);
+        if (location->charge_staff_task_handle >= 0 &&
+            location->charge_staff_task_handle < GAME_SESSION_MAX_PENDING_EVENTS) {
+            (void)game_session_pending_event_release(session,
+                (uint8_t)location->charge_staff_task_handle);
+            location->charge_staff_task_handle = -1;
+        }
+        if (location->upgrade_task_handle >= 0 &&
+            location->upgrade_task_handle < GAME_SESSION_MAX_PENDING_EVENTS) {
+            GamePendingEvent *event = &session->pending_events[
+                (uint8_t)location->upgrade_task_handle];
+            if (event->active != 0) {
+                GamePendingEvent expected = *event;
+                (void)game_session_dispatch_task_command(session,
+                    (uint8_t)location->upgrade_task_handle, 12, &expected);
+            }
+            location->upgrade_task_handle = -1;
+        }
+        for (task_type = 0; task_type < GAME_RESOURCE_TYPE_COUNT; ++task_type) {
+            int16_t task_slot = location->source_task_slot[task_type];
+            if (task_slot >= 0 &&
+                task_slot < GAME_SESSION_MAX_PENDING_EVENTS) {
+                (void)game_session_pending_event_release(session,
+                                                         (uint8_t)task_slot);
+            }
+            location->source_task_slot[task_type] = -1;
+        }
+    }
     return 1;
 }
 
@@ -239,6 +339,7 @@ int game_session_finish_location_move(GameSession *session,
     uint8_t target_class;
     uint8_t target_site_size;
     int moves_hall;
+    int preserve_native_site_state;
     int32_t moved_base_item_id;
     GamePlayerEconomy *player_economy;
     if (session == NULL || !session->location_move_active ||
@@ -285,6 +386,17 @@ int game_session_finish_location_move(GameSession *session,
             session, (uint8_t)source->charge_staff_task_handle);
         source->charge_staff_task_handle = -1;
     }
+    if (source->upgrade_task_handle >= 0 &&
+        source->upgrade_task_handle < GAME_SESSION_MAX_PENDING_EVENTS) {
+        GamePendingEvent *event = &session->pending_events[
+            (uint8_t)source->upgrade_task_handle];
+        if (event->active != 0) {
+            GamePendingEvent expected = *event;
+            (void)game_session_dispatch_task_command(session,
+                (uint8_t)source->upgrade_task_handle, 12, &expected);
+        }
+        source->upgrade_task_handle = -1;
+    }
     for (task_type = 0; task_type < GAME_RESOURCE_TYPE_COUNT; ++task_type) {
         int16_t task_slot = source->source_task_slot[task_type];
         if (task_slot >= 0 && task_slot < GAME_SESSION_MAX_PENDING_EVENTS) {
@@ -296,7 +408,12 @@ int game_session_finish_location_move(GameSession *session,
 
     moved = *source;
     moved_base_item_id = game_session_base_item_id(&moved);
+    /* The temporary grab transition belongs to the old site, not the
+       building's carried runtime state. */
+    moved.source_value_46 = session->location_move_previous_source_46;
+    moved.source_value_58 = session->location_move_previous_source_58;
     moved.charge_staff_task_handle = -1;
+    moved.upgrade_task_handle = -1;
     for (task_type = 0; task_type < GAME_RESOURCE_TYPE_COUNT; ++task_type)
         moved.source_task_slot[task_type] = -1;
     target_x = target->x;
@@ -343,16 +460,20 @@ int game_session_finish_location_move(GameSession *session,
         }
     }
 
-    /* The source helper's indirect cleanup is not fully reconstructed. The
-       remake applies the user-facing move operation and leaves an empty site. */
+    /* FUN_00452a15 preserves this site state only for the native owner-4
+       transition window; all other moved-from sites clear both fields. */
+    preserve_native_site_state = source->source_value_14 == 4 &&
+        source->record_value_24 > 4 && source->record_value_24 < 0x22;
     source->record_value_10 = 0;
     source->owner_id = -1;
     source->source_value_14 = -1;
     source->maintenance_tone_cost = 0;
     source->source_location_slot_18 = -1;
     source->source_category_slot_60 = -1;
-    source->record_value_24 = 0;
+    if (preserve_native_site_state) source->record_value_10 = 1;
+    else source->record_value_24 = 0;
     source->source_flags = 0;
+    source->new_build_animation_ticks = 0;
     source->source_value_34 = -1;
     source->source_value_22 = 0;
     source->resource_stock[0] = 0;
@@ -362,11 +483,14 @@ int game_session_finish_location_move(GameSession *session,
     source->charge_floater_count = 0;
     source->charge_recent_floater = -1;
     source->charge_staff_task_handle = -1;
+    source->upgrade_task_handle = -1;
     source->leviathan_spawned_floater = -1;
     source->source_capacity_4a = 0;
     source->source_progress_08 = 0;
     source->source_level_flags = 0;
     source->source_value_44 = 0;
+    source->source_value_40 = 0;
+    source->source_value_42 = 0;
     /* FUN_004533fb clears +0x46, sets +0x58, then recomputes the active bit. */
     source->source_value_46 = 0;
     source->source_value_58 = 1;
@@ -425,6 +549,15 @@ int game_session_cancel_location_move(GameSession *session,
             }
         }
     }
+    if (island_index < session->island_count &&
+        location_index < session->islands[island_index].location_count) {
+        GameRuntimeLocation *source = &session->islands[island_index]
+            .locations[location_index];
+        source->source_value_46 = session->location_move_previous_source_46;
+        source->source_value_58 = session->location_move_previous_source_58;
+        if (game_session_recalculate_location_active_with_visibility(source))
+            game_session_refresh_player_maintenance_budgets(session);
+    }
     session->location_move_active = 0;
     return 1;
 }
@@ -459,6 +592,7 @@ unsigned int game_session_update_resource_requests(GameSession *session)
             continue;
         hall = &session->islands[economy->hall_island_index]
                     .locations[economy->hall_location_index];
+        update_player_hall_tier(session, (uint8_t)player, hall);
         for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
             const int16_t linked_slot = economy->resource_task_slot[resource];
             const int request_active = economy->stock_mode[resource] == 2 &&
@@ -478,8 +612,22 @@ unsigned int game_session_update_resource_requests(GameSession *session)
             } else if (!request_active && linked_slot != -1) {
                 if (linked_slot >= 0 &&
                     linked_slot < GAME_SESSION_MAX_PENDING_EVENTS) {
-                    (void)game_session_pending_event_release(
-                        session, (uint8_t)linked_slot);
+                    GamePendingEvent *event =
+                        &session->pending_events[(uint8_t)linked_slot];
+                    if (event->active != 0 &&
+                        event->player_id == (int16_t)player &&
+                        event->action_type == 4 &&
+                        event->payload_0a ==
+                            (int16_t)economy->hall_island_index &&
+                        event->payload_0e ==
+                            (int16_t)economy->hall_location_index &&
+                        event->payload_12 == (int16_t)(resource + 1U)) {
+                        GamePendingEvent expected = *event;
+                        /* FUN_0045eaa7 cancels the task through
+                           FUN_00466533, which also detaches its worker. */
+                        (void)game_session_dispatch_task_command(session,
+                            (uint8_t)linked_slot, 12, &expected);
+                    }
                 }
                 economy->resource_task_slot[resource] = -1;
                 ++changes;

@@ -13,7 +13,8 @@ int game_session_queue_audio_event(GameSession *session, uint8_t kind,
 
     if (session == NULL || session->audio_event_count >=
             GAME_SESSION_MAX_AUDIO_EVENTS ||
-        (kind != GAME_SESSION_AUDIO_BUILD &&
+        (kind != GAME_SESSION_AUDIO_FLOATER_DEATH &&
+         kind != GAME_SESSION_AUDIO_BUILD &&
          kind != GAME_SESSION_AUDIO_BRIDGE &&
          kind != GAME_SESSION_AUDIO_FLOATER_BIRTH)) return 0;
     tail = ((unsigned int)session->audio_event_head +
@@ -35,6 +36,40 @@ int game_session_pop_audio_event(GameSession *session,
         ((unsigned int)session->audio_event_head + 1U) %
         GAME_SESSION_MAX_AUDIO_EVENTS);
     --session->audio_event_count;
+    return 1;
+}
+
+int game_session_queue_world_event(GameSession *session, uint8_t kind,
+                                   uint8_t island_index, int32_t payload)
+{
+    unsigned int tail;
+    GameSessionWorldEvent *event;
+
+    if (session == NULL ||
+        (kind != GAME_SESSION_WORLD_EVENT_BUILDING_DESTROYED &&
+         kind != GAME_SESSION_WORLD_EVENT_ISLAND_REACHED) ||
+        island_index >= session->island_count ||
+        session->world_event_count >= GAME_SESSION_MAX_WORLD_EVENTS) return 0;
+    tail = ((unsigned int)session->world_event_head +
+            session->world_event_count) % GAME_SESSION_MAX_WORLD_EVENTS;
+    event = &session->world_events[tail];
+    event->kind = kind;
+    event->island_index = island_index;
+    event->payload = payload;
+    ++session->world_event_count;
+    return 1;
+}
+
+int game_session_pop_world_event(GameSession *session,
+                                 GameSessionWorldEvent *out)
+{
+    if (session == NULL || out == NULL || session->world_event_count == 0)
+        return 0;
+    *out = session->world_events[session->world_event_head];
+    session->world_event_head = (uint8_t)(
+        ((unsigned int)session->world_event_head + 1U) %
+        GAME_SESSION_MAX_WORLD_EVENTS);
+    --session->world_event_count;
     return 1;
 }
 

@@ -181,7 +181,15 @@ int building_render_parse_animation_layer(const char *line, const char *tag,
     segment->last_frame = (uint16_t)last;
     segment->ticks_per_frame = (uint16_t)speed;
     segment->fallback_frame = (uint16_t)value_a;
-    segment->threshold = (uint16_t)value_b;
+    if (building_render_ascii_case_equal(tag, "prod")) {
+        /* FUN_00455833 stores PROD+4 in ticks, not as the source frame
+           number. A zero value leaves the native -1 sentinel intact. */
+        segment->threshold = value_b == 0 ? UINT16_MAX
+            : (uint16_t)(((uint32_t)((int32_t)value_b - (int32_t)first)) *
+                         (uint32_t)speed);
+    } else {
+        segment->threshold = (uint16_t)value_b;
+    }
     if (building_render_ascii_case_equal(tag, "cons")) {
         segment->parameter_a = (int16_t)offset_x;
         segment->parameter_b = (int16_t)offset_y;

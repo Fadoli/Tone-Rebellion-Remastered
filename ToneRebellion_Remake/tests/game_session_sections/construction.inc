@@ -552,19 +552,19 @@ static void test_tone_maintenance_surplus_tracks_regions_and_workers(void)
     session.floaters[0].is_active = 1;
     session.floaters[0].type_index = 0;
 
-    /* Each accessible Tone region provides 10 gross capacity; the worker and
-       active building consume two. */
+    /* Native gross capacity is 10; the worker and active building consume
+       two points of the available budget. */
     game_session_refresh_player_maintenance_budgets(&session);
-    assert(session.economy[0].source_maintenance_capacity == 50);
-    assert(session.economy[0].source_maintenance_budget == 48);
+    assert(session.economy[0].source_maintenance_capacity == 10);
+    assert(session.economy[0].source_maintenance_budget == 8);
 
-    /* A sixth region adds ten gross capacity. */
+    /* A sixth region does not change the native fixed gross capacity. */
     session.islands[0].locations[5].renderer_class = 1;
     session.islands[0].locations[5].source_value_14 = 0;
     session.islands[0].locations[5].source_value_22 = 1U;
     game_session_refresh_player_maintenance_budgets(&session);
-    assert(session.economy[0].source_maintenance_capacity == 60);
-    assert(session.economy[0].source_maintenance_budget == 58);
+    assert(session.economy[0].source_maintenance_capacity == 10);
+    assert(session.economy[0].source_maintenance_budget == 8);
 
     /* Losing that worker returns its upkeep to the available surplus. */
     session.floaters[0].is_active = 0;
@@ -594,9 +594,9 @@ static void test_recruitment_waits_for_surplus_then_creates_animated_worker(void
     assert(game_session_initialize(&world, islands, &catalog, &floater_catalog,
                                    &config, &session, error, sizeof(error)));
 
-    /* Three accessible starting pools provide gross capacity 30. */
-    assert(session.economy[0].source_maintenance_capacity == 30);
-    assert(session.economy[0].source_maintenance_budget == 26);
+    /* The native gross capacity is 10, with four starting workers charged. */
+    assert(session.economy[0].source_maintenance_capacity == 10);
+    assert(session.economy[0].source_maintenance_budget == 6);
     for (index = 0; index < 300; ++index)
         game_session_tick_floater_moves(&session, index + 1U, &catalog);
     assert(session.floater_count == 16);

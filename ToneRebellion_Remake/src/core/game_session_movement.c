@@ -37,8 +37,28 @@ static void game_session_remove_floater(GameSession *session,
     for (index = 0; index < session->floater_count; ++index) {
         GameFloaterStart *other = &session->floaters[index];
         if (index == floater_index ||
-            !game_session_floater_is_active(other) ||
-            other->order_target_floater != (int16_t)floater_index ||
+            !game_session_floater_is_active(other)) continue;
+        if (other->defend_target_floater == (int16_t)floater_index &&
+            other->active_order_action == 8) {
+            /* A defend order keeps a second target index outside the linked
+               order field. Cancel it now so a newly spawned unit cannot
+               inherit the old target when this floater slot is reused. */
+            other->active_order_action = 0;
+            other->movement_state = 0;
+            other->order_target_floater = -1;
+            other->defend_target_floater = -1;
+            other->order_target_location = -1;
+            other->order_target_island = UINT8_MAX;
+            other->order_progress = 0;
+            other->source_order_state_2c = 0;
+            other->source_order_coordinate_30 = 0;
+            other->source_order_pending = 0;
+            other->source_runtime_flags &= ~0x065U;
+            other->has_move_order = 0;
+            other->has_wander_order = 1;
+            other->wander_timer = 0;
+        }
+        if (other->order_target_floater != (int16_t)floater_index ||
             (other->source_runtime_flags & 0x004U) == 0) continue;
         /* FUN_004206b2 routes this through FUN_00421ec1(-1): drop the
            linked order/claim and clear its target bookkeeping and flags. */
@@ -57,6 +77,21 @@ static void game_session_remove_floater(GameSession *session,
         other->has_wander_order = 1;
         other->wander_timer = 0;
     }
+    for (effect_slot = 0; effect_slot < 32; ++effect_slot) {
+        GameDefenseProjectile *projectile =
+            &session->defense_projectiles[effect_slot];
+        if (projectile->active != 0 &&
+            projectile->target_floater == (int16_t)floater_index) {
+            /* FUN_00418921 invalidates effect-table entries that still target
+               the removed floater; do not let a tower bolt retarget a reused
+               slot on the next island tick. */
+            projectile->active = 0;
+        }
+    }
+    /* FUN_00467101 calls FUN_00425084 before freeing the slot. Drop carried
+       artifacts at the nearest empty neutral site (or back to inventory when
+       no site is available), and clear the carried-item field for all cargo. */
+    game_session_drop_carried_artifact(session, floater);
     floater->is_active = 0;
     floater->movement_state = 0;
     floater->active_order_action = 0;
@@ -725,7 +760,7 @@ static int game_session_floater_has_site_speed_bonus(
     if (session == NULL || floater == NULL ||
         floater->owner_slot >= GAME_START_PLAYER_COUNT ||
         floater->source_link_0c < 0 ||
-        floater->source_link_0c >= GAME_SOURCE_RECORDS_PER_ISLAND ||
+        floater->source_link_0c >= GAME_SOURCE_RECORDS_PER_PLAYER ||
         floater->charge_source_island >= session->island_count ||
         floater->charge_source_location >=
             session->islands[floater->charge_source_island].location_count) {
@@ -823,10 +858,11 @@ static int game_session_create_recruited_worker(GameSession *session,
     floater->type_index = type_index;
     floater->source_subtype = 0;
     floater->owner_slot = player_slot;
-    floater->current_hit_points = (uint8_t)stats->hit_points;
-    floater->max_hit_points = (uint8_t)stats->hit_points;
+    floater->current_hit_points = stats->hit_points;
+    floater->max_hit_points = stats->hit_points;
     floater->attack_strength = (uint8_t)stats->attack_strength;
     floater->max_attack_points = stats->max_attack_points;
+    floater->base_max_attack_points = stats->max_attack_points;
     floater->attack_realm = stats->attack_realm;
     if (stats->attack_realm >= 0 && stats->attack_realm < 4) {
         memcpy(floater->attack_impact_frame_counts,
@@ -933,6 +969,18 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
         int32_t dy;
         int32_t distance;
 
+        if ((floater->source_runtime_flags & 0x800U) != 0) {
+            /* FUN_0041e569 holds newly produced Leviathan floaters while
+               their building's PROD animation is still running. The native
+               +0x24 counter advances during that hold and removes the unit
+               at 0xc9 if the producer never releases it. This check precedes
+               ordinary death handling even when both flags 0x800 and 0x008
+               are set. */
+            ++floater->source_death_timer;
+            if (floater->source_death_timer >= 0xc9U)
+                game_session_remove_floater(session, i);
+            continue;
+        }
         if (game_session_tick_floater_death(session, i)) continue;
         game_session_tick_floater_cast_pulse(floater);
         if (game_session_tick_ground_object_pickup(session, floater, 0))
@@ -985,6 +1033,12 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
              floater->cast_spell_kind == 7 ||
              floater->cast_spell_kind == 8 ||
              floater->cast_spell_kind == 9 ||
+             floater->cast_spell_kind == 0x0a ||
+             floater->cast_spell_kind == 0x0b ||
+             floater->cast_spell_kind == 0x0c ||
+             floater->cast_spell_kind == 0x0d ||
+             floater->cast_spell_kind == 0x0e ||
+             floater->cast_spell_kind == 0x0f ||
              floater->cast_spell_kind == 0x10 ||
              floater->cast_spell_kind == 0x11 ||
              floater->cast_spell_kind == 0x12 ||
