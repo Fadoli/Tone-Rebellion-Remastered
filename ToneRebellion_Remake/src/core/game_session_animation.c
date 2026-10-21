@@ -308,12 +308,13 @@ static int leviathan_spawn_threshold(const GameSession *session,
         if (late_game_reduction > 2400U) late_game_reduction = 2400U;
         threshold -= (int)late_game_reduction;
 
-        /* FUN_00450a71 scans island locations and counts class-1 markers
-           with a nonzero raw +0x22 visibility word, capped at five. */
+        /* FUN_00450a71 reads the raw +0x22 visibility byte and caps the
+           class-1 marker count at five. The high byte is not part of this
+           spawn-rate input. */
         for (index = 0; index < island->location_count; ++index) {
             const GameRuntimeLocation *location = &island->locations[index];
             if (location->renderer_class == 1 &&
-                location->source_value_22 != 0) {
+                (uint8_t)location->source_value_22 != 0) {
                 ++visible_markers;
                 if (visible_markers == 5) break;
             }
