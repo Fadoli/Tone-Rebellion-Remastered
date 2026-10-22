@@ -354,8 +354,10 @@ static void draw_task_gauge(HDC dc, const WindowTemplate *panel, int row_y,
        right of the filled portion. */
     draw_sprite(dc, &g_task_icon_art, 9U, gauge_x, gauge_y);
     if (progress_width < interior_width) {
+        /* FUN_00406604 fills an inclusive rect, so the exclusive GDI rect
+           extends one pixel right and down. */
         fill_rect(dc, gauge_x + 2 + (int)progress_width, gauge_y + 2,
-                  gauge_x + 2 + (int)interior_width, gauge_y + 5,
+                  gauge_x + 2 + (int)interior_width + 1, gauge_y + 5 + 1,
                   g_island_palette[0]);
     }
 }

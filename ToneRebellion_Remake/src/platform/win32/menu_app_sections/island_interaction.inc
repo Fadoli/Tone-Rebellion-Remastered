@@ -41,6 +41,33 @@ static int open_island_view(HWND window, int map_island_index)
     return 1;
 }
 
+static int island_pad_group(const IslandLocation *location);
+static int island_site_buildable_by_player(int location_index,
+                                           int32_t *out_items,
+                                           size_t *out_count);
+
+/* An empty construction site the local tribe cannot build on is neither drawn
+   nor clickable: it behaves like bare ground. */
+static int island_site_is_hidden_pad(int location_index)
+{
+    const IslandLocation *location;
+    const GameRuntimeIsland *runtime_island;
+    const GameRuntimeLocation *runtime_location;
+    if (!g_game_session_valid || g_menu.selected_map_island < 0 ||
+        g_menu.selected_map_island >= g_game_session.island_count ||
+        location_index < 0 ||
+        location_index >= g_island_surface_data.location_count) return 0;
+    location = &g_island_surface_data.locations[location_index];
+    runtime_island = &g_game_session.islands[g_menu.selected_map_island];
+    if (location_index >= runtime_island->location_count) return 0;
+    runtime_location = &runtime_island->locations[location_index];
+    if (location->kind != ISLAND_LOCATION_PAD &&
+        island_pad_group(location) < 0) return 0;
+    if (runtime_location->renderer_class != 0 ||
+        runtime_location->record_value_10 > 0) return 0;
+    return !island_site_buildable_by_player(location_index, NULL, NULL);
+}
+
 static int island_location_at(int x, int y)
 {
     int map_x = x + g_island_scroll_x;
@@ -51,7 +78,8 @@ static int island_location_at(int x, int y)
         const IslandLocation *location = &g_island_surface_data.locations[index];
         int dx = map_x - location->x;
         int dy = map_y - location->y;
-        if (dx * dx + dy * dy <= 100) return index;
+        if (dx * dx + dy * dy <= 100 && !island_site_is_hidden_pad(index))
+            return index;
     }
     return -1;
 }
@@ -704,14 +732,20 @@ static int click_diplomacy_action(int x, int y, int player_slot)
     return 1;
 }
 
-static int open_iw_construct(int location_index)
+/* Shared by the click path and the pad renderer: a site is buildable when
+   FUN_004526de's owner/state/visibility guard passes for the local tribe and
+   FUN_0045f121 yields at least one candidate for the site size. */
+static int island_site_buildable_by_player(int location_index,
+                                           int32_t *out_items,
+                                           size_t *out_count)
 {
+    int32_t scratch_items[IW_CONSTRUCT_BUILD_CANDIDATE_COUNT];
+    size_t scratch_count = 0;
     const IslandLocation *site;
     const GameRuntimeIsland *runtime_island;
     uint16_t owned_island_count = 0;
     uint16_t owner_bit;
     unsigned int island_index;
-    char error[96];
 
     if (!g_game_session_valid || g_menu.selected_map_island < 0 ||
         g_menu.selected_map_island >= g_game_session.island_count ||
@@ -750,9 +784,19 @@ static int open_iw_construct(int location_index)
     if (!iw_construct_build_list_for_site(
             &g_pad_catalog, g_game_session.config.selected_tribe, site,
             g_game_session.config.world_index, owned_island_count,
-            g_iw_construct_items,
-            sizeof(g_iw_construct_items) / sizeof(g_iw_construct_items[0]),
-            &g_iw_construct_item_count) || g_iw_construct_item_count == 0) return 0;
+            scratch_items, sizeof(scratch_items) / sizeof(scratch_items[0]),
+            &scratch_count) || scratch_count == 0) return 0;
+    if (out_items != NULL && out_count != NULL) {
+        memcpy(out_items, scratch_items, scratch_count * sizeof(scratch_items[0]));
+        *out_count = scratch_count;
+    }
+    return 1;
+}
+
+static int open_iw_construct(int location_index)
+{
+    if (!island_site_buildable_by_player(location_index, g_iw_construct_items,
+                                         &g_iw_construct_item_count)) return 0;
 
     iw_construct_init(&g_iw_construct, g_iw_construct_item_count);
     iw_construct_info_init(&g_iw_construct_info);

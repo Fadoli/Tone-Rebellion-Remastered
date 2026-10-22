@@ -302,6 +302,61 @@ static void draw_building_slot_floaters(HDC dc, const WindowTemplate *info,
     }
 }
 
+/* FUN_0043842c stamps a 3x3 dot per entity into the IWLilMap pane
+   (observed: FUN_004382bf msg 0x33 only clears/invalidates; the dot loop at
+   0x4384f0 is not a Ghidra procedure, decoded by hand). Position is
+   entity (x,y)/10 + pane origin. Kinds: floater -> 0 when owned by the
+   viewing player (predicate on DAT_0049f538 not resolved; owner match is an
+   inference) else 1 for type 4; site -> 2 when record +0x10 is 0, else 1.
+   Palette slots DAT_0049e140[1,0,4,5] are not extracted: the colours below
+   are placeholders. */
+static void draw_island_lilmap_dots(HDC dc, const WindowTemplate *mini_map,
+                                    const GameRuntimeIsland *island)
+{
+    static const COLORREF kind_colors[3] = {
+        RGB(64, 255, 64), RGB(255, 64, 64), RGB(224, 224, 224)
+    };
+    int saved = SaveDC(dc);
+    unsigned int n;
+    (void)IntersectClipRect(dc, mini_map->pane.left, mini_map->pane.top,
+                            mini_map->pane.right + 1, mini_map->pane.bottom + 1);
+    if (island != NULL) {
+        for (n = 0; n < island->location_count; ++n) {
+            const GameRuntimeLocation *loc = &island->locations[n];
+            RECT dot;
+            HBRUSH brush;
+            int cx = (int)loc->x / 10 + mini_map->pane.left;
+            int cy = (int)loc->y / 10 + mini_map->pane.top;
+            if (loc->record_value_10 < 0) continue;
+            dot.left = cx - 1; dot.top = cy - 1;
+            dot.right = cx + 2; dot.bottom = cy + 2;
+            brush = CreateSolidBrush(kind_colors[loc->record_value_10 == 0 ? 2 : 1]);
+            FillRect(dc, &dot, brush);
+            DeleteObject(brush);
+        }
+    }
+    if (g_game_session_valid) {
+        for (n = 0; n < g_game_session.floater_count; ++n) {
+            const GameFloaterStart *fl = &g_game_session.floaters[n];
+            RECT dot;
+            HBRUSH brush;
+            int cx, cy;
+            int own = fl->type_index == (uint8_t)g_menu.selected_tribe;
+            if (!game_session_floater_is_active(fl) ||
+                fl->island_index != g_menu.selected_map_island) continue;
+            if (!own && fl->type_index != 4) continue;
+            cx = (int)fl->x / 10 + mini_map->pane.left;
+            cy = (int)fl->y / 10 + mini_map->pane.top;
+            dot.left = cx - 1; dot.top = cy - 1;
+            dot.right = cx + 2; dot.bottom = cy + 2;
+            brush = CreateSolidBrush(kind_colors[own ? 0 : 1]);
+            FillRect(dc, &dot, brush);
+            DeleteObject(brush);
+        }
+    }
+    if (saved != 0) RestoreDC(dc, saved);
+}
+
 static void render_island_view(HDC dc)
 {
     const int image_top = 0;
@@ -390,6 +445,7 @@ static void render_island_view(HDC dc)
             if (runtime_location == NULL || runtime_location->record_value_10 <= 0) continue;
         }
         if (x < -4 || x >= LOGICAL_WIDTH + 4) continue;
+        if (island_site_is_hidden_pad((int)location_index)) continue;
         /* The original class-2 bridge site is distinct from class-0 pads.
            bldinf.txt defines BR-TRG01's static BASE as frame 1; the COB's
            corresponding SHP stores that frame at index 0. */
@@ -452,7 +508,7 @@ static void render_island_view(HDC dc)
             }
             if (has_runtime_item || occupied) drew_location = 1;
             else if (island_site_should_draw_pad(pad_group, occupied) &&
-                     g_pad_art.frame_count == 27) {
+                                          g_pad_art.frame_count == 27) {
                 uint32_t frame = island_pad_frame(g_menu.animation_ticks,
                                                   location->x,
                                                   (unsigned)pad_group,
@@ -658,6 +714,7 @@ static void render_island_view(HDC dc)
             draw_sprite(dc, &g_island_lilmap_art,
                         (uint32_t)g_island_surface_id,
                         mini_map->pane.left, mini_map->pane.top);
+            draw_island_lilmap_dots(dc, mini_map, runtime_island);
         }
     }
 
