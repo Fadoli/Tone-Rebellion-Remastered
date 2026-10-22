@@ -1,5 +1,8 @@
+#include <limits.h>
+#include <stdint.h>
 #include <string.h>
 
+#include "game_session_delivery.h"
 #include "game_session_delivery_internal.h"
 #include "game_session_action9.h"
 #include "game_session_economy.h"
@@ -510,8 +513,26 @@ static void reclaim_orphaned_task_claim(GameSession *session,
     const GamePendingEvent *event;
     int task_matches = 0;
 
-    if (session == NULL || floater == NULL || floater->linked_task_slot < 0)
+    if (session == NULL || floater == NULL) return;
+    if (floater->linked_task_slot < 0) {
+        /* Delivery/construction/repair orders always carry a claim. Several
+           paths (movement, events, combat) drop the claim without clearing
+           the order, which leaves a worker that no scheduler can pick up. */
+        if ((floater->active_order_action == 4 ||
+             floater->active_order_action == 0x12) &&
+            !floater->has_move_order) {
+            floater->active_order_action = 0;
+            floater->movement_state = 0;
+            floater->order_timer = 0;
+            floater->order_target_location = -1;
+            floater->order_target_island = UINT8_MAX;
+            floater->order_resource_code = GAME_RESOURCE_NONE;
+            floater->source_runtime_flags &= ~1U;
+            floater->has_wander_order = 1;
+            floater->wander_timer = 0;
+        }
         return;
+    }
     slot = floater->linked_task_slot;
     if (slot < GAME_SESSION_MAX_PENDING_EVENTS) {
         event = &session->pending_events[(uint8_t)slot];
@@ -602,9 +623,10 @@ static int task_count_rule_accepts(const GamePendingEvent *row,
 }
 
 /* FUN_0042219e leaves urgent tasks alone and skips workers in combat states
-   6/7 or +0x2c == 4 (delivering). The remake lets delivering/constructing
-   workers (states 4/5) be reallocated too, but keeps cross-island handoffs
-   (action 9) on their task. */
+   6/7 or +0x2c == 4 (delivering). The remake lets a delivering worker
+   (state 4) be reallocated once its commitment window has elapsed, but never
+   a worker at its build site (state 5) or on a cross-island handoff
+   (action 9), so long tasks still complete. */
 static const GamePendingEvent *rebalance_current_task(
     const GameSession *session, const GameFloaterStart *floater)
 {
@@ -614,7 +636,9 @@ static const GamePendingEvent *rebalance_current_task(
         floater->linked_task_slot >= GAME_SESSION_MAX_PENDING_EVENTS ||
         (floater->active_order_action != 4 &&
          floater->active_order_action != 0x12) ||
-        floater->movement_state == 6 || floater->movement_state == 7)
+        floater->movement_state == 5 || floater->movement_state == 6 ||
+        floater->movement_state == 7 ||
+        session->simulation_tick < floater->task_commit_tick)
         return NULL;
     event = &session->pending_events[(uint8_t)floater->linked_task_slot];
     if (event->active == 0 || event->player_id != floater->owner_slot ||
@@ -630,6 +654,7 @@ static void assign_resource_tasks(GameSession *session,
     unsigned int slot;
 
     if (session == NULL) return;
+    game_session_apply_panic_orders(session);
     for (slot = 0; slot < GAME_SESSION_MAX_PENDING_EVENTS; ++slot) {
         const GamePendingEvent *event = &session->pending_events[slot];
         if (event->active != 0 && event->priority == 3 &&
@@ -649,7 +674,9 @@ static void assign_resource_tasks(GameSession *session,
         int current_slot = -1;
         int swapped = 0;
         int assigned_task = 0;
+        uint64_t visited;
         int idle_wander;
+        int idle_action;
         int replacing_move;
         int can_take_local_task;
         int can_take_construction;
@@ -676,10 +703,27 @@ static void assign_resource_tasks(GameSession *session,
         /* FUN_0042219e checks the first eligible row in slot order. Keep the
            task type's worker guards, but arbitrate CONSTR/CHARGE/delivery in
            that shared order instead of giving one type a fixed priority. */
-        for (slot = 0; slot < GAME_SESSION_MAX_PENDING_EVENTS; ++slot) {
-            GamePendingEvent *event = &session->pending_events[slot];
+        /* Remake: try rows from the least to the most staffed (slot order on
+           ties) so workers spread evenly instead of piling on the first row. */
+        for (visited = 0;;) {
+            GamePendingEvent *event;
+            unsigned int candidate;
+            int best_count = INT_MAX;
 
-            if (event->active == 0 || (int)slot == current_slot) continue;
+            slot = GAME_SESSION_MAX_PENDING_EVENTS;
+            for (candidate = 0; candidate < GAME_SESSION_MAX_PENDING_EVENTS;
+                 ++candidate) {
+                const GamePendingEvent *row = &session->pending_events[candidate];
+                if ((visited >> candidate & 1U) != 0 || row->active == 0 ||
+                    (int)candidate == current_slot) continue;
+                if (row->assigned_floater_count < best_count) {
+                    best_count = row->assigned_floater_count;
+                    slot = candidate;
+                }
+            }
+            if (slot == GAME_SESSION_MAX_PENDING_EVENTS) break;
+            visited |= (uint64_t)1 << slot;
+            event = &session->pending_events[slot];
             if (priority_three_pending[floater->owner_slot] &&
                 event->priority != 3 && !task_is_urgent(event)) continue;
             if (!task_count_rule_accepts(event, current_count, current_class))
@@ -704,10 +748,16 @@ static void assign_resource_tasks(GameSession *session,
                 floater->has_wander_order && !floater->has_move_order;
             replacing_move = floater->active_order_action == 9 &&
                 floater->movement_state == 9;
-            can_take_local_task = floater->active_order_action == 0 &&
+            /* The home-island fallback (FA_Wander, action 0x0e) never returns
+               to action 0 once set, so a cancelled worker would stay in it and
+               ignore every later task. It is idle while it has no route. */
+            idle_action = floater->active_order_action == 0 ||
+                (floater->active_order_action == 0x0e &&
+                 !floater->has_move_order);
+            can_take_local_task = idle_action &&
                 (floater->movement_state == 0 || idle_wander);
             can_take_construction =
-                (floater->active_order_action == 0 || replacing_move) &&
+                (idle_action || replacing_move) &&
                 (floater->movement_state == 0 || floater->movement_state == 9 ||
                  idle_wander) &&
                 (floater->carried_resource_code == 0 ||
@@ -743,6 +793,9 @@ static void assign_resource_tasks(GameSession *session,
             *floater = saved_floater;
             memcpy(session->pending_events, saved_events, sizeof(saved_events));
         }
+        if (assigned_task)
+            floater->task_commit_tick =
+                session->simulation_tick + GAME_SESSION_TASK_COMMIT_TICKS;
     }
 }
 

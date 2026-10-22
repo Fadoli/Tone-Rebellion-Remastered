@@ -3,6 +3,7 @@
 #include "game_session_action9.h"
 #include "floater_motion.h"
 #include "game_session_delivery.h"
+#include "game_session_delivery_internal.h"
 
 #include <string.h>
 
@@ -612,6 +613,86 @@ static void cancel_defend_order(GameFloaterStart *floater)
     floater->wander_timer = 0;
 }
 
+/* Remake interpretation (no Ghidra reader of the PANIC parity bit exists):
+   while the bit is set for a player on an island, that player's idle workers
+   there attack the nearest Leviathan unit, reusing the defend order (action 8)
+   with a category-4 target. Clearing the bit cancels those orders. */
+static int panic_worker_candidate(const GameFloaterStart *floater)
+{
+    return game_session_floater_is_active(floater) &&
+        (floater->source_runtime_flags & 0x808U) == 0 &&
+        floater->source_link_0c == -1 && floater->type_index != 4 &&
+        floater->source_subtype == 0 &&
+        floater->owner_slot < GAME_START_PLAYER_COUNT;
+}
+
+int game_session_panic_active(const GameSession *session, uint8_t player_slot,
+                              uint8_t island_index)
+{
+    return session != NULL && player_slot < GAME_START_PLAYER_COUNT &&
+        island_index < session->island_count &&
+        (session->islands[island_index].source_event_state[player_slot] & 1U) != 0;
+}
+
+void game_session_apply_panic_orders(GameSession *session)
+{
+    unsigned int index;
+
+    if (session == NULL) return;
+    for (index = 0; index < session->floater_count; ++index) {
+        GameFloaterStart *floater = &session->floaters[index];
+        int panic;
+        int ordered;
+        int best = -1;
+        int32_t best_distance = INT32_MAX;
+        unsigned int candidate;
+
+        if (!panic_worker_candidate(floater) ||
+            floater->island_index >= session->island_count) continue;
+        panic = game_session_panic_active(session, floater->owner_slot,
+                                          floater->island_index);
+        ordered = floater->active_order_action == 8 &&
+            floater->defend_target_floater >= 0 &&
+            (unsigned int)floater->defend_target_floater < session->floater_count &&
+            session->floaters[(unsigned int)floater->defend_target_floater]
+                .type_index == 4;
+        if (!panic) {
+            if (ordered) cancel_defend_order(floater);
+            continue;
+        }
+        if (ordered || floater->active_order_action == 9 ||
+            floater->movement_state == 6 || floater->movement_state == 7)
+            continue;
+        for (candidate = 0; candidate < session->floater_count; ++candidate) {
+            const GameFloaterStart *target = &session->floaters[candidate];
+            int32_t distance;
+            if (target->type_index != 4 ||
+                !game_session_floater_is_active(target) ||
+                (target->source_runtime_flags & 0x809U) != 0 ||
+                target->island_index != floater->island_index) continue;
+            distance = game_session_source_chebyshev_distance(
+                floater->x, floater->y, target->x, target->y);
+            if (distance < best_distance) {
+                best_distance = distance;
+                best = (int)candidate;
+            }
+        }
+        if (best < 0) continue;
+        release_task_claim(session, floater);
+        floater->active_order_action = 8;
+        floater->movement_state = 0;
+        floater->order_target_floater = (int16_t)best;
+        floater->defend_target_floater = (int16_t)best;
+        floater->order_target_location = -1;
+        floater->order_target_island = UINT8_MAX;
+        floater->order_progress = 0;
+        floater->source_order_pending = 0;
+        floater->has_move_order = 0;
+        floater->has_wander_order = 0;
+        floater->wander_timer = 0;
+    }
+}
+
 void game_session_advance_defend_order(GameSession *session,
                                        unsigned int floater_index)
 {
@@ -658,8 +739,11 @@ void game_session_advance_defend_order(GameSession *session,
             cancel_defend_order(floater);
             return;
         }
-        candidate_index = action9_find_floater(
-            session, floater_index, target->x, target->y, 250);
+        /* Panic orders (target is a Leviathan unit) attack that unit itself. */
+        candidate_index = target->type_index == 4
+            ? floater->defend_target_floater
+            : action9_find_floater(
+                session, floater_index, target->x, target->y, 250);
         if (candidate_index < 0) {
             floater->order_progress = 0;
             return;

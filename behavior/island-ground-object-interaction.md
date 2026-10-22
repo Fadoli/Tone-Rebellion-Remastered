@@ -269,7 +269,7 @@ une hypothèse. Pas de port tant que l'écrivain n'est pas trouvé.
 ### Correction: la table `0x6188c0` est `spells.txt` (REA)
 
 Observation (ev_0e751e17…, ev_6b705a6f…, ev_04e755bc…, ev_71318e69…, ev_4ee89808…,
-ev_1e292500…): `FUN_0041C46F` appelle `FUN_004642A3` (ECX = `0x5EC218`), qui charge
+ev_1e292500…): `FUN_0041c46f` appelle `FUN_004642a3` (ECX = `0x5EC218`), qui charge
 `pad.txt`, `floater.txt` puis `spells.txt` par `FUN_00463563`; celle-ci écrit
 `this+0x2C6A8 + i*0x2C` (i < 0x20), soit `0x6188C0`. Disposition de la rangée:
 `+0x00` nom (32 octets), `+0x20` = `Level` - 1, `+0x22` = `MagCost`, `+0x24` =
@@ -279,7 +279,7 @@ de `FUN_00450070` est l'octet `DAT_004A2863[monde*8 + type]` (type 0x15..0x1c),
 sans décalage `-0x15` (corrige la note précédente). Les barres 3x55 comparent donc
 le coût CryCost (A) et MagCost (B, x2/3 si le drapeau 0x100 du propriétaire) du
 sort `s` aux stocks `+0x2a`/`+0x2c` du site; le message 14000 est envoyé par
-`FUN_0042FA0F` (cas 0x47) à `IWHallMove`/`IWMove`, pas à `IWLocInfo`.
+`FUN_0042fa0f` (cas 0x47) à `IWHallMove`/`IWMove`, pas à `IWLocInfo`.
 Non porté: l'état « sort armé » (`this+0x74`) qui détermine `s` n'est pas établi
 côté `IWLocInfo` (le panneau l'initialise à 0, d'autres usages l'interprètent
 comme pointeur); le port charge déjà les coûts de sorts pour `FA_Cast`.
@@ -495,7 +495,7 @@ départ non portés tant que l'état 2 n'est pas établi comme atteint en jeu no
 
 État 2 (REA, ev_489f6ae9…, ev_e6404a40…, ev_79d1691e…, ev_42a7b18b…): état = `0x6191B4`, tick = `0x6191B6`, dword joueur = `0x619248`. Écrivains de l'état:
 `FUN_004637fc` (0, init), `FUN_00466ce2` (0 -> 1 si dword != 0), `FUN_00464e4d` (1 -> 3, 2 -> 3, 3 -> 4/5, 4 -> 5, 5 -> 6; n'écrit jamais 2),
-`FUN_004672ef` cas 0x15 (3), `FUN_00467BE5` (chargement de sauvegarde) et `FUN_00460460` @0x4606B6 (**seul écrivain de 2**, garde: état 0, dernier
+`FUN_004672ef` cas 0x15 (3), `FUN_00467be5` (chargement de sauvegarde) et `FUN_00460460` @0x4606B6 (**seul écrivain de 2**, garde: état 0, dernier
 joueur traité, aucun enregistrement d'unité de type 0x17..0x24). `FUN_00460460` est le décompte par île des flotteurs de type 4, appelé par `FUN_00462a87`
 après une apparition de type 4. Interprétation: la séquence de léviathans de départ de l'état 2 se déclenche à la première apparition de léviathan, pas depuis le
 menu. Le dword `0x619248` n'est remis à 0 que par `FUN_0046466f` et ne devient non nul que par chargement de flux (aucun écrivain direct).

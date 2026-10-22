@@ -12,6 +12,11 @@ void game_session_advance_merge_order(GameSession *session,
                                      unsigned int floater_index);
 void game_session_advance_defend_order(GameSession *session,
                                        unsigned int floater_index);
+/* Remake interpretation of PANIC: bit 0 of source_event_state sends the
+   player's workers on that island against the nearest Leviathan unit. */
+int game_session_panic_active(const GameSession *session, uint8_t player_slot,
+                              uint8_t island_index);
+void game_session_apply_panic_orders(GameSession *session);
 /* FUN_0042219e's autonomous category-4 floater target selection. */
 int game_session_assign_category4_autonomous_order(
     GameSession *session, unsigned int floater_index);

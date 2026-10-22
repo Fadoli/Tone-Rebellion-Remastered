@@ -80,6 +80,9 @@ typedef struct GameFloaterStart {
     int16_t carried_resource_code;
     int16_t order_resource_code;
     int16_t linked_task_slot;
+    /* Remake: earliest simulation tick at which a worker may be moved off its
+       current task, so long tasks are not abandoned by constant rebalancing. */
+    uint32_t task_commit_tick;
     uint16_t order_timer;
     int16_t order_source_location;
     uint8_t order_source_island;

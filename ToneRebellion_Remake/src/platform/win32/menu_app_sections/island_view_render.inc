@@ -460,22 +460,10 @@ static void render_island_view(HDC dc)
                 draw_sprite(dc, &g_pad_art, frame, x, y);
                 drew_location = 1;
             }
-            /* Build Tone is stored on an empty runtime pad until construction
-               consumes it. Keep the deposited stock visible at the site. */
-            if (is_construction_site && runtime_location != NULL &&
-                runtime_location->record_value_10 == 0 &&
-                runtime_location->resource_stock[GAME_RESOURCE_BUILD_TONE] != 0 &&
-                g_bildtone_art.frame_count != 0) {
-                char stock_label[8];
-                unsigned int stock = runtime_location->resource_stock[
-                    GAME_RESOURCE_BUILD_TONE];
-                draw_sprite_scaled(dc, &g_bildtone_art, 0, x - 5, y - 12,
-                                   0x00008000U);
-                (void)snprintf(stock_label, sizeof(stock_label), "%u", stock);
-                draw_bitmap_label(dc, stock_label, x + 3, y - 10,
-                                  RGB(255, 238, 164));
-                drew_location = 1;
-            }
+            /* No native overlay shows Build Tone deposited on an empty pad:
+               the object painter FUN_0040bf98 never reads site +0x28, and the
+               readers found (FUN_004459e6, FUN_00440567) gate on hall sites
+               (+0x10 == 0x2a). The former icon + count was invented. */
         }
         if (drew_location) continue;
         }
@@ -642,8 +630,14 @@ static void render_island_view(HDC dc)
                 &g_window_catalog, button_names[button_index], 3);
             int frame;
             if (button == NULL || button->shape_frame < 0) continue;
+            /* Remake: PANIC keeps its highlighted frame while the mode is on. */
             frame = window_catalog_control_frame(
-                button, (int)button_index == g_hovered_island_button);
+                button, (int)button_index == g_hovered_island_button ||
+                ((int)button_index == WINDOW_ISLAND_BUTTON_PANIC &&
+                 g_game_session_valid && g_menu.selected_map_island >= 0 &&
+                 game_session_panic_active(
+                     &g_game_session, (uint8_t)g_menu.selected_tribe,
+                     (uint8_t)g_menu.selected_map_island)));
             if (frame >= 0 && (uint32_t)frame < g_island_main_buttons.frame_count) {
                 draw_sprite(dc, &g_island_main_buttons, (uint32_t)frame,
                             button->pane.left, button->pane.top);
@@ -1053,8 +1047,12 @@ static void render_island_view(HDC dc)
                 &g_window_catalog, stock_control_names[resource], 3);
             uint32_t frame;
             if (button == NULL) continue;
+            /* THBUTT frames 1/2/3 are fill arrow, empty arrow, roof (help
+               text order); stock modes are 0 = Hall serves as source (empty),
+               1 = keep stocked (roof), 2 = request (fill). */
             frame = (uint32_t)button->shape_frame +
-                g_game_session.economy[hall_player].stock_mode[resource];
+                (g_game_session.economy[hall_player].stock_mode[resource] +
+                 1U) % 3U;
             if (frame < g_hall_stock_art.frame_count) {
                 draw_sprite(dc, &g_hall_stock_art, frame,
                             button->pane.left, button->pane.top);
@@ -1256,37 +1254,6 @@ static void draw_location_action_panel(HDC dc)
             }
         }
     }
-    {
-        RECT bridge_button_rect;
-        int bridge_state;
-        if (selected_bridge_build_button_rect(&bridge_button_rect,
-                                              &bridge_state)) {
-            COLORREF fill_color = bridge_state == 1
-                ? RGB(43, 57, 84) : RGB(59, 63, 74);
-            const char *label = bridge_state == 1 ? "BUILD BRIDGE" :
-                bridge_state == 2 ? "BRIDGE REQUESTED" : "BRIDGE BUILDING";
-            HBRUSH fill = CreateSolidBrush(fill_color);
-            HBRUSH border = CreateSolidBrush(RGB(168, 190, 224));
-            int text_width = measure_bitmap_text(NULL, label, strlen(label));
-            int text_height = (int)g_small_font.height;
-            if (fill != NULL) {
-                (void)FillRect(dc, &bridge_button_rect, fill);
-                DeleteObject(fill);
-            }
-            if (border != NULL) {
-                (void)FrameRect(dc, &bridge_button_rect, border);
-                DeleteObject(border);
-            }
-            draw_bitmap_label(dc, label,
-                bridge_button_rect.left +
-                    ((bridge_button_rect.right - bridge_button_rect.left) -
-                     text_width) / 2,
-                bridge_button_rect.top +
-                    ((bridge_button_rect.bottom - bridge_button_rect.top) -
-                     text_height) / 2,
-                RGB(240, 244, 255));
-        }
-    }
     if (panel != NULL && selected_location_can_be_grabbed()) {
         RECT button_rect;
         HBRUSH button_brush;
@@ -1321,6 +1288,31 @@ static void draw_location_action_panel(HDC dc)
                     panel->pane.left + 8, panel->pane.top + 5,
                     RGB(230, 238, 255));
             }
+        }
+    }
+    {
+        RECT pickup_rect;
+        if (ground_pickup_button_rect(&pickup_rect)) {
+            const char *label = "PICK UP";
+            HBRUSH fill = CreateSolidBrush(g_hovered_location_grab
+                ? RGB(72, 91, 126) : RGB(43, 57, 84));
+            HBRUSH border = CreateSolidBrush(RGB(168, 190, 224));
+            int text_width = measure_bitmap_text(NULL, label, strlen(label));
+            int text_height = (int)g_small_font.height;
+            if (fill != NULL) {
+                (void)FillRect(dc, &pickup_rect, fill);
+                DeleteObject(fill);
+            }
+            if (border != NULL) {
+                (void)FrameRect(dc, &pickup_rect, border);
+                DeleteObject(border);
+            }
+            draw_bitmap_label(dc, label,
+                pickup_rect.left + ((pickup_rect.right - pickup_rect.left) -
+                                    text_width) / 2,
+                pickup_rect.top + ((pickup_rect.bottom - pickup_rect.top) -
+                                   text_height) / 2,
+                RGB(240, 244, 255));
         }
     }
     button_name = action == ISLAND_LOCATION_ACTION_HALL_MOVE
