@@ -536,6 +536,15 @@ static void draw_hall_panel(HDC dc, int hall_player)
             &g_game_session.economy[(unsigned int)hall_player];
         unsigned int resource;
         unsigned int target;
+        for (target = 0; target < GAME_TRADE_TARGET_COUNT; ++target) {
+            /* FUN_0043edac: FUN_00428191(class, 0, x = 55 + 38c, y = 12) with
+               class c, or c + 1 once c reaches the local player. */
+            unsigned int tribe = target >= (unsigned int)hall_player
+                ? target + 1U : target;
+            draw_diplomacy_initial_worker_icon(dc, NULL, tribe,
+                panel->pane.left + 55 + (int)target * 38,
+                panel->pane.top + 12);
+        }
         for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
             if (resource_sheets[resource]->frame_count > 4U) {
                 /* FUN_0043edac draws frame 4 of each named Tone sheet. */

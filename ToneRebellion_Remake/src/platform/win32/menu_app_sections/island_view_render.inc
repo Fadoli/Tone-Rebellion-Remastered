@@ -102,6 +102,60 @@ static void draw_island_access_notice(HDC dc)
     draw_bitmap_label(dc, label, 188, 18, RGB(238, 226, 177));
 }
 
+/* Badge frame is 0x15 - n, n clamped to 10: frame 11 is the full gauge and 21
+   the empty one, so n is the filled tenths, current/max hits * 10 (truncated
+   like __ftol). Interpretation: the x87 operands before __ftol are not in the
+   decompiled output. */
+static int16_t island_floater_health_stat(const GameFloaterStart *floater)
+{
+    if (floater->max_hit_points <= 0 || floater->current_hit_points <= 0)
+        return 0;
+    return (int16_t)(((int32_t)floater->current_hit_points * 10) /
+                     floater->max_hit_points);
+}
+
+/* FUN_0042822b calls FUN_0042704b with param_5=1 for world floaters. The first
+   overlay global gates FLTINFO realm frames 22..25; the second gates the
+   combat-stat badge (FUN_00420f28), which the source does not restrict to
+   workers: leviathans with a body shape get it too (type 4 is only excluded
+   from the third, strength, badge). Anchor is the body frame's hit box. */
+static void draw_island_floater_overlays(HDC dc, const GameFloaterStart *floater,
+                                         const SpriteSheet *body_art,
+                                         uint32_t body_frame_index,
+                                         int x, int y)
+{
+    const SpriteFrame *body_frame;
+    int32_t body_left;
+    int32_t body_top;
+    int32_t body_right;
+    uint32_t frame;
+    int32_t badge_x;
+    int32_t badge_y;
+    if (g_floater_info_art.frame_count < 26 || body_art == NULL ||
+        body_frame_index >= body_art->frame_count) return;
+    body_frame = &body_art->frames[body_frame_index];
+    body_left = x + body_frame->x_offset + body_frame->hit_left;
+    body_top = y + body_frame->y_offset + body_frame->hit_top;
+    body_right = x + body_frame->x_offset + body_frame->hit_right;
+    if (island_worker_realm_overlay_enabled(g_floater_overlay_flags, 1) &&
+        island_worker_realm_badge_layout(
+            floater->type_index, 0, 0, floater->facing_left,
+            body_left, body_top, body_right, &frame, &badge_x, &badge_y) &&
+        frame < g_floater_info_art.frame_count) {
+        draw_sprite(dc, &g_floater_info_art, frame, badge_x, badge_y);
+    }
+    /* Initial workers are created with +0x1c cleared by
+       FUN_00466fe4/FUN_0041e4e4, so their world badge is eligible. */
+    if (island_worker_health_overlay_enabled(g_floater_overlay_flags, 1) &&
+        island_worker_stat_badge_layout(
+            floater->type_index, island_floater_health_stat(floater),
+            floater->facing_left, body_left, body_top, body_right,
+            &frame, &badge_x, &badge_y) &&
+        frame < g_floater_info_art.frame_count) {
+        draw_sprite(dc, &g_floater_info_art, frame, badge_x, badge_y);
+    }
+}
+
 static void draw_island_leviathan_floater(HDC dc,
                                           const GameFloaterStart *floater,
                                           int x, int y)
@@ -452,6 +506,19 @@ static void render_island_view(HDC dc)
             floater_y = image_top + (int)floater->y;
             if (floater->type_index == 4) {
                 draw_island_leviathan_floater(dc, floater, floater_x, floater_y);
+                /* Overlays need the body shape (local_c != 0): subtype 9
+                   has legs only and gets none. */
+                if (floater->source_subtype >= 10U &&
+                    floater->source_subtype <= 17U) {
+                    draw_island_floater_overlays(
+                        dc, floater,
+                        floater->facing_left ? &g_leviathan_body_art_flipped
+                                             : &g_leviathan_body_art,
+                        2U * (floater->source_subtype - 10U) +
+                            (((g_game_session.simulation_tick +
+                               floater->animation_seed) / 8U) & 1U),
+                        floater_x, floater_y);
+                }
                 continue;
             }
             leg_frame = island_floater_legs_frame(floater);
@@ -499,58 +566,8 @@ static void render_island_view(HDC dc)
             }
             draw_sprite(dc, leg_art, leg_frame, floater_x, floater_y);
             draw_sprite(dc, body_art, 0, floater_x, floater_y);
-            /* FUN_0042822b calls FUN_0042704b with param_5=1 for world
-               floaters. The first overlay global gates FLTINFO realm frames
-               22..25; the second gates the combat-stat badge below. */
-            if (island_worker_realm_overlay_enabled(
-                    g_floater_overlay_flags, 1) &&
-                g_floater_info_art.frame_count >= 26 &&
-                body_art->frame_count != 0) {
-                const SpriteFrame *body_frame = &body_art->frames[0];
-                int32_t body_left = floater_x + body_frame->x_offset +
-                                    body_frame->hit_left;
-                int32_t body_top = floater_y + body_frame->y_offset +
-                                   body_frame->hit_top;
-                int32_t body_right = floater_x + body_frame->x_offset +
-                                     body_frame->hit_right;
-                uint32_t realm_frame;
-                int32_t badge_x;
-                int32_t badge_y;
-                if (island_worker_realm_badge_layout(
-                        floater->type_index, 0, 0, floater->facing_left,
-                        body_left, body_top, body_right,
-                        &realm_frame, &badge_x, &badge_y) &&
-                    realm_frame < g_floater_info_art.frame_count) {
-                    draw_sprite(dc, &g_floater_info_art, realm_frame,
-                                badge_x, badge_y);
-                }
-            }
-            /* FUN_0042704b gates combat-stat FLTINFO frames with the second
-               TOGREALM flag. Initial workers are created with +0x1c cleared
-               by FUN_00466fe4/FUN_0041e4e4, so their world badge is eligible. */
-            if (island_worker_health_overlay_enabled(
-                    g_floater_overlay_flags, 1) &&
-                g_floater_info_art.frame_count >= 26 &&
-                body_art->frame_count != 0) {
-                const SpriteFrame *body_frame = &body_art->frames[0];
-                int32_t body_left = floater_x + body_frame->x_offset +
-                                    body_frame->hit_left;
-                int32_t body_top = floater_y + body_frame->y_offset +
-                                   body_frame->hit_top;
-                int32_t body_right = floater_x + body_frame->x_offset +
-                                     body_frame->hit_right;
-                uint32_t stat_frame;
-                int32_t badge_x;
-                int32_t badge_y;
-                if (island_worker_stat_badge_layout(
-                        floater->type_index, floater->max_attack_points,
-                        floater->facing_left, body_left, body_top, body_right,
-                        &stat_frame, &badge_x, &badge_y) &&
-                    stat_frame < g_floater_info_art.frame_count) {
-                    draw_sprite(dc, &g_floater_info_art, stat_frame,
-                                badge_x, badge_y);
-                }
-            }
+            draw_island_floater_overlays(dc, floater, body_art, 0,
+                                         floater_x, floater_y);
         }
     }
     if (runtime_island != NULL && g_game_session_valid) {
@@ -848,7 +865,7 @@ static void render_island_view(HDC dc)
                                          body_frame->hit_right;
                     if (island_worker_stat_badge_layout(
                             selected_floater->type_index,
-                            selected_floater->max_attack_points,
+                            island_floater_health_stat(selected_floater),
                             selected_floater->facing_left,
                             body_left, body_top, body_right,
                             &stat_frame, &badge_x, &badge_y) &&
@@ -1200,13 +1217,10 @@ static void draw_location_action_panel(HDC dc)
             /* NSTATES 2: BLDCMD frames 19/20 are the two switch positions
                (interpretation: 19 = enabled, matching the default 0x400 bit
                and the descriptor's frame); the hover overlay (21) is shared. */
-            WindowTemplate onoff_state = *onoff_button;
-            const GameRuntimeLocation *onoff_site =
-                &island->locations[g_selected_location];
-            if ((onoff_site->source_flags & 0x400U) == 0 &&
-                onoff_state.nstates > 1) {
-                ++onoff_state.shape_frame;
-            }
+            WindowTemplate onoff_state;
+            (void)window_catalog_onoff_state_control(onoff_button,
+                (island->locations[g_selected_location].source_flags &
+                 0x400U) != 0, &onoff_state);
             draw_control_with_hover_overlay(dc, &onoff_state,
                 &g_building_command_art, g_hovered_onoff_control);
         }

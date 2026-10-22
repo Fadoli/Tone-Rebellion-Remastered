@@ -111,6 +111,11 @@ int32_t window_catalog_control_overlay_frame(const WindowTemplate *control,
 size_t window_catalog_control_render_frames(const WindowTemplate *control,
                                            int hovered,
                                            int32_t frames[2]);
+/* BC_OnOff: copy of the template whose base frame is the switch position
+   (NSTATES 2: shape_frame = enabled, shape_frame + 1 = disabled). The hover
+   overlay is unchanged. Returns 0 for a NULL control. */
+int window_catalog_onoff_state_control(const WindowTemplate *control,
+                                       int enabled, WindowTemplate *out);
 
 /* These names and panel numbers mirror FUN_0042f150 / FUN_0042f303 and the
    permanent-button messages dispatched by FUN_0042fa0f. */

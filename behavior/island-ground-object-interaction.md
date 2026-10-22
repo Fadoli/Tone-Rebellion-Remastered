@@ -417,3 +417,103 @@ Port: genres 6/7 (auto-attribution), 8 (`defend_target_floater`) et 9 (`game_ses
 zone ni de relance) existent par floater; absents: l'enregistrement d'ordre du bâtiment et l'adoption par lien de charge, les boutons
 `Attack*`/`Defend*`/`Recall`, et l'écriture des ordres joueur par le paquet de catégorie 1. Inconnues: ECX exact des écrivains, cible de
 `Recall` (`FUN_00452e2b`), effets de `FUN_00415fc6`, double rôle de `+0x32`.
+
+### Ordres des boutons de bâtiment: attaque, défense, rappel (REA, ev_e29c42ec, ev_0b6984d3, ev_08044150, ev_55875c8f, ev_2788be00, ev_fca9efc0)
+
+Observation: l'ordre est écrit dans l'enregistrement source du bâtiment (`+0x28` cible, `+0x2c` genre, `+0x30` id/cellule, `+0x32` 0).
+`FUN_0045d867` (flotteur ciblé): genre 6 attaque, 8 défense (mode 0x12). `FUN_0045d8b2` (site/zone): genre 7 AttackLoc, 9 DefendArea
+(mode 0x13). `FUN_0045dcf4` (Recall, sans curseur): genre 9 vers la cellule `((x+5)/10)<<8 | (y+5)/10` du bâtiment (`FUN_0041e3eb`).
+Curseurs (`FUN_0043530b`): 0x10 AttackFlt, 0x11 AttackLoc (0xd, ou 0xb si site sélectionné), 0x12 DefendFlt (5), 0x13 DefendArea (0xf);
+mode 0xf sans armement. Adoption (`FUN_0042219e`): un flotteur dont le lien `+0xc` désigne le bâtiment et dont l'état n'est pas 0x13 copie
+`+0x2c/+0x28/+0x30/+0x32` vers `+0x3c/+0x40/+0x42/+0x44`. États (`FUN_004211bb`): 6 approche (0xf) puis frappe (6); 7 déplacement (0x10)
+puis frappe bâtiment (7); 8 suit la cible puis cherche un ennemi (`FUN_004208eb`); 9 va au site, attaque l'ennemi du site
+(`FUN_00420829`/`FUN_00420d97`) sinon retourne; 0xd Obtain -> 0xe (minuterie 0x3c).
+Inconnues: qui écrit le lien `+0xc` d'un flotteur vers un bâtiment; `FUN_0045d5ba` (visibilité des boutons du propriétaire); branche
+classe 4 de `FUN_0042219e`; sens exact de `+0x28` de `FUN_0045dcf4`. TrnStk, UpgSpread et Obtain non revérifiés. Non porté.
+
+Suite (REA, ev_f90d1eb1…, ev_aaf759e7…, ev_e3322fcb…, ev_ab48501a…): le lien `+0xc` n'est écrit ni par `FUN_0042219e`, `FUN_00421ec1`
+ni `FUN_004207f2`; il l'est par l'automate `FUN_004211bb` (charge `+0x44` = emplacement du bâtiment, objet porté `+0x18`, 1 ou 0 à la
+libération). `FUN_00421ec1(-1)` (détachement) ne le remet pas à 0. Interprétation (confiance moyenne): le lien est posé quand un flotteur
+prend un ordre, pas à la naissance (non trouvée). Le test « classe 4 » est `*(int*)rec == 4` sur `+0` (propriétaire), sans usage du lien.
+Visibilité (`FUN_0045302a` puis `FUN_0045d5ba`, liste construite sans condition; 5 en tête, 2 en fin): type de site 0x2c..0x2e ajoute
+0x10..0x13 et 0xf; 0x2f/0x30 ajoutent 6 et 0x15..0x1c; Obtain (4) pour type 1 sous-type 5..0x21 sans test de propriétaire; Repair (3)
+pour type > 0x24 sauf 0x2a; liste du propriétaire seulement si emplacement `+0x18 != -1`. Obtain: ordre 0xd = si l'objet porté vaut
+`+0x44` chercher un emplacement de type 2 (action 4), sinon aller vers l'île `+0x40` (action 0xd, `+0x46 = 1`); la minuterie 0x3c
+appartient à l'ordre 0xe. Inconnues: naissance de `+0xc`, `FUN_00420e94`, `FUN_004210a9`, `FUN_00425084`, `FUN_004502dc`, `FUN_00452a15`,
+`FUN_00466533`; pas de table de stride 0x13 vs 0x4c à clarifier.
+
+Passe Obtain (REA, ev_935e70f7, ev_7864c1e4, ev_b112d391, ev_de447f6b, ev_4be246fe, ev_49f6c42a, ev_282d6ab2): stride de la table de
+flotteurs confirmé à 0x4c octets (`IDIV 0x4c` dans `FUN_0041e569`; le `*0x13` de Ghidra compte des dwords). `FUN_00420e94` délègue à
+`FUN_004626f8` (balayage de 0x29a8 enregistrements de 0x30 octets, type 0..3, meilleur par distance). `FUN_004210a9` choisit dans la
+table joueur `0x5ec640 + joueur*0x29e8` (entrées de 0x60) l'entrée `+4 == 2` avec `+0x1c & 1` (préférence `+0x36 == paramètre`, sinon
+la plus proche) et pose action 0x11, `+0x32` = indice. `FUN_00425084` (objet porté 5..0x21): dépose dans une entrée libre du joueur
+(`+4 == 0`, `+0x14 == -1`, `+0x10 == 0`), sinon incrémente le compteur d'attente `DAT_006191fc[joueur*0x14a0 + objet*2]`.
+`FUN_004502dc` renvoie `+0x24` si l'état `+0x10 == 1`. `FUN_00452a15` remet l'enregistrement à zéro (pas la naissance).
+Interprétations: type 2 = emplacement prêt; l'objet 5..0x21 est un identifiant d'inventaire. Inconnues: bâtiment dont vient le stock,
+fin de tâche, naissance des flotteurs (aucun `rep stosd` de 0x13 dwords; ~150 références à `0x6137b8` non lues). Non porté.
+
+Naissance et lien (REA, passe 3): création des flotteurs toujours introuvée (les accès `ECX+0x275a0` n'apparaissent pas dans les xrefs
+absolus). `FUN_00467101(idx)` est la libération (assert `num < MAX_FLOATERS`, `*rec = -1`, compteur à `0x6183b8` décrémenté). `FUN_0045c470(idx)`
+rattache un flotteur à un emplacement de personnel du bâtiment (8 emplacements `+4..+0x12`, compte `+0x24 < 8`) puis écrit
+`rec+0xc = FUN_0045c325()` = indice de l'enregistrement bâtiment `(ptr-0x6192b0-tribu*0x14a0)/100`; appelée via `FUN_0041e569` états
+0xa/0xb (production). Donc `+0xc` = indice du bâtiment, posé au rattachement (cohérent avec l'adoption de `FUN_0042219e`).
+`FUN_00416a9a(0, rec)` met en file l'évènement « naissance » (sons `levbirth`/`fltbirth`). Piste suivante: appelants de la liste d'île
+`DAT_00618fb4` (0x4355f3, 0x435648, 0x43870b, 0x4517c2, 0x451e62, 0x45eb89, 0x45f67e).
+
+Création des flotteurs (REA, ev_4dd79568, ev_05ced3dc, ev_c7ef5dde, ev_c21b24fd): `FUN_00466fe4(type, sous-type)` est l'allocateur
+(objet monde `0x5ec218`, garde compteur `+0x2c1a0 < 0x100`, premier enregistrement `*rec == -1`; sous-type borné [9,0x11] pour le type 4,
+sinon [0,8]); écrit `+0` type, `+4` sous-type, `+8` 0, `+0x14`, `+0x20`, `+0x22`; n'écrit ni `+0xc`, `+0xe`, `+0x2c`, `+0x38`, `+0x3c`
+ni `+0x1c`. Enveloppe `FUN_00462a87(type, ?, x, y)` (assert type 0..4; type 4 limité à 0x80 vivants): écrit `+0xe` île, `+0x10/+0x28` x,
+`+0x12/+0x2a` y. Appelants: `FUN_004532e2` (naissance par un bâtiment: ensuite `FUN_00416a9a(0, …)`, `owner+0x5c` = indice, `rec+0x1c |= 0x801`),
+`FUN_0046466f` (initialisation d'île, types 0..3 par emplacement), `FUN_00464e4d` (début de partie, type 4, sous-type `rand(8)+10`),
+`FUN_004672ef` cas 0 (5 apparitions, y = rand(300)) et 0x14. Valeur initiale de `+0xc`: non écrite, inconnue (ne pas supposer 0).
+Inconnue: appel 0x42ff6e dans `FUN_0042fa0f`; appelants de `FUN_004532e2`/`FUN_004672ef`.
+
+Population de départ native (REA, ev_3cb7946b30cb, ev_424bed26fa19, ev_649d4571fe34): `FUN_0046466f` boucle `k = 0..3` (joueur `k`, ou
+`base + (k&1)` en mode 1) et appelle 4 fois `FUN_00462a87(k, 0, x_île, y_île)` : 16 apparitions, types 0..3 dans l'ordre, sous-type 0, sans
+décalage aléatoire, à l'île choisie (mode 0: 1re île active pour `k` pair, 4e pour `k` impair; salle = île `+2 == 0 && +8 == 0` la plus proche).
+Léviathans (`FUN_00464e4d`, état 2, tick 40): un `FUN_00462a87(4, rand(8)+10, …)` par flotteur de type < 4 dont le propriétaire est `cur-1` et le
+sous-type != 8 (jusqu'à 16), sur l'île non spéciale de `cur`; plafond 0x80 vivants. Le remake (`game_start.c`, 4 par joueur,
+`GAME_START_FLOATERS_PER_PLAYER`) est compatible pour le compte; placement et ordre d'indices (type 0 puis 1..3, 4 chacun) non revérifiés.
+Inconnues: paramètres réels (appelants des thunks `0x4013d4`, `0x4023fb`), propriétaire à l'appel de `FUN_00462a87`, drapeaux `DAT_006191f8`.
+
+Comparaison remake (lecture de `game_session_animation.c`): le remake ne crée de léviathan que par le générateur de sites (`spawn_leviathan_floater`, modèle de
+`FUN_00450a71`, seuil de difficulté); aucun équivalent de la création de départ de `FUN_00464e4d` (état 2, tick 40: un type 4 de sous-type
+`rand(8)+10` par flotteur de type < 4 dont le propriétaire est `cur-1`). Rôle exact de cette machine (séquence d'ouverture? état 2 -> 3 à
+tick 1000) non établi; non porté.
+
+Machine `FUN_00464e4d` (REA, ev_e22cb8ca…, ev_cffabb90…, ev_83def11e…, ev_a3043bb8…): séquence scriptée à ticks fixes, pas un mode de débogage.
+États 0 et 6 inactifs; 0 -> 1 par `FUN_00466ce2` quand le premier dword de l'enregistrement du joueur courant (`this+0x2d030 + DAT_0049f538*0x14a0`)
+est non nul; état 1 attend le tick 100 puis 3; état 2 (aucune transition entrante trouvée): tick 0 `FUN_004655b2(0xb)`, tick 0x28 apparition des
+léviathans (placés à la position du 1er enregistrement qualifiant, minuterie 0x14), tick 1000 -> 3; état 3 fondu (`FUN_00410765`), tick 100 `FUN_0046c1b4(1,2,0)`,
+puis 4 (tick 350) ou 5 (tick 1299) selon `local_c`; état 5 tick 100/160 `FUN_0046c1b4(1,7|0,0)` et `DAT_004bf120 = 0`, tick 200 -> 6.
+Appelée seulement par la boucle principale (`DAT_004bf120 != 0 && DAT_004bf124 == 0`). Monde: `FUN_004637fc` n'est appelée que par `FUN_004121b7` cas 9
+(`FUN_004637fc(this+0x138, this+0x13c, DAT_004c2b9c != 0, DAT_0049c9b0)`), qui est le même cas qui pose `DAT_004bf110` (voir cadence).
+`FUN_00462a87` depuis `FUN_0046466f`: ECX = enregistrement joueur `S(p)`, donc propriétaire = `p` (joueur), `k` est le type.
+Inconnues: écrivain de l'état 2 et du dword `+0x2d030`; variante `local_c` du mode solo; commande 9 envoyée par le menu non vérifiée. Léviathans de
+départ non portés tant que l'état 2 n'est pas établi comme atteint en jeu normal.
+
+État 2 (REA, ev_489f6ae9…, ev_e6404a40…, ev_79d1691e…, ev_42a7b18b…): état = `0x6191B4`, tick = `0x6191B6`, dword joueur = `0x619248`. Écrivains de l'état:
+`FUN_004637fc` (0, init), `FUN_00466ce2` (0 -> 1 si dword != 0), `FUN_00464e4d` (1 -> 3, 2 -> 3, 3 -> 4/5, 4 -> 5, 5 -> 6; n'écrit jamais 2),
+`FUN_004672ef` cas 0x15 (3), `FUN_00467BE5` (chargement de sauvegarde) et `FUN_00460460` @0x4606B6 (**seul écrivain de 2**, garde: état 0, dernier
+joueur traité, aucun enregistrement d'unité de type 0x17..0x24). `FUN_00460460` est le décompte par île des flotteurs de type 4, appelé par `FUN_00462a87`
+après une apparition de type 4. Interprétation: la séquence de léviathans de départ de l'état 2 se déclenche à la première apparition de léviathan, pas depuis le
+menu. Le dword `0x619248` n'est remis à 0 que par `FUN_0046466f` et ne devient non nul que par chargement de flux (aucun écrivain direct).
+Inconnu: si `FUN_00460460` s'exécute dans une partie solo normale (aucun appelant direct résolu). Non porté.
+
+Atteignabilité de l'état 2 (REA, passe finale): `FUN_00460460` (thunk `0x401226`) est appelée par `FUN_00453a5f`, `FUN_00462a87` (type 4), `FUN_00464b9e` (arg -1) et
+`FUN_00466c8b`. Garde de l'écriture de 2: état 0, île traitée = dernière, aucun enregistrement de type 0x17..0x24 dans son tableau (`île+0x428`, entrées de 0x60).
+`FUN_00464b9e` pose justement ces types (`c + 0x17`, état 4, `+0x45c = 30000`) dans la dernière île avant d'appeler `FUN_00460460(-1)`: la garde est donc fausse
+après l'initialisation. Interprétation: en partie normale l'état 2 (léviathans de départ) n'est pas atteint; ce serait un reste de séquence d'ouverture ou
+de mode non utilisé. Non porté, aucune action nécessaire. Inconnu: ordre exact des chemins de haut niveau vers les 4 thunks.
+
+Adoption précise (REA, ev_21a176c7…, ev_80a249b2…, ev_7b696e7a…, ev_560ab863…, ev_f90d1eb1…): `FUN_0042219e` (tick de flotteur si action 0 ou `tick % 10 == 0`) sort si l'action `+0x2c` vaut 6 ou 7 ou si `DAT_006191b4 != 0`. Le bloc « enregistrement » ne tourne que pour propriétaire (`+0x00`) différent de 4 et lien `+0xc != -1`:
+`rec = 0x6192b0 + lien*100 + propriétaire*0x14a0`. Drapeau `+0x1c & 0x10` -> `FUN_00421d82` et fin. Si `rec+0x4c == indice du flotteur`: état != 0xc et pas de drapeau `0x20` -> détache, état 0xc, `+0x40 = rec+0`, `+0x42 = rec+2` (copie sautée). Sinon, état 2 avec drapeau 1: sauté; sinon un test de distance peut poser l'état 2 (`+0x44 = 0/1`).
+La copie a lieu si l'état n'est pas `0x13` et que l'un de état/`+0x40`/`+0x42`/`+0x44` diffère de `rec+0x2c/+0x28/+0x30/+0x32` (pas de test `rec+0x2c != 0`; un 0 copié devient l'état 0xe). Copie: `FUN_00421ec1(-1)`, `état = rec+0x2c`, `+0x40 = rec+0x28`, `+0x42 = rec+0x30`, `+0x44 = rec+0x32`, `+0x46 = 0`; le lien n'est pas écrit.
+La fonction n'efface jamais `rec+0x2c`: l'ordre est réappliqué à chaque passage. Propriétaire 4 (léviathan): sous-type 9 -> état 1 vers l'île `+0x0e`; autres sous-types: état 6 (bâtiment le plus proche `< 150`, ou `< 3000` avec drapeau `0x80`) ou 7; aucune copie. États 6/7 approche puis frappe, 8 suit, 9 site, 0xc dépôt, 0xd Obtain -> 0xe (minuterie `+0x34 = 0x3c`).
+Correction: les drapeaux sont en `+0x1c`, pas `+0x18`. Inconnues: écrivains de `rec+0x4c` et `rec+0x2c` (Recall non relu), `DAT_006191b4` hors partie normale (l'état 6 de `FUN_00464e4d` bloquerait l'adoption globale), espace d'indices flotteur/bâtiment.
+
+Écrivains de l'ordre et état du monde (REA, ev_e9e981a4…, ev_c9ba49c0…, ev_eb5b6cab…, ev_349b14e0…, ev_592a62cd…, ev_4e786cad…, ev_c01195f2…, ev_424bed26…, ev_a34a7d43…): `rec+0x2c` est remis à 0 par `FUN_004500c4` (remise à zéro; efface aussi `+0x28/+0x30/+0x32`, pas `+0x4c`) et `FUN_004528ca` (initialisation: `+0x2c/+0x28/+0x30 = 0`, `+0x32 = 1`);
+écrit 9 par `FUN_0045dcf4` (Recall, `+0x28/+0x30/+0x32 = 0`), 6 ou 8 par `FUN_0045d867`, 7 ou 9 par `FUN_0045d8b2` (sans appelant direct). Aucun écrivain « annuler » trouvé: seules les remises à zéro ci-dessus. `rec+0x4c` (flotteur lié): `0xffff` par `FUN_0045c82f` (détachement) et `FUN_0045c3fe` (initialisation d'enregistrement),
+indice d'emplacement par `FUN_0045c470` (rattachement, écrit aussi `flotteur+0xc`) et `FUN_0045cd75` (choix du candidat à 0x45d14d). `DAT_006191b4`: écrit seulement par `FUN_00460460` (2, garde état 0) et `FUN_004672ef` cas 0x15 (3); la machine `FUN_00464e4d` ne tourne qu'hors états 0 et 6 et y passe via `in_ECX+0x2cf9c`; l'état 6 n'est pas atteignable depuis 0 par la machine seule.
+Conclusion: l'adoption (`FUN_0042219e`, bloquée dès que l'état != 0) fonctionne en partie normale tant qu'aucun évènement du cas 0x15 ni chargement de sauvegarde ne s'exécute (non prouvé); un ordre de bâtiment persiste jusqu'à remise à zéro de l'enregistrement. Inconnues: appelants de `FUN_0045d867/8b2`, données du cas 0x15, lecteurs bruts non décodés.

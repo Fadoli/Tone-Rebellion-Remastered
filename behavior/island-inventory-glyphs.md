@@ -62,3 +62,42 @@ aux ordonnées 20, 34, 48… Modes simples: NEWGAME, LEVNAME et le mode 5 sont c
 Port: `hall_support_render.inc` utilise maintenant x = 6, largeur 167, première ligne à `haut + 6 + h + 1` et pas
 `h + 1` via `draw_wrapped_bitmap_label_pitch`; le renvoi partagé des autres écrans garde `h + 2`. Non porté: les
 modes centrés et niveau; liaison de `DAT_005c30b8` à `bgoutfnt.fnt` non tracée.
+
+Contexte des appels à `FUN_004503bd` (REA, ev_377d36e5, ev_f5fa2b6f, ev_b1d53f56, ev_053a6cdd, ev_dccd5da0, ev_b943bfaa): 8 appels via le thunk `0x402347`, dans quatre fonctions:
+`FUN_0041e569` (phase livraison, objet porté, quantité 1, joueur `*rec`; 0x41ea31/0x41ea8f/0x41eaf3), `FUN_00425084` (dépôt dans un emplacement libre, 0x425157, sinon compteur d'attente),
+`FUN_00465793` sous-type 4 (0x465cde, débit seulement si l'appel renvoie non nul) et `FUN_004672ef` cas 1 (0x4673f0.., +50 aux compteurs `+0x28/+0x2a/+0x2c`, sans bits ni glyphe).
+Bits de progression (état `+0x10 == 3`): si `action - (2*DAT_005eebf8[île*0x14f4] + 6) == record+0x4a` alors `record+0x1c |= 1` et `slot+0x4a |= 1<<indice` (indice 0/1: les deux objets
+`2X+6` et `2X+7`); quand `slot+0x4a & 3 == 3` dans ce même appel: `slot+0x1c |= 1`, `DAT_005eebe4[île*0xa7a] = 1`, **`DAT_00619242[joueur*0x14a0] |= 1<<île` (glyphe attribué)** et évènement monde 4.
+`FUN_004672ef` cas 0x11 met `slot+0x4a |= 3` sans glyphe. Inconnues: ECX réel des appels de `FUN_00465793`/`FUN_004672ef`, sens de `DAT_005eebf8/e8/e4`, si le site de livraison est le Hall.
+Interprétation: un glyphe est attribué quand les deux objets consécutifs `2X+6` et `2X+7` ont été livrés au site de l'île.
+
+Correction et tables (REA, ev_655c26af asm, ev_ba8f92a6, ev_916926256, ev_8878395b): Ghidra met les pas à l'échelle faussement; l'assembleur donne un bloc par île `IB = 0x5ec218 + I*0x29e8`
+avec `word IB+0x29e0` (`DAT_005eebf8`, identifiant de paire B, 0..13), `word IB+0x29d0` (`DAT_005eebe8`, indice X du site de glyphe), `dword IB+0x29cc` (`DAT_005eebe4`, drapeau « glyphe obtenu »).
+Branche `FUN_004503bd` état 3 (0x4506d6..0x450794): `I = word[rec+8]`, `d = action - (2B+6)` doit valoir `word[rec+0x4a]`; alors `rec+0x1c |= 1`, `S = IB + X*0x60 + 0x428`, `S.word+0x4a |= 1<<d`; si `& 3 == 3`:
+`S+0x1c |= 1`, `IB+0x29cc = 1`, `word 0x619242 + P*0x14a0 |= 1<<I` (bit de l'île `I`, pas de `B`), évènement 4. `FUN_00460072` (aucun appelant résolu) installe les ordres: `S+0x24 = 2B+6` puis `2B+7`
+(`B < 0xe`). Interprétation: le glyphe d'une île s'obtient en livrant les objets `2B+6` et `2B+7` au site `X` de cette île. Inconnues: valeurs initiales de B/X, écrivain de l'état 3, valeur initiale de `rec+0x4a`.
+
+Rapprochement avec le port: le bit du joueur est `1 << île` (île 0..13) et le port indexe les glyphes de 0 à `GAME_GLYPH_COUNT - 1`: l'indice de glyphe du port correspond donc à l'indice d'île natif (interprétation).
+`game_session_acquire_glyph(session, joueur, glyphe)` n'a aucun appelant hors tests; l'attribution en jeu (livraison `2B+6`/`2B+7` au site `X`) reste à brancher quand B et X seront connus (probablement lus des données d'île).
+
+Rectification (REA ev_bbd3d552, ev_ee737bfe, ev_46f600af + lecture du port): `DAT_00619242` est le masque « fonctionnalité spéciale » par joueur, déjà porté
+(`special_feature_island_mask`, `credit_floater_delivery`); ce n'est pas le masque des glyphes du panneau (`glyph_mask`), dont l'écrivain natif reste à établir (la phrase « glyphe attribué »
+plus haut est à lire ainsi). Origine des données: B = 4e champ (forme) de `WORLDPOS.TXT` par monde et île (= `leviathan_marker_shape_id` du port), X = indice de l'enregistrement
+`feature` de `ISLANDnn.TXT` (nn = B). Les deux sont lus de fichiers, non calculés.
+
+Rectification 2 (REA, ev_303065b9…, ev_2ea57c14…, ev_ba8f92a6…): `DAT_00619242[joueur*0x14a0]` EST le masque lu par le panneau Glyphes (`FUN_0043dee3`, bit k -> frame k+1; 0 -> TEMPHOLE/NOKNOW)
+et porte aussi d'autres drapeaux (0x4..0x2000 lus par `FUN_0041fde6`, `FUN_00420721`, `FUN_00420f28`, `FUN_00422d27`, `FUN_0045d9c1`, `FUN_0045dd3c`, `FUN_00440567`). Seul écrivain: `FUN_004503bd`
+(14 sites octets décodés), bit = indice d'île. La rectification précédente est à ignorer; le port maintient `glyph_mask` et `special_feature_island_mask` ensemble.
+
+État 3 (REA, ev_49f6c42a…, ev_169fcebf…, ev_fb2899df…, ev_2d44d75f…): dans `FUN_004503bd`, `rec` n'est pas le site mais l'**objet par joueur** (`0x6191b8 + P*0x14a0`, `P = param_3`; `rec+8` = île, `rec+0x8a` = masque d'îles parcouru par `FUN_00460072`); le site est `S = IB + X*0x60 + 0x428`.
+Transitions d'état de `rec+0x10`: 0 -> 1 dans `FUN_004503bd` (action 1 ou 4 < action < 0x22: `rec+0x24 = action`, `rec+0x14 = P` si -1); cas 1 sans transition; cas 2 (action 5: `rec+0x2c`, drapeau 4, `rec+0x40 = 0`) sans transition;
+cas 3 n'écrit jamais `rec+0x10`. Les transitions 1 -> 2 -> 3 ne sont pas dans cette fonction; aucune écriture immédiate de 3 dans `.text` (0 résultat pour `C7 ?? 10 03 00 00 00`); seule candidate pour l'état 2: `0x463c96` (immédiat 2 dans `FUN_004637fc`, registre de base non décodé).
+`FUN_00460072` pose l'état du site à 1 et `S+0x24 = 2B+6+côté` (le côté est dans le code, pas dans `+0x4a`). Appelants de `FUN_004503bd`: aucun résolu (appel indirect). Inconnues: écrivain de `rec+0x10 == 2/3` (probablement non immédiat), écrivain de `rec+0x4a`.
+
+Écriture de l'état 2 (REA, ev_0ad75c66…, ev_c42e6e1b…): `FUN_004637fc` à `0x463c96` fait `mov dword [site+0x10], 2` pour **tous les sites de classe 2** (`site+4 == 2`) de chaque île au démarrage du monde (boucle `k < word[île+0x29a8]`), sans transition; l'écriture à `0x464136`
+pose 1 (`+4 == 0`, `+0x14 == -1`, `+0x10 == 0`, `+0x24 = pair[k]+6`). Donc l'état 2 est un état initial des sites de classe 2, pas une étape de progression du joueur. Aucun incrément mémoire ni immédiat vers 3 (motifs `FF ?? 10`, `83 40 10 01`, `C7 ?? 10 03`, `B8 03…`: 0 résultat); les trois `83 ?? 10 01`
+(`0x41eb58`, `0x450a9f`, `0x44066f`) et les `89 ?? 10` (store registre) restent à décoder. Rectifie la phrase « aucune écriture de 2 » plus haut: seul 3 reste sans écrivain trouvé.
+
+État 3 résolu (REA, ev_af836582…, ev_342b57c4…, ev_a9362b0f…, ev_3fc8feca…): le chargeur d'île `FUN_00461b3b` (`0x461fed`: `mov [edx+0x10], eax`, `eax = [ebp-0xe4]`) écrit `+0x10 = 3` pour les enregistrements de type `feattrig` (chaîne `0x4a4c5c`; classe `[ebp-0x9c] = 3`),
+`4` pour `feature` (`0x4a4c54`) et `0x16` pour `levhub` (`0x4a4c44`), sur le site `IB + 0x428 + k*0x60`. Les sites « paire » (`feattrig`, classe 3, `+0x10 = 3`) reçoivent donc leur état 3 **du fichier `ISLANDnn.TXT` au chargement**, sans transition de jeu;
+cela correspond au port (`renderer_class == 3 && record_value_10 == 3` pour la paire, `== 4` pour le site central `feature`). Il n'y a donc pas d'écrivain d'exécution à chercher. Les trois `83 ?? 10 01` sont des `cmp`. Restent inconnus les appelants de `FUN_00461b3b`/`FUN_004528ca`/`FUN_00462a87` (indirects).

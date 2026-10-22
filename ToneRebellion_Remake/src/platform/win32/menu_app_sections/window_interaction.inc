@@ -472,6 +472,12 @@ static void handle_click(HWND window, int x, int y)
                 g_hovered_glyph = -1;
                 g_glyph_info_default =
                     hall_panel_mode == WINDOW_ISLAND_PANEL_GLYPHS;
+                if (hall_panel_mode == WINDOW_ISLAND_PANEL_TRADE &&
+                    selected_hall_player() >= 0) {
+                    /* FUN_0043eab5 message 1 zeroes the nine offers on open. */
+                    (void)game_session_clear_trade_offers(
+                        &g_game_session, (uint8_t)selected_hall_player());
+                }
                 if (hall_panel_mode == WINDOW_ISLAND_PANEL_INVENTORY) {
                     g_inventory_page = 0;
                     g_hovered_inventory_item = -1;
@@ -584,13 +590,24 @@ static void handle_click(HWND window, int x, int y)
                                     &unlock_island->locations[clicked_location];
                                 if ((pair_code >> 1) ==
                                         unlock_island->leviathan_marker_shape_id) {
+                                    /* FUN_0042fa0f case 0x40: the second test runs
+                                       on the site after the +1 shift, so both
+                                       rules can apply (net +2 or 0). */
+                                    const GameRuntimeLocation *test_site =
+                                        clicked_site;
                                     if (clicked_site->record_value_10 == 4) {
                                         target_location = clicked_location + 1;
-                                    } else if (clicked_site->renderer_class == 3 &&
-                                               clicked_site->source_capacity_4a !=
-                                                   pair_side) {
-                                        target_location = clicked_location +
-                                            (pair_side == 0 ? -1 : 1);
+                                        test_site = target_location <
+                                                (int)unlock_island->location_count
+                                            ? &unlock_island->locations[
+                                                  target_location]
+                                            : NULL;
+                                    }
+                                    if (test_site != NULL &&
+                                        test_site->renderer_class == 3 &&
+                                        test_site->source_capacity_4a !=
+                                            pair_side) {
+                                        target_location += pair_side == 0 ? -1 : 1;
                                     }
                                     if (target_location < 0 ||
                                         target_location >=

@@ -739,7 +739,7 @@ static void test_recruitment_waits_for_surplus_then_creates_animated_worker(void
                    session.player_starts.players[owner].floater_type_index);
             assert(floater->current_hit_points ==
                    session.worker_birth_stats[owner].hit_points);
-            assert(floater->source_runtime_flags == 0x001U);
+            assert(floater->source_runtime_flags == 0x801U);
             assert(floater->has_wander_order);
             assert(floater->island_index ==
                    session.economy[owner].hall_island_index);
@@ -810,7 +810,7 @@ static void test_initialized_workers_build_from_queued_selection(void)
     item->item_id = 37;
     item->size = 0;
     item->building_tone_cost = 35;
-    item->maintenance_tone_cost = 27;
+    item->maintenance_tone_cost = 50;
     item->hit_points = 17;
     assert(hall->resource_stock[GAME_RESOURCE_BUILD_TONE] >= 35);
     assert(game_session_queue_build_selection(&session, 0,
@@ -822,9 +822,10 @@ static void test_initialized_workers_build_from_queued_selection(void)
     assert(session.pending_events[slot].payload_0a == start->island_index);
     assert(session.pending_events[slot].payload_0e == (int16_t)location_index);
     assert(session.pending_events[slot].payload_12 == 37);
-    assert(session.economy[0].source_maintenance_budget == 6);
-    assert(session.economy[0].source_maintenance_budget <
-           item->maintenance_tone_cost);
+    assert(session.economy[0].source_maintenance_budget == 30);
+    /* FUN_004526de compares the cost with gross capacity, not the budget. */
+    assert(item->maintenance_tone_cost >
+           session.economy[0].source_maintenance_capacity);
     {
         int16_t delivered = -1;
         int16_t required = -1;
@@ -842,7 +843,7 @@ static void test_initialized_workers_build_from_queued_selection(void)
     assert(session.pending_events[slot].assigned_floater_count == 0);
     assert(site->resource_stock[GAME_RESOURCE_BUILD_TONE] == 0);
     /* The queue entry exists, but its upkeep check blocks dispatch. Lowering
-       its upkeep below the initial net budget makes it eligible. */
+       its upkeep to the gross capacity makes it eligible. */
     item->maintenance_tone_cost = 1;
 
     for (worker_index = 0; worker_index < start->floater_count; ++worker_index) {

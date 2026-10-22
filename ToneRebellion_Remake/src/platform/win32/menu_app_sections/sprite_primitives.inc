@@ -117,6 +117,7 @@ static int draw_runtime_item_scaled(HDC dc,
 static int begin_new_game(HWND window)
 {
     char error[256];
+    g_sim_speed = 1U;   /* FUN_004121b7 case 9 resets DAT_004bf110 */
     if (!load_game_session_for_selected_world(error, sizeof(error))) {
         MessageBoxA(window, error, "Tone Rebellion remake - game setup error",
                     MB_OK | MB_ICONERROR);

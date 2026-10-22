@@ -77,3 +77,33 @@ Port: un joueur sans floater actif affiche maintenant la pose de travailleur de 
 de `g_initial_floater_legs/bodies[tribu]`, non retourné) au lieu de rien. Inférence: ces feuilles correspondent à
 l'enregistrement de classe natif. Non établi: octet `+0x14`, source de la police de la légende (objet de police
 `FUN_0042de0d` non résolu; noms `smfont` et `bgfont` en `0x4a0308`), couleur native de la légende.
+
+Passe Commerce (REA, `FUN_0043edac` dessin, `FUN_0043eab5` messages, `FUN_0043ec78` clic; ev_116199be…, ev_016c96cc…, ev_58dd79bd…): remise à zéro à l'ouverture
+(`memset(panel+0x74, 0, 0x12)` au message 1): portée. Texte des montants et légende en indice de palette 6 (objet `DAT_005c2870`): déjà couvert par `panel_text_color`.
+Emblèmes d'en-tête: `FUN_00428191` en `(55+38c, 12)`, c = 0..2, classe `c` ou `c+1` si `c >= DAT_0049f538`; rectangles de ligne
+`x 40..190, y 37+24r, h 14` (blit de forme remappé `FUN_004109a6`, `FUN_004106dd(1,0)`). Ces deux éléments restent absents du port (sprite/frame de bannière
+non résolus). Clic: `x 40..154`, `y 37..109`, colonne `(x-40)/33`, ligne `(y-37)/19`, pas ±10, 0..1000. À vérifier: orientation ligne/colonne du
+validateur (natif par colonne cible, port par ligne ressource).
+
+Emblèmes et fonds du Commerce (REA, ev_e0739526, ev_825b6d33, ev_0d5900a6): `FUN_00428191` construit un objet de 0x4c octets (classe, sous-type) et dessine via
+`FUN_0042704b(surface, obj, x, y, 0, mode 8, 0x10000, 0)`; mode 8 = blit RLE transparent coupé, sans voile, origine absolue. Enregistrement
+`FUN_00464242(classe, sous)` = `0x5ebfa0 + (classe*9+sous)*14`, index d'info de forme `+4`, entrée de 0x54 octets (`FUN_0045575c`): trame du corps =
+`[4] + (obj+0x14 / [6]) % ([5]-[4]+1)`, sous-couche `[2] + nibble bas de surface+0xa` borné [2..3]. Fichier de bannière non résolu (aucun nom dans les chaînes; pas de
+SHP de tribu dans le corpus), animation par tick non observée. Fonds de ligne: forme `FUN_0040e864(panel+0x1c)` trame `panel+0x1e` (écrivain non trouvé);
+`FUN_004109a6` applique `table[pixel]` sous un masque (`FUN_004106dd(1,0)` = table de voile niveau 0 `0x4b20f0`, remplie à l'exécution), source non lue: les fonds sont un
+assombrissement du fond de fenêtre, pas des pixels de forme. Rectangle d'en-tête `x 40+38c..68+38c, y 22..102` = ombrage statique (pas de survol). Non porté:
+tant que l'index de forme de bannière manque, les emblèmes ne peuvent pas être fidèles; l'ombrage des lignes/colonnes est portable via la LUT de voile existante.
+
+Port (interprétation): la « bannière » de `FUN_00428191` est la pose du travailleur de la tribu (même helper que la Diplomatie, sous-type 0); le Commerce
+l'affiche désormais à `(55+38c, 12)` relatif au panneau, tribu `c` ou `c+1` à partir du joueur local. Hypothèse: origine relative au panneau (non confirmée par un
+argument de site d'appel); fonds de ligne ombrés non portés.
+
+Origine de l'emblème (REA, ev_9fabd444f0c1b2d2, ev_e60ae5e3389e533e): l'appel de `FUN_0043edac` à `0x43eeee` pousse `x = 0x37 + 0x26*i`, `y = 0xc` bruts, sans `this+0xc/+0x10`;
+`FUN_00428191`/`FUN_0042704b` les transmettent sans origine de surface (surface globale `DAT_005c30a0`, 640x480). Même traitement brut pour l'icône de ligne `(30, 52+24r)`
+et les montants, que le port place déjà relativement au panneau (revue visuelle antérieure: l'origine du panneau est ajoutée par l'enveloppe de fenêtre, cf. Diplomatie où l'appelant
+passe des coordonnées moins l'origine). Conclusion retenue: pane-relatif, comme les autres éléments de la même fonction; le rapport « absolu » du sous-agent n'est pas retenu
+(contradit la Diplomatie). Reste non confirmé par un tracé de `FUN_00404770` / `FUN_0042704b`.
+
+Origine, suite (REA, ev_5935c354…, ev_4d46b37e…, ev_e60ae5e3…): `FUN_0042d28f` renvoie `&DAT_005c30a0` et n'y écrit que `+4 = 639`, `+8 = 479` (étendues plein écran);
+`FUN_00404770` ajoute `surface+4/+8` à x,y puis borne contre `+4..+0x10`, ce qui est incompatible avec une origine nulle: la mise en page de la structure (ou le typage du
+décompilateur) reste non résolue. Aucun positionneur d'origine par fenêtre trouvé. Décision inchangée: emblème pane-relatif comme les autres éléments, à contrôler visuellement.

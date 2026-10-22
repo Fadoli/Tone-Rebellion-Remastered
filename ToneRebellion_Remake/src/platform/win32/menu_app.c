@@ -232,6 +232,8 @@ static int g_hovered_spell_kind = -1;
 /* Set when a world-map press already acted: the matching release is dropped,
    as the original pump never delivers it (FUN_00469f56). */
 static int g_swallow_left_button_up;
+/* DAT_004bf110: simulation ticks per 50 ms frame, 1..3 (keys 8/9). */
+static unsigned g_sim_speed = 1U;
 static int g_hovered_location_grab;
 static int g_hovered_hall_stock = -1;
 static int g_hovered_island_button = -1;

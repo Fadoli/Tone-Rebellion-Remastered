@@ -114,3 +114,14 @@ détruit). Le port destruit un bâtiment à la fin du compteur létal
 (`game_session_animation.c`, événement monde 8), mais la correspondance avec la
 commande native 5/7 n'est pas établie (l'émetteur de `(5, 7, paquet)` est inconnu), donc
 aucun son n'est branché.
+
+## Volume et panoramique des effets (REA, ev_aabff0f0, ev_effbb692, ev_d51b7f06, ev_4b03a6df)
+
+Observation: `FUN_0045afb9(son, vol%, pan)` joue un tampon DirectSound statique par indice (Stop `+0x48`, SetCurrentPosition(0) `+0x34`, SetPan `+0x40`, SetVolume `+0x3c`, Play `+0x30`);
+si `DAT_004c2bc8 != 0` un tampon déjà en lecture n'est pas relancé, sauf `levdeath`/`fltdeath` qui redémarrent toujours. Déclencheur `FUN_004181a6` (par instance et par tick,
+`FUN_00416ff8`): joue seulement si le son de la définition est défini, île de l'instance (`+0x08`) == île affichée `DAT_0049f53c`, `DAT_0062d172 == 3` et compteur d'instance (`+0x12`) == 0
+(premier tick seul). `d = (DAT_005dbee0[île] + 0x140) - x_évènement`; `FUN_0045b24d`: volume `= trunc(100*(2000 - min(|d|,2000))/2000)` (linéaire, 0 à 2000 unités),
+pan `= atténuation(trunc(100*(500 - min(|d|,500))/500))` signé (droite si `x > centre`), 0 au centre, ±10000 à 500 unités et plus; atténuation `FUN_004595cc` (0 -> -10000, 100 -> 0, centièmes de dB).
+Table d'instances: 32 emplacements (`obj+0x1202`, pas 0x14), évènements ignorés si plein. Pas de volume par son (`SOUND` des `effects.txt` n'est qu'un indice).
+Interprétation / limites: unités de `x` non vérifiées en pixels; `FUN_00414fbf` (types 2/3) et le sens de `DAT_004c2bc8`, `DAT_0062d172` non résolus.
+Port: `PlaySoundA` n'a ni volume ni panoramique; reproduire ces formules exige un tampon audio contrôlable (waveOut/DirectSound/SDL). Non porté.

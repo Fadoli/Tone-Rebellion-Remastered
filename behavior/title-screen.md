@@ -140,3 +140,17 @@ RÉSOLU (3e passe, ev_8c1a4a9e…, asm 0x4126b1): `DAT_004bf110` = `GAMEENV(0x4b
 Valeur initiale posée aux cas 9 (début de partie, envoyé par `FUN_00448e5a` cas 0x34) et 0xc: 1, ou 2 si `DAT_004befe0 != 0`
 (réseau). Solo: N = 1, soit 1 tick par image de 50 ms (20/s). Minuteur du port passé de 33 à 50 ms (logo en ticks réduits).
 
+
+### `draw_method` et `multispeed` (REA, ev_2f74d0d0, ev_350fca36, ev_fbabbb86, ev_5c792cde, ev_e9e94c75)
+
+Observation: `FUN_0041d19d` fixe `DAT_0049c9b4 = atoi(valeur)` (lu par `FUN_0041c1d6` seulement) puis `FUN_0042c608(mode)` choisit la
+présentation: 0 VidFront, 1 VidBack, 2 SysToVidFront (blit mémoire système vers primaire, sans flip), 3 SysToVidBack, 4 Bitmap (GDI
+`BitBlt` SRCCOPY depuis le DIB 8 bpp). Modes 0..3: DirectDraw plein écran exclusif 640x480x8; aucun redimensionnement, alpha, voile ni
+transformation de couleur dans ces routines. Le `FLOAT.CFG` installé (`draw_method 2`) n'a donc aucun effet visible à reproduire au-delà
+du plein écran 640x480 (le port fenêtré GDI correspond au mode 4). `multispeed` (`DAT_004c2bb4`) ne sert qu'à autoriser les touches de
+vitesse en réseau; en solo elles sont toujours actives. `nevada` (`DAT_004c2b74`, ~67 lecteurs) garde des touches de débogage.
+Inconnues: `DAT_004c2b6c`, `DAT_004c2bb8`, surface écrite par le moteur (système ou DIB).
+
+`easyunlock` précisé (REA, `FUN_0042fa0f` cas 0x40, seul lecteur de `DAT_004c2ba0`, aucune écriture d'état): la vérification d'occupation porte sur le site cliqué avant réécriture; la réécriture
+de colonne est faite si `(objet-6)/2 == B` de l'île: site `+0x10 == 4` -> colonne +1 et le site suivant devient le site testé; puis si ce site testé est de classe 3 et `+0x4a != (objet-6)&1`
+colonne -1 (côté 0) ou +1 (côté 1). Le second test voit donc le site déjà décalé (décalage net +2 ou 0). Porté tel quel. Aucun écrivain de l'état 3 trouvé (recherche d'immédiats: 0 résultat).

@@ -523,6 +523,14 @@ unsigned int game_session_dispatch_cast_actions(GameSession *session)
             if (!game_session_floater_is_active(floater) ||
                 floater->owner_slot != request.player_slot ||
                 floater->active_order_action == 0x13) continue;
+            /* FUN_0045d8f4 tests DAT_006188e0[kind] <= worker level L (low
+               nibble of +0xa). The table is spells.txt Level - 1 (REA, loader
+               FUN_00463563): 0 for kinds 0..10, 1 for 11..17, 2 for 18..21.
+               Class 1 casting kind 15 and class 2 casting kind 17 skip it. */
+            if (!((floater->type_index == 1U && kind == 15U) ||
+                  (floater->type_index == 2U && kind == 17U)) &&
+                (kind >= 18U ? 2U : kind >= 11U ? 1U : 0U) >
+                    (floater->attack_level_flags & 0x0fU)) continue;
             caster = floater;
             break;
         }

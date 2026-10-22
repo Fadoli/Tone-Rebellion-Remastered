@@ -602,8 +602,9 @@ static int task_count_rule_accepts(const GamePendingEvent *row,
 }
 
 /* FUN_0042219e leaves urgent tasks alone and skips workers in combat states
-   6/7 or +0x2c == 4 (delivering). The remake also keeps a CONSTR finisher
-   (state 5) and cross-island handoffs (action 9) on their task. */
+   6/7 or +0x2c == 4 (delivering). The remake lets delivering/constructing
+   workers (states 4/5) be reallocated too, but keeps cross-island handoffs
+   (action 9) on their task. */
 static const GamePendingEvent *rebalance_current_task(
     const GameSession *session, const GameFloaterStart *floater)
 {
@@ -613,7 +614,6 @@ static const GamePendingEvent *rebalance_current_task(
         floater->linked_task_slot >= GAME_SESSION_MAX_PENDING_EVENTS ||
         (floater->active_order_action != 4 &&
          floater->active_order_action != 0x12) ||
-        floater->movement_state == 4 || floater->movement_state == 5 ||
         floater->movement_state == 6 || floater->movement_state == 7)
         return NULL;
     event = &session->pending_events[(uint8_t)floater->linked_task_slot];
@@ -663,10 +663,9 @@ static void assign_resource_tasks(GameSession *session,
             floater->owner_slot >= GAME_FLOATER_CATEGORY_COUNT ||
             floater->island_index >= session->island_count) continue;
         if (floater->linked_task_slot != -1) {
-            /* FUN_0041e569 calls FUN_0042219e every tick in state 0 and only
-               once per ten ticks (offset by the floater index) otherwise. */
-            if ((session->simulation_tick + floater_index) % 10U != 0U)
-                continue;
+            /* Remake deviation: FUN_0041e569 re-evaluates busy workers once
+               per ten ticks; re-evaluate every tick so reallocation does not
+               wait for the worker to finish its current task. */
             current_task = rebalance_current_task(session, floater);
             if (current_task == NULL) continue;
             current_count = current_task->assigned_floater_count;
@@ -874,6 +873,12 @@ static void credit_floater_delivery(GameSession *session,
                                 .special_feature_island_mask & island_bit) == 0) {
                             session->economy[floater->owner_slot]
                                 .special_feature_island_mask |= island_bit;
+                            /* DAT_00619242 is also the word the Glyph panel and
+                               the glyph checks read: bit k = island k. */
+                            if (floater->island_index < GAME_GLYPH_COUNT)
+                                (void)game_session_acquire_glyph(session,
+                                    floater->owner_slot,
+                                    (uint8_t)floater->island_index);
                             game_session_refresh_player_attack_points(
                                 session, floater->owner_slot);
                         }
@@ -962,6 +967,32 @@ void game_session_update_construction_tasks(GameSession *session,
 
     }
 
+}
+
+/* The worker that drops the last Build Tone unit keeps its CONSTR claim and
+   walks the final leg (state 5) itself, so no other idle worker finishes the
+   building. Returns 1 when the floater became the finisher. */
+static int continue_as_construction_finisher(GameSession *session,
+                                             const PadCatalog *catalog,
+                                             GameFloaterStart *floater)
+{
+    const GameRuntimeLocation *target;
+    const PadCatalogItem *item;
+    const GamePendingEvent *event;
+
+    if (!floater_has_construction_task(session, floater)) return 0;
+    event = &session->pending_events[(uint8_t)floater->linked_task_slot];
+    if (event->assigned_floater_count != 1 ||
+        !construction_task_details(session, catalog, event, &target, &item) ||
+        target->resource_stock[GAME_RESOURCE_BUILD_TONE] <
+            (uint16_t)item->building_tone_cost) return 0;
+    floater->order_source_location = -1;
+    floater->order_timer = 0;
+    floater->source_runtime_flags &= ~1U;
+    floater_target_location(floater, target, 5);
+    floater->has_wander_order = 0;
+    floater->wander_timer = 0;
+    return 1;
 }
 
 void game_session_advance_local_resource_task(GameSession *session,
@@ -1296,6 +1327,8 @@ void game_session_advance_local_resource_task(GameSession *session,
             return;
         }
         credit_floater_delivery(session, floater, code);
+        if (continue_as_construction_finisher(session, catalog, floater))
+            return;
         floater->source_runtime_flags &= ~1U;
         floater->active_order_action = 0;
         release_task_claim(session, floater);
@@ -1310,6 +1343,7 @@ void game_session_advance_local_resource_task(GameSession *session,
     /* The other state-4 path finishes on exact arrival and attempts the same
        receiver without the 20-tick Hall wait. */
     credit_floater_delivery(session, floater, code);
+    if (continue_as_construction_finisher(session, catalog, floater)) return;
     floater->active_order_action = 0;
     release_task_claim(session, floater);
     floater->has_move_order = 0;

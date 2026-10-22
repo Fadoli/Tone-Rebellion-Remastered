@@ -116,6 +116,16 @@ size_t window_catalog_control_render_frames(const WindowTemplate *control,
     return 1;
 }
 
+int window_catalog_onoff_state_control(const WindowTemplate *control,
+                                       int enabled, WindowTemplate *out)
+{
+    if (control == NULL || out == NULL) return 0;
+    *out = *control;
+    if (!enabled && out->nstates > 1 && out->shape_frame >= 0)
+        ++out->shape_frame;
+    return 1;
+}
+
 int window_catalog_hall_panel_mode(const char *control_name)
 {
     if (control_name == NULL) return WINDOW_ISLAND_PANEL_NONE;

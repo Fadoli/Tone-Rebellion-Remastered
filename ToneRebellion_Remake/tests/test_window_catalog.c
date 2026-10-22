@@ -149,6 +149,22 @@ static void verify_original_manifest(const char *path)
         assert(window_catalog_control_render_frames(window, 1, draw_frames) == 2);
         assert(draw_frames[0] == 19 && draw_frames[1] == 21);
     }
+    {
+        WindowTemplate state;
+        int32_t draw_frames[2] = {-1, -1};
+        assert(window->nstates == 2);
+        assert(window_catalog_onoff_state_control(NULL, 1, &state) == 0);
+        assert(window_catalog_onoff_state_control(window, 1, &state) == 1);
+        assert(state.shape_frame == 19);
+        assert(window_catalog_onoff_state_control(window, 0, &state) == 1);
+        assert(state.shape_frame == 20);
+        /* Hover overlay stays shared; base frame follows the switch. */
+        assert(window_catalog_control_render_frames(&state, 0, draw_frames) == 1);
+        assert(draw_frames[0] == 20);
+        assert(window_catalog_control_render_frames(&state, 1, draw_frames) == 2);
+        assert(draw_frames[0] == 20 && draw_frames[1] == 21);
+        assert(window->shape_frame == 19);
+    }
     window = window_catalog_hit_test(&catalog, 1, 600, 430);
     assert(window != NULL && strcmp(window->name, "BEGINGAME") == 0);
     window = window_catalog_hit_test(&catalog, 1, 10, 430);

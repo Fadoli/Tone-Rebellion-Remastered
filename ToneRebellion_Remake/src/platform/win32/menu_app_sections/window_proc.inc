@@ -34,6 +34,10 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         if (wparam == 1 && (g_menu.screen == SCREEN_NEW_GAME ||
                             g_menu.screen == SCREEN_WORLD_MAP ||
                             g_menu.screen == SCREEN_ISLAND)) {
+            /* FUN_0041c46f runs the tick DAT_004bf110 times per frame; keys 8/9
+               change it from 1 to 3 (FUN_0046a5b7). */
+            unsigned sim_steps = g_menu.screen == SCREEN_ISLAND ? g_sim_speed : 1U;
+            while (sim_steps-- != 0U) {
             ++g_menu.animation_ticks;
             if (g_menu.screen == SCREEN_WORLD_MAP && g_mouse_inside) {
                 /* Islands orbit under a stationary pointer. Re-hit-test each
@@ -102,7 +106,8 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                             SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
                 }
             }
-            /* Redraw the full animated screen at every 30 Hz simulation tick,
+            }
+            /* Redraw the full animated screen at every 20 Hz frame,
                including while the Tasks panel is open. */
             InvalidateRect(window, NULL, FALSE);
         }
@@ -372,6 +377,16 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
     case WM_KEYDOWN:
         /* The original logo loop polls no input. */
         if (g_menu.screen == SCREEN_LOGO) return 0;
+        if (g_menu.screen == SCREEN_ISLAND &&
+            (wparam == '8' || wparam == VK_SUBTRACT)) {
+            if (g_sim_speed > 1U) --g_sim_speed;   /* FUN_0046a5b7: min 1 */
+            return 0;
+        }
+        if (g_menu.screen == SCREEN_ISLAND &&
+            (wparam == '9' || wparam == VK_ADD)) {
+            if (g_sim_speed < 3U) ++g_sim_speed;   /* FUN_0046a5b7: max 3 */
+            return 0;
+        }
         if (wparam == VK_ESCAPE) {
             if (g_menu.screen == SCREEN_LOAD_GAME) {
                 g_menu.screen = SCREEN_MAIN_MENU;
