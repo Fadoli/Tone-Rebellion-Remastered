@@ -78,11 +78,10 @@ static void handle_click(HWND window, int x, int y)
             (void)open_island_view(window, clicked_island);
         }
     } else if (g_menu.screen == SCREEN_ISLAND) {
-        if (ground_pickup_button_at(x, y)) {
-            (void)game_session_order_floater_to_ground_object(&g_game_session,
+        if (obtain_button_at(x, y)) {
+            (void)game_session_queue_obtain_task(&g_game_session,
                 (uint8_t)g_menu.selected_tribe,
                 (uint8_t)g_menu.selected_map_island,
-                (unsigned int)g_selected_floater,
                 (uint16_t)g_selected_location);
             InvalidateRect(window, NULL, FALSE);
             return;
@@ -544,7 +543,7 @@ static void handle_click(HWND window, int x, int y)
                     }
                     if (clicked_ground_item) {
                         /* Keep the map target selected and the worker active;
-                           a right-click on this object issues the pickup order. */
+                           the Obtain button posts the type-0xd task. */
                         g_selected_location = clicked_location;
                         g_hovered_location = -1;
                     } else {

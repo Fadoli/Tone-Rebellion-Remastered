@@ -59,16 +59,16 @@ int game_session_order_floater_to_charge_site(GameSession *session,
                                               uint8_t island_index,
                                               unsigned int floater_index,
                                               uint16_t location_index);
-/* Order an owned floater to pick up a visible PIT_Object on its island.
-   The runtime consumer is observed; the native player-order producer remains
-   unresolved, so this is a remake-side interaction inferred from that state. */
-int game_session_can_order_floater_to_ground_object(
-    const GameSession *session, uint8_t player_slot, uint8_t island_index,
-    unsigned int floater_index, uint16_t location_index);
-int game_session_order_floater_to_ground_object(GameSession *session,
-                                                uint8_t player_slot,
-                                                uint8_t island_index,
-                                                unsigned int floater_index,
-                                                uint16_t location_index);
+/* Item id (5..33) of a loose PIT_Object at a class-0, unowned site, else 0.
+   FUN_004502dc reads +0x24 only when the record's +0x10 equals 1. */
+int game_session_ground_object_item(const GameSession *session,
+                                    uint8_t island_index,
+                                    uint16_t location_index);
+/* Enter movement state 13 toward a ground object for a floater already on
+   that island; used by the Obtain (type 0xd) task attach. */
+int game_session_start_floater_ground_pickup(GameSession *session,
+                                             unsigned int floater_index,
+                                             uint8_t island_index,
+                                             uint16_t location_index);
 
 #endif

@@ -38,7 +38,7 @@ static int island_lilmap_scroll_to(int x, int y, int clamp_to_pane)
     const WindowTemplate *mini_map;
     int scroll;
     if (g_menu.screen != SCREEN_ISLAND) return 0;
-    mini_map = window_catalog_find(&g_window_catalog, "IWLilMap", 16);
+    mini_map = window_catalog_find(&g_window_catalog, "IWLilMap", 3);
     if (mini_map == NULL) return 0;
     if (!clamp_to_pane &&
         (x < mini_map->pane.left || x > mini_map->pane.right ||
@@ -122,6 +122,25 @@ static int island_site_is_hidden_pad(int location_index)
     return !island_site_buildable_by_player(location_index, NULL, NULL);
 }
 
+/* Remake: loose PIT_Object items stay selectable outside the explored x
+   extent (the Obtain button list of FUN_0045302a has no range test). */
+static int island_location_is_ground_object(int location_index)
+{
+    const GameRuntimeIsland *island;
+    const GameRuntimeLocation *location;
+    int32_t item_id;
+    if (!g_game_session_valid || g_menu.selected_map_island < 0 ||
+        g_menu.selected_map_island >= g_game_session.island_count ||
+        location_index < 0) return 0;
+    island = &g_game_session.islands[g_menu.selected_map_island];
+    if (location_index >= (int)island->location_count) return 0;
+    location = &island->locations[location_index];
+    item_id = location->record_value_10 == 1 ? location->record_value_24 : 0;
+    return location->renderer_class == 0 && location->owner_id == -1 &&
+        item_id >= GAME_INVENTORY_ITEM_FIRST_ID &&
+        item_id < GAME_INVENTORY_ITEM_FIRST_ID + GAME_INVENTORY_ITEM_COUNT;
+}
+
 static int island_location_at(int x, int y)
 {
     int map_x = x + g_island_scroll_x;
@@ -134,6 +153,7 @@ static int island_location_at(int x, int y)
         int dy = map_y - location->y;
         if (dx * dx + dy * dy <= 100 && !island_site_is_hidden_pad(index) &&
             (!g_game_session_valid || g_menu.selected_tribe < 0 ||
+             island_location_is_ground_object(index) ||
              game_session_island_x_explored(&g_game_session,
                  (uint8_t)g_menu.selected_map_island,
                  (uint8_t)g_menu.selected_tribe, location->x)))
@@ -437,27 +457,28 @@ static int location_grab_button_at(int x, int y)
         y >= rect.top && y < rect.bottom;
 }
 
-/* Remake: explicit "PICK UP" control for the selected ground object. The
-   native player-order producer is unresolved (see
-   game_session_order_floater_to_ground_object); this only exposes the same
-   order the right-click issues. */
-static int ground_pickup_button_visible(void)
+/* FUN_0045302a lists command 4 (Obtain) for a selected PIT_Object (type 1,
+   +0x24 in 5..0x21) without an owner or range test; FUN_0042fa0f (0x39)
+   posts the type-0xd task for the selected location. The button position is
+   a remake layout choice (the native control->code table is not traced). */
+static int obtain_button_visible(void)
 {
     if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
         g_island_panel_mode != WINDOW_ISLAND_PANEL_GENERAL ||
-        g_selected_floater < 0 || g_selected_location < 0 ||
+        g_selected_location < 0 ||
         g_menu.selected_map_island < 0 ||
+        g_menu.selected_map_island >= g_game_session.island_count ||
         g_menu.selected_tribe < 0 ||
         g_menu.selected_tribe >= GAME_START_PLAYER_COUNT) return 0;
-    return game_session_can_order_floater_to_ground_object(&g_game_session,
-        (uint8_t)g_menu.selected_tribe, (uint8_t)g_menu.selected_map_island,
-        (unsigned int)g_selected_floater, (uint16_t)g_selected_location);
+    return game_session_ground_object_item(&g_game_session,
+        (uint8_t)g_menu.selected_map_island,
+        (uint16_t)g_selected_location) != 0;
 }
 
-static int ground_pickup_button_rect(RECT *rect)
+static int obtain_button_rect(RECT *rect)
 {
     const WindowTemplate *panel;
-    if (rect == NULL || !ground_pickup_button_visible()) return 0;
+    if (rect == NULL || !obtain_button_visible()) return 0;
     panel = window_catalog_find(&g_window_catalog, "IWLocControl", 3);
     if (panel == NULL) return 0;
     rect->left = panel->pane.left + 8;
@@ -467,16 +488,16 @@ static int ground_pickup_button_rect(RECT *rect)
     return 1;
 }
 
-static int ground_pickup_button_at(int x, int y)
+static int obtain_button_at(int x, int y)
 {
     RECT rect;
-    return ground_pickup_button_rect(&rect) && x >= rect.left &&
+    return obtain_button_rect(&rect) && x >= rect.left &&
         x < rect.right && y >= rect.top && y < rect.bottom;
 }
 
 static int update_location_grab_hover(int x, int y)
 {
-    int hovered = location_grab_button_at(x, y) || ground_pickup_button_at(x, y);
+    int hovered = location_grab_button_at(x, y) || obtain_button_at(x, y);
     if (hovered == g_hovered_location_grab) return 0;
     g_hovered_location_grab = hovered;
     return 1;

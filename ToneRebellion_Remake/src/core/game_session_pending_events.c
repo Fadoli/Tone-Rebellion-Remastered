@@ -1,5 +1,6 @@
 #include "game_session.h"
 #include "game_session_delivery_internal.h"
+#include "game_session_movement.h"
 
 #include <string.h>
 
@@ -186,7 +187,7 @@ unsigned int game_session_cancel_tasks_for_location(GameSession *session,
         if (event->action_type == 0x0b) {
             targets_location = event->payload_0c == (int16_t)location_index;
         } else if (event->action_type == 4 || event->action_type == 5 ||
-                   event->action_type == 0x12) {
+                   event->action_type == 0x0d || event->action_type == 0x12) {
             targets_location = event->payload_0e == (int16_t)location_index;
         } else {
             continue;
@@ -210,4 +211,23 @@ int game_session_pending_event_release(GameSession *session, uint8_t slot)
     event->active = 0;
     --session->pending_event_count;
     return 1;
+}
+
+int game_session_queue_obtain_task(GameSession *session, uint8_t player_slot,
+                                   uint8_t island_index,
+                                   uint16_t location_index)
+{
+    int item_id;
+
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT) return 0;
+    item_id = game_session_ground_object_item(session, island_index,
+                                              location_index);
+    if (item_id == 0) return 0;
+    /* FUN_0042fa0f 0x39 posts category 0 / type 0xd with the player, island,
+       location index and the object's +0x24 value; FUN_004662b7 drops a
+       duplicate (same type, player, island, location). The pending-event add
+       already coalesces type 13. */
+    return game_session_pending_event_add(session, (int16_t)player_slot,
+        (int16_t)island_index, 0x0d, 0, (int16_t)location_index,
+        (int16_t)item_id) >= 0;
 }

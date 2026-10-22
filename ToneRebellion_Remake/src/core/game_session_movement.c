@@ -655,6 +655,22 @@ void game_session_drop_carried_artifact(GameSession *session,
     floater->carried_resource_code = 0;
 }
 
+/* FUN_00466533 clears the type-0xd task entry once its worker is done (or
+   FUN_004502dc found no PIT_Object). Returns 1 when a task was released. */
+static int game_session_finish_obtain_task(GameSession *session,
+                                           GameFloaterStart *floater)
+{
+    int16_t slot = floater->linked_task_slot;
+    GamePendingEvent expected;
+
+    if (slot < 0 || slot >= GAME_SESSION_MAX_PENDING_EVENTS ||
+        session->pending_events[(uint8_t)slot].active == 0 ||
+        session->pending_events[(uint8_t)slot].action_type != 0x0d) return 0;
+    expected = session->pending_events[(uint8_t)slot];
+    return game_session_dispatch_task_command(session, (uint8_t)slot, 12,
+                                              &expected);
+}
+
 static void game_session_cancel_ground_pickup_order(GameSession *session,
                                                     GameFloaterStart *floater)
 {
@@ -666,6 +682,7 @@ static void game_session_cancel_ground_pickup_order(GameSession *session,
          floater->active_order_action == 0x0d);
     GamePendingEvent expected;
 
+    if (game_session_finish_obtain_task(session, floater)) return;
     if (release_old_task != 0)
         expected = session->pending_events[(uint8_t)old_task_slot];
     release_task_claim(session, floater);
@@ -718,6 +735,7 @@ static int game_session_tick_ground_object_pickup(
     }
     floater->movement_state = 0;
     floater->has_move_order = 0;
+    (void)game_session_finish_obtain_task(session, floater);
     /* FUN_0041e569 sends subtype 8 back to its Hall after a completed
        non-cast state when the native global order gate is open. The remake
        reaches this handler only while simulation ticks are advancing. */
@@ -1661,55 +1679,46 @@ int game_session_order_floater_to_charge_site(GameSession *session,
     return 1;
 }
 
-int game_session_can_order_floater_to_ground_object(
-    const GameSession *session, uint8_t player_slot, uint8_t island_index,
-    unsigned int floater_index, uint16_t location_index)
+int game_session_ground_object_item(const GameSession *session,
+                                    uint8_t island_index,
+                                    uint16_t location_index)
 {
-    const GameRuntimeIsland *island;
-    const GameFloaterStart *floater;
     const GameRuntimeLocation *target;
     int32_t item_id;
 
-    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
-        island_index >= session->island_count ||
-        floater_index >= session->floater_count ||
+    if (session == NULL || island_index >= session->island_count ||
         location_index >= session->islands[island_index].location_count)
         return 0;
-    floater = &session->floaters[floater_index];
-    island = &session->islands[island_index];
-    target = &island->locations[location_index];
+    target = &session->islands[island_index].locations[location_index];
     item_id = target->record_value_10 == 1 ? target->record_value_24 : 0;
-    if (!game_session_floater_is_active(floater) ||
-        (floater->source_runtime_flags & 0x008U) != 0 ||
-        floater->owner_slot != player_slot ||
-        floater->island_index != island_index ||
-        floater->linked_task_slot != -1 ||
-        (floater->active_order_action != 0 &&
-         floater->active_order_action != 0x0d) ||
-        target->renderer_class != 0 || target->owner_id != -1 ||
+    if (target->renderer_class != 0 || target->owner_id != -1 ||
         item_id < 5 || item_id > 33) return 0;
-    return 1;
+    return (int)item_id;
 }
 
-int game_session_order_floater_to_ground_object(GameSession *session,
-                                                uint8_t player_slot,
-                                                uint8_t island_index,
-                                                unsigned int floater_index,
-                                                uint16_t location_index)
+int game_session_start_floater_ground_pickup(GameSession *session,
+                                             unsigned int floater_index,
+                                             uint8_t island_index,
+                                             uint16_t location_index)
 {
     GameFloaterStart *floater;
     const GameRuntimeLocation *target;
 
-    if (!game_session_can_order_floater_to_ground_object(session, player_slot,
-            island_index, floater_index, location_index)) return 0;
+    if (session == NULL || floater_index >= session->floater_count ||
+        game_session_ground_object_item(session, island_index,
+                                        location_index) == 0) return 0;
     floater = &session->floaters[floater_index];
+    if (!game_session_floater_is_active(floater) ||
+        (floater->source_runtime_flags & 0x008U) != 0 ||
+        floater->island_index != island_index) return 0;
     target = &session->islands[island_index].locations[location_index];
 
-    /* The consumer's arrival path reads the target from +0x32 and expects
-       state 13. Action 0x0d is also the task class released by cancellation. */
+    /* FUN_004211bb case 0xc (action 0xd, worker on the task's island and not
+       carrying the wanted item) sets state 0xd with +0x32 = task location. */
     floater->active_order_action = 0x0d;
     floater->movement_state = 13;
     floater->source_order_parameter_32 = location_index;
+    floater->order_target_island = island_index;
     floater->order_target_location = (int16_t)location_index;
     floater->order_target_floater = -1;
     floater->destination_x = target->x;

@@ -17,6 +17,13 @@ size_t game_session_collect_task_slots(const GameSession *session,
 int game_session_dispatch_task_command(GameSession *session, uint8_t slot,
                                        uint8_t subtype,
                                        const GamePendingEvent *expected);
+/* FUN_0042fa0f(0x39): Obtain button on a selected PIT_Object. Posts a type
+   0xd task record; a free worker attaches to it later (FUN_0042219e). Returns
+   1 when a new task was queued, 0 for a duplicate, a full table or a site
+   that is not a loose ground object. */
+int game_session_queue_obtain_task(GameSession *session, uint8_t player_slot,
+                                   uint8_t island_index,
+                                   uint16_t location_index);
 /* FUN_00460029 releases every modeled task record targeting one island site. */
 unsigned int game_session_cancel_tasks_for_location(GameSession *session,
                                                     uint8_t island_index,

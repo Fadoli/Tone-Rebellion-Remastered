@@ -8,6 +8,7 @@
 #include "game_session_economy.h"
 #include "game_session_events.h"
 #include "game_session_internal.h"
+#include "game_session_movement.h"
 #include "game_session_movement_internal.h"
 #include "iw_construct.h"
 #include "island_data.h"
@@ -206,6 +207,31 @@ static int assign_charge_task_for_floater(GameSession *session,
     floater->linked_task_slot = (int16_t)slot;
     floater->order_target_island = target_island;
     floater->order_target_location = event->payload_0c;
+    event->assigned_floater_count = 1;
+    return 1;
+}
+
+/* Task 0xd (Obtain): FUN_00422031 has no case for it, so any free worker of
+   the player is admitted. FUN_004211bb then sends it to the site (state 13).
+   The remake attaches only workers already on the task's island; the native
+   travel leg for other islands (FUN_004210a9) is not ported. */
+static int assign_obtain_task_for_floater(GameSession *session,
+                                          GameFloaterStart *floater,
+                                          unsigned int floater_index,
+                                          unsigned int slot)
+{
+    GamePendingEvent *event = &session->pending_events[slot];
+
+    if (event->active == 0 || event->action_type != 0x0d ||
+        event->assigned_floater_count >= 1 ||
+        event->player_id != floater->owner_slot ||
+        event->payload_0a != floater->island_index ||
+        event->payload_0e < 0) return 0;
+    if (game_session_ground_object_item(session, floater->island_index,
+            (uint16_t)event->payload_0e) == 0) return 0;
+    if (!game_session_start_floater_ground_pickup(session, floater_index,
+            floater->island_index, (uint16_t)event->payload_0e)) return 0;
+    floater->linked_task_slot = (int16_t)slot;
     event->assigned_floater_count = 1;
     return 1;
 }
@@ -553,6 +579,8 @@ static void reclaim_orphaned_task_claim(GameSession *session,
                    floater->order_resource_code == 1))) ||
                 (floater->active_order_action == 0x12 &&
                  event->action_type == 0x12) ||
+                (floater->active_order_action == 0x0d &&
+                 event->action_type == 0x0d) ||
                 (floater->active_order_action == 9 &&
                  (floater->handoff_resume_action == 4 ||
                   floater->handoff_resume_action == 0x12));
@@ -596,7 +624,7 @@ static void reclaim_orphaned_task_claim(GameSession *session,
    worker only and are never swapped away from. */
 static int task_is_urgent(const GamePendingEvent *event)
 {
-    return event->action_type == 0x0b ||
+    return event->action_type == 0x0b || event->action_type == 0x0d ||
         (event->action_type == 4 && event->payload_12 >= 5 &&
          event->payload_12 < 0x22);
 }
@@ -765,6 +793,12 @@ static void assign_resource_tasks(GameSession *session,
 
             if (event->action_type == 0x0b && can_take_local_task &&
                 assign_charge_task_for_floater(
+                    session, floater, floater_index, slot)) {
+                assigned_task = 1;
+                break;
+            }
+            if (event->action_type == 0x0d && can_take_local_task &&
+                assign_obtain_task_for_floater(
                     session, floater, floater_index, slot)) {
                 assigned_task = 1;
                 break;
@@ -1600,13 +1634,18 @@ void release_task_claim(GameSession *session, GameFloaterStart *floater)
             event->player_id == floater->owner_slot &&
             event->payload_0a == floater->order_target_island &&
             event->payload_0c == floater->order_target_location;
+        int matches_obtain_task = event->action_type == 0x0d &&
+            event->player_id == floater->owner_slot &&
+            event->payload_0a == floater->order_target_island &&
+            event->payload_0e == floater->order_target_location;
         int matches_repair_task = event->action_type == 0x12 &&
             event->player_id == floater->owner_slot &&
             event->payload_0a == floater->order_target_island &&
             event->payload_0e == floater->order_target_location;
         if (event->active != 0 &&
             (matches_resource_task || matches_construction_task ||
-             matches_charge_task || matches_repair_task) &&
+             matches_charge_task || matches_repair_task ||
+             matches_obtain_task) &&
             event->assigned_floater_count > 0) {
             --event->assigned_floater_count;
         }

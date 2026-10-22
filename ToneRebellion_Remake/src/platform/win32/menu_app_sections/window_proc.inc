@@ -382,15 +382,6 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                     InvalidateRect(window, NULL, FALSE);
                     return 0;
                 }
-                if (clicked_location >= 0 &&
-                    game_session_order_floater_to_ground_object(
-                        &g_game_session, g_menu.selected_tribe,
-                        (uint8_t)g_menu.selected_map_island,
-                        (unsigned int)g_selected_floater,
-                        (uint16_t)clicked_location)) {
-                    InvalidateRect(window, NULL, FALSE);
-                    return 0;
-                }
                 (void)game_session_order_floater_to_coordinate(
                     &g_game_session, g_menu.selected_tribe,
                     (uint8_t)g_menu.selected_map_island,

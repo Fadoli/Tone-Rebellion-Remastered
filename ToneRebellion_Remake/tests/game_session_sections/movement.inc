@@ -50,6 +50,7 @@ static void test_floater_pickup_order_collects_ground_artifact(void)
     floater->source_subtype = 0;
     floater->is_active = 1;
     floater->linked_task_slot = -1;
+    floater->source_link_0c = -1;
     floater->carried_resource_code = 5;
     floater->x = 100;
     floater->y = 100;
@@ -69,16 +70,16 @@ static void test_floater_pickup_order_collects_ground_artifact(void)
     for (slot = 0; slot < GAME_RESOURCE_TYPE_COUNT; ++slot)
         object->source_task_slot[slot] = -1;
 
-    assert(game_session_can_order_floater_to_ground_object(&session,
-        2, 0, 0, 0));
-    assert(game_session_order_floater_to_ground_object(&session, 2, 0, 0, 0));
-    assert(floater->movement_state == 13);
-    assert(floater->active_order_action == 0x0d);
+    /* Obtain is a type-0xd task; the scheduler attaches the free worker. */
+    assert(game_session_queue_obtain_task(&session, 2, 0, 0));
+    assert(!game_session_queue_obtain_task(&session, 2, 0, 0));
     game_session_tick_floater_moves(&session, 1, NULL);
+    assert(floater->active_order_action == 0x0d || floater->carried_resource_code == 6);
+    game_session_tick_floater_moves(&session, 2, NULL);
     assert(floater->carried_resource_code == 6);
     assert(object->record_value_10 == 0 && object->record_value_24 == 0);
-    assert(!game_session_can_order_floater_to_ground_object(&session,
-        2, 0, 0, 0));
+    assert(!game_session_queue_obtain_task(&session, 2, 0, 0));
+    assert(session.pending_event_count == 0);
     assert(session.islands[0].locations[1].record_value_10 == 1);
     assert(session.islands[0].locations[1].record_value_24 == 5);
 }
