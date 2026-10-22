@@ -126,6 +126,20 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         if (!logical_viewport(width, height, &viewport)) return 0;
         x = GET_X_LPARAM(lparam);
         y = GET_Y_LPARAM(lparam);
+        if (g_lilmap_drag) {
+            if ((wparam & MK_LBUTTON) == 0) {
+                g_lilmap_drag = 0;
+                ReleaseCapture();
+            } else {
+                int logical_x = ((x - viewport.left) * LOGICAL_WIDTH) /
+                    (viewport.right - viewport.left);
+                int logical_y = ((y - viewport.top) * LOGICAL_HEIGHT) /
+                    (viewport.bottom - viewport.top);
+                if (island_lilmap_scroll_to(logical_x, logical_y, 1))
+                    InvalidateRect(window, NULL, FALSE);
+                return 0;
+            }
+        }
         if (x < viewport.left || x >= viewport.right || y < viewport.top || y >= viewport.bottom) {
             int construct_hover_changed = update_iw_construct_hover(-1, -1);
             int inventory_hover_changed = update_inventory_hover(-1, -1);
@@ -233,6 +247,25 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         int x;
         int y;
         GetClientRect(window, &client);
+        if (g_menu.screen == SCREEN_ISLAND &&
+            logical_viewport(client.right - client.left,
+                             client.bottom - client.top, &viewport) &&
+            GET_X_LPARAM(lparam) >= viewport.left &&
+            GET_X_LPARAM(lparam) < viewport.right &&
+            GET_Y_LPARAM(lparam) >= viewport.top &&
+            GET_Y_LPARAM(lparam) < viewport.bottom) {
+            x = ((GET_X_LPARAM(lparam) - viewport.left) * LOGICAL_WIDTH) /
+                (viewport.right - viewport.left);
+            y = ((GET_Y_LPARAM(lparam) - viewport.top) * LOGICAL_HEIGHT) /
+                (viewport.bottom - viewport.top);
+            if (island_lilmap_scroll_to(x, y, 0)) {
+                g_lilmap_drag = 1;
+                g_swallow_left_button_up = 1;
+                SetCapture(window);
+                InvalidateRect(window, NULL, FALSE);
+                return 0;
+            }
+        }
         if (g_menu.screen != SCREEN_WORLD_MAP ||
             !logical_viewport(client.right - client.left,
                               client.bottom - client.top, &viewport)) return 0;
@@ -260,6 +293,10 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         int x;
         int y;
         if (g_menu.screen == SCREEN_LOGO) return 0;
+        if (g_lilmap_drag) {
+            g_lilmap_drag = 0;
+            ReleaseCapture();
+        }
         if (g_swallow_left_button_up) {
             g_swallow_left_button_up = 0;
             return 0;
@@ -368,8 +405,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         if (g_menu.screen == SCREEN_ISLAND) {
             int direction = GET_WHEEL_DELTA_WPARAM(wparam) > 0 ? -1 : 1;
             g_island_scroll_x += direction * 128;
-            if (g_island_scroll_x < 0) g_island_scroll_x = 0;
-            if (g_island_scroll_x > 1920) g_island_scroll_x = 1920;
+            g_island_scroll_x = island_clamp_scroll(g_island_scroll_x);
             g_hovered_location = -1;
             InvalidateRect(window, NULL, FALSE);
         }
@@ -445,8 +481,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         } else if (g_menu.screen == SCREEN_ISLAND &&
                    (wparam == VK_LEFT || wparam == VK_RIGHT)) {
             g_island_scroll_x += wparam == VK_RIGHT ? 160 : -160;
-            if (g_island_scroll_x < 0) g_island_scroll_x = 0;
-            if (g_island_scroll_x > 1920) g_island_scroll_x = 1920;
+            g_island_scroll_x = island_clamp_scroll(g_island_scroll_x);
             g_hovered_location = -1;
             InvalidateRect(window, NULL, FALSE);
         } else if (g_menu.screen == SCREEN_NEW_GAME &&

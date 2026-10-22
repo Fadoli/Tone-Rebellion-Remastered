@@ -220,6 +220,8 @@ static unsigned char *g_island_height_data;
 static size_t g_island_height_length;
 static int g_island_surface_id = -1;
 static int g_island_scroll_x;
+/* Remake: left button held on the IWLilMap pane scrolls the island view. */
+static int g_lilmap_drag;
 static int g_hovered_location = -1;
 static IslandLocationActionControl g_hovered_location_action =
     ISLAND_LOCATION_ACTION_NONE;

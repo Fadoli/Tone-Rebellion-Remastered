@@ -509,7 +509,10 @@ static void handle_click(HWND window, int x, int y)
                 g_selected_floater = clicked_roster_floater;
                 g_hovered_location = -1;
             } else {
-                int clicked_floater = g_game_session_valid
+                int clicked_floater = g_game_session_valid &&
+                    game_session_island_x_explored(&g_game_session,
+                        (uint8_t)g_menu.selected_map_island,
+                        (uint8_t)g_menu.selected_tribe, x + g_island_scroll_x)
                     ? game_session_floater_at(&g_game_session,
                         (uint8_t)g_menu.selected_map_island,
                         (uint16_t)(x + g_island_scroll_x), (uint16_t)y)

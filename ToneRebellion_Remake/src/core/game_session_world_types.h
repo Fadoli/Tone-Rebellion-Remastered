@@ -3,6 +3,8 @@
 
 #include "game_session_base_types.h"
 
+#define GAME_ISLAND_EXPLORED_CELLS 256
+
 typedef struct GameRuntimeLocation {
     int32_t record_value_10;
     int32_t owner_id;
@@ -145,6 +147,10 @@ typedef struct GameRuntimeIsland {
     /* Pending type-3/subtype-0 events are represented by parity: each source
        event only XORs bit 0, so coalescing preserves the post-drain raw word. */
     uint8_t source_event3_pending_parity[GAME_START_PLAYER_COUNT];
+    /* Remake: sticky per-player explored map. One byte per 10-pixel column
+       cell of the 2560-wide island, bit N set once player N's visibility spans
+       (FUN_00462285) have covered it. The original fog rule is not decoded. */
+    uint8_t explored_cells[GAME_ISLAND_EXPLORED_CELLS];
     GameRuntimeLocation locations[ISLAND_DATA_MAX_LOCATIONS];
 } GameRuntimeIsland;
 

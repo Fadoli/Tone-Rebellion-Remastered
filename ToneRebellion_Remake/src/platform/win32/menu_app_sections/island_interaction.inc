@@ -1,3 +1,57 @@
+/* Remake: keep the camera inside the player's explored x extent (sticky
+   cells from the FUN_00462285 visibility spans). Falls back to 0..1920 when no
+   session or nothing is explored. */
+static int island_clamp_scroll(int scroll)
+{
+    int lo = 0;
+    int hi = 1920;
+    if (g_game_session_valid && g_menu.selected_tribe >= 0 &&
+        g_menu.selected_map_island >= 0 &&
+        g_menu.selected_map_island < g_game_session.island_count) {
+        int first = -1;
+        int last = -1;
+        int cell;
+        for (cell = 0; cell < GAME_ISLAND_EXPLORED_CELLS; ++cell) {
+            if (!game_session_island_x_explored(&g_game_session,
+                    (uint8_t)g_menu.selected_map_island,
+                    (uint8_t)g_menu.selected_tribe, cell * 10)) continue;
+            if (first < 0) first = cell;
+            last = cell;
+        }
+        if (first >= 0) {
+            lo = first * 10;
+            hi = (last + 1) * 10 - LOGICAL_WIDTH;
+            if (hi < lo) hi = lo;
+            if (lo > 1920) lo = 1920;
+            if (hi > 1920) hi = 1920;
+        }
+    }
+    return scroll < lo ? lo : scroll > hi ? hi : scroll;
+}
+
+/* Remake: the IWLilMap pane shows the whole 2560x320 island at 1/10 scale, so
+   a pane x maps to world x * 10. Centre the 640-wide view on the point, clamped
+   to the same 0..1920 range as the wheel and arrow keys. `clamp_to_pane`
+   lets a drag keep scrolling when the cursor leaves the pane horizontally. */
+static int island_lilmap_scroll_to(int x, int y, int clamp_to_pane)
+{
+    const WindowTemplate *mini_map;
+    int scroll;
+    if (g_menu.screen != SCREEN_ISLAND) return 0;
+    mini_map = window_catalog_find(&g_window_catalog, "IWLilMap", 16);
+    if (mini_map == NULL) return 0;
+    if (!clamp_to_pane &&
+        (x < mini_map->pane.left || x > mini_map->pane.right ||
+         y < mini_map->pane.top || y > mini_map->pane.bottom)) return 0;
+    scroll = (x - mini_map->pane.left) * 10 - LOGICAL_WIDTH / 2;
+    scroll = island_clamp_scroll(scroll);
+    if (scroll != g_island_scroll_x) {
+        g_island_scroll_x = scroll;
+        g_hovered_location = -1;
+    }
+    return 1;
+}
+
 static int open_island_view(HWND window, int map_island_index)
 {
     const WorldDefinition *world;
@@ -78,7 +132,11 @@ static int island_location_at(int x, int y)
         const IslandLocation *location = &g_island_surface_data.locations[index];
         int dx = map_x - location->x;
         int dy = map_y - location->y;
-        if (dx * dx + dy * dy <= 100 && !island_site_is_hidden_pad(index))
+        if (dx * dx + dy * dy <= 100 && !island_site_is_hidden_pad(index) &&
+            (!g_game_session_valid || g_menu.selected_tribe < 0 ||
+             game_session_island_x_explored(&g_game_session,
+                 (uint8_t)g_menu.selected_map_island,
+                 (uint8_t)g_menu.selected_tribe, location->x)))
             return index;
     }
     return -1;

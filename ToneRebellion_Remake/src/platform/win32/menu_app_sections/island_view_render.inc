@@ -328,6 +328,10 @@ static void draw_island_lilmap_dots(HDC dc, const WindowTemplate *mini_map,
             int cx = (int)loc->x / 10 + mini_map->pane.left;
             int cy = (int)loc->y / 10 + mini_map->pane.top;
             if (loc->record_value_10 < 0) continue;
+            if (g_game_session_valid && g_menu.selected_tribe >= 0 &&
+                !game_session_island_x_explored(&g_game_session,
+                    (uint8_t)g_menu.selected_map_island,
+                    (uint8_t)g_menu.selected_tribe, (int)loc->x)) continue;
             dot.left = cx - 1; dot.top = cy - 1;
             dot.right = cx + 2; dot.bottom = cy + 2;
             brush = CreateSolidBrush(kind_colors[loc->record_value_10 == 0 ? 2 : 1]);
@@ -345,6 +349,9 @@ static void draw_island_lilmap_dots(HDC dc, const WindowTemplate *mini_map,
             if (!game_session_floater_is_active(fl) ||
                 fl->island_index != g_menu.selected_map_island) continue;
             if (!own && fl->type_index != 4) continue;
+            if (!game_session_island_x_explored(&g_game_session,
+                    (uint8_t)g_menu.selected_map_island,
+                    (uint8_t)g_menu.selected_tribe, (int)fl->x)) continue;
             cx = (int)fl->x / 10 + mini_map->pane.left;
             cy = (int)fl->y / 10 + mini_map->pane.top;
             dot.left = cx - 1; dot.top = cy - 1;
@@ -394,6 +401,7 @@ static void render_island_view(HDC dc)
         }
     }
 
+    g_island_scroll_x = island_clamp_scroll(g_island_scroll_x);
     fill_rect(dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
     if (g_island_height_data == NULL ||
         g_island_height_length != ISLAND_HAZE_FILE_BYTES) {
@@ -711,10 +719,45 @@ static void render_island_view(HDC dc)
         const WindowTemplate *mini_map = window_catalog_find(
             &g_window_catalog, "IWLilMap", 16);
         if (mini_map != NULL) {
-            draw_sprite(dc, &g_island_lilmap_art,
-                        (uint32_t)g_island_surface_id,
-                        mini_map->pane.left, mini_map->pane.top);
+            /* Remake: the LILMAP frame renders black here, so the radar is
+               the island surface itself shrunk 10x into the pane. */
+            {
+                const SpriteFrame *surface = g_island_surface_art.frame_count != 0
+                    ? &g_island_surface_art.frames[0] : NULL;
+                fill_rect(dc, mini_map->pane.left, mini_map->pane.top,
+                          mini_map->pane.right + 1, mini_map->pane.bottom + 1,
+                          RGB(0, 0, 0));
+                if (surface != NULL && surface->bitmap != NULL) {
+                    HDC source = get_sprite_source_dc(dc);
+                    if (source != NULL) {
+                        HGDIOBJ previous = SelectObject(source, surface->bitmap);
+                        int old_mode = SetStretchBltMode(dc, HALFTONE);
+                        (void)SetBrushOrgEx(dc, 0, 0, NULL);
+                        (void)StretchBlt(dc, mini_map->pane.left, mini_map->pane.top,
+                                         mini_map->pane.right - mini_map->pane.left + 1,
+                                         mini_map->pane.bottom - mini_map->pane.top + 1,
+                                         source, 0, 0, surface->width,
+                                         surface->height < 320 ? surface->height : 320,
+                                         SRCCOPY);
+                        SetStretchBltMode(dc, old_mode);
+                        SelectObject(source, previous);
+                    }
+                }
+            }
             draw_island_lilmap_dots(dc, mini_map, runtime_island);
+            /* Remake: outline of the 640px view on the 1/10 scale minimap. */
+            {
+                HPEN pen = CreatePen(PS_SOLID, 1, RGB(255, 255, 255));
+                HGDIOBJ old_pen = SelectObject(dc, pen);
+                HGDIOBJ old_brush = SelectObject(dc, GetStockObject(NULL_BRUSH));
+                int view_left = mini_map->pane.left + g_island_scroll_x / 10;
+                Rectangle(dc, view_left, mini_map->pane.top,
+                          view_left + LOGICAL_WIDTH / 10 + 1,
+                          mini_map->pane.bottom + 1);
+                SelectObject(dc, old_brush);
+                SelectObject(dc, old_pen);
+                DeleteObject(pen);
+            }
         }
     }
 

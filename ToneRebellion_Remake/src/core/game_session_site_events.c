@@ -142,6 +142,8 @@ static int recalculate_island_visibility_for_player(
     int expanded;
 
     if (session->economy[player_slot].island_visibility_override != 0) {
+        for (index = 0; index < GAME_ISLAND_EXPLORED_CELLS; ++index)
+            island->explored_cells[index] |= (uint8_t)player_bit;
         for (index = 0; index < island->location_count; ++index) {
             GameRuntimeLocation *location = &island->locations[index];
             if (location->source_value_14 == 4)
@@ -190,6 +192,12 @@ static int recalculate_island_visibility_for_player(
         }
     } while (expanded != 0);
 
+    for (index = 0; index < span_count; ++index) {
+        int32_t cell;
+        for (cell = span_min[index] / 10; cell <= span_max[index] / 10 &&
+             cell < GAME_ISLAND_EXPLORED_CELLS; ++cell)
+            island->explored_cells[cell] |= (uint8_t)player_bit;
+    }
     for (index = 0; index < island->location_count; ++index) {
         GameRuntimeLocation *location = &island->locations[index];
         if (visible[index] == 0 && location->renderer_class == 0 &&
@@ -218,6 +226,17 @@ int game_session_recalculate_player_island_visibility(
     island = &session->islands[island_index];
     return recalculate_island_visibility_for_player(session, island,
                                                     player_slot);
+}
+
+int game_session_island_x_explored(const GameSession *session,
+                                   uint8_t island_index, uint8_t player_slot,
+                                   int x)
+{
+    if (session == NULL || island_index >= session->island_count ||
+        player_slot >= GAME_START_PLAYER_COUNT || x < 0 ||
+        x / 10 >= GAME_ISLAND_EXPLORED_CELLS) return 0;
+    return (session->islands[island_index].explored_cells[x / 10] >>
+            player_slot & 1U) != 0;
 }
 
 void game_session_tick_site_effect_timers(GameSession *session)

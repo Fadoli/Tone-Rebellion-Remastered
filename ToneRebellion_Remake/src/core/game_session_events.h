@@ -137,6 +137,10 @@ unsigned int game_session_recalculate_active_locations(GameSession *session);
 /* FUN_00466b09 calls FUN_00462285 for the newly reached island and player. */
 int game_session_recalculate_player_island_visibility(
     GameSession *session, uint8_t island_index, uint8_t player_slot);
+/* Remake: 1 when map x (0..2559) lies in a cell the player has explored. */
+int game_session_island_x_explored(const GameSession *session,
+                                   uint8_t island_index, uint8_t player_slot,
+                                   int x);
 void game_session_recalculate_leviathan_island(GameSession *session,
                                                uint8_t island_index);
 void game_session_tick_leviathan_ai(GameSession *session);
