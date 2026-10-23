@@ -148,6 +148,34 @@ static int draw_island_leviathan_spawn_effect(
     HDC dc, const GameRuntimeLocation *location,
     const BuildingRenderItem *item, int x, int y, int full_reveal);
 
+/* FUN_0040bf98's +0x58 mode selects a FUN_00410bd2 stipple level for every
+   layer: mode 1 (grabbed) dips and recovers, mode 2 (placed) fades in, mode 3
+   (removed) fades out, from the +0x46 counter (0..15); level 8 is opaque. */
+static int g_item_stipple_level = 8;
+
+static int item_stipple_level(const GameRuntimeLocation *location)
+{
+    int counter = location->source_value_46;
+    if (counter < 0) counter = 0;
+    switch (location->source_value_58) {
+    case 1: return counter < 8 ? 8 - counter / 2 : (counter - 8) / 2 + 4;
+    case 2: return counter / 2;
+    case 3: return 8 - counter / 2;
+    default: return 8;
+    }
+}
+
+static void draw_item_layer(HDC dc, const SpriteSheet *sheet, uint32_t frame,
+                            int x, int y, uint32_t scale_16_16)
+{
+    if (g_item_stipple_level >= 8 || scale_16_16 != 0x10000U) {
+        draw_sprite_scaled(dc, sheet, frame, x, y, scale_16_16);
+        return;
+    }
+    draw_feature_reveal(dc, sheet, g_island_surface_id, frame, x, y,
+                        g_item_stipple_level);
+}
+
 static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_location,
                                     int x, int y, uint32_t scale_16_16)
 {
@@ -164,6 +192,8 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
     if (item == NULL || (unsigned int)raw_id >= PAD_CATALOG_MAX_ITEMS) return 0;
     sheet = &g_building_art[raw_id];
     if (sheet->frames == NULL || sheet->frame_count == 0) return 0;
+    g_item_stipple_level = scale_16_16 == 0x10000U
+        ? item_stipple_level(runtime_location) : 8;
 
     /* FUN_0040bf98 shifts the intact building downward after destruction
        tick 30; the CRUMBLE overlay remains anchored at its original position. */
@@ -203,6 +233,15 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
         }
     }
 
+    /* Flag 0x100: FUN_004106dd(1, level) haze table, level 0..3 from the
+       +0x44 counter (0..999), applied to every later layer. The native setter
+       of the flag is not identified, so this only shows once a writer exists. */
+    if ((runtime_location->source_flags & 0x100U) != 0 &&
+        scale_16_16 == 0x10000U && g_sprite_haze_level < 0) {
+        int v = runtime_location->source_value_44;
+        g_sprite_haze_selector = 1;
+        g_sprite_haze_level = v < 20 ? v / 5 : 1000 - v < 20 ? (1000 - v) / 5 : 3;
+    }
     /* FUN_0040bf98 draws the static/base item layer and then the CHUG layer.
        The source divides the object's +0x3a progress by CHUG speed. The menu
        timer is only a provisional source for that per-object counter. */
@@ -211,14 +250,14 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
                                                      runtime_location->source_capacity_4a,
                                                      runtime_location->source_flags);
         if (frame < sheet->frame_count) {
-            draw_sprite_scaled(dc, sheet, frame, x, y, scale_16_16);
+            draw_item_layer(dc, sheet, frame, x, y, scale_16_16);
             drew = 1;
         }
     }
     if (item->chug.present) {
         frame = building_render_chug_frame(item, runtime_location->chug_progress);
         if (frame < sheet->frame_count) {
-            draw_sprite_scaled(dc, sheet, frame, x, y, scale_16_16);
+            draw_item_layer(dc, sheet, frame, x, y, scale_16_16);
             drew = 1;
             /* Keep rendering later layers: GLYP is drawn after CHUG by
                FUN_0040bf98 and may be the visible top layer. */
@@ -227,7 +266,7 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
     if (item->glyph.present) {
         frame = building_render_glyph_frame(item, runtime_location->glyph_progress);
         if (frame < sheet->frame_count) {
-            draw_sprite_scaled(dc, sheet, frame, x, y, scale_16_16);
+            draw_item_layer(dc, sheet, frame, x, y, scale_16_16);
             drew = 1;
         }
     }
@@ -240,7 +279,7 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
     if (item->inci.present) {
         frame = building_render_inci_frame(item, runtime_location->inci_progress);
         if (frame < sheet->frame_count) {
-            draw_sprite_scaled(dc, sheet, frame, x, y, scale_16_16);
+            draw_item_layer(dc, sheet, frame, x, y, scale_16_16);
             drew = 1;
         }
     }
@@ -249,7 +288,7 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
             runtime_location->construction_progress,
             runtime_location->source_flags);
         if (frame < sheet->frame_count) {
-            draw_sprite_scaled(dc, sheet, frame, x, y, scale_16_16);
+            draw_item_layer(dc, sheet, frame, x, y, scale_16_16);
             drew = 1;
         }
     }
@@ -259,7 +298,7 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
         frame = building_render_prod_frame(item, runtime_location->production_progress,
                                            runtime_location->source_flags);
         if (frame < sheet->frame_count) {
-            draw_sprite_scaled(dc, sheet, frame, prod_position.x, prod_position.y,
+            draw_item_layer(dc, sheet, frame, prod_position.x, prod_position.y,
                                scale_16_16);
             drew = 1;
         }
@@ -340,18 +379,19 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
     if (item->occu.present && (runtime_location->source_flags & 8U) != 0) {
         frame = (uint32_t)item->occu.first_frame - 1U;
         if (frame < sheet->frame_count) {
-            draw_sprite_scaled(dc, sheet, frame, x, y, scale_16_16);
+            draw_item_layer(dc, sheet, frame, x, y, scale_16_16);
             drew = 1;
         }
     }
     if (item->barg.present) {
         frame = building_render_barg_frame(item, runtime_location->barg_progress);
         if (frame < sheet->frame_count) {
-            draw_sprite_scaled(dc, sheet, frame, x, y, scale_16_16);
+            draw_item_layer(dc, sheet, frame, x, y, scale_16_16);
             drew = 1;
         }
     }
     g_sprite_haze_level = -1;
+    g_item_stipple_level = 8;
     /* FUN_0040bf98 draws CRUMBLE after the item's data layers on the full-size
        in-world path. The overlay runs for flag 0x080 through the destruction
        timer and uses a nine-frame band for each pad size (class 1 uses band 4). */

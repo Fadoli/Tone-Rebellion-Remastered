@@ -174,3 +174,7 @@ Evidence: renderer `ev_e0431074`, updater `FUN_00450a71` `ev_42f2f924` (lue en e
 - `+0x58` (échelle/stipple): mode 1 `L = +0x46<8 ? 8-(+0x46)/2 : (+0x46-8)/2+4`, mode 2 `L = +0x46/2`, mode 3 `L = 8-(+0x46)/2`, défaut 8; `L<8` -> `FUN_00410bd2` (motifs `DAT_0049b444`), sinon blit plein. Écrivain de `+0x58` non analysé.
 - Aussi non porté: icônes `bildicon` de l'item 0x28 (drapeaux `0x7800`) dans le renderer monde.
 Écarts d'inférence: noms de couches C/D/E/H du renderer (accesseurs `0x456b0d`, `0x456b4d`, `0x456b8d`, `0x456c56`) non confirmés.
+
+### Mise à jour: `+0x58` et `0x100` portés (rendu)
+
+REA (sous-agent haiku, non relue): `FUN_004533fb` écrit `+0x58 = 1` (saisie) et `+0x46 = 0` (`ev_7ca990d5…`), `FUN_0045343b` écrit 2 (`ev_0e13c19e…`), `FUN_004535af` écrit 3 (`ev_3a17c4c7…`); `FUN_00450a71` fait avancer `+0x46` et traite 2/3 (déjà simulé). Le rendu applique maintenant le niveau de stipple de `FUN_0040bf98` à toutes les couches: mode 1 `+0x46<8 ? 8-n/2 : (n-8)/2+4`, mode 2 `n/2`, mode 3 `8-n/2`, 8 = opaque (motifs `DAT_0049b444` via `draw_feature_reveal`). Le drapeau `0x100` applique la table de brume sélecteur 1, niveau 0..3 depuis `+0x44`, avec compteur et effacement après 999. Écrivains de `0x100`, `0x200` (candidat `FUN_0042383d`, `|= 0x200` sur le compteur `+0x34` à 0x28 / >399, structure non confirmée) et de `0x8000/0x10000/0x20000` non trouvés; scintillement `0x200` et clignotement d'artefact non portés. Non vérifié en jeu.

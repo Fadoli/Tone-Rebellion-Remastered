@@ -1311,6 +1311,17 @@ void game_session_tick_item_animations_with_floaters(
                     state->source_flags &= ~0x020U;
             }
 
+            /* FUN_00450a71: flag 0x100 advances +0x44 and clears itself after
+               it passes 999 (the renderer maps it to a four-level haze). */
+            if ((state->source_flags & 0x100U) != 0) {
+                state->source_value_44 = (int16_t)(
+                    (uint16_t)state->source_value_44 + 1U);
+                if (state->source_value_44 > 999) {
+                    state->source_value_44 = 0;
+                    state->source_flags &= ~0x100U;
+                }
+            }
+
             /* Lethal site damage sets 0x080 and resets +0x48. The native tick
                clears the site once the shared short passes 100, through
                FUN_00452ae7/FUN_00452a15. */
