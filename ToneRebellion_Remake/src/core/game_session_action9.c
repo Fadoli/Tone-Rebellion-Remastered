@@ -45,10 +45,13 @@ static int action9_find_floater(const GameSession *session,
             category_matches = candidate->type_index != 4;
         } else {
             /* FUN_00420991 accepts category 4 or a zero in the source/target
-               category matrix. The 5x5 entries read from FLOAT.EXE are all
-               zero, so every modeled category is initially eligible. */
-            category_matches =
-                candidate->type_index < GAME_FLOATER_CATEGORY_COUNT;
+               matrix DAT_00619290[source][target]: the Diplomacy "policy"
+               flags (set = friend). All entries start at zero (enemies). */
+            category_matches = candidate->type_index == 4 ||
+                (candidate->type_index < GAME_START_PLAYER_COUNT &&
+                 source->type_index < GAME_START_PLAYER_COUNT &&
+                 ((session->diplomacy_policy_mask[source->type_index] >>
+                   candidate->type_index) & 1U) == 0U);
         }
         if (index == source_index || candidate->island_index != source->island_index ||
             !category_matches || (candidate->source_runtime_flags & 0x809U) != 0) {
@@ -613,16 +616,20 @@ static void cancel_defend_order(GameFloaterStart *floater)
     floater->wander_timer = 0;
 }
 
-/* Remake interpretation (no Ghidra reader of the PANIC parity bit exists):
-   while the bit is set for a player on an island, that player's idle workers
-   there attack the nearest Leviathan unit, reusing the defend order (action 8)
-   with a category-4 target. Clearing the bit cancels those orders. */
+/* PANIC (FUN_0042219e, ev_7b65b088): the per-player island event word
+   DAT_005eebd4 switches every unlinked, non-subtype-8 floater of a category
+   below 4 on that island into FA_Attack (action 6): while the flag is set and
+   the floater is not already attacking (action 6, or state 6/7) it picks the
+   NEAREST valid candidate on the island (FUN_00420991 filter, distance
+   FUN_00420600, strict < so the first of equal distances wins, no range limit)
+   and attacks it; when the flag is off any action 6 of such a floater is
+   cancelled (FUN_00421ec1(-1)) so tasks resume. */
 static int panic_worker_candidate(const GameFloaterStart *floater)
 {
     return game_session_floater_is_active(floater) &&
         (floater->source_runtime_flags & 0x808U) == 0 &&
         floater->source_link_0c == -1 && floater->type_index != 4 &&
-        floater->source_subtype == 0 &&
+        floater->source_subtype != 8 &&
         floater->owner_slot < GAME_START_PLAYER_COUNT;
 }
 
@@ -634,6 +641,27 @@ int game_session_panic_active(const GameSession *session, uint8_t player_slot,
         (session->islands[island_index].source_event_state[player_slot] & 1U) != 0;
 }
 
+static int action9_candidate_is_valid(const GameSession *session,
+                                      unsigned int source_index,
+                                      unsigned int candidate_index)
+{
+    const GameFloaterStart *source = &session->floaters[source_index];
+    const GameFloaterStart *candidate = &session->floaters[candidate_index];
+    int category_matches;
+
+    if (candidate_index == source_index ||
+        !game_session_floater_is_active(candidate) ||
+        (candidate->source_runtime_flags & 0x809U) != 0 ||
+        candidate->island_index != source->island_index) return 0;
+    if (source->type_index == 4) category_matches = candidate->type_index != 4;
+    else category_matches = candidate->type_index == 4 ||
+        (candidate->type_index < GAME_START_PLAYER_COUNT &&
+         source->type_index < GAME_START_PLAYER_COUNT &&
+         ((session->diplomacy_policy_mask[source->type_index] >>
+           candidate->type_index) & 1U) == 0U);
+    return category_matches;
+}
+
 void game_session_apply_panic_orders(GameSession *session)
 {
     unsigned int index;
@@ -641,55 +669,40 @@ void game_session_apply_panic_orders(GameSession *session)
     if (session == NULL) return;
     for (index = 0; index < session->floater_count; ++index) {
         GameFloaterStart *floater = &session->floaters[index];
-        int panic;
-        int ordered;
         int best = -1;
         int32_t best_distance = INT32_MAX;
         unsigned int candidate;
 
         if (!panic_worker_candidate(floater) ||
             floater->island_index >= session->island_count) continue;
-        panic = game_session_panic_active(session, floater->owner_slot,
-                                          floater->island_index);
-        ordered = floater->active_order_action == 8 &&
-            floater->defend_target_floater >= 0 &&
-            (unsigned int)floater->defend_target_floater < session->floater_count &&
-            session->floaters[(unsigned int)floater->defend_target_floater]
-                .type_index == 4;
-        if (!panic) {
-            if (ordered) cancel_defend_order(floater);
+        if (!game_session_panic_active(session, floater->owner_slot,
+                                       floater->island_index)) {
+            if (floater->active_order_action == 6 &&
+                floater->linked_task_slot == -1) cancel_defend_order(floater);
             continue;
         }
-        if (ordered || floater->active_order_action == 9 ||
-            floater->movement_state == 6 || floater->movement_state == 7)
-            continue;
+        if (floater->active_order_action == 6 ||
+            floater->movement_state == 6 || floater->movement_state == 7 ||
+            floater->active_order_action == 0x13) continue;
         for (candidate = 0; candidate < session->floater_count; ++candidate) {
-            const GameFloaterStart *target = &session->floaters[candidate];
             int32_t distance;
-            if (target->type_index != 4 ||
-                !game_session_floater_is_active(target) ||
-                (target->source_runtime_flags & 0x809U) != 0 ||
-                target->island_index != floater->island_index) continue;
+            if (!action9_candidate_is_valid(session, index, candidate)) continue;
             distance = game_session_source_chebyshev_distance(
-                floater->x, floater->y, target->x, target->y);
-            if (distance < best_distance) {
-                best_distance = distance;
+                floater->x, floater->y, session->floaters[candidate].x,
+                session->floaters[candidate].y);
+            if (best < 0 || distance < best_distance) {
                 best = (int)candidate;
+                best_distance = distance;
             }
         }
         if (best < 0) continue;
+        /* Release the task row while the order fields still name it: the
+           adopt helper overwrites them before its own release. */
         release_task_claim(session, floater);
-        floater->active_order_action = 8;
+        floater->active_order_action = 0;
         floater->movement_state = 0;
-        floater->order_target_floater = (int16_t)best;
-        floater->defend_target_floater = (int16_t)best;
-        floater->order_target_location = -1;
-        floater->order_target_island = UINT8_MAX;
-        floater->order_progress = 0;
-        floater->source_order_pending = 0;
-        floater->has_move_order = 0;
-        floater->has_wander_order = 0;
-        floater->wander_timer = 0;
+        game_session_adopt_building_attack_order(session, index, 6,
+                                                 (unsigned int)best);
     }
 }
 

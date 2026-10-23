@@ -254,20 +254,22 @@ static void setup_panic_island(GameSession *session, unsigned int workers,
     }
 }
 
-static void test_panic_sends_workers_to_the_nearest_leviathan(void)
+static void test_panic_sends_workers_to_the_nearest_enemy(void)
 {
     GameSession session;
 
     setup_panic_island(&session, 2, 2);
-    /* Workers at x=100/200, leviathans at x=300 (index 2) and x=90 (index 3):
-       worker 0 is nearest to index 3, worker 1 to index 2. */
+    /* FUN_0042219e panic: action 6 against the nearest valid candidate on the
+       island. Workers at x=100/200, leviathans at x=300 (index 2) and x=90
+       (index 3): worker 0 is nearest to index 3 (10); worker 1 ties between
+       worker 0 and index 2 (100) and takes the first. */
     session.floaters[3].x = 90;
     session.islands[0].source_event_state[0] = 1;
     game_session_apply_panic_orders(&session);
-    assert(session.floaters[0].active_order_action == 8);
-    assert(session.floaters[0].defend_target_floater == 3);
-    assert(session.floaters[1].active_order_action == 8);
-    assert(session.floaters[1].defend_target_floater == 2);
+    assert(session.floaters[0].active_order_action == 6);
+    assert(session.floaters[0].order_target_floater == 3);
+    assert(session.floaters[1].active_order_action == 6);
+    assert(session.floaters[1].order_target_floater == 0);
 }
 
 static void test_panic_is_per_player_and_per_island(void)
@@ -276,9 +278,10 @@ static void test_panic_is_per_player_and_per_island(void)
 
     setup_panic_island(&session, 2, 1);
     session.floaters[1].owner_slot = 1;
+    session.floaters[1].type_index = 1;
     session.islands[0].source_event_state[0] = 1;
     game_session_apply_panic_orders(&session);
-    assert(session.floaters[0].active_order_action == 8);
+    assert(session.floaters[0].active_order_action == 6);
     assert(session.floaters[1].active_order_action == 0);
 
     setup_panic_island(&session, 1, 1);
@@ -289,15 +292,21 @@ static void test_panic_is_per_player_and_per_island(void)
     assert(session.floaters[0].active_order_action == 0);
 }
 
-static void test_panic_without_leviathan_keeps_the_current_task(void)
+static void test_panic_skips_friends_but_not_leviathans(void)
 {
     GameSession session;
-    int slot_a = setup_two_delivery_tasks(&session, 2, 3);
 
+    setup_panic_island(&session, 2, 1);
+    session.floaters[1].owner_slot = 1;
+    session.floaters[1].type_index = 1;
+    session.floaters[1].x = 110;
+    /* DAT_00619290[0][1] set = friend: the nearby player-1 worker is skipped
+       and the Leviathan (category 4, always a candidate) is chosen. */
+    session.diplomacy_policy_mask[0] = 1U << 1;
     session.islands[0].source_event_state[0] = 1;
     game_session_apply_panic_orders(&session);
-    assert(session.floaters[0].active_order_action == 4);
-    assert(workers_on_slot(&session, slot_a) == 2);
+    assert(session.floaters[0].active_order_action == 6);
+    assert(session.floaters[0].order_target_floater == 2);
 }
 
 static void test_panic_releases_the_task_claim(void)
@@ -315,27 +324,23 @@ static void test_panic_releases_the_task_claim(void)
     session.floaters[2].x = 50;
     session.islands[0].source_event_state[0] = 1;
     game_session_apply_panic_orders(&session);
-    assert(session.floaters[0].active_order_action == 8);
+    assert(session.floaters[0].active_order_action == 6);
     assert(session.floaters[0].linked_task_slot == -1);
     assert(session.pending_events[slot_a].assigned_floater_count == 0);
 }
 
-static void test_panic_off_cancels_leviathan_orders_only(void)
+static void test_panic_off_cancels_the_attack_orders(void)
 {
     GameSession session;
 
     setup_panic_island(&session, 2, 1);
     session.islands[0].source_event_state[0] = 1;
     game_session_apply_panic_orders(&session);
-    assert(session.floaters[0].active_order_action == 8);
-    /* A normal defend order on an ally must survive the PANIC being off. */
-    session.floaters[1].active_order_action = 8;
-    session.floaters[1].defend_target_floater = 0;
+    assert(session.floaters[0].active_order_action == 6);
     session.islands[0].source_event_state[0] = 0;
     game_session_apply_panic_orders(&session);
     assert(session.floaters[0].active_order_action == 0);
-    assert(session.floaters[0].defend_target_floater == -1);
-    assert(session.floaters[1].active_order_action == 8);
+    assert(session.floaters[1].active_order_action == 0);
 }
 
 static void test_panic_event_toggles_the_visible_state(void)
@@ -416,11 +421,11 @@ static void test_worker_tasks_and_panic(void)
     test_three_three_split_never_swaps_workers();
     test_worker_at_build_site_is_never_reallocated();
     test_combat_and_handoff_workers_are_not_reallocated();
-    test_panic_sends_workers_to_the_nearest_leviathan();
+    test_panic_sends_workers_to_the_nearest_enemy();
     test_panic_is_per_player_and_per_island();
-    test_panic_without_leviathan_keeps_the_current_task();
+    test_panic_skips_friends_but_not_leviathans();
     test_panic_releases_the_task_claim();
-    test_panic_off_cancels_leviathan_orders_only();
+    test_panic_off_cancels_the_attack_orders();
     test_panic_event_toggles_the_visible_state();
     test_cancelled_task_workers_take_the_remaining_task();
     test_home_wander_fallback_worker_is_idle();
