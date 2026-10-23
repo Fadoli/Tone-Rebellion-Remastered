@@ -186,6 +186,20 @@ static int game_session_tick_floater_death(GameSession *session,
 
 static void game_session_tick_floater_cast_pulse(GameFloaterStart *floater)
 {
+    /* FUN_0041e569 tail: flag 0x100 shares the +0x24 counter. FUN_00425296
+       gives 2000 for 0x100 and 0xdac for 0x1000; past 0xdac with 0x1000 set
+       both flags clear, otherwise the counter runs to 2000 and then clears. */
+    if ((floater->source_runtime_flags & 0x100U) != 0) {
+        if ((floater->source_runtime_flags & 0x1000U) == 0 ||
+            floater->source_death_timer <= 0xdacU) {
+            if (floater->source_death_timer > 2000U)
+                floater->source_runtime_flags &= ~0x100U;
+            else
+                ++floater->source_death_timer;
+        } else {
+            floater->source_runtime_flags &= ~0x1100U;
+        }
+    }
     if ((floater->source_runtime_flags & 0x2000U) == 0) return;
     /* FUN_0041e569 increments +0x24 through 46, then clears 0x2000 on the
        following update when the old counter is already above 45. */

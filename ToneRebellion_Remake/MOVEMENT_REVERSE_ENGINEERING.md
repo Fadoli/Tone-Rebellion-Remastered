@@ -86,3 +86,12 @@ Sections détaillées ci-dessous. Les titres sont repris ici pour conserver les 
 
 ## Order 9 from the Hall move context
 [Section complète](MOVEMENT_HALL_CONTEXT.md#order-9-from-the-hall-move-context)
+
+## Audit direct mouvement/combat (pseudocode relu par l'agent principal)
+
+Evidence: `FUN_00422d27` `ev_dce3014d` et assembleur `ev_12c6e0e8`, `FUN_004672a6` `ev_11cfa067` (distance de Tchebychev), `FUN_00420217` `ev_6ccca76e`, `FUN_004204bc` `ev_2016a3eb`, `FUN_0041e569` `ev_8578fcc7`, `FUN_0042520e` `ev_124b4bd8`, `FUN_00425296` `ev_436a1ff2`.
+
+- Corrigé: la vitesse réduite près de la cible est `distance / 4` tronqué (`CDQ/AND 3/ADD/SAR 2` à `0x422f8c`), pas arrondie vers le haut; un pas nul retombe sur `tick & 1`. `floater_motion.c` et son test suivent désormais le natif.
+- Corrigé: l'expiration du drapeau floater `0x100` (bouclier du cast niveau 0/1 et `0x1100` au niveau 2) manquait. `FUN_0041e569` (queue) incrémente le compteur `+0x24`; au-delà de 2000 (`FUN_00425296(0x100)`) le drapeau tombe; avec `0x1000`, au-delà de 0xdac (3500) les deux tombent. Porté dans `game_session_tick_floater_cast_pulse`.
+- Confirmé conforme: étapes de déplacement par axe borné, doublement de vitesse du sous-type 0 par propriétaire, +1 des sites 0x2c/0x2d/0x2e, états 8/9/0xe à vitesse 1 près de la cible (rayon 100), table `FUN_00425296` (8 -> 40, 0x2000 -> 45), minuterie de mort, tirage de dégâts de `FUN_00420217` (trois tirages bornés à 10, garde propriétaire/0x8/0x100) et application de `FUN_004204bc` (mort quand PV < 1).
+- Non rediffé ligne à ligne: le calcul x87 du pourcentage de touche de `FUN_00420217` (le décompilateur le perd; le port le reconstruit), les cases d'actions 6/7/8/9 de `FUN_0041e569` et les fonctions `FUN_00420721`, `FUN_00423068`, `FUN_004200d2`, `FUN_00420188`, `FUN_00415fc6`. Non vérifié en jeu.
