@@ -296,10 +296,29 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
         if (frame < sheet->frame_count) {
             draw_item_layer(dc, sheet, frame, x, y, scale_16_16);
             drew = 1;
+            /* FUN_0040bf98: with upgrade bit 0x20 the solid, unhazed BASE
+               pass also fades the next level's frame in at +0x48 / 3. */
+            if ((runtime_location->source_flags & 0x20U) != 0 &&
+                scale_16_16 == 0x10000U && g_sprite_haze_level < 0 &&
+                g_item_stipple_level >= 8 &&
+                frame < (uint32_t)item->base.last_frame - 1U &&
+                frame + 1U < sheet->frame_count) {
+                draw_feature_reveal(dc, sheet, g_island_surface_id, frame + 1U,
+                                    x, y, runtime_location->source_value_48 / 3);
+            }
         }
     }
     if (item->chug.present) {
-        frame = building_render_chug_frame(item, runtime_location->chug_progress);
+        uint32_t chug_ticks = runtime_location->chug_progress;
+        /* Neutral class-1 pools stay at CHUG tick 0 (below 90) until the
+           shown tribe has seen them (+0x22 visibility mask). */
+        if (runtime_location->renderer_class == 1 &&
+            runtime_location->owner_id == -1 && chug_ticks < 0x5aU &&
+            (g_menu.selected_tribe < 0 || g_menu.selected_tribe > 7 ||
+             (((unsigned int)runtime_location->source_value_22 & 0xffU) &
+              (1U << (unsigned int)g_menu.selected_tribe)) == 0U))
+            chug_ticks = 0U;
+        frame = building_render_chug_frame(item, chug_ticks);
         if (frame < sheet->frame_count) {
             draw_item_layer(dc, sheet, frame, x, y, scale_16_16);
             drew = 1;
@@ -436,6 +455,25 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
     }
     g_sprite_haze_level = -1;
     g_item_stipple_level = 8;
+    /* FUN_0040bf98 tail: item 0x28 shows one BILDICON frame 4+k at
+       (x-12+8k, y-67) for each of its flag bits 0x800<<k (k = 0..3). The
+       first BILDICON branch (worker dots) needs DAT_005c37f4, which only the
+       selection view sets, so the world pass reaches this branch. */
+    if (scale_16_16 == 0x10000U &&
+        (runtime_location->record_value_10 -
+         (runtime_location->owner_id >= 0 && runtime_location->owner_id < 4
+              ? runtime_location->owner_id * 16 : 0)) == 0x28 &&
+        (runtime_location->source_flags & 0x7800U) != 0U &&
+        g_building_number_art.frame_count > 7U) {
+        int bit;
+        for (bit = 0; bit < 4; ++bit) {
+            if ((runtime_location->source_flags & (0x800U << bit)) != 0U) {
+                draw_sprite(dc, &g_building_number_art, (uint32_t)(bit + 4),
+                            x - 12 + 8 * bit, y - 0x43);
+                drew = 1;
+            }
+        }
+    }
     if ((runtime_location->source_flags & 0x200U) != 0 &&
         scale_16_16 == 0x10000U) {
         uint32_t seed = g_game_session.simulation_tick >> 1;

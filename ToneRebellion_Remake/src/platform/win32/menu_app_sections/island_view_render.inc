@@ -302,63 +302,134 @@ static void draw_building_slot_floaters(HDC dc, const WindowTemplate *info,
     }
 }
 
-/* FUN_0043842c stamps a 3x3 dot per entity into the IWLilMap pane
-   (observed: FUN_004382bf msg 0x33 only clears/invalidates; the dot loop at
-   0x4384f0 is not a Ghidra procedure, decoded by hand). Position is
-   entity (x,y)/10 + pane origin. Kinds: floater -> 0 when owned by the
-   viewing player (predicate on DAT_0049f538 not resolved; owner match is an
-   inference) else 1 for type 4; site -> 2 when record +0x10 is 0, else 1.
-   Palette slots DAT_0049e140[1,0,4,5] are not extracted: the colours below
-   are placeholders. */
+/* Painter at 0x4384f2 (not a Ghidra procedure, decoded by hand from bytes).
+   Pass 1 walks the island's 0x60-byte site records and stamps a 3x3 dot
+   (FUN_0043842c) at (x,y)/10 + pane origin:
+     class 0 pad: owned (FUN_00453cf5: +0x14 == viewer or flag 0x800<<viewer)
+                  -> palette slot 1; else +0x14 == 4 -> slot 0
+     class 1:     +0x10 == 0 -> slot 4; else slot 0
+     class 2:     flag bit 0 (bridge complete) -> slot 5
+   Pass 2 walks every floater of the island (FUN_004656d6 mode -2) and writes
+   a 2x2 block at (x,y)/10 clamped inside the pane. Pixel n&1 / n>>1 of the
+   block carries the owner index (type 4 = both diagonal pixels), the rest
+   is slot 0. Colour: slot 1; own floater with link +0x0c != -1 -> slot 2
+   (slot 4 for subtype 4); selected own floater -> slot 5.
+   Palette slots DAT_0049e140[1..6] are the 6-bit RGB triples at 0x49e148
+   matched to the island palette by FUN_0041081b (assumed nearest colour).
+   Remake only: columns outside the explored extent are blacked out, since
+   the camera cannot reach them, and no dot is drawn there. */
+static COLORREF lilmap_slot_color(int slot)
+{
+    static const unsigned char rgb6[7][3] = {
+        {0, 0, 0}, {63, 63, 63}, {63, 0, 0}, {0, 63, 0},
+        {0, 0, 63}, {63, 63, 0}, {50, 50, 50}
+    };
+    int best = 0;
+    int best_distance = 0x7fffffff;
+    int index;
+    if (slot <= 0 || slot > 6) return g_island_palette[0];
+    for (index = 0; index < 256; ++index) {
+        int dr = (int)GetRValue(g_island_palette[index]) - rgb6[slot][0] * 255 / 63;
+        int dg = (int)GetGValue(g_island_palette[index]) - rgb6[slot][1] * 255 / 63;
+        int db = (int)GetBValue(g_island_palette[index]) - rgb6[slot][2] * 255 / 63;
+        int distance = dr * dr + dg * dg + db * db;
+        if (distance < best_distance) {
+            best_distance = distance;
+            best = index;
+        }
+    }
+    return g_island_palette[best];
+}
+
+static void lilmap_fill(HDC dc, int left, int top, int width, int height,
+                        COLORREF color)
+{
+    RECT box;
+    HBRUSH brush;
+    box.left = left; box.top = top;
+    box.right = left + width; box.bottom = top + height;
+    brush = CreateSolidBrush(color);
+    FillRect(dc, &box, brush);
+    DeleteObject(brush);
+}
+
+static int lilmap_explored(int island_index, int x)
+{
+    if (!g_game_session_valid || g_menu.selected_tribe < 0) return 1;
+    return game_session_island_x_explored(&g_game_session,
+        (uint8_t)island_index, (uint8_t)g_menu.selected_tribe, x);
+}
+
 static void draw_island_lilmap_dots(HDC dc, const WindowTemplate *mini_map,
                                     const GameRuntimeIsland *island)
 {
-    static const COLORREF kind_colors[3] = {
-        RGB(64, 255, 64), RGB(255, 64, 64), RGB(224, 224, 224)
-    };
     int saved = SaveDC(dc);
     unsigned int n;
+    int column;
+    int pane_width = mini_map->pane.right - mini_map->pane.left + 1;
+    int pane_height = mini_map->pane.bottom - mini_map->pane.top + 1;
+    int viewer = g_menu.selected_tribe;
     (void)IntersectClipRect(dc, mini_map->pane.left, mini_map->pane.top,
                             mini_map->pane.right + 1, mini_map->pane.bottom + 1);
+    /* Hide unreachable (unexplored) columns; one minimap pixel = 10 units. */
+    for (column = 0; column < pane_width; ) {
+        int run = column;
+        while (run < pane_width &&
+               !lilmap_explored(g_menu.selected_map_island, run * 10)) ++run;
+        if (run > column) {
+            lilmap_fill(dc, mini_map->pane.left + column, mini_map->pane.top,
+                        run - column, pane_height, RGB(0, 0, 0));
+            column = run;
+        } else {
+            ++column;
+        }
+    }
     if (island != NULL) {
         for (n = 0; n < island->location_count; ++n) {
             const GameRuntimeLocation *loc = &island->locations[n];
-            RECT dot;
-            HBRUSH brush;
             int cx = (int)loc->x / 10 + mini_map->pane.left;
             int cy = (int)loc->y / 10 + mini_map->pane.top;
-            if (loc->record_value_10 < 0) continue;
-            if (g_game_session_valid && g_menu.selected_tribe >= 0 &&
-                !game_session_island_x_explored(&g_game_session,
-                    (uint8_t)g_menu.selected_map_island,
-                    (uint8_t)g_menu.selected_tribe, (int)loc->x)) continue;
-            dot.left = cx - 1; dot.top = cy - 1;
-            dot.right = cx + 2; dot.bottom = cy + 2;
-            brush = CreateSolidBrush(kind_colors[loc->record_value_10 == 0 ? 2 : 1]);
-            FillRect(dc, &dot, brush);
-            DeleteObject(brush);
+            int slot = -1;
+            if (loc->renderer_class == 0) {
+                if (viewer >= 0 && (loc->source_value_14 == viewer ||
+                    (loc->source_flags & (0x800U << viewer)) != 0)) slot = 1;
+                else if (loc->source_value_14 == 4) slot = 0;
+            } else if (loc->renderer_class == 1) {
+                slot = loc->record_value_10 == 0 ? 4 : 0;
+            } else if (loc->renderer_class == 2) {
+                if ((loc->source_flags & 1U) != 0) slot = 5;
+            }
+            if (slot < 0) continue;
+            if (!lilmap_explored(g_menu.selected_map_island, (int)loc->x)) continue;
+            lilmap_fill(dc, cx - 1, cy - 1, 3, 3, lilmap_slot_color(slot));
         }
     }
     if (g_game_session_valid) {
         for (n = 0; n < g_game_session.floater_count; ++n) {
             const GameFloaterStart *fl = &g_game_session.floaters[n];
-            RECT dot;
-            HBRUSH brush;
-            int cx, cy;
-            int own = fl->type_index == (uint8_t)g_menu.selected_tribe;
+            int own = viewer >= 0 && fl->type_index == (uint8_t)viewer;
+            int slot = 1;
+            int px;
+            int py;
+            int pixel;
             if (!game_session_floater_is_active(fl) ||
                 fl->island_index != g_menu.selected_map_island) continue;
-            if (!own && fl->type_index != 4) continue;
-            if (!game_session_island_x_explored(&g_game_session,
-                    (uint8_t)g_menu.selected_map_island,
-                    (uint8_t)g_menu.selected_tribe, (int)fl->x)) continue;
-            cx = (int)fl->x / 10 + mini_map->pane.left;
-            cy = (int)fl->y / 10 + mini_map->pane.top;
-            dot.left = cx - 1; dot.top = cy - 1;
-            dot.right = cx + 2; dot.bottom = cy + 2;
-            brush = CreateSolidBrush(kind_colors[own ? 0 : 1]);
-            FillRect(dc, &dot, brush);
-            DeleteObject(brush);
+            if (!lilmap_explored(g_menu.selected_map_island, (int)fl->x)) continue;
+            if (own && fl->source_link_0c != -1)
+                slot = fl->source_subtype == 4 ? 4 : 2;
+            if (own && (int)n == g_selected_floater) slot = 5;
+            px = (int)fl->x / 10 + mini_map->pane.left;
+            py = (int)fl->y / 10 + mini_map->pane.top;
+            if (px < mini_map->pane.left) px = mini_map->pane.left;
+            if (px > mini_map->pane.right - 1) px = mini_map->pane.right - 1;
+            if (py < mini_map->pane.top) py = mini_map->pane.top;
+            if (py > mini_map->pane.bottom - 1) py = mini_map->pane.bottom - 1;
+            for (pixel = 0; pixel < 4; ++pixel) {
+                int lit = fl->type_index == 4 ? (pixel == 0 || pixel == 3)
+                                              : pixel == fl->type_index;
+                lilmap_fill(dc, px + (pixel & 1), py + (pixel >> 1), 1, 1,
+                            lilmap_slot_color(lit ? slot : 0));
+            }
         }
     }
     if (saved != 0) RestoreDC(dc, saved);
