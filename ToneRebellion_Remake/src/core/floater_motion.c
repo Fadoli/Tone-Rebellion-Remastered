@@ -55,10 +55,9 @@ int floater_motion_step(FloaterPosition *position,
 
     step = effective_speed;
     if (distance < step * 4) {
-        /* FUN_00422d27 rounds the reduced speed up: (distance + 3) / 4.
-           This avoids slowing a floater one extra tick when its remaining
-           Chebyshev distance is not a multiple of four. */
-        step = (distance + 3) / 4;
+        /* FUN_00422d27 (0x422f8c..0x422f92: CDQ/AND 3/ADD/SAR 2) divides the
+           non-negative Chebyshev distance by four, truncating. */
+        step = distance / 4;
         if (step < 1) step = (int32_t)(source_tick & 1U);
     }
 
