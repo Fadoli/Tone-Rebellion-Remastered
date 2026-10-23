@@ -410,7 +410,9 @@ void game_session_advance_category4_autonomous_order(
         floater->order_target_floater = -1;
         floater->order_target_location = -1;
         floater->order_progress = 0;
-        floater->source_runtime_flags &= ~0x004U;
+        /* FUN_004211bb's finished-order path runs FUN_00421ec1(-1) and
+           FUN_00466533, clearing the 0x65 flag group, not only 0x04. */
+        floater->source_runtime_flags &= ~0x065U;
         floater->has_wander_order = 1;
         floater->wander_timer = 0;
     }

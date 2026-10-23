@@ -1740,6 +1740,9 @@ int game_session_order_floater_to_charge_site(GameSession *session,
         charge_state = 12;
     }
 
+    /* FUN_004211bb cases 10/0xb call FUN_00425084 before planning the charge
+       state: a carried item is dropped or credited first. */
+    game_session_drop_carried_artifact(session, floater);
     floater->source_order_parameter_32 = location_index;
     floater->movement_state = charge_state;
     floater->order_timer = 0;

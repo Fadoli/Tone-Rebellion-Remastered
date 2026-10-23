@@ -130,3 +130,9 @@ Les globales `DAT_00618e4c/50` ont 3 références chacune hors de ce calcul (`0x
 - Corrigé: les états 6 et 7 (frappes) sont immobiles dans le natif (`FUN_00422d27` non appelée); le port poursuivait la cible.
 - Corrigé: mêlée. À l'arrivée en état 0xf (hors action 0x14) d'un floater sans attaque à distance (`FUN_00420721` renvoie 0), la cible reçoit `0x10`, l'attaquant `0x40`. Un floater avec `0x10` ne fait pas de pas (`+0x1c & 0x411`, ici 0x10 seul retenu) tant qu'un floater de l'île le cible avec `0x40`. Le port n'écrivait jamais ces drapeaux.
 - Non vérifié en jeu. Les bits `0x01` et `0x400` du même masque de blocage (`FUN_00422d27` non appelée) ne sont pas portés.
+
+### Ordres de charge et fin d'ordre (relus: `FUN_004211bb` `ev_3477c421`)
+
+- Corrigé: les ordres 0xb/0xc appellent `FUN_00425084` avant de planifier l'état de charge: l'objet porté est déposé ou crédité d'abord (`game_session_order_floater_to_charge_site`).
+- Corrigé: la fin d'un ordre automatique (`FUN_00421ec1(-1)` + `FUN_00466533`) efface le groupe de drapeaux `0x65`, pas seulement `0x04` (`game_session_advance_category4_autonomous_order`).
+- Restent non portés: actions 2/0x11 (aucun émetteur dans le port), branche « objet déjà porté » de l'action 0xd, sous-étapes de livraison, retour au Hall des sous-types 4/8 comme bloc commun, rejet d'un ordre hors de la plage du propriétaire, blocage de pas par `0x01`/`0x400`.
