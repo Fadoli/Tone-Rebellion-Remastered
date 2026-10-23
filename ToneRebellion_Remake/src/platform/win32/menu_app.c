@@ -18,6 +18,7 @@
 #include "game_session.h"
 #include "game_session_delivery.h"
 #include "game_session_action9.h"
+#include "native_save.h"
 #include "game_glyph_inventory.h"
 #include "iw_construct.h"
 #include "shp_image.h"

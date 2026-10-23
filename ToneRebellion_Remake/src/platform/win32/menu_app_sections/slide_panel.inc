@@ -73,8 +73,9 @@ static int slide_panel_hit(int x, int y)
     return -1;
 }
 
-/* Same attenuation curve as the effects (FUN_004595cc); MCI waveaudio takes
-   a linear 0..1000 level, so apply the amplitude gain. */
+/* Same attenuation curve as the effects (FUN_004595cc). MCI `waveaudio` has no
+   `setaudio volume` (error 261), so the music is opened as `mpegvideo`
+   (DirectShow), which takes a linear 0..1000 level: apply the amplitude gain. */
 static void apply_music_volume(void)
 {
     if (g_music_device_open) {

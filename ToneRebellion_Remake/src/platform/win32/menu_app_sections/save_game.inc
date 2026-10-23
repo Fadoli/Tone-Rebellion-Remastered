@@ -149,6 +149,71 @@ static int read_save_file(HWND window, const char *path)
     return 1;
 }
 
+/* Loads an original-game save (C:\Program Files\Tone\NN.SAV; the process sees
+   the VirtualStore copy). The world and tribe come from the file, a fresh
+   session is built for them and the native records are applied on top
+   (core/native_save.c). Returns 0 and leaves the running game untouched when
+   the file cannot be restored. */
+static int read_native_save_file(HWND window, const char *path, char *error,
+                                 size_t error_capacity)
+{
+    NativeSave save;
+    FILE *file = fopen(path, "rb");
+    unsigned char *bytes = NULL;
+    long length;
+    int world;
+    int ok = 0;
+    int previous_world = g_menu.world_index;
+    int previous_tribe = g_menu.selected_tribe;
+    int previous_difficulty = g_menu.difficulty;
+    if (file == NULL) {
+        (void)snprintf(error, error_capacity, "save file could not be opened");
+        return 0;
+    }
+    if (fseek(file, 0, SEEK_END) != 0 || (length = ftell(file)) <= 0 ||
+        fseek(file, 0, SEEK_SET) != 0 ||
+        (bytes = (unsigned char *)malloc((size_t)length)) == NULL ||
+        fread(bytes, 1, (size_t)length, file) != (size_t)length) {
+        (void)fclose(file);
+        free(bytes);
+        (void)snprintf(error, error_capacity, "save file could not be read");
+        return 0;
+    }
+    (void)fclose(file);
+    if (!native_save_parse(bytes, (size_t)length, &save, error, error_capacity))
+        goto done;
+    world = native_save_find_world(&save, &g_menu.world_map);
+    if (world < 0 || save.tribe >= GAME_START_PLAYER_COUNT) {
+        (void)snprintf(error, error_capacity,
+                       "save world or tribe is not supported");
+        goto done;
+    }
+    g_menu.world_index = world;
+    g_menu.selected_tribe = (int)save.tribe;
+    if (!load_game_session_for_selected_world(error, error_capacity) ||
+        !native_save_apply(&save, &g_floater_catalog, &g_game_session, error,
+                           error_capacity)) {
+        g_menu.world_index = previous_world;
+        g_menu.selected_tribe = previous_tribe;
+        g_menu.difficulty = previous_difficulty;
+        goto done;
+    }
+    game_music_state_init(&g_game_music);
+    g_menu.selected_map_island = -1;
+    g_menu.setup_accepted = 1;
+    g_sim_speed = 1U;
+    g_selected_floater = -1;
+    g_selected_location = -1;
+    g_hovered_island = -1;
+    g_defeat_ticks = 0;
+    g_menu.screen = SCREEN_WORLD_MAP;
+    (void)window;
+    ok = 1;
+done:
+    free(bytes);
+    return ok;
+}
+
 static int save_slot_path(int slot, char *path, size_t capacity)
 {
     char directory[MAX_PATH];

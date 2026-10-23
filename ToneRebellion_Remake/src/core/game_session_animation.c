@@ -381,37 +381,53 @@ static int leviathan_spawn_subtype(GameSession *session,
 
     /* FUN_00450a71 (local_78): 1 = Spore (subtype 9), 2 = Leviathan pair.
        A site that is not the least represented family always makes a Spore.
-       Otherwise the cached FUN_00460460 island counters decide; the tree
-       below follows the native branch order. Its c0 == 1 branch reads
-       DAT_0061fa10, which sits past the 0x1614-byte world object copied by
-       FUN_00460c83 and has no observed writer, so it is treated as 0. */
+       Otherwise the island summary cached by FUN_00460460 decides. Receiver
+       0x61e438 + island * 2 (or * 4) maps the native globals as:
+       DAT_0061f9d4 = +0x159c remaining markers, DAT_0061fa10 = +0x15d8
+       marker count, DAT_0061f998 = +0x1560 floater budget, DAT_0061f9f2 =
+       +0x15ba floater count, DAT_0061f9b6 = +0x157e site budget,
+       DAT_0061f920 = +0x14e8 admissible flag. */
     if (group != least_group) return 9;
     {
-        int markers = island->leviathan_marker_count;          /* DAT_0061f9d4 */
-        int free_markers = island->leviathan_remaining_markers; /* DAT_0061f998 */
-        int units = island->leviathan_floater_count;           /* DAT_0061f9b6 */
-        int wait_timer = island->leviathan_wait_timer;         /* DAT_0061f920 */
+        int remaining = island->leviathan_remaining_markers;
+        int markers = island->leviathan_marker_count;
+        int floater_budget = island->leviathan_floater_budget;
+        int units = island->leviathan_floater_count;
+        int site_budget = island->leviathan_site_budget;
+        int admissible = island->leviathan_admissible;
         int choice = 0;
 
         /* FUN_00450a71 selects subtype 9 once FUN_0046562b(4, -1) reports
            more than 123 registered category-4 floaters. Creation itself has
            a separate refusal threshold above 128 in FUN_00462a87. */
-        if (free_markers == 0 || total_type4_count > 123U) {
+        if (floater_budget == 0 || total_type4_count > 123U) {
             choice = 1;
-        } else if (markers == 0 && units == 0) {
+        } else if (remaining == 0 && site_budget == 0) {
             choice = 2;
-        } else if (units == 0) {
-            if (markers < free_markers) choice = 2;
-            else if (free_markers < markers) choice = 1;
-        } else if (free_markers * 2 <= units) {
-            if (units < free_markers * 4) {
-                if (markers < free_markers) choice = 2;
-                else if (free_markers < markers) choice = 1;
-            } else if (wait_timer != 0) {
+        } else if (markers == 1) {
+            if (admissible != 0) {
+                choice = 1;
+            } else if (units < 2) {
+                choice = 2;
+            } else if (floater_budget < 5) {
+                if (site_budget >= 4) choice = 1;
+                else if (site_budget == 0 && floater_budget > 2) choice = 2;
+                else if (site_budget + 2 < floater_budget) choice = 2;
+            } else {
+                choice = 2;
+            }
+        } else if (site_budget == 0) {
+            if (remaining < floater_budget) choice = 2;
+            else if (floater_budget < remaining) choice = 1;
+        } else if (floater_budget * 2 <= site_budget) {
+            if (site_budget < floater_budget * 4) {
+                if (remaining < floater_budget) choice = 2;
+                else if (floater_budget < remaining) choice = 1;
+            } else if (admissible != 0) {
                 choice = 1;
             }
-        } else if (free_markers * 2 <= markers) {
-            if (free_markers * 2 < markers) choice = 1;
+        } else if (floater_budget * 2 <= remaining) {
+            if (floater_budget * 2 < remaining) choice = 1;
         } else {
             choice = 2;
         }

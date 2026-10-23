@@ -239,7 +239,7 @@ static void keep_background_tune_playing(void)
     result = mciSendStringA("status tone_music mode", mode, sizeof(mode), NULL);
     if (result == 0 && strcmp(mode, "stopped") == 0) {
         if (g_music_loops) {
-            (void)mciSendStringA("play tone_music", NULL, 0, NULL);
+            (void)mciSendStringA("play tone_music from 0", NULL, 0, NULL);
         } else {
             /* FUN_0041c46f requests the `start` tune once; the title handler
                then requests the looping `ambi1` menu bed. */
@@ -278,7 +278,7 @@ static void set_background_tune_mode(const char *tune_id, int loop)
     {
         int command_length = snprintf(
             command, sizeof(command),
-            "open \"%s\" type waveaudio alias tone_music", path);
+            "open \"%s\" type mpegvideo alias tone_music", path);
         if (command_length < 0 || (size_t)command_length >= sizeof(command)) return;
     }
     result = mciSendStringA(command, NULL, 0, NULL);

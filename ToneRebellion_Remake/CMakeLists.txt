@@ -27,6 +27,7 @@ add_library(tone_core STATIC
     src/core/game_start_tones.c
     src/core/game_session.c
     src/core/game_session_start.c
+    src/core/native_save.c
     src/core/game_session_buildings.c
     src/core/game_session_layout.c
     src/core/game_session_pending_events.c

@@ -783,9 +783,19 @@ static void handle_click(HWND window, int x, int y)
                 }
             } else if (slot >= 0 && slot < 8 && g_load_slot_valid[slot] &&
                        g_load_slot_native[slot]) {
-                MessageBoxA(window,
-                            "Cette sauvegarde provient du jeu d'origine: son format n'est pas pris en charge par le remake.",
-                            "Tone Rebellion remake", MB_OK | MB_ICONINFORMATION);
+                char error[160];
+                (void)snprintf(path, sizeof(path), "C:\\Program Files\\Tone\\%02d.SAV", slot);
+                if (read_native_save_file(window, path, error, sizeof(error))) {
+                    g_load_save_mode = 0;
+                    g_load_from_game = 0;
+                } else {
+                    char message[256];
+                    (void)snprintf(message, sizeof(message),
+                                   "Cette sauvegarde du jeu d'origine n'a pas pu etre chargee: %s.",
+                                   error);
+                    MessageBoxA(window, message, "Tone Rebellion remake",
+                                MB_OK | MB_ICONERROR);
+                }
             } else if (slot >= 0 && slot < 8 && g_load_slot_valid[slot]) {
                 if (save_slot_path(slot, path, sizeof(path)) &&
                     read_save_file(window, path)) {

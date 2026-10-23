@@ -28,3 +28,9 @@ En parcourant ce plan avec les compteurs lus dans le fichier (îles = mot bas du
 - Contenu des blobs (0x500, 0x100, 0x400, …), du flux 1 et des 48 octets du flux 4 (classe d'objet et champs non tracés).
 - `09.sav` (`"1.16F"`, 49 282 octets, 0 île d'après ce cadrage) n'a pas le même plan: probablement une sauvegarde d'un autre mode; non analysée.
 - Correspondance champ à champ avec `GameSession` (le remake modélise déjà les offsets des enregistrements 0x60 et 0x4c, mais pas les blobs).
+
+## Port: chargement natif (première tranche)
+`ToneRebellion_Remake/src/core/native_save.c`: les 8 échantillons passent `native_save_parse` (monde déduit du nombre d'îles: 7, 11 ou 15; tribu = dword `0x84`). Le troisième dword (`0x88`, `DAT_0049f53c`) vaut 0..14 selon la sauvegarde: ce n'est pas la difficulté. L'écran Charger construit une session neuve pour ce monde et cette tribu, puis `native_save_apply` y superpose:
+- **sites (0x60)**: `+0x08/0x0a/0x10/0x14/0x18/0x1c/0x22/0x24`, stocks du Hall (`+0x28/2a/2c`), `+0x30..+0x4a`. L'identifiant `+0x10` est converti en identifiant propre au joueur (+16·joueur), comme `game_session_base_item_id`. Les Halls des joueurs sont retrouvés par balayage.
+- **floaters (0x4c)**: propriétaire (`+0`, -1 = libre), sous-type, île, position, graine d'animation, ressource portée, drapeaux, compteur de charge, minuterie. Les points de vie ne sont pas décodés: ils reprennent le maximum du catalogue.
+**Non porté (état perdu au chargement):** lien bâtiment/tâche/ordre des floaters (ils repartent en errance), enregistrements joueur 0x14a0 (dont les 48 lignes source de 100 octets), bloc global 0x1614, tâches et événements en attente, blobs du flux 2, flux 1, flux 4. Non vérifié en jeu (l'exécutable en cours d'exécution bloquait l'édition de liens).
