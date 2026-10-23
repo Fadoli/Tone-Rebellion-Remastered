@@ -192,6 +192,15 @@ static void draw_site_shimmer(HDC dc, int left, int top, int right, int bottom,
     }
 }
 
+/* FUN_0040bf98's artifact blink reads the word at 0x618f78 + selected site *
+   2. REA found no writer for that table (ev_0c606e63, ev_fe08974e), so the
+   gate stays closed here; replace this with the real table once a writer is
+   identified. */
+static int artifact_blink_table_entry(void)
+{
+    return 0;
+}
+
 /* FUN_0040bf98's +0x58 mode selects a FUN_00410bd2 stipple level for every
    layer: mode 1 (grabbed) dips and recovers, mode 2 (placed) fades in, mode 3
    (removed) fades out, from the +0x46 counter (0..15); level 8 is opaque. */
@@ -472,6 +481,22 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
                             x - 12 + 8 * bit, y - 0x43);
                 drew = 1;
             }
+        }
+    }
+    /* Artifact blink: owner 4, +0x24 in 5..0x21, active tribe 2 and a nonzero
+       table entry; frame +0x24 - 5 of TRIGGERS at stipple level 2..6. */
+    if (scale_16_16 == 0x10000U && runtime_location->owner_id == 4 &&
+        runtime_location->record_value_24 > 4 &&
+        runtime_location->record_value_24 < 0x22 &&
+        g_menu.selected_tribe == 2 && artifact_blink_table_entry() != 0) {
+        int level = (int)((g_game_session.simulation_tick >> 1) & 7U) + 2;
+        uint32_t blink_frame =
+            (uint32_t)(runtime_location->record_value_24 - 5);
+        if (level > 6) level = 12 - level;
+        if (blink_frame < g_inventory_item_art.frame_count) {
+            draw_feature_reveal(dc, &g_inventory_item_art, g_island_surface_id,
+                                blink_frame, x, y, level);
+            drew = 1;
         }
     }
     if ((runtime_location->source_flags & 0x200U) != 0 &&
