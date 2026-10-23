@@ -544,6 +544,8 @@ static void render_island_view(HDC dc)
         /* The original class-2 bridge site is distinct from class-0 pads.
            bldinf.txt defines BR-TRG01's static BASE as frame 1; the COB's
            corresponding SHP stores that frame at index 0. */
+        if (runtime_class == 2 && runtime_location != NULL &&
+            draw_runtime_item(dc, runtime_location, x, y)) continue;
         if (runtime_class == 2 && g_bridge_trigger_art.frame_count == 23) {
             draw_sprite(dc, &g_bridge_trigger_art, 0, x, y);
             continue;

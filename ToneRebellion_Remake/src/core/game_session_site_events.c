@@ -144,6 +144,10 @@ static int recalculate_island_visibility_for_player(
     if (session->economy[player_slot].island_visibility_override != 0) {
         for (index = 0; index < GAME_ISLAND_EXPLORED_CELLS; ++index)
             island->explored_cells[index] |= (uint8_t)player_bit;
+        /* Full-reveal path adds span [0,0xa00] (clamped), so the bounds
+           widen to 0..0x9ff. */
+        island->floater_min_x[player_slot] = 0;
+        island->floater_max_x[player_slot] = 0x9ff;
         for (index = 0; index < island->location_count; ++index) {
             GameRuntimeLocation *location = &island->locations[index];
             if (location->source_value_14 == 4)
@@ -197,6 +201,21 @@ static int recalculate_island_visibility_for_player(
         for (cell = span_min[index] / 10; cell <= span_max[index] / 10 &&
              cell < GAME_ISLAND_EXPLORED_CELLS; ++cell)
             island->explored_cells[cell] |= (uint8_t)player_bit;
+    }
+    {
+        /* FUN_00462285 tail: widen the island+0x408/+0x40c bounds (the
+           floater_min_x/max_x pair) by 100 past every span end, never
+           shrinking, clamped to 0..0x9ff. Runs even with no span. */
+        int32_t left = island->floater_min_x[player_slot];
+        int32_t right = island->floater_max_x[player_slot];
+        for (index = 0; index < span_count; ++index) {
+            if (span_min[index] - 100 < left) left = span_min[index] - 100;
+            if (right < span_max[index] + 100) right = span_max[index] + 100;
+        }
+        if (left < 0) left = 0;
+        if (right > 0x9ff) right = 0x9ff;
+        island->floater_min_x[player_slot] = left;
+        island->floater_max_x[player_slot] = right;
     }
     for (index = 0; index < island->location_count; ++index) {
         GameRuntimeLocation *location = &island->locations[index];

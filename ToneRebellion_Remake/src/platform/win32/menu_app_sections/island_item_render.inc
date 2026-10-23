@@ -318,7 +318,11 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
             }
         }
     }
-    if (item->chug.present) {
+    /* FUN_0040bf98 nulls the CHUG record for a class-2 site while flag 0x001
+       (bridge built) is clear (ev_e0431074...). */
+    if (item->chug.present &&
+        !(runtime_location->renderer_class == 2 &&
+          (runtime_location->source_flags & 1U) == 0U)) {
         uint32_t chug_ticks = runtime_location->chug_progress;
         /* Neutral class-1 pools stay at CHUG tick 0 (below 90) until the
            shown tribe has seen them (+0x22 visibility mask). */
@@ -360,6 +364,12 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
         frame = building_render_cons_frame(item,
             runtime_location->construction_progress,
             runtime_location->source_flags);
+        /* FUN_0040bf98 draws CONS's static frame for class 2 only once the
+           site is built or producing (flags & 3); a running CONS (0x004)
+           animates regardless (ev_e0431074...). */
+        if (runtime_location->renderer_class == 2 &&
+            (runtime_location->source_flags & 0x007U) == 0U)
+            frame = UINT32_MAX;
         if (frame < sheet->frame_count) {
             draw_item_layer(dc, sheet, frame, x, y, scale_16_16);
             drew = 1;

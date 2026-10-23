@@ -1486,9 +1486,11 @@ void game_session_tick_item_animations_with_floaters(
                     goto tick_location_done;
             }
 
-            /* FUN_00450a71 increments class-0 CHUG only while source flag bit 0
-               is set; objects created by FUN_004528ca begin with it clear. */
-            if (state->renderer_class == 0 &&
+            /* FUN_00450a71 increments CHUG for every non-class-1 object only
+               while source flag bit 0 is set (for a class-2 bridge marker the
+               bit is set by FUN_004669bd); objects created by FUN_004528ca
+               begin with it clear (ev_42f2f924...). */
+            if ((state->renderer_class == 0 || state->renderer_class == 2) &&
                 (state->source_flags & 1U) != 0 && item->chug.present) {
                 uint32_t increment = state->owner_id == 4 || state->source_value_32 < 2
                     ? 1U : item->chug.ticks_per_frame;
