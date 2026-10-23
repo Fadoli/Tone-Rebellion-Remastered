@@ -186,6 +186,7 @@ static void draw_site_shimmer(HDC dc, int left, int top, int right, int bottom,
             if (second[u] != 4U) {
                 (void)SetPixel(dc, x + 1, y, colors[second[u]]);
                 (void)SetPixel(dc, x, y + 1, GetPixel(dc, x + 1, y));
+                (void)SetPixel(dc, x - 1, y, GetPixel(dc, x, y + 1));
                 (void)SetPixel(dc, x, y - 1, GetPixel(dc, x - 1, y));
             }
         }
