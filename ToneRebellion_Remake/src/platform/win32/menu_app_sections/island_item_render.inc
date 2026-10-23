@@ -148,6 +148,50 @@ static int draw_island_leviathan_spawn_effect(
     HDC dc, const GameRuntimeLocation *location,
     const BuildingRenderItem *item, int x, int y, int full_reveal);
 
+/* FUN_00411478 (site flag 0x200): dithered shimmer over a rectangle around the
+   site, seeded with DAT_00618e44 >> 1. Colours are the palette entries nearest
+   to (30,30,30) and (46,46,46) on a 0..63 scale plus palette index 1
+   (FUN_004108fa/FUN_0042dd0f). The native palette is filled at runtime, so
+   the island palette stands in for it. Writes keep the native order, including
+   the copy of the just-written neighbour pixel. */
+static void draw_site_shimmer(HDC dc, int left, int top, int right, int bottom,
+                              uint32_t seed)
+{
+    static const uint8_t first[7] = {0, 1, 1, 2, 1, 1, 0};
+    static const uint8_t second[7] = {4, 4, 0, 1, 0, 4, 4};
+    COLORREF colors[3];
+    uint32_t state = 0xdefeca35U;
+    uint8_t index;
+    int x;
+    int y;
+    int c;
+    static const int gray[2] = {30, 46};
+
+    for (c = 0; c < 2; ++c) {
+        int level = gray[c] * 255 / 63;
+        colors[c] = RGB(level, level, level);
+        if (island_palette_lookup_nearest(&g_island_palette_lookup,
+                (uint32_t)RGB(level, level, level) & UINT32_C(0x00ffffff),
+                &index)) colors[c] = g_island_palette[index];
+    }
+    colors[2] = g_island_palette[1];
+    for (y = top; y <= bottom; y += 2) {
+        for (x = left; x <= right; x += 2) {
+            uint32_t u = (state + seed + (uint32_t)(x - left) +
+                          (uint32_t)(y - top)) % 119U;
+            state >>= 1;
+            if (state < 0x40U) state += 0xdefeca35U;
+            if (u >= 7U) continue;
+            (void)SetPixel(dc, x, y, colors[first[u]]);
+            if (second[u] != 4U) {
+                (void)SetPixel(dc, x + 1, y, colors[second[u]]);
+                (void)SetPixel(dc, x, y + 1, GetPixel(dc, x + 1, y));
+                (void)SetPixel(dc, x, y - 1, GetPixel(dc, x - 1, y));
+            }
+        }
+    }
+}
+
 /* FUN_0040bf98's +0x58 mode selects a FUN_00410bd2 stipple level for every
    layer: mode 1 (grabbed) dips and recovers, mode 2 (placed) fades in, mode 3
    (removed) fades out, from the +0x46 counter (0..15); level 8 is opaque. */
@@ -392,6 +436,15 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
     }
     g_sprite_haze_level = -1;
     g_item_stipple_level = 8;
+    if ((runtime_location->source_flags & 0x200U) != 0 &&
+        scale_16_16 == 0x10000U) {
+        uint32_t seed = g_game_session.simulation_tick >> 1;
+        if (runtime_location->renderer_class == 1)
+            draw_site_shimmer(dc, x - 50, y - 20, x + 50, y + 20, seed);
+        else
+            draw_site_shimmer(dc, x - 20, y - 50, x + 20, y, seed);
+        drew = 1;
+    }
     /* FUN_0040bf98 draws CRUMBLE after the item's data layers on the full-size
        in-world path. The overlay runs for flag 0x080 through the destruction
        timer and uses a nine-frame band for each pad size (class 1 uses band 4). */
