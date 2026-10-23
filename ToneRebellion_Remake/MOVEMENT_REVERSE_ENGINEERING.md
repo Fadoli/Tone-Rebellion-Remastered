@@ -166,3 +166,6 @@ Corrigé pour les états d'approche 0xf/0x10: si le x du point d'arrivée est ho
 
 ### Recrutement (`FUN_0045eaa7`, relu: `ev_427930b7`)
 Conforme à `game_session_tick_floater_recruitment`: nombre de floaters du joueur, capacité `+0x3c`, budget `+0x40 > 4`, ouvriers (sous-type 0) `< capacité / 2`, minuteur `+0x8c` incrémenté puis naissance (`FUN_004532e2`) quand `> 300`, avec le marqueur de naissance `+0x13ce != -1`. Seul le verrou de défaite `+0x90` (événement 0xb ou `FUN_00460072`) n'a pas d'équivalent dans le port; la détection de fin de partie relève de l'écran de fin de partie en cours de développement.
+
+### Ordre de choix des lignes de tâche: écart assumé
+`FUN_0042219e` prend la première ligne éligible dans l'ordre des emplacements; avec les valeurs de départ (compteur 1000, classe 1) une ligne de classe 1 accepte tout ouvrier libre tant qu'elle en a moins de 999, donc les ouvriers s'empilent d'abord sur la première ligne puis se rééquilibrent par échanges (ligne avec au moins 2 ouvriers de moins) toutes les dix ticks. Le port choisit directement la ligne la moins servie et réévalue chaque tick (`game_session_delivery.c`, commentaires « Remake deviation »). Résultat proche à l'équilibre, trajectoire différente; non modifié pour ne pas déstabiliser les gardes propres au port (plafond Build Tone, réservation de coût, finisseur unique).
