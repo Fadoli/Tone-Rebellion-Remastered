@@ -1371,29 +1371,12 @@ static void draw_location_action_panel(HDC dc)
             }
         }
     }
-    {
-        RECT pickup_rect;
-        if (obtain_button_rect(&pickup_rect)) {
-            const char *label = "OBTAIN";
-            HBRUSH fill = CreateSolidBrush(g_hovered_location_grab
-                ? RGB(72, 91, 126) : RGB(43, 57, 84));
-            HBRUSH border = CreateSolidBrush(RGB(168, 190, 224));
-            int text_width = measure_bitmap_text(NULL, label, strlen(label));
-            int text_height = (int)g_small_font.height;
-            if (fill != NULL) {
-                (void)FillRect(dc, &pickup_rect, fill);
-                DeleteObject(fill);
-            }
-            if (border != NULL) {
-                (void)FrameRect(dc, &pickup_rect, border);
-                DeleteObject(border);
-            }
-            draw_bitmap_label(dc, label,
-                pickup_rect.left + ((pickup_rect.right - pickup_rect.left) -
-                                    text_width) / 2,
-                pickup_rect.top + ((pickup_rect.bottom - pickup_rect.top) -
-                                   text_height) / 2,
-                RGB(240, 244, 255));
+    if (obtain_button_visible()) {
+        const WindowTemplate *obtain_control = window_catalog_find(
+            &g_window_catalog, "BC_Obtain", 3);
+        if (obtain_control != NULL) {
+            draw_control_with_hover_overlay(dc, obtain_control,
+                &g_building_command_art, g_hovered_location_grab);
         }
     }
     button_name = action == ISLAND_LOCATION_ACTION_HALL_MOVE

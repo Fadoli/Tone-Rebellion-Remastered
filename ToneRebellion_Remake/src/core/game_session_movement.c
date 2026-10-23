@@ -699,12 +699,75 @@ static void game_session_cancel_ground_pickup_order(GameSession *session,
             (uint8_t)old_task_slot, 12, &expected);
 }
 
+/* Remake interpretation (player request, not a native path): an artifact
+   picked up by Obtain is carried to the nearest owned Hall or recruiter
+   building and credited to the owner's Inventory there. Returns 1 when a
+   delivery leg was started. */
+static int game_session_start_artifact_delivery(GameSession *session,
+                                                GameFloaterStart *floater)
+{
+    const GameRuntimeIsland *island;
+    const GameRuntimeLocation *best = NULL;
+    int32_t best_distance = INT32_MAX;
+    unsigned int index;
+
+    if (floater->owner_slot >= GAME_START_PLAYER_COUNT ||
+        floater->island_index >= session->island_count) return 0;
+    island = &session->islands[floater->island_index];
+    for (index = 0; index < island->location_count; ++index) {
+        const GameRuntimeLocation *location = &island->locations[index];
+        int32_t base_item_id = game_session_base_item_id(location);
+        int32_t distance;
+
+        if (location->renderer_class != 0 ||
+            location->owner_id != (int32_t)floater->owner_slot ||
+            (base_item_id != 0x2a && (base_item_id < 0x2c || base_item_id > 0x2e)))
+            continue;
+        distance = game_session_source_chebyshev_distance(
+            floater->x, floater->y, location->x, location->y);
+        if (distance < best_distance) {
+            best = location;
+            best_distance = distance;
+        }
+    }
+    if (best == NULL) return 0;
+    floater->movement_state = 14;
+    floater->destination_x = best->x;
+    floater->destination_y = best->y;
+    floater->stop_radius = 0;
+    floater->order_timer = 0;
+    floater->has_move_order = 1;
+    floater->has_wander_order = 0;
+    floater->wander_timer = 0;
+    return 1;
+}
+
 static int game_session_tick_ground_object_pickup(
     GameSession *session, GameFloaterStart *floater, int arrived)
 {
     GameRuntimeLocation *target;
     int32_t item_id;
 
+    if (floater->movement_state == 14) {
+        int16_t carried = floater->carried_resource_code;
+
+        if (!arrived) return 0;
+        if (carried > 4 && carried < 0x22 &&
+            floater->owner_slot < GAME_START_PLAYER_COUNT) {
+            ++session->economy[floater->owner_slot]
+                  .inventory_count[(unsigned int)(carried - 5)];
+        }
+        floater->carried_resource_code = 0;
+        floater->movement_state = 0;
+        floater->has_move_order = 0;
+        if (floater->active_order_action == 0x0d) floater->active_order_action = 0;
+        floater->has_wander_order = 1;
+        floater->wander_timer = 0;
+        if (floater->source_subtype == 8U)
+            (void)game_session_order_floater_home(
+                session, (unsigned int)(floater - session->floaters));
+        return 1;
+    }
     if (floater->movement_state != 13) return 0;
     if (floater->island_index >= session->island_count ||
         floater->source_order_parameter_32 >=
@@ -736,6 +799,8 @@ static int game_session_tick_ground_object_pickup(
     floater->movement_state = 0;
     floater->has_move_order = 0;
     (void)game_session_finish_obtain_task(session, floater);
+    if (item_id > 4 && item_id < 0x22 &&
+        game_session_start_artifact_delivery(session, floater)) return 1;
     /* FUN_0041e569 sends subtype 8 back to its Hall after a completed
        non-cast state when the native global order gate is open. The remake
        reaches this handler only while simulation ticks are advancing. */

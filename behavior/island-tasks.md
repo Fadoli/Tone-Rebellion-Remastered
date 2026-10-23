@@ -210,3 +210,9 @@ Port: libellé et compteur d'une ligne prennent `g_island_palette[5]` (priorité
 Précision (relecture du code du port): la surbrillance de la ligne sélectionnée est déjà le remappage de `FUN_004106dd(1, 1)`
 (banque « haze » 1, niveau 1), calculé par `island_haze_remap` pour chaque indice de palette dans
 `rebuild_island_palette_lookup`; la mention « valeurs non lues » ci-dessus décrit seulement ma lecture du binaire.
+
+## Panneau Tâches : lignes UPGSPREAD / SUPPLY (REA, sous-agent haiku, non relue)
+
+Evidence rapportées: ev_956729d2…, ev_0383c7a8…, ev_1bf61b01…, ev_a78bedd3…, ev_9bd33459…, ev_0289c266…, ev_639bf60d…, ev_7cbbb9a2…, ev_ab7739c5… (IDs tronqués par le sous-agent).
+Dispatch de `FUN_004459e6` (première correspondance): type 5 CONSTR (icône 0); type 0x12 REPAIR (icône 1); type 4 sous 1 avec `FUN_0045ff3f` REPAIR; type 4 sous 1 avec `FUN_0045ff6d` UPGSPREAD (icône 2, jauge = compteur de l'entrée genre 1 / 10, table `panneau+0x13dc`, 16 entrées de 5 shorts [île, site, genre, tâche, compteur]); type 4 autre: `FUN_00450385()==0` STOCK/DARTIFACT, sinon UPGRADE (`FUN_0045c9fe` et sous 1: icône 2, `+0x28`/20) ou SUPPLY (icône 3, `+0x2a` si sous 2 sinon `+0x2c`, dénominateur `50+25*(FUN_0045c3bb()+0x4a)`, icône tonecrys/magctone); type 0xd OARTIFACT. Gabarit: libellé x=45, compteur `[n]` x=5, icône x=25, jauge x=170 70x7, dessinée si numérateur != -1.
+Corrections: `FUN_00450385` ne prend aucun argument (lit l'objet appelant); le compteur `[%d]` est bien dessiné. Inconnues: `FUN_0045c3bb`, `FUN_004641de`, comportement à dénominateur 0, entrée UPGSPREAD nulle. Non porté: la table genre 0/1 de `FUN_0045fcbe` n'est pas modélisée.

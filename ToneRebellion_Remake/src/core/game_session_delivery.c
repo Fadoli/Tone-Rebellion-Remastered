@@ -225,12 +225,23 @@ static int assign_obtain_task_for_floater(GameSession *session,
     if (event->active == 0 || event->action_type != 0x0d ||
         event->assigned_floater_count >= 1 ||
         event->player_id != floater->owner_slot ||
-        event->payload_0a != floater->island_index ||
+        event->payload_0a < 0 || event->payload_0a >= session->island_count ||
         event->payload_0e < 0) return 0;
-    if (game_session_ground_object_item(session, floater->island_index,
+    if (game_session_ground_object_item(session, (uint8_t)event->payload_0a,
             (uint16_t)event->payload_0e) == 0) return 0;
-    if (!game_session_start_floater_ground_pickup(session, floater_index,
-            floater->island_index, (uint16_t)event->payload_0e)) return 0;
+    if (event->payload_0a == floater->island_index) {
+        if (!game_session_start_floater_ground_pickup(session, floater_index,
+                floater->island_index, (uint16_t)event->payload_0e)) return 0;
+    } else {
+        /* FUN_004210a9: state 0x11 toward the nearest bridge access; the
+           pickup order resumes on arrival (travel resume, action 0xd). */
+        if (!game_session_begin_floater_handoff(session, floater,
+                (uint8_t)event->payload_0a)) return 0;
+        floater->handoff_resume_action = 0x0d;
+        floater->handoff_resume_state = 13;
+        floater->order_target_island = (uint8_t)event->payload_0a;
+        floater->order_target_location = event->payload_0e;
+    }
     floater->linked_task_slot = (int16_t)slot;
     event->assigned_floater_count = 1;
     return 1;

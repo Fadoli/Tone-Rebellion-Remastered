@@ -477,14 +477,16 @@ static int obtain_button_visible(void)
 
 static int obtain_button_rect(RECT *rect)
 {
-    const WindowTemplate *panel;
+    /* windows.txt BC_Obtain (BLDCMD frame 15) owns the pane; the hit area is
+       the control's own pane. */
+    const WindowTemplate *control;
     if (rect == NULL || !obtain_button_visible()) return 0;
-    panel = window_catalog_find(&g_window_catalog, "IWLocControl", 3);
-    if (panel == NULL) return 0;
-    rect->left = panel->pane.left + 8;
-    rect->top = panel->pane.bottom - 32;
-    rect->right = rect->left + 104;
-    rect->bottom = rect->top + 24;
+    control = window_catalog_find(&g_window_catalog, "BC_Obtain", 3);
+    if (control == NULL) return 0;
+    rect->left = control->pane.left;
+    rect->top = control->pane.top;
+    rect->right = control->pane.right;
+    rect->bottom = control->pane.bottom;
     return 1;
 }
 

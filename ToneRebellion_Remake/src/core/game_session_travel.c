@@ -301,6 +301,15 @@ int game_session_tick_floater_handoff(GameSession *session,
                        session->islands[floater->island_index].location_count) {
             floater->movement_state = 11;
             floater->active_order_action = 0;
+        } else if (resume_action == 0x0d && resume_state == 13) {
+            if (!game_session_start_floater_ground_pickup(session,
+                    (unsigned int)(floater - session->floaters),
+                    floater->island_index,
+                    (uint16_t)floater->order_target_location)) {
+                cancel_handoff(session, floater);
+                return 1;
+            }
+            return 1;
         } else if (resume_action == 0x0e) {
             floater->movement_state = 0;
             floater->active_order_action = 0x0e;
