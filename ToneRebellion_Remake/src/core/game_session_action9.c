@@ -728,6 +728,8 @@ void game_session_adopt_building_attack_order(GameSession *session,
         if (target >= session->islands[floater->island_index].location_count)
             return;
         site = &session->islands[floater->island_index].locations[target];
+        /* Release the task row while the order fields still name it. */
+        release_task_claim(session, floater);
         floater->active_order_action = 7;
         floater->order_target_location = (int16_t)target;
         floater->order_target_floater = -1;
@@ -760,6 +762,7 @@ void game_session_adopt_building_attack_order(GameSession *session,
         }
         if (floater->active_order_action == 6 &&
             floater->order_target_floater == (int16_t)target) return;
+        release_task_claim(session, floater);
         floater->active_order_action = 6;
         floater->order_target_floater = (int16_t)target;
         floater->order_target_location = -1;
