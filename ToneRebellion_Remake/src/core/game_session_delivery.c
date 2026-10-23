@@ -1504,11 +1504,7 @@ static int local_refill_source_on_island(GameSession *session,
     const GameRuntimeIsland *island;
     uint16_t candidate_indices[10];
     int32_t candidate_distances[10];
-    int32_t candidate_weights[10];
     unsigned int candidate_count = 0;
-    int32_t distance_sum = 0;
-    double inverse_weight_sum = 0.0;
-    int32_t roll;
     unsigned int location_index;
 
     if (island_index >= session->island_count ||
@@ -1554,27 +1550,11 @@ static int local_refill_source_on_island(GameSession *session,
     }
     if (candidate_count == 0) return -1;
 
-    for (location_index = 0; location_index < candidate_count; ++location_index)
-        distance_sum += candidate_distances[location_index];
-    for (location_index = 0; location_index < candidate_count; ++location_index)
-        inverse_weight_sum += (double)distance_sum /
-                              (double)candidate_distances[location_index];
-
-    /* FUN_0041e28e stores each normalized inverse-distance weight separately,
-       then compares the same random roll against each weight in candidate
-       order. It does not turn these weights into cumulative thresholds. */
-    for (location_index = 0; location_index < candidate_count; ++location_index) {
-        double raw_weight = (double)distance_sum /
-                            (double)candidate_distances[location_index];
-        candidate_weights[location_index] = (int32_t)(
-            (1000.0 / inverse_weight_sum) * raw_weight);
+    {
+        int pick = game_session_pick_inverse_distance(
+            session, candidate_distances, candidate_count);
+        return pick < 0 ? -1 : (int)candidate_indices[pick];
     }
-
-    roll = tone_rng_bounded(&session->random_state, 1000);
-    for (location_index = 0; location_index < candidate_count; ++location_index)
-        if (roll < candidate_weights[location_index])
-            return (int)candidate_indices[location_index];
-    return -1;
 }
 
 int refill_source(GameSession *session, const GameFloaterStart *floater,

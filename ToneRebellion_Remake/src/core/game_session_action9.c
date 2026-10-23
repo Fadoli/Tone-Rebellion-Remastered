@@ -60,13 +60,42 @@ static int action9_find_floater(const GameSession *session,
     return -1;
 }
 
-static int32_t action9_round_source_float(double value)
+/* FUN_0041e28e (assembly ev_17c3c46d): inverse-distance weighted pick.
+   weight_i = sum / d_i, scaled so the weights total 1000; threshold_i is the
+   running integer cumulative, each step truncated by __ftol (0x472c6c, chop
+   mode); the last threshold is forced to 1000 so a roll always selects a
+   candidate. One RNG draw of range 1000. Returns the picked candidate index
+   or -1 when there are no candidates. */
+int game_session_pick_inverse_distance(GameSession *session,
+                                       const int32_t *distances,
+                                       unsigned int count)
 {
-    int32_t whole = (int32_t)value;
-    double fraction = value - whole;
-    if (fraction > 0.5 || (fraction == 0.5 && (whole & 1) != 0)) ++whole;
-    else if (fraction < -0.5 || (fraction == -0.5 && (whole & 1) != 0)) --whole;
-    return whole;
+    double weights[10];
+    double total = 0.0;
+    int32_t thresholds[10];
+    int32_t distance_sum = 0;
+    int32_t cumulative = 0;
+    int32_t roll;
+    unsigned int i;
+
+    if (session == NULL || distances == NULL || count == 0U || count > 10U)
+        return -1;
+    for (i = 0; i < count; ++i) distance_sum += distances[i];
+    for (i = 0; i < count; ++i) {
+        weights[i] = (double)distance_sum / (double)distances[i];
+        total += weights[i];
+    }
+    for (i = 0; i < count; ++i) {
+        weights[i] = 1000.0 / total * weights[i];
+        cumulative = (int32_t)((double)cumulative + weights[i]);
+        thresholds[i] = cumulative;
+    }
+    thresholds[count - 1U] = 1000;
+    roll = tone_rng_bounded(&session->random_state, 1000);
+    for (i = 0; i < count; ++i) {
+        if (roll < thresholds[i]) return (int)i;
+    }
+    return -1;
 }
 
 static int action9_find_enemy_site(GameSession *session,
@@ -76,9 +105,6 @@ static int action9_find_enemy_site(GameSession *session,
     uint16_t candidate_indices[10];
     int32_t candidate_distances[10];
     unsigned int candidate_count = 0;
-    int32_t distance_sum = 0;
-    double inverse_weight_sum = 0.0;
-    int32_t roll;
     unsigned int island_index = floater->island_index;
     GameRuntimeIsland *island;
     unsigned int location_index;
@@ -94,10 +120,16 @@ static int action9_find_enemy_site(GameSession *session,
         if (location->source_value_14 != 4 ||
             location->record_value_10 >= 0x16 ||
             (location->source_flags & 0x90U) != 0) continue;
-        distance = game_session_source_chebyshev_distance(location->x, location->y,
-                                             target_x, target_y);
-        /* FUN_00420a55's inverse-distance weighting divides by distance. */
-        if (distance == 0 || distance >= 90) continue;
+        /* FUN_00420a55 case 4 filters by the Chebyshev distance from the
+           target cell (< 90, zero allowed) but collects and weights the
+           distance from the searching floater (FUN_00420635). */
+        if (game_session_source_chebyshev_distance(location->x, location->y,
+                                                   target_x, target_y) >= 90)
+            continue;
+        distance = game_session_source_chebyshev_distance(
+            floater->x, floater->y, location->x, location->y);
+        /* A zero weight distance divides by zero in FUN_0041e28e. */
+        if (distance == 0) continue;
         if (candidate_count < 10) {
             candidate_indices[candidate_count] = (uint16_t)location_index;
             candidate_distances[candidate_count] = distance;
@@ -117,27 +149,11 @@ static int action9_find_enemy_site(GameSession *session,
     }
     if (candidate_count == 0) return -1;
 
-    for (location_index = 0; location_index < candidate_count; ++location_index) {
-        distance_sum += candidate_distances[location_index];
-    }
-    for (location_index = 0; location_index < candidate_count; ++location_index) {
-        inverse_weight_sum += (double)distance_sum /
-                              (double)candidate_distances[location_index];
-    }
-    roll = tone_rng_bounded(&session->random_state, 1000);
     {
-        int32_t cumulative = 0;
-        for (location_index = 0; location_index < candidate_count; ++location_index) {
-            double raw_weight = (double)distance_sum /
-                                (double)candidate_distances[location_index];
-            /* FUN_0041e28e converts each positive bucket with __ftol; ties
-               follow the source's round-to-nearest-even FP mode. */
-            cumulative += action9_round_source_float(
-                (1000.0 / inverse_weight_sum) * raw_weight);
-            if (roll < cumulative) return (int)candidate_indices[location_index];
-        }
+        int pick = game_session_pick_inverse_distance(
+            session, candidate_distances, candidate_count);
+        return pick < 0 ? -1 : (int)candidate_indices[pick];
     }
-    return -1;
 }
 
 static int action9_find_category4_site(GameSession *session,
@@ -147,9 +163,6 @@ static int action9_find_category4_site(GameSession *session,
     uint16_t candidate_indices[10];
     int32_t candidate_distances[10];
     unsigned int candidate_count = 0;
-    int32_t distance_sum = 0;
-    double inverse_weight_sum = 0.0;
-    int32_t roll;
     GameRuntimeIsland *island;
     unsigned int index;
 
@@ -186,23 +199,11 @@ static int action9_find_category4_site(GameSession *session,
     }
     if (candidate_count == 0) return -1;
 
-    for (index = 0; index < candidate_count; ++index)
-        distance_sum += candidate_distances[index];
-    for (index = 0; index < candidate_count; ++index)
-        inverse_weight_sum += (double)distance_sum /
-                              (double)candidate_distances[index];
-    roll = tone_rng_bounded(&session->random_state, 1000);
     {
-        int32_t cumulative = 0;
-        for (index = 0; index < candidate_count; ++index) {
-            double weight = (double)distance_sum /
-                            (double)candidate_distances[index];
-            cumulative += action9_round_source_float(
-                (1000.0 / inverse_weight_sum) * weight);
-            if (roll < cumulative) return (int)candidate_indices[index];
-        }
+        int pick = game_session_pick_inverse_distance(
+            session, candidate_distances, candidate_count);
+        return pick < 0 ? -1 : (int)candidate_indices[pick];
     }
-    return -1;
 }
 
 static int action9_find_category4_subtype9_site(
@@ -211,9 +212,6 @@ static int action9_find_category4_subtype9_site(
     uint16_t candidate_indices[10];
     int32_t candidate_distances[10];
     unsigned int candidate_count = 0;
-    int32_t distance_sum = 0;
-    double inverse_weight_sum = 0.0;
-    int32_t roll;
     GameRuntimeIsland *island;
     unsigned int index;
 
@@ -250,23 +248,11 @@ static int action9_find_category4_subtype9_site(
     }
     if (candidate_count == 0) return -1;
 
-    for (index = 0; index < candidate_count; ++index)
-        distance_sum += candidate_distances[index];
-    for (index = 0; index < candidate_count; ++index)
-        inverse_weight_sum += (double)distance_sum /
-                              (double)candidate_distances[index];
-    roll = tone_rng_bounded(&session->random_state, 1000);
     {
-        int32_t cumulative = 0;
-        for (index = 0; index < candidate_count; ++index) {
-            double weight = (double)distance_sum /
-                            (double)candidate_distances[index];
-            cumulative += action9_round_source_float(
-                (1000.0 / inverse_weight_sum) * weight);
-            if (roll < cumulative) return (int)candidate_indices[index];
-        }
+        int pick = game_session_pick_inverse_distance(
+            session, candidate_distances, candidate_count);
+        return pick < 0 ? -1 : (int)candidate_indices[pick];
     }
-    return -1;
 }
 
 int game_session_assign_category4_subtype9_order(
@@ -751,11 +737,11 @@ void game_session_advance_defend_order(GameSession *session,
             cancel_defend_order(floater);
             return;
         }
-        /* Panic orders (target is a Leviathan unit) attack that unit itself. */
-        candidate_index = target->type_index == 4
-            ? floater->defend_target_floater
-            : action9_find_floater(
-                session, floater_index, target->x, target->y, 250);
+        /* FUN_004208eb scans the island's floaters (type 4 included) for the
+           first FUN_00420991 match within 250 of the protected floater; it
+           has no special case for a category-4 protected unit. */
+        candidate_index = action9_find_floater(
+            session, floater_index, target->x, target->y, 250);
         if (candidate_index < 0) {
             floater->order_progress = 0;
             return;
