@@ -198,3 +198,5 @@ Relu en entier et comparé à `game_session_animation.c`: minuteries `0x10/0x20/
 Correction (relecture `FUN_00450a71` cases 0xa..0x15): la cadence de recherche de cible est `(DAT_00618e44 - id_item) % 10 == 0` (`in_ECX[4]`), pas l'indice de site; le port utilisait l'indice de site et suit désormais l'identifiant d'objet. Non vérifié en jeu.
 
 Correction (pseudocode de `FUN_00411478` relu directement, `ev_2a41b7e7`): après l'écriture du pixel `(x, y)` et, si le second index n'est pas 4, du pixel `(x+1, y)`, le natif copie `(x+1, y)` vers `(x, y+1)`, puis `(x, y+1)` vers `(x-1, y)`, puis `(x-1, y)` vers `(x, y-1)`. Le rapport du sous-agent omettait la copie vers `(x-1, y)`; le port l'inclut maintenant.
+
+Vérification directe (`FUN_004106dd`, `ev_f8e0a7fb`): le paramètre 1 sélectionne `DAT_004b20f0 + niveau*0x100` (non nul) ou `DAT_004bc530 + niveau*0x100` (nul), niveau 0..7 (assertion `NUM_HAZE`). La rampe de placement passe `propriétaire != 4` et le drapeau `0x100` passe 1: le port utilise le même sélecteur 1 pour `0x100`, cohérent avec la table de brume d'île déjà chargée (`island_haze`).
