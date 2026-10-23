@@ -438,7 +438,8 @@ static int location_grab_button_rect(RECT *rect)
 {
     const WindowTemplate *panel;
     if (rect == NULL || g_menu.screen != SCREEN_ISLAND ||
-        !g_game_session_valid || g_island_panel_mode != WINDOW_ISLAND_PANEL_GENERAL ||
+        !g_game_session_valid ||
+        !island_panel_location_control_visible(g_island_panel_mode) ||
         !iw_construct_location_control_pane_visible(g_iw_construct_open))
         return 0;
     panel = window_catalog_find(&g_window_catalog, "IWLocControl", 3);

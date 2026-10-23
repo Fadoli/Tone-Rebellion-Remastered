@@ -9,16 +9,16 @@ int main(void)
 
     tone_rng_seed(&rng, 1);
     assert(tone_rng_next15(&rng) == 41);
-    assert(tone_rng_next15(&rng) == 18467);
-    assert(tone_rng_next15(&rng) == 6334);
+    assert(tone_rng_next15(&rng) == 172);
+    assert(tone_rng_next15(&rng) == 600);
 
     tone_rng_seed(&rng, 1);
     assert(tone_rng_bounded(&rng, 10) == 0);
-    assert(tone_rng_bounded(&rng, 10) == 5);
+    assert(tone_rng_bounded(&rng, 10) == 0);
 
     tone_rng_seed(&rng, 1);
     assert(tone_rng_bounded(&rng, 0) == 40);
-    assert(tone_rng_bounded(&rng, 32768) == 18467);
+    assert(tone_rng_bounded(&rng, 32768) == 172);
 
     return 0;
 }

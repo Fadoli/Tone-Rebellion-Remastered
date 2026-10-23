@@ -9,7 +9,7 @@
 
 /* Floater movement, order execution and selection queries. */
 uint16_t game_session_floater_approach_radius(
-    const GameFloaterStart *floater);
+    const GameSession *session, const GameFloaterStart *floater);
 
 int32_t game_session_source_chebyshev_distance(int32_t x1, int32_t y1,
                                          int32_t x2, int32_t y2)
@@ -359,7 +359,7 @@ int game_session_assign_category4_autonomous_order(
         floater->order_target_location = (int16_t)target_location;
         floater->order_target_floater = -1;
         floater->movement_state = 0x10;
-        floater->stop_radius = game_session_floater_approach_radius(floater);
+        floater->stop_radius = game_session_floater_approach_radius(session, floater);
         game_session_set_approach_point(floater, target->x, target->y);
     } else if (target_floater >= 0) {
         const GameFloaterStart *target = &session->floaters[target_floater];
@@ -367,7 +367,7 @@ int game_session_assign_category4_autonomous_order(
         floater->order_target_floater = (int16_t)target_floater;
         floater->order_target_location = -1;
         floater->movement_state = 0x0f;
-        floater->stop_radius = game_session_floater_approach_radius(floater);
+        floater->stop_radius = game_session_floater_approach_radius(session, floater);
         floater->source_runtime_flags |= 0x004U;
         game_session_set_approach_point(floater, target->x, target->y);
     } else {
@@ -452,11 +452,23 @@ void game_session_set_approach_point(GameFloaterStart *floater,
 }
 
 uint16_t game_session_floater_approach_radius(
-    const GameFloaterStart *floater)
+    const GameSession *session, const GameFloaterStart *floater)
 {
+    /* FUN_00420721: pad row +0 (attack range) for category 4 or a charged
+       nonzero subtype; with a linked source and the owner's glyph bit 0x04 a
+       positive range grows by 5/4 (16-bit truncation). Anything else, or a
+       zero range, falls back to the 10 used by FUN_0041e569 cases 0xe/0xf. */
     if (floater->type_index == 4U ||
         (floater->source_subtype != 0 && floater->charge_current > 0)) {
-        if (floater->attack_range > 0) return (uint16_t)floater->attack_range;
+        int32_t range = floater->attack_range;
+        if (session != NULL && range > 0 && floater->source_link_0c >= 0 &&
+            floater->owner_slot < GAME_START_PLAYER_COUNT &&
+            floater->charge_source_island < session->island_count &&
+            floater->charge_source_location <
+                session->islands[floater->charge_source_island].location_count &&
+            (session->economy[floater->owner_slot].glyph_mask & 0x0004U) != 0)
+            range = (int32_t)(int16_t)(range * 5) / 4;
+        if (range > 0) return (uint16_t)range;
     }
     return 10;
 }
@@ -517,7 +529,7 @@ void game_session_advance_action9(GameSession *session,
         floater->order_target_floater = (int16_t)target_index;
         floater->order_target_location = -1;
         floater->movement_state = 0x0f;
-        floater->stop_radius = game_session_floater_approach_radius(floater);
+        floater->stop_radius = game_session_floater_approach_radius(session, floater);
         floater->source_runtime_flags |= 0x004U;
         game_session_set_approach_point(floater, target->x, target->y);
         floater->has_move_order = 1;
@@ -532,7 +544,7 @@ void game_session_advance_action9(GameSession *session,
         floater->order_target_location = (int16_t)target_index;
         floater->order_target_floater = -1;
         floater->movement_state = 0x10;
-        floater->stop_radius = game_session_floater_approach_radius(floater);
+        floater->stop_radius = game_session_floater_approach_radius(session, floater);
         game_session_set_approach_point(floater, target->x, target->y);
         floater->has_move_order = 1;
         floater->order_progress = 3;
@@ -751,7 +763,7 @@ void game_session_advance_defend_order(GameSession *session,
         target = &session->floaters[candidate_index];
         floater->order_target_floater = (int16_t)candidate_index;
         floater->movement_state = 0x0f;
-        floater->stop_radius = game_session_floater_approach_radius(floater);
+        floater->stop_radius = game_session_floater_approach_radius(session, floater);
         floater->source_runtime_flags |= 0x004U;
         game_session_set_approach_point(floater, target->x, target->y);
         floater->has_move_order = 1;

@@ -1305,7 +1305,7 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
                 target->island_index == floater->island_index) {
                 game_session_set_approach_point(floater, target->x, target->y);
                 floater->stop_radius =
-                    game_session_floater_approach_radius(floater);
+                    game_session_floater_approach_radius(session, floater);
                 dx = (int32_t)floater->destination_x - floater->x;
                 dy = (int32_t)floater->destination_y - floater->y;
                 distance = dx < 0 ? -dx : dx;
@@ -1324,7 +1324,7 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
                     (uint16_t)floater->order_target_location];
             game_session_set_approach_point(floater, target->x, target->y);
             floater->stop_radius =
-                game_session_floater_approach_radius(floater);
+                game_session_floater_approach_radius(session, floater);
             dx = (int32_t)floater->destination_x - floater->x;
             dy = (int32_t)floater->destination_y - floater->y;
             distance = dx < 0 ? -dx : dx;

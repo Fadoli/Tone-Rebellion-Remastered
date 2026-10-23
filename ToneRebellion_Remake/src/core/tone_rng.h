@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-/* The original runtime keeps one 32-bit seed and exposes a 15-bit MSVC LCG. */
+/* The original keeps one seed word that is replaced by each 15-bit LCG output. */
 typedef uint32_t ToneRng;
 
 void tone_rng_seed(ToneRng *rng, uint32_t seed);

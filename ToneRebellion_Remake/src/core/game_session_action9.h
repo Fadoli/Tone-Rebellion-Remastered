@@ -6,7 +6,7 @@
 int32_t game_session_source_chebyshev_distance(int32_t x1, int32_t y1, int32_t x2, int32_t y2);
 void game_session_set_approach_point(GameFloaterStart *floater, int32_t target_x, int32_t target_y);
 uint16_t game_session_floater_approach_radius(
-    const GameFloaterStart *floater);
+    const GameSession *session, const GameFloaterStart *floater);
 void game_session_advance_action9(GameSession *session, unsigned int floater_index);
 void game_session_advance_merge_order(GameSession *session,
                                      unsigned int floater_index);

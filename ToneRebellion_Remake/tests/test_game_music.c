@@ -24,11 +24,11 @@ int main(void)
     assert(strcmp(tune, "levi") == 0);
 
     assert(game_music_enter_realm(&state, 4, 2, &rng, tune, sizeof(tune)));
-    assert(strcmp(tune, "ambi2") == 0); /* gate 41 is odd; next draw selects 8 */
-    assert(state.last_random_track == 8);
+    assert(strcmp(tune, "tribe2") == 0); /* gate 41 is odd; next draw 172 % 9 == 1 */
+    assert(state.last_random_track == 1);
     previous_random_track = state.last_random_track;
     assert(game_music_enter_realm(&state, 5, 2, &rng, tune, sizeof(tune)));
-    assert(tune[0] == '\0'); /* gate 6334 is even: consume flag, keep current tune */
+    assert(tune[0] == '\0'); /* gate 600 is even: consume flag, keep current tune */
     assert(state.last_random_track == previous_random_track);
     assert(!game_music_enter_realm(&state, 5, 2, &rng, tune, sizeof(tune)));
     assert(!game_music_enter_realm(&state, 15, 2, &rng, tune, sizeof(tune)));
