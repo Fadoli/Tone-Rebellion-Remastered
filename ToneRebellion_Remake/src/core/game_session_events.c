@@ -211,6 +211,109 @@ int game_session_toggle_staff_upgrade_request(GameSession *session,
     return 1;
 }
 
+int game_session_upgspread_available(const GameSession *session,
+                                     uint8_t player_slot, uint8_t island_index,
+                                     uint16_t location_index)
+{
+    const GameRuntimeLocation *location;
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count)
+        return 0;
+    location = &session->islands[island_index].locations[location_index];
+    return location->renderer_class == 0 && location->owner_id >= 0 &&
+        location->owner_id < GAME_START_PLAYER_COUNT &&
+        location->owner_id != (int32_t)player_slot &&
+        game_session_base_item_id(location) == 0x28 &&
+        (location->source_value_22 & (uint16_t)(1U << player_slot)) != 0 &&
+        (location->source_flags & (0x800U << player_slot)) == 0;
+}
+
+static int upgspread_entry_matches(const GameSession *session,
+                                   const GameRuntimeLocation *location,
+                                   uint8_t player_slot, uint8_t island_index,
+                                   uint16_t location_index)
+{
+    int16_t slot;
+    const GamePendingEvent *event;
+    if (location->spread_task_plus1[player_slot] == 0) return 0;
+    slot = (int16_t)(location->spread_task_plus1[player_slot] - 1U);
+    if (slot < 0 || slot >= GAME_SESSION_MAX_PENDING_EVENTS) return 0;
+    event = &session->pending_events[(uint8_t)slot];
+    return event->active != 0 && event->player_id == player_slot &&
+        event->action_type == 4 && event->payload_12 == 1 &&
+        event->payload_0a == (int16_t)island_index &&
+        event->payload_0e == (int16_t)location_index;
+}
+
+int game_session_upgspread_active(const GameSession *session,
+                                  uint8_t player_slot, uint8_t island_index,
+                                  uint16_t location_index)
+{
+    const GameRuntimeLocation *location;
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count)
+        return 0;
+    location = &session->islands[island_index].locations[location_index];
+    return upgspread_entry_matches(session, location, player_slot,
+                                   island_index, location_index);
+}
+
+int game_session_toggle_upgspread(GameSession *session, uint8_t player_slot,
+                                  uint8_t island_index, uint16_t location_index)
+{
+    GameRuntimeLocation *location;
+    GamePendingEvent expected;
+    int task_slot;
+    if (!game_session_upgspread_available(session, player_slot, island_index,
+                                          location_index)) return 0;
+    location = &session->islands[island_index].locations[location_index];
+    if (upgspread_entry_matches(session, location, player_slot, island_index,
+                                location_index)) {
+        /* FUN_00465793 cat 2 sub 0x14 cancels an existing entry. */
+        task_slot = (int)location->spread_task_plus1[player_slot] - 1;
+        expected = session->pending_events[(uint8_t)task_slot];
+        (void)game_session_dispatch_task_command(session, (uint8_t)task_slot,
+                                                 12, &expected);
+        location->spread_task_plus1[player_slot] = 0;
+        location->spread_count[player_slot] = 0;
+        return 1;
+    }
+    task_slot = game_session_pending_event_add(session, (int16_t)player_slot,
+        (int16_t)island_index, 4, 0, (int16_t)location_index, 1);
+    if (task_slot < 0) return 0;
+    location->spread_task_plus1[player_slot] = (uint16_t)(task_slot + 1);
+    location->spread_count[player_slot] = 0;
+    return 1;
+}
+
+int game_session_upgspread_task_target(const GameSession *session,
+                                       uint8_t player_slot, int16_t task_slot,
+                                       uint8_t *island_index,
+                                       uint16_t *location_index)
+{
+    const GamePendingEvent *event;
+    const GameRuntimeLocation *location;
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        task_slot < 0 || task_slot >= GAME_SESSION_MAX_PENDING_EVENTS)
+        return 0;
+    event = &session->pending_events[(uint8_t)task_slot];
+    if (event->active == 0 || event->action_type != 4 ||
+        event->payload_12 != 1 || event->player_id != player_slot ||
+        event->payload_0a < 0 || event->payload_0a >= session->island_count ||
+        event->payload_0e < 0 ||
+        (uint16_t)event->payload_0e >=
+            session->islands[event->payload_0a].location_count) return 0;
+    location = &session->islands[event->payload_0a].locations[
+        (uint16_t)event->payload_0e];
+    if (location->spread_task_plus1[player_slot] != (uint16_t)(task_slot + 1))
+        return 0;
+    if (island_index != NULL) *island_index = (uint8_t)event->payload_0a;
+    if (location_index != NULL) *location_index = (uint16_t)event->payload_0e;
+    return 1;
+}
+
 int game_session_complete_staff_upgrade(GameSession *session,
                                         const PadCatalog *catalog,
                                         uint8_t island_index,

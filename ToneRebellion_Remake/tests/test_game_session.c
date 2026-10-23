@@ -441,6 +441,7 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
 #include "game_session_sections/movement.inc"
 
 #include "game_session_sections/worker_tasks.inc"
+#include "game_session_sections/audio.inc"
 
 int main(void)
 {
@@ -452,6 +453,7 @@ int main(void)
     test_several_workers_share_one_construction_task_from_the_hall();
     test_busy_worker_moves_to_a_task_with_two_fewer_workers();
     test_worker_tasks_and_panic();
+    test_audio_effect_sounds();
     test_hall_resource_ledger_is_safe();
     test_hall_resource_modes_cycle_through_original_three_states();
     test_hall_stock_mode_creates_and_releases_linked_resource_tasks();

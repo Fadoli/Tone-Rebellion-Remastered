@@ -98,6 +98,10 @@ Bullets/impacts (`FUN_00450a71` = tick des items producteurs/défenses,
 (table atteff non lue), 13 effets BULLET tous avec SOUND; tir à `+0x42 == rec+4`
 (30 par défaut). Non porté: le remake ne modélise pas ces bullets d'item.
 
+### Règle de lecture des sons d'effet (REA, ev_debaf503…, ev_4bf3fa40…, ev_cacde6bd…, ev_c5d4a510…)
+
+Observation: `FUN_00416ff8` appelle `FUN_004181a6` à chaque tick d'instance; le son part seulement si le compteur `+0x12` vaut 0 (premier tick), si le SOUND de la définition est défini, si l'île de l'instance (`+0x08`) égale `DAT_0049f53c` et si `DAT_0062d172 == 3`. La règle est la même pour mort, naissance, construction, pont et crumble. `FUN_004204bc` ne joue rien directement: la mort crée l'instance (événement 1) quand les PV passent sous 1. `FUN_0045afb9` ignore un son si un son est déjà en cours, sauf `levdeath`/`fltdeath` qui redémarrent. Port: l'événement audio porte l'île (`game_session_queue_audio_event_at`), `game_session_audio_event_is_audible` applique la règle, le pont reste non filtré (île de `FUN_004669bd` non résolue), et la file est vidée à chaque frame. Non porté: la règle « ne pas couper un son en cours » (`PlaySound` n'expose pas l'état). Tests: `tests/game_session_sections/audio.inc`.
+
 ### `CRUMBLE` et appelants de `FUN_00416a9a` (REA, pas de port)
 
 Observation (ev_ed75141a…, ev_da0c5175…): `CRUMBLE` (événement 7) est lancé depuis le

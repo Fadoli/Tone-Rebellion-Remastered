@@ -172,7 +172,7 @@ static char g_newgame_text[8][256];
 static char g_empty_glyph_text[256];
 static char g_empty_inventory_text[256];
 static char g_empty_task_text[256];
-static char g_task_label_text[5][256];
+static char g_task_label_text[6][256];
 static char g_task_stock_text[256];
 static char g_task_building_const_text[256];
 static char g_task_priority_text[3][256];
@@ -239,6 +239,13 @@ static int g_swallow_left_button_up;
 static unsigned g_sim_speed = 1U;
 static int g_hovered_location_grab;
 static int g_hovered_defend_area;
+/* Ticks since the solo tribe lost its last floater (end sequence, FUN_00464e4d). */
+static unsigned g_defeat_ticks;
+static int g_hovered_upgspread;
+static SpriteSheet g_clip_art;
+static SpriteSheet g_bildicon_art;
+/* 1 = BC_TrnStkC, 2 = BC_TrnStkM under the pointer. */
+static int g_hovered_training_stock;
 /* BC_DefendArea armed: the next island click sets the building's area order
    (FUN_0043530b mode 19). */
 static int g_defend_area_armed;
@@ -275,6 +282,32 @@ static size_t g_iw_construct_item_count;
 static int g_iw_construct_open;
 static int g_resume_available;
 static unsigned char g_load_slot_valid[8];
+/* 1 = the slot is an original-game save (listed, not loadable). */
+static unsigned char g_load_slot_native[8];
+/* The Load/Save screen is shared: 1 = Save (state 5), 0 = Load (state 4). */
+static int g_load_save_mode;
+static int g_save_return_screen;
+/* 1 = the Load screen was opened from a game (the panel), so Esc returns there. */
+static int g_load_from_game;
+/* SlideWindow toggles and volumes (DAT_0049c9a8 / ac / a0 / a4). */
+static int g_music_enabled = 1;
+static int g_sound_enabled = 1;
+static int g_sound_volume = 100;
+static char g_music_resume_tune[16];
+static int g_music_resume_loop;
+static void apply_music_volume(void);
+static void load_audio_settings(void);
+/* 1 = music slider, 2 = effects slider while the left button is held. */
+static int g_slide_drag;
+/* FUN_00458371: the 0x80-byte header and ctime-style date of each valid slot. */
+static unsigned char g_load_slot_header[8][0x80];
+static char g_load_slot_date[8][32];
+static COLORREF g_load_save_palette[256];
+static SpriteSheet g_load_title_art;
+static SpriteSheet g_load_endgame_art;
+static SpriteSheet g_load_tone_art[3];
+static SpriteSheet g_load_floater_body[4];
+static SpriteSheet g_load_floater_legs[4];
 static int g_hovered_help = -1;
 static int g_hovered_newgame_text = -1;
 static int g_hovered_island = -1;
@@ -285,6 +318,91 @@ static HDC g_paint_buffer_dc;
 static HBITMAP g_paint_buffer_bitmap;
 static HGDIOBJ g_paint_buffer_original_bitmap;
 static HDC g_sprite_source_dc;
+
+/* FUN_004595cc: volume 0..100 -> attenuation in 1/100 dB,
+   ftol(1000 * log2(v / 100)) clamped to [-10000, 0]; 0 is silence. */
+static int volume_attenuation(int volume)
+{
+    int attenuation;
+    if (volume < 0 || volume > 100) return 0;
+    if (volume == 0) return -10000;
+    attenuation = (int)(1000.0 * log(volume / 100.0) / log(2.0));
+    if (attenuation < -10000) attenuation = -10000;
+    if (attenuation > 0) attenuation = 0;
+    return attenuation;
+}
+
+/* Amplitude gain for an attenuation in 1/100 dB (10 ^ (dB / 20)). */
+static double volume_gain(int volume)
+{
+    return volume <= 0 ? 0.0 : pow(10.0, volume_attenuation(volume) / 2000.0);
+}
+
+/* The SlideWindow sound toggle and effects slider act on every sound effect:
+   in-memory WAV effects are copied and their PCM samples scaled by the slider
+   attenuation (DirectSound-style volume, which PlaySound lacks). */
+static BOOL play_effect_sound(LPCSTR sound, HMODULE module, DWORD flags)
+{
+    static unsigned char *ring[8];
+    static size_t ring_capacity[8];
+    static unsigned int ring_next;
+    const unsigned char *wav = (const unsigned char *)sound;
+    size_t total;
+    size_t offset;
+    unsigned int slot;
+    unsigned int bits = 0;
+    double gain;
+    if (sound == NULL) return PlaySoundA(NULL, module, flags);
+    if (!g_sound_enabled || g_sound_volume <= 0) return TRUE;
+    if ((flags & SND_MEMORY) == 0 || g_sound_volume >= 100)
+        return PlaySoundA(sound, module, flags);
+    if (memcmp(wav, "RIFF", 4) != 0 || memcmp(wav + 8, "WAVE", 4) != 0)
+        return PlaySoundA(sound, module, flags);
+    total = 8U + (size_t)(wav[4] | (wav[5] << 8) | (wav[6] << 16) |
+                          ((unsigned)wav[7] << 24));
+    if (total < 44U || total > 64U * 1024U * 1024U)
+        return PlaySoundA(sound, module, flags);
+    slot = ring_next++ & 7U;
+    if (ring_capacity[slot] < total) {
+        unsigned char *grown = (unsigned char *)realloc(ring[slot], total);
+        if (grown == NULL) return PlaySoundA(sound, module, flags);
+        ring[slot] = grown;
+        ring_capacity[slot] = total;
+    }
+    memcpy(ring[slot], wav, total);
+    gain = volume_gain(g_sound_volume);
+    for (offset = 12; offset + 8U <= total;) {
+        size_t chunk = (size_t)(ring[slot][offset + 4] |
+            (ring[slot][offset + 5] << 8) | (ring[slot][offset + 6] << 16) |
+            ((unsigned)ring[slot][offset + 7] << 24));
+        if (memcmp(ring[slot] + offset, "fmt ", 4) == 0 && chunk >= 16U &&
+            offset + 8U + 16U <= total)
+            bits = (unsigned)(ring[slot][offset + 8 + 14] |
+                              (ring[slot][offset + 8 + 15] << 8));
+        if (memcmp(ring[slot] + offset, "data", 4) == 0) {
+            size_t start = offset + 8U;
+            size_t end = start + chunk;
+            size_t i;
+            if (end > total) end = total;
+            if (bits == 16U) {
+                for (i = start; i + 1U < end; i += 2U) {
+                    int sample = (short)(ring[slot][i] | (ring[slot][i + 1] << 8));
+                    sample = (int)(sample * gain);
+                    ring[slot][i] = (unsigned char)sample;
+                    ring[slot][i + 1] = (unsigned char)(sample >> 8);
+                }
+            } else if (bits == 8U) {
+                for (i = start; i < end; ++i)
+                    ring[slot][i] = (unsigned char)(128 +
+                        (int)(((int)ring[slot][i] - 128) * gain));
+            }
+            break;
+        }
+        offset += 8U + chunk + (chunk & 1U);
+    }
+    return PlaySoundA((LPCSTR)ring[slot], module, flags);
+}
+#define PlaySoundA(sound, module, flags) play_effect_sound((sound), (module), (flags))
 
 /* Ordered source fragments share private Win32 state in this one
    translation unit; the split is organizational and keeps internal linkage. */
@@ -307,6 +425,10 @@ static HDC g_sprite_source_dc;
 #include "menu_app_sections/world_map_render.inc"
 
 #include "menu_app_sections/island_interaction.inc"
+
+#include "menu_app_sections/save_game.inc"
+
+#include "menu_app_sections/slide_panel.inc"
 
 #include "menu_app_sections/hall_support_render.inc"
 

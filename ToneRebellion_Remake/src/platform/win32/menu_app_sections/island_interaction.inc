@@ -513,9 +513,12 @@ static int defend_area_button_visible(void)
 }
 
 /* Genre written by each building order control: BC_AttackFlt 6,
-   BC_AttackLoc 7, BC_DefendFlt 8, BC_DefendArea 9. */
-static const char *const k_building_order_buttons[4] = {
-    "BC_AttackFlt", "BC_AttackLoc", "BC_DefendFlt", "BC_DefendArea"
+   BC_AttackLoc 7, BC_DefendFlt 8, BC_DefendArea 9; BC_Recall (list index 15,
+   FUN_0045dcf4: genre 9 at the building's own packed tile) is reported as
+   10 and acts at once. */
+static const char *const k_building_order_buttons[5] = {
+    "BC_AttackFlt", "BC_AttackLoc", "BC_DefendFlt", "BC_DefendArea",
+    "BC_Recall"
 };
 
 /* Genre (6..9) of the building order button at (x, y), else 0. */
@@ -523,7 +526,7 @@ static int building_order_button_at(int x, int y)
 {
     unsigned int index;
     if (!defend_area_button_visible()) return 0;
-    for (index = 0; index < 4U; ++index) {
+    for (index = 0; index < 5U; ++index) {
         const WindowTemplate *control = window_catalog_find(
             &g_window_catalog, k_building_order_buttons[index], 3);
         if (control != NULL && x >= control->pane.left &&
@@ -531,6 +534,84 @@ static int building_order_button_at(int x, int y)
             y < control->pane.bottom) return (int)(6U + index);
     }
     return 0;
+}
+
+/* BC_TrnStkC / BC_TrnStkM (THBUTT, NSTATES 2): 1 = crystal, 2 = magic when the
+   control is offered for the selected site under the pointer at (x, y). */
+static int training_stock_control_at(int x, int y)
+{
+    static const char *const names[2] = {"BC_TrnStkC", "BC_TrnStkM"};
+    unsigned int index;
+    if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
+        g_menu.selected_tribe < 0 ||
+        g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
+        g_menu.selected_map_island < 0 || g_selected_location < 0) return 0;
+    for (index = 0; index < 2U; ++index) {
+        const WindowTemplate *control = window_catalog_find(
+            &g_window_catalog, names[index], 3);
+        if (control != NULL && x >= control->pane.left &&
+            x < control->pane.right && y >= control->pane.top &&
+            y < control->pane.bottom &&
+            game_session_training_stock_visible(&g_game_session,
+                (uint8_t)g_menu.selected_tribe,
+                (uint8_t)g_menu.selected_map_island,
+                (uint16_t)g_selected_location, (int)index)) return (int)index + 1;
+    }
+    return 0;
+}
+
+/* CLIPSEL1-3 / CLIPBD1-3 (island view clipboard strip). Returns 1..3 for a
+   group tab and 11..13 for a slot column under (x, y), else 0. */
+static int clipboard_control_at(int x, int y)
+{
+    static const char *const tabs[3] = {"CLIPSEL1", "CLIPSEL2", "CLIPSEL3"};
+    static const char *const slots[3] = {"CLIPBD1", "CLIPBD2", "CLIPBD3"};
+    unsigned int index;
+    if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND) return 0;
+    for (index = 0; index < 3U; ++index) {
+        const WindowTemplate *tab = window_catalog_find(&g_window_catalog, tabs[index], 3);
+        const WindowTemplate *slot = window_catalog_find(&g_window_catalog, slots[index], 3);
+        if (tab != NULL && x >= tab->pane.left && x < tab->pane.right &&
+            y >= tab->pane.top && y < tab->pane.bottom) return (int)index + 1;
+        if (slot != NULL && x >= slot->pane.left && x < slot->pane.right &&
+            y >= slot->pane.top && y < slot->pane.bottom) return (int)index + 11;
+    }
+    return 0;
+}
+
+static int ensure_clipboard_art(void)
+{
+    CobArchive archive = {0};
+    char error[128];
+    if (g_clip_art.frame_count != 0 && g_bildicon_art.frame_count != 0) return 1;
+    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE01.COB", &archive,
+                          error, sizeof(error))) return 0;
+    if (g_clip_art.frame_count == 0)
+        (void)load_sprite_sheet(&archive, "data\\clip0.shp", g_island_palette,
+                                &g_clip_art, error, sizeof(error));
+    if (g_bildicon_art.frame_count == 0)
+        (void)load_sprite_sheet(&archive, "data\\bildicon.shp", g_island_palette,
+                                &g_bildicon_art, error, sizeof(error));
+    cob_archive_close(&archive);
+    return g_clip_art.frame_count != 0 && g_bildicon_art.frame_count != 0;
+}
+
+/* BC_UpgSpread (UPGRADE shape, pane 246,400..270,425): FUN_0045302a offers it
+   on another tribe's base-0x28 block while FUN_00452bc5 holds. */
+static int upgspread_button_at(int x, int y)
+{
+    const WindowTemplate *control;
+    if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
+        g_menu.selected_tribe < 0 ||
+        g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
+        g_menu.selected_map_island < 0 || g_selected_location < 0 ||
+        !game_session_upgspread_available(&g_game_session,
+            (uint8_t)g_menu.selected_tribe, (uint8_t)g_menu.selected_map_island,
+            (uint16_t)g_selected_location)) return 0;
+    control = window_catalog_find(&g_window_catalog, "BC_UpgSpread", 3);
+    return control != NULL && x >= control->pane.left &&
+        x < control->pane.right && y >= control->pane.top &&
+        y < control->pane.bottom;
 }
 
 static int ensure_trainb_art(void)
@@ -551,6 +632,16 @@ static int update_location_grab_hover(int x, int y)
     int hovered = location_grab_button_at(x, y) || obtain_button_at(x, y);
     int defend_hovered = building_order_button_at(x, y);
     int changed = 0;
+    int training_hovered = training_stock_control_at(x, y);
+    int spread_hovered = upgspread_button_at(x, y);
+    if (spread_hovered != g_hovered_upgspread) {
+        g_hovered_upgspread = spread_hovered;
+        changed = 1;
+    }
+    if (training_hovered != g_hovered_training_stock) {
+        g_hovered_training_stock = training_hovered;
+        changed = 1;
+    }
     if (defend_hovered != g_hovered_defend_area) {
         g_hovered_defend_area = defend_hovered;
         changed = 1;

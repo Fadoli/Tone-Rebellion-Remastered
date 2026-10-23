@@ -59,6 +59,14 @@ typedef struct GameRuntimeLocation {
     /* Building order record (FUN_0045d8b2/FUN_0045dcf4 writers, read by
        FUN_0042219e): +0x2c genre (0 = none, 9 = defend area), +0x28 island,
        +0x30 packed coordinate (x/10 << 8 | y/10). Reset by FUN_004500c4. */
+    /* Building record words +0x58 / +0x5c (FUN_00465793 cat 3 sub 2 toggles;
+       FUN_004421f1 reads them for the TrnStkC / TrnStkM control state). */
+    /* UPGSPREAD entry per player (genre 1 of the order table, FUN_0045fe62):
+       task slot + 1 (0 = none) and the delivery counter (entry +8, done at 10). */
+    uint16_t spread_task_plus1[4];
+    uint8_t spread_count[4];
+    uint8_t training_stock_crystal;
+    uint8_t training_stock_magic;
     uint8_t building_order_genre;
     uint8_t building_order_island;
     uint16_t building_order_coordinate;

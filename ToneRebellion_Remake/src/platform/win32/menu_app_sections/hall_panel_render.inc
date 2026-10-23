@@ -147,8 +147,17 @@ static void draw_hall_panel(HDC dc, int hall_player)
                                 .location_count)
                         upgrade_site = &g_game_session.islands[event->payload_0a]
                             .locations[event->payload_0e];
+                    /* UPGSPREAD (FUN_004459e6): the same type-4 sub-type-1
+                       task on another tribe's block; icon 2, label
+                       UPGSPREAD, gauge entry counter over 10. */
+                    const int spread_row = upgrade_site != NULL &&
+                        event->player_id >= 0 &&
+                        event->player_id < GAME_START_PLAYER_COUNT &&
+                        upgrade_site->spread_task_plus1[event->player_id] ==
+                            (uint16_t)(task_slots[(size_t)offset +
+                                                  visible_index] + 1U);
                     if (upgrade_site != NULL) {
-                        row.label_key = "UPGRADE";
+                        row.label_key = spread_row ? "UPGSPREAD" : "UPGRADE";
                         row.task_icon_frame = 2;
                         row.secondary_task_icon_frame =
                             (int8_t)(upgrade_site->record_value_10 == 0x2f ? 6 : 5);
@@ -249,7 +258,12 @@ static void draw_hall_panel(HDC dc, int hall_player)
                                     position.resource_icon_x,
                                 task_list_panel->pane.top + position.y + 7);
                         }
-                        if (upgrade_site->resource_stock[0] < 20U)
+                        if (spread_row) {
+                            unsigned int spread_done =
+                                upgrade_site->spread_count[event->player_id];
+                            upgrade_fill = spread_done >= 10U
+                                ? 66U : (66U * spread_done) / 10U;
+                        } else if (upgrade_site->resource_stock[0] < 20U)
                             upgrade_fill = (66U *
                                 (unsigned int)upgrade_site->resource_stock[0]) /
                                 20U;

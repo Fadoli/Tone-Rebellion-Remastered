@@ -68,6 +68,21 @@ int game_session_set_building_defend_area(GameSession *session,
                                           uint8_t island_index,
                                           uint16_t location_index,
                                           uint16_t x, uint16_t y);
+/* BC_TrnStkC / BC_TrnStkM (list indices 5, 6; FUN_0045d5ba): offered for an
+   owned, built 0x2c..0x32 site, the magic control only for 0x2f/0x30.
+   The toggle flips the building's +0x58 (crystal) or +0x5c (magic) flag; no
+   reader other than the control's own state was found. */
+int game_session_training_stock_visible(const GameSession *session,
+                                        uint8_t player_slot,
+                                        uint8_t island_index,
+                                        uint16_t location_index, int magic);
+int game_session_toggle_training_stock(GameSession *session,
+                                       uint8_t player_slot,
+                                       uint8_t island_index,
+                                       uint16_t location_index, int magic);
+int game_session_training_stock_state(const GameSession *session,
+                                      uint8_t island_index,
+                                      uint16_t location_index, int magic);
 /* True when the building order buttons are offered for the site (FUN_0045d5ba rule R5:
    owner == player, built, base item 0x2c..0x2e). */
 int game_session_building_has_defend_area(const GameSession *session,

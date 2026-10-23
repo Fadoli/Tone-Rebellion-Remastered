@@ -281,6 +281,10 @@ static int assign_delivery_task_for_floater(GameSession *session,
             session->islands[event->payload_0a].location_count) {
         const GameRuntimeLocation *target = &session->islands[
             event->payload_0a].locations[(uint16_t)event->payload_0e];
+        if (event->payload_0a >= 0 && target->spread_task_plus1[event->player_id] ==
+                (uint16_t)(slot + 1U) &&
+            (unsigned int)target->spread_count[event->player_id] +
+                (uint16_t)event->assigned_floater_count >= 10U) return 0;
         if (target->upgrade_task_handle == (int16_t)slot &&
             (uint32_t)target->resource_stock[GAME_RESOURCE_BUILD_TONE] +
                 (uint16_t)event->assigned_floater_count >= 20U) return 0;
@@ -924,6 +928,34 @@ static void credit_floater_delivery(GameSession *session,
                                     GameFloaterStart *floater,
                                     int16_t resource_code)
 {
+    if (resource_code == 1 && floater->linked_task_slot >= 0 &&
+        floater->owner_slot < GAME_START_PLAYER_COUNT &&
+        floater->order_target_island < session->island_count &&
+        floater->order_target_location >= 0 &&
+        (uint16_t)floater->order_target_location <
+            session->islands[floater->order_target_island].location_count &&
+        session->islands[floater->order_target_island].locations[
+            (uint16_t)floater->order_target_location]
+            .spread_task_plus1[floater->owner_slot] ==
+            (uint16_t)(floater->linked_task_slot + 1)) {
+        /* FUN_004503bd: an item-1 delivery to a base-0x28 block with an
+           UPGSPREAD entry counts toward ten, then sets 0x800 << player. */
+        GameRuntimeLocation *block = &session->islands[
+            floater->order_target_island].locations[
+                (uint16_t)floater->order_target_location];
+        uint8_t owner = floater->owner_slot;
+        floater->carried_resource_code = 0;
+        if (++block->spread_count[owner] >= 10U) {
+            GamePendingEvent expected =
+                session->pending_events[(uint8_t)floater->linked_task_slot];
+            block->source_flags |= 0x800U << owner;
+            (void)game_session_dispatch_task_command(session,
+                (uint8_t)floater->linked_task_slot, 12, &expected);
+            block->spread_task_plus1[owner] = 0;
+            block->spread_count[owner] = 0;
+        }
+        return;
+    }
     if (floater_has_staff_upgrade_task(session, floater) &&
         resource_code == 1) {
         GameRuntimeLocation *target = &session->islands[

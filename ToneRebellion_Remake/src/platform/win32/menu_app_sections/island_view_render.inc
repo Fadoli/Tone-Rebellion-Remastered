@@ -1450,9 +1450,111 @@ static void draw_location_action_panel(HDC dc)
                 &g_building_command_art, g_hovered_location_grab);
         }
     }
+    if (g_hall_stock_art.frame_count >= 5 && g_selected_location >= 0 &&
+        g_menu.selected_tribe >= 0 && g_menu.selected_map_island >= 0) {
+        static const char *const names[2] = {"BC_TrnStkC", "BC_TrnStkM"};
+        unsigned int index;
+        for (index = 0; index < 2U; ++index) {
+            const WindowTemplate *control = window_catalog_find(
+                &g_window_catalog, names[index], 3);
+            uint32_t frame;
+            if (control == NULL || !game_session_training_stock_visible(
+                    &g_game_session, (uint8_t)g_menu.selected_tribe,
+                    (uint8_t)g_menu.selected_map_island,
+                    (uint16_t)g_selected_location, (int)index)) continue;
+            /* NSTATES 2: frame = SHAPEFRAME + state; the state is the
+               building's +0x58 / +0x5c flag (FUN_004421f1). */
+            frame = (uint32_t)control->shape_frame +
+                (uint32_t)game_session_training_stock_state(&g_game_session,
+                    (uint8_t)g_menu.selected_map_island,
+                    (uint16_t)g_selected_location, (int)index);
+            if (frame < g_hall_stock_art.frame_count)
+                draw_sprite(dc, &g_hall_stock_art, frame,
+                            control->pane.left, control->pane.top);
+            if (g_hovered_training_stock == (int)index + 1 &&
+                control->has_hilite_frame && control->hilite_frame >= 0 &&
+                (uint32_t)control->hilite_frame < g_hall_stock_art.frame_count)
+                draw_sprite(dc, &g_hall_stock_art,
+                            (uint32_t)control->hilite_frame,
+                            control->pane.left, control->pane.top);
+        }
+    }
+    if (g_game_session_valid && g_menu.selected_tribe >= 0 &&
+        g_menu.selected_tribe < GAME_START_PLAYER_COUNT &&
+        ensure_clipboard_art()) {
+        static const char *const tabs[3] = {"CLIPSEL1", "CLIPSEL2", "CLIPSEL3"};
+        static const char *const slots[3] = {"CLIPBD1", "CLIPBD2", "CLIPBD3"};
+        unsigned int index;
+        /* FUN_0042f755 -> FUN_00438120: each selection refresh remembers the
+           selected training building in the active group. */
+        if (g_selected_location >= 0 && g_menu.selected_map_island >= 0)
+            game_session_clip_remember(&g_game_session,
+                (uint8_t)g_menu.selected_tribe,
+                (uint8_t)g_menu.selected_map_island,
+                (uint16_t)g_selected_location);
+        for (index = 0; index < 3U; ++index) {
+            const WindowTemplate *tab = window_catalog_find(&g_window_catalog, tabs[index], 3);
+            const WindowTemplate *slot = window_catalog_find(&g_window_catalog, slots[index], 3);
+            uint8_t clip_island = 0;
+            uint16_t clip_location = 0;
+            unsigned int dots;
+            if (tab != NULL && tab->shape_frame >= 0) {
+                /* CLIP frames: 4 per group; +2 marks the active group. */
+                uint32_t frame = (uint32_t)tab->shape_frame +
+                    (g_game_session.clip_group == index ? 2U : 0U);
+                if (frame < g_clip_art.frame_count)
+                    draw_sprite(dc, &g_clip_art, frame, tab->pane.left, tab->pane.top);
+            }
+            if (slot == NULL) continue;
+            if (slot->shape_frame >= 0 &&
+                (uint32_t)slot->shape_frame < g_temp_hole_art.frame_count)
+                draw_sprite(dc, &g_temp_hole_art, (uint32_t)slot->shape_frame,
+                            slot->pane.left, slot->pane.top);
+            dots = game_session_clip_slot(&g_game_session,
+                (uint8_t)g_menu.selected_tribe, index, &clip_island, &clip_location);
+            if (dots != 0) {
+                /* FUN_004391ab: dots at step 5, five per row from (1,1), frame =
+                   the owner's tribe (clamped 0..3). */
+                uint32_t frame = (uint32_t)(g_menu.selected_tribe > 3
+                                            ? 3 : g_menu.selected_tribe);
+                unsigned int dot;
+                for (dot = 0; dot < dots && dot < 10U; ++dot) {
+                    if (frame < g_bildicon_art.frame_count)
+                        draw_sprite(dc, &g_bildicon_art, frame,
+                            slot->pane.left + 1 + (int)(dot % 5U) * 5,
+                            slot->pane.top + 1 + (int)(dot / 5U) * 5);
+                }
+            }
+        }
+    }
+    if (g_game_session_valid && g_menu.selected_tribe >= 0 &&
+        g_menu.selected_tribe < GAME_START_PLAYER_COUNT &&
+        g_menu.selected_map_island >= 0 && g_selected_location >= 0 &&
+        game_session_upgspread_available(&g_game_session,
+            (uint8_t)g_menu.selected_tribe, (uint8_t)g_menu.selected_map_island,
+            (uint16_t)g_selected_location) &&
+        g_upgrade_button_art.frame_count > 13) {
+        const WindowTemplate *control = window_catalog_find(
+            &g_window_catalog, "BC_UpgSpread", 3);
+        if (control != NULL) {
+            /* NSTATES 13: the active entry cycles the 13 frames
+               (FUN_00442a7b animation counter); HILITEFRAME 13 on hover. */
+            int active = game_session_upgspread_active(&g_game_session,
+                (uint8_t)g_menu.selected_tribe,
+                (uint8_t)g_menu.selected_map_island,
+                (uint16_t)g_selected_location);
+            uint32_t frame = (uint32_t)control->shape_frame +
+                (active ? (uint32_t)((GetTickCount() / 100U) % 13U) : 0U);
+            draw_sprite(dc, &g_upgrade_button_art, frame,
+                        control->pane.left, control->pane.top);
+            if (g_hovered_upgspread)
+                draw_sprite(dc, &g_upgrade_button_art, 13,
+                            control->pane.left, control->pane.top);
+        }
+    }
     if (defend_area_button_visible() && ensure_trainb_art()) {
         unsigned int index;
-        for (index = 0; index < 4U; ++index) {
+        for (index = 0; index < 5U; ++index) {
             const WindowTemplate *control = window_catalog_find(
                 &g_window_catalog, k_building_order_buttons[index], 3);
             int genre = (int)(6U + index);

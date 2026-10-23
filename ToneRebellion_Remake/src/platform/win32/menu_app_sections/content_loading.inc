@@ -289,6 +289,7 @@ static int load_menu_art(char *error, size_t error_capacity)
     COLORREF title_palette[256];
     COLORREF newgame_palette[256];
     COLORREF mainmap_palette[256];
+    COLORREF load_save_palette[256];
     const char *path = "C:\\Program Files\\Tone\\TONE01.COB";
     int success = 0;
     if (!cob_archive_open(path, &archive, error, error_capacity)) return 0;
@@ -298,8 +299,36 @@ static int load_menu_art(char *error, size_t error_capacity)
                       error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\titscrn.shp", title_palette,
                            &g_title_art, error, error_capacity) ||
-        !load_sprite_sheet(&archive, "data\\loadsav0.shp", title_palette,
+        !load_palette(&archive, "data\\game.pal", load_save_palette, NULL,
+                      error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\loadsav0.shp", load_save_palette,
                            &g_load_save_art, error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\lstitle.shp", load_save_palette,
+                           &g_load_title_art, error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\endgame.shp", load_save_palette,
+                           &g_load_endgame_art, error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\bildtone.shp", load_save_palette,
+                           &g_load_tone_art[0], error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\tonecrys.shp", load_save_palette,
+                           &g_load_tone_art[1], error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\magctone.shp", load_save_palette,
+                           &g_load_tone_art[2], error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\pbod.shp", load_save_palette,
+                           &g_load_floater_body[0], error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\sbod.shp", load_save_palette,
+                           &g_load_floater_body[1], error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\mbod.shp", load_save_palette,
+                           &g_load_floater_body[2], error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\lbod.shp", load_save_palette,
+                           &g_load_floater_body[3], error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\plegs.shp", load_save_palette,
+                           &g_load_floater_legs[0], error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\slegs.shp", load_save_palette,
+                           &g_load_floater_legs[1], error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\mlegs.shp", load_save_palette,
+                           &g_load_floater_legs[2], error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\llegs.shp", load_save_palette,
+                           &g_load_floater_legs[3], error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\newback.shp", newgame_palette,
                            &g_new_background, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\ngmeintr.shp", newgame_palette,
@@ -479,6 +508,7 @@ static int load_menu_art(char *error, size_t error_capacity)
         }
     }
     (void)load_logo_splash(&archive);
+    memcpy(g_load_save_palette, load_save_palette, sizeof(g_load_save_palette));
     memcpy(g_newgame_palette, newgame_palette, sizeof(g_newgame_palette));
     memcpy(g_map_palette, mainmap_palette, sizeof(g_map_palette));
     success = 1;
@@ -495,6 +525,18 @@ done:
         free_sprite_sheet(&g_map_background);
         free_sprite_sheet(&g_small_islands);
         free_sprite_sheet(&g_load_save_art);
+        free_sprite_sheet(&g_load_title_art);
+        free_sprite_sheet(&g_load_endgame_art);
+        free_sprite_sheet(&g_load_tone_art[0]);
+        free_sprite_sheet(&g_load_tone_art[1]);
+        free_sprite_sheet(&g_load_tone_art[2]);
+        {
+            int load_floater;
+            for (load_floater = 0; load_floater < 4; ++load_floater) {
+                free_sprite_sheet(&g_load_floater_body[load_floater]);
+                free_sprite_sheet(&g_load_floater_legs[load_floater]);
+            }
+        }
         bitmap_font_free(&g_bitmap_font);
         bitmap_font_free(&g_small_font);
         bitmap_font_free(&g_big_font);
@@ -570,6 +612,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     }
     g_resume_available = resume_header_is_valid();
     scan_load_slots();
+    load_audio_settings();
     g_menu.world_index = 0;
     g_menu.difficulty = 0;
     g_menu.selected_tribe = 0;
@@ -693,6 +736,18 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free_sprite_sheet(&g_leviathan_reveal_art);
     free_sprite_sheet(&g_island_names_art);
     free_sprite_sheet(&g_load_save_art);
+        free_sprite_sheet(&g_load_title_art);
+        free_sprite_sheet(&g_load_endgame_art);
+        free_sprite_sheet(&g_load_tone_art[0]);
+        free_sprite_sheet(&g_load_tone_art[1]);
+        free_sprite_sheet(&g_load_tone_art[2]);
+        {
+            int load_floater;
+            for (load_floater = 0; load_floater < 4; ++load_floater) {
+                free_sprite_sheet(&g_load_floater_body[load_floater]);
+                free_sprite_sheet(&g_load_floater_legs[load_floater]);
+            }
+        }
     free_sprite_sheet(&g_menu_help);
     free_sprite_sheet(&g_newgame_captions);
     free_sprite_sheet(&g_tribe_descriptions);

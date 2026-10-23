@@ -1087,8 +1087,9 @@ static int game_session_create_recruited_worker(GameSession *session,
     location->production_progress = 0;
     location->source_value_42 = 0;
     game_session_refresh_player_maintenance_budgets(session);
-    (void)game_session_queue_audio_event(
-        session, GAME_SESSION_AUDIO_FLOATER_BIRTH, player_slot);
+    (void)game_session_queue_audio_event_at(
+        session, GAME_SESSION_AUDIO_FLOATER_BIRTH, player_slot,
+        floater->island_index);
     return 1;
 }
 
@@ -1152,6 +1153,52 @@ int game_session_building_has_defend_area(const GameSession *session,
     return location->owner_id == (int32_t)player_slot &&
            location->source_location_slot_18 != -1 &&
            item >= 0x2c && item <= 0x2e;
+}
+
+int game_session_training_stock_visible(const GameSession *session,
+                                        uint8_t player_slot,
+                                        uint8_t island_index,
+                                        uint16_t location_index, int magic)
+{
+    const GameRuntimeLocation *location;
+    int32_t item;
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count)
+        return 0;
+    location = &session->islands[island_index].locations[location_index];
+    item = game_session_base_item_id(location);
+    return location->owner_id == (int32_t)player_slot &&
+           location->source_location_slot_18 != -1 &&
+           item >= 0x2c && item <= 0x32 &&
+           (!magic || item == 0x2f || item == 0x30);
+}
+
+int game_session_toggle_training_stock(GameSession *session,
+                                       uint8_t player_slot,
+                                       uint8_t island_index,
+                                       uint16_t location_index, int magic)
+{
+    GameRuntimeLocation *location;
+    if (!game_session_training_stock_visible(session, player_slot, island_index,
+                                             location_index, magic)) return 0;
+    location = &session->islands[island_index].locations[location_index];
+    if (magic) location->training_stock_magic = !location->training_stock_magic;
+    else location->training_stock_crystal = !location->training_stock_crystal;
+    return 1;
+}
+
+int game_session_training_stock_state(const GameSession *session,
+                                      uint8_t island_index,
+                                      uint16_t location_index, int magic)
+{
+    const GameRuntimeLocation *location;
+    if (session == NULL || island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count)
+        return 0;
+    location = &session->islands[island_index].locations[location_index];
+    return magic ? location->training_stock_magic != 0
+                 : location->training_stock_crystal != 0;
 }
 
 int game_session_set_building_order(GameSession *session, uint8_t player_slot,

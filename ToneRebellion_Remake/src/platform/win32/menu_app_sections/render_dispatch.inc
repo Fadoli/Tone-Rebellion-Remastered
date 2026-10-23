@@ -108,12 +108,131 @@ static void render_world_map(HDC dc)
     }
 }
 
+/* FUN_0045858a: LOADTMP frame 0 is the 640x480 template; the eight cells are
+   LOADSAVE frames 1..8 (300x99) at x 13 / 326 and y 36 + 111 row (slot =
+   row + 4 column). A valid slot shows its file date at (2,2) and the header
+   summary (SURPFLOW / POPSTR / WORKSTR) on the right. The ENDGAME level frame,
+   the resource icons and the preview draw are not ported (their layout and
+   palette are not established). */
 static void render_load_game(HDC dc)
 {
+    int slot;
     fill_rect(dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
-    /* windows.txt state 4 layers LOADSAVE frame 0 and frame 1 full-screen. */
     draw_sprite(dc, &g_load_save_art, 0, 0, 0);
-    draw_sprite(dc, &g_load_save_art, 1, 0, 0);
+    for (slot = 0; slot < 8; ++slot) {
+        int column = slot / 4;
+        int row = slot % 4;
+        int x = 13 + 313 * column;
+        int y = 36 + 111 * row;
+        char text[96];
+        draw_sprite(dc, &g_load_save_art, (uint32_t)(1 + slot), x, y);
+        if (!g_load_slot_valid[slot] || g_small_font.bytes == NULL) continue;
+        {
+            /* ENDGAME frame clamp(header +0x78, 0..4) at (-6,-6): the level
+               emblem (DAT_004bf11c), coloured with the active game.pal. */
+            uint32_t level = (uint32_t)(g_load_slot_header[slot][0x78] |
+                (g_load_slot_header[slot][0x79] << 8));
+            if (level > 4U) level = 4U;
+            if (g_load_endgame_art.frame_count > level)
+                draw_sprite(dc, &g_load_endgame_art, level, x - 6, y - 6);
+        }
+        if (g_load_slot_date[slot][0] != '\0')
+            draw_small_label(dc, g_load_slot_date[slot], x + 2, y + 2,
+                             g_load_save_palette[6]);
+        (void)snprintf(text, sizeof(text), "%s %d", g_hall_surplus_label,
+            (int)(g_load_slot_header[slot][0x68] |
+                  (g_load_slot_header[slot][0x69] << 8) |
+                  (g_load_slot_header[slot][0x6a] << 16) |
+                  ((unsigned)g_load_slot_header[slot][0x6b] << 24)));
+        draw_small_label(dc, text, x + 0x69, y + 0x0e, g_load_save_palette[6]);
+        (void)snprintf(text, sizeof(text), "%s %d", g_hall_population_label,
+            (int)(g_load_slot_header[slot][0x6c] |
+                  (g_load_slot_header[slot][0x6d] << 8)));
+        draw_small_label(dc, text, x + 0xe8, y + 0x28, g_load_save_palette[6]);
+        {
+            /* "%s %d (%d%%)": workers over population, truncated (the native
+               value is an FPU quotient converted by __ftol). */
+            int population = (int)(g_load_slot_header[slot][0x6c] |
+                                   (g_load_slot_header[slot][0x6d] << 8));
+            int workers = (int)(g_load_slot_header[slot][0x70] |
+                                (g_load_slot_header[slot][0x71] << 8));
+            int percentage = population > 0 ? workers * 100 / population : 0;
+            (void)snprintf(text, sizeof(text), "%s %d (%d%%)", g_hall_work_label,
+                           workers, percentage);
+            draw_small_label(dc, text, x + 0xe8, y + 0x32,
+                             g_load_save_palette[6]);
+        }
+        {
+            /* FUN_0040bf98 draws the saved site record (header +0x08) at
+               (210, 90) at scale 1.0: here the Hall's item id (header +0x18),
+               when that building's art is loaded (a game is running). */
+            uint32_t item = (uint32_t)(g_load_slot_header[slot][0x18] |
+                (g_load_slot_header[slot][0x19] << 8));
+            uint32_t owner = (uint32_t)(g_load_slot_header[slot][0x1c] |
+                (g_load_slot_header[slot][0x1d] << 8));
+            if (!g_load_slot_native[slot] && item > 0U &&
+                item < PAD_CATALOG_MAX_ITEMS &&
+                g_building_art[item].frame_count != 0U && owner < 4U)
+            {
+                /* The preview struct of FUN_0040d3e1 minus the placement ramp
+                   (flag 0x010), which only applies at scale 1.0, clipped to
+                   the cell like the native rectangle. */
+                GameRuntimeLocation preview;
+                int saved_clip = SaveDC(dc);
+                memset(&preview, 0, sizeof(preview));
+                preview.record_value_10 = (int32_t)item;
+                preview.owner_id = (int32_t)owner;
+                preview.source_flags = 0x400U;
+                preview.animation_rate = 1;
+                (void)IntersectClipRect(dc, x, y, x + 300, y + 99);
+                (void)draw_runtime_item_scaled(dc, &preview, x + 210, y + 90,
+                                               0x10000U);
+                (void)RestoreDC(dc, saved_clip);
+            }
+        }
+        {
+            /* FUN_0042704b draws the tribe's floater (record +0x14 = header
+               +0x1c) at (250, 17), or 14 for tribe 3, scale 1.0. Frame 0 of
+               body and legs is an approximation of its idle pose. */
+            uint32_t tribe = (uint32_t)(g_load_slot_header[slot][0x1c] |
+                (g_load_slot_header[slot][0x1d] << 8));
+            if (tribe < 4U && g_load_floater_body[tribe].frame_count > 0U) {
+                int sprite_y = y + (tribe == 3U ? 14 : 17);
+                if (g_load_floater_legs[tribe].frame_count > 0U)
+                    draw_sprite(dc, &g_load_floater_legs[tribe], 0, x + 250,
+                                sprite_y);
+                draw_sprite(dc, &g_load_floater_body[tribe], 0, x + 250,
+                            sprite_y);
+            }
+        }
+        {
+            /* Header +0x30/+0x32/+0x34 (record +0x28/+0x2a/+0x2c): bildtone
+               frame 24 at (141,40), tonecrys and magctone frame 4 at (141,70)
+               and (141,97), values at x 153 and y 34 / 63 / 90. */
+            static const int icon_frame[3] = {24, 4, 4};
+            static const int icon_y[3] = {40, 70, 97};
+            static const int text_y[3] = {34, 63, 90};
+            static const int field[3] = {0x30, 0x32, 0x34};
+            int tone;
+            for (tone = 0; tone < 3; ++tone) {
+                int value = (int)(short)(g_load_slot_header[slot][field[tone]] |
+                    (g_load_slot_header[slot][field[tone] + 1] << 8));
+                if (g_load_tone_art[tone].frame_count >
+                    (uint32_t)icon_frame[tone])
+                    draw_sprite(dc, &g_load_tone_art[tone],
+                                (uint32_t)icon_frame[tone], x + 141,
+                                y + icon_y[tone]);
+                (void)snprintf(text, sizeof(text), "%d", value);
+                draw_small_label(dc, text, x + 153, y + text_y[tone],
+                                 g_load_save_palette[6]);
+            }
+        }
+    }
+    /* LSTITLE at (317,0): frame clamp(tribe, 0..7), +4 in Load mode. */
+    if (g_load_title_art.frame_count > 7U) {
+        uint32_t tribe = g_menu.selected_tribe < 3 ? (uint32_t)g_menu.selected_tribe : 3U;
+        draw_sprite(dc, &g_load_title_art, (g_load_save_mode ? 0U : 4U) + tribe, 317, 0);
+    }
 }
 static void paint_window(HWND window)
 {
@@ -146,6 +265,8 @@ static void paint_window(HWND window)
         } else {
             render_load_game(back);
         }
+        if (g_menu.screen == SCREEN_WORLD_MAP || g_menu.screen == SCREEN_ISLAND)
+            render_slide_panel(back);
         (void)GdiFlush();
         if (logical_viewport(width, height, &viewport)) {
             /* Clearing the whole client before each StretchBlt exposed a black

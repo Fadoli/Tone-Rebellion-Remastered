@@ -49,6 +49,25 @@ int game_session_toggle_staff_upgrade_request(GameSession *session,
                                               uint8_t player_slot,
                                               uint8_t island_index,
                                               uint16_t location_index);
+/* UpgSpread (BC_UpgSpread, list index 20; FUN_00452bc5 gate, FUN_0045fe62
+   entry): offered on another tribe's base-0x28 block while the player has
+   neither finished nor refused it. The entry is a type-4 delivery task for
+   item 1 on that block; ten deliveries (FUN_004503bd) set site flag
+   0x800 << player and retire the entry. */
+int game_session_upgspread_available(const GameSession *session,
+                                     uint8_t player_slot, uint8_t island_index,
+                                     uint16_t location_index);
+int game_session_upgspread_active(const GameSession *session,
+                                  uint8_t player_slot, uint8_t island_index,
+                                  uint16_t location_index);
+int game_session_toggle_upgspread(GameSession *session, uint8_t player_slot,
+                                  uint8_t island_index, uint16_t location_index);
+/* Returns nonzero when the task slot is the player's UpgSpread entry on the
+   location and fills island/location. */
+int game_session_upgspread_task_target(const GameSession *session,
+                                       uint8_t player_slot, int16_t task_slot,
+                                       uint8_t *island_index,
+                                       uint16_t *location_index);
 int game_session_complete_staff_upgrade(GameSession *session,
                                         const PadCatalog *catalog,
                                         uint8_t island_index,
@@ -155,6 +174,13 @@ void game_session_tick_leviathan_ai(GameSession *session);
    birth event for the platform audio adapter. */
 int game_session_queue_audio_event(GameSession *session, uint8_t kind,
                                    int16_t owner_id);
+/* Same as above, tagged with the effect instance's island (+0x08). */
+int game_session_queue_audio_event_at(GameSession *session, uint8_t kind,
+                                      int16_t owner_id, uint8_t island);
+/* FUN_004181a6's play gate for an event popped from the queue. */
+int game_session_audio_event_is_audible(const GameSessionAudioEvent *event,
+                                        int island_screen,
+                                        int viewed_island);
 int game_session_pop_audio_event(GameSession *session,
                                  GameSessionAudioEvent *out);
 /* FUN_004655b2 queues world events; type 12 is emitted when a player reaches

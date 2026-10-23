@@ -44,10 +44,10 @@ static int load_newgame_captions(char *error, size_t error_capacity)
         goto done;
     }
     {
-        static const char *const task_keys[5] = {
-            "CONSTR", "REPAIR", "DARTIFACT", "OARTIFACT", "UPGRADE"
+        static const char *const task_keys[6] = {
+            "CONSTR", "REPAIR", "DARTIFACT", "OARTIFACT", "UPGRADE", "UPGSPREAD"
         };
-        for (i = 0; i < 5; ++i) {
+        for (i = 0; i < 6; ++i) {
             if (!extract_help_entry(bytes, member->length, task_keys[i],
                                     g_task_label_text[i],
                                     sizeof(g_task_label_text[i]))) {

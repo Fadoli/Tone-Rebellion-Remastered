@@ -218,6 +218,13 @@ typedef struct GameSession {
     uint8_t onoff_action_count;
     GameOnOffActionRequest onoff_actions[GAME_SESSION_MAX_ONOFF_ACTIONS];
     /* The IWLocInfo grab/place flow holds one owned building between clicks. */
+    /* DAT_005e16a8 / DAT_005e16b0: three clipboard groups of three slots
+       holding training-building records (FUN_00438120 fills the active group
+       when such a building is selected). */
+    uint8_t clip_group;
+    uint8_t clip_slot_used[9];
+    uint8_t clip_slot_island[9];
+    uint16_t clip_slot_location[9];
     uint8_t location_move_active;
     uint8_t location_move_player;
     uint8_t location_move_source_island;

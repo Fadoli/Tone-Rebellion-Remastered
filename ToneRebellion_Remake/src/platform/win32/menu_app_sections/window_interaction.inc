@@ -41,8 +41,10 @@ static void handle_click(HWND window, int x, int y)
             }
         } else if (control != NULL && strcmp(control->name, "RESUME") == 0 &&
                    g_resume_available) {
-            MessageBoxA(window, "La reprise d'une sauvegarde n'est pas encore prise en charge.",
-                        "Tone Rebellion remake", MB_OK | MB_ICONINFORMATION);
+            char path[MAX_PATH];
+            if (!resume_path(path, sizeof(path)) || !read_save_file(window, path))
+                MessageBoxA(window, "La partie sauvegardee n'a pas pu etre reprise.",
+                            "Tone Rebellion remake", MB_OK | MB_ICONERROR);
         }
     } else if (g_menu.screen == SCREEN_NEW_GAME && clicked_tribe >= 0) {
         /* NewGameWin's custom mouse handler resolves the animated tribe glyphs. */
@@ -86,8 +88,66 @@ static void handle_click(HWND window, int x, int y)
             InvalidateRect(window, NULL, FALSE);
             return;
         }
+        if (upgspread_button_at(x, y)) {
+            (void)game_session_toggle_upgspread(&g_game_session,
+                (uint8_t)g_menu.selected_tribe,
+                (uint8_t)g_menu.selected_map_island,
+                (uint16_t)g_selected_location);
+            InvalidateRect(window, NULL, FALSE);
+            return;
+        }
+        {
+            int clip_control = clipboard_control_at(x, y);
+            if (clip_control >= 1 && clip_control <= 3) {
+                /* CLIPSEL msg 7001..7003: active group, repaint. */
+                game_session_clip_set_group(&g_game_session,
+                                            (unsigned int)clip_control - 1U);
+                InvalidateRect(window, NULL, FALSE);
+                return;
+            }
+            if (clip_control >= 11 && clip_control <= 13 &&
+                g_menu.selected_tribe >= 0 &&
+                g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
+                uint8_t clip_island;
+                uint16_t clip_location;
+                /* Interpretation: select the remembered building (the traced
+                   message path only re-selects the current record). */
+                if (game_session_clip_slot(&g_game_session,
+                        (uint8_t)g_menu.selected_tribe,
+                        (unsigned int)clip_control - 11U, &clip_island,
+                        &clip_location) != 0 &&
+                    clip_island == (uint8_t)g_menu.selected_map_island) {
+                    g_selected_location = (int)clip_location;
+                }
+                InvalidateRect(window, NULL, FALSE);
+                return;
+            }
+        }
+        {
+            int training_control = training_stock_control_at(x, y);
+            if (training_control != 0) {
+                (void)game_session_toggle_training_stock(&g_game_session,
+                    (uint8_t)g_menu.selected_tribe,
+                    (uint8_t)g_menu.selected_map_island,
+                    (uint16_t)g_selected_location, training_control - 1);
+                InvalidateRect(window, NULL, FALSE);
+                return;
+            }
+        }
         {
             int order_genre = building_order_button_at(x, y);
+            if (order_genre == 10) {
+                /* FUN_0045dcf4: genre 9 at the building's own packed tile. */
+                const GameRuntimeLocation *own = &g_game_session.islands[
+                    g_menu.selected_map_island].locations[g_selected_location];
+                (void)game_session_set_building_order(&g_game_session,
+                    (uint8_t)g_menu.selected_tribe,
+                    (uint8_t)g_menu.selected_map_island,
+                    (uint16_t)g_selected_location, 9, own->x, own->y);
+                g_defend_area_armed = 0;
+                InvalidateRect(window, NULL, FALSE);
+                return;
+            }
             if (order_genre != 0) {
                 g_defend_area_armed =
                     g_defend_area_armed == order_genre ? 0 : order_genre;
@@ -705,20 +765,41 @@ static void handle_click(HWND window, int x, int y)
             }
         }
     } else if (g_menu.screen == SCREEN_LOAD_GAME) {
-        /* FUN_00458162 maps the two columns and four rows to slots 00..07.
-           An empty slot closes the load/save screen; a valid slot is kept
-           here with an explicit notice until savegame restoration is ported. */
+        /* FUN_00458162 (msg 6): y < 35 goes back; otherwise slot =
+           (y - 28) / 112 + 4 * (x / 320). Save mode (DAT_0062d172 != 4)
+           writes the slot, Load mode restores a valid one, then the screen
+           closes. */
         if (y >= 35) {
             int slot = (y - 28) / 112 + (x / 320) * 4;
-            if (slot >= 0 && slot < 8 && g_load_slot_valid[slot]) {
+            char path[MAX_PATH];
+            if (slot >= 0 && slot < 8 && g_load_save_mode) {
+                if (save_slot_path(slot, path, sizeof(path)) &&
+                    write_save_file(path)) {
+                    scan_load_slots();
+                    leave_load_screen();
+                } else {
+                    MessageBoxA(window, "La sauvegarde n'a pas pu etre ecrite.",
+                                "Tone Rebellion remake", MB_OK | MB_ICONERROR);
+                }
+            } else if (slot >= 0 && slot < 8 && g_load_slot_valid[slot] &&
+                       g_load_slot_native[slot]) {
                 MessageBoxA(window,
-                            "Cette sauvegarde est valide, mais son chargement n'est pas encore pris en charge.",
+                            "Cette sauvegarde provient du jeu d'origine: son format n'est pas pris en charge par le remake.",
                             "Tone Rebellion remake", MB_OK | MB_ICONINFORMATION);
+            } else if (slot >= 0 && slot < 8 && g_load_slot_valid[slot]) {
+                if (save_slot_path(slot, path, sizeof(path)) &&
+                    read_save_file(window, path)) {
+                    g_load_save_mode = 0;
+                    g_load_from_game = 0;
+                } else {
+                    MessageBoxA(window, "Cette sauvegarde n'a pas pu etre chargee.",
+                                "Tone Rebellion remake", MB_OK | MB_ICONERROR);
+                }
             } else {
-                g_menu.screen = SCREEN_MAIN_MENU;
+                leave_load_screen();
             }
         } else {
-            g_menu.screen = SCREEN_MAIN_MENU;
+            leave_load_screen();
         }
     }
     (void)update_hover_help(x, y);

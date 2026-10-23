@@ -15,9 +15,11 @@ static void record_floater_death(GameSession *session,
                                  int32_t killer_faction)
 {
     if (session == NULL || floater == NULL) return;
-    /* FUN_00416a9a selects levdeath for raw type 4, fltdeath otherwise. */
-    (void)game_session_queue_audio_event(session,
-        GAME_SESSION_AUDIO_FLOATER_DEATH, (int16_t)floater->type_index);
+    /* FUN_00416a9a selects levdeath for raw type 4, fltdeath otherwise, and
+       tags the instance with the floater's island. */
+    (void)game_session_queue_audio_event_at(session,
+        GAME_SESSION_AUDIO_FLOATER_DEATH, (int16_t)floater->type_index,
+        floater->island_index);
     if (floater->type_index < GAME_START_PLAYER_COUNT) {
         ++session->economy[floater->type_index].floater_losses;
     }

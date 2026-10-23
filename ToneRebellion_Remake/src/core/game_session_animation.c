@@ -201,8 +201,8 @@ static int tick_item5_spawn(GameSession *session,
     game_session_recalculate_leviathan_island(session, (uint8_t)island_index);
     /* The native case reaches FUN_00452859(item_id, 4), which emits the same
        build-world event as player placement after the replacement succeeds. */
-    (void)game_session_queue_audio_event(
-        session, GAME_SESSION_AUDIO_BUILD, 4);
+    (void)game_session_queue_audio_event_at(
+        session, GAME_SESSION_AUDIO_BUILD, 4, (uint8_t)island_index);
     return 1;
 }
 
@@ -272,8 +272,8 @@ static int tick_neutral_item5_replacement(GameSession *session,
     game_session_recalculate_leviathan_island(session, island_index);
     /* FUN_00450a71 cases 0/1 call FUN_00452859(5, 4), so neutral POOL
        replacement also emits the native Leviathan-build event. */
-    (void)game_session_queue_audio_event(
-        session, GAME_SESSION_AUDIO_BUILD, 4);
+    (void)game_session_queue_audio_event_at(
+        session, GAME_SESSION_AUDIO_BUILD, 4, (uint8_t)island_index);
     return 1;
 }
 
@@ -379,14 +379,46 @@ static int leviathan_spawn_subtype(GameSession *session,
         }
     }
 
-    /* The native selector emits subtype 9 when this site is not the least
-       represented marker family. Otherwise it chooses the pair associated
-       with the family's preferred source level; the remaining strategic
-       state and FUN_00467260 choice are only partly modeled. */
-    /* FUN_00450a71 selects subtype 9 once FUN_0046562b(4, -1) reports more
-       than 123 registered category-4 floaters. Creation itself has a separate
-       refusal threshold above 128 in FUN_00462a87. */
-    if (group != least_group || total_type4_count > 123U) return 9;
+    /* FUN_00450a71 (local_78): 1 = Spore (subtype 9), 2 = Leviathan pair.
+       A site that is not the least represented family always makes a Spore.
+       Otherwise the cached FUN_00460460 island counters decide; the tree
+       below follows the native branch order. Its c0 == 1 branch reads
+       DAT_0061fa10, which sits past the 0x1614-byte world object copied by
+       FUN_00460c83 and has no observed writer, so it is treated as 0. */
+    if (group != least_group) return 9;
+    {
+        int markers = island->leviathan_marker_count;          /* DAT_0061f9d4 */
+        int free_markers = island->leviathan_remaining_markers; /* DAT_0061f998 */
+        int units = island->leviathan_floater_count;           /* DAT_0061f9b6 */
+        int wait_timer = island->leviathan_wait_timer;         /* DAT_0061f920 */
+        int choice = 0;
+
+        /* FUN_00450a71 selects subtype 9 once FUN_0046562b(4, -1) reports
+           more than 123 registered category-4 floaters. Creation itself has
+           a separate refusal threshold above 128 in FUN_00462a87. */
+        if (free_markers == 0 || total_type4_count > 123U) {
+            choice = 1;
+        } else if (markers == 0 && units == 0) {
+            choice = 2;
+        } else if (units == 0) {
+            if (markers < free_markers) choice = 2;
+            else if (free_markers < markers) choice = 1;
+        } else if (free_markers * 2 <= units) {
+            if (units < free_markers * 4) {
+                if (markers < free_markers) choice = 2;
+                else if (free_markers < markers) choice = 1;
+            } else if (wait_timer != 0) {
+                choice = 1;
+            }
+        } else if (free_markers * 2 <= markers) {
+            if (free_markers * 2 < markers) choice = 1;
+        } else {
+            choice = 2;
+        }
+        if (choice == 0)
+            choice = 2 - (tone_rng_bounded(&session->random_state, 2) != 0);
+        if (choice == 1) return 9;
+    }
     if (source_level < 0) source_level = 0;
     if (source_level > 14) source_level = 14;
     if (odd_subtype_family_by_level[source_level] == (int8_t)group)
@@ -524,8 +556,8 @@ static int spawn_leviathan_floater(GameSession *session,
     /* FUN_00462a87 recalculates the source island immediately after creating
        a type-4 floater; this updates its remaining population budget/rates. */
     game_session_recalculate_leviathan_island(session, floater->island_index);
-    (void)game_session_queue_audio_event(
-        session, GAME_SESSION_AUDIO_FLOATER_BIRTH, 4);
+    (void)game_session_queue_audio_event_at(
+        session, GAME_SESSION_AUDIO_FLOATER_BIRTH, 4, floater->island_index);
     return (int)index;
 }
 

@@ -23,7 +23,18 @@ int game_session_queue_audio_event(GameSession *session, uint8_t kind,
     event->kind = kind;
     event->owner_id = owner_id;
     event->sound = 0;
+    event->island = UINT8_MAX;
     ++session->audio_event_count;
+    return 1;
+}
+
+int game_session_queue_audio_event_at(GameSession *session, uint8_t kind,
+                                      int16_t owner_id, uint8_t island)
+{
+    if (!game_session_queue_audio_event(session, kind, owner_id)) return 0;
+    session->audio_events[((unsigned int)session->audio_event_head +
+        session->audio_event_count - 1U) % GAME_SESSION_MAX_AUDIO_EVENTS]
+        .island = island;
     return 1;
 }
 
@@ -59,8 +70,25 @@ int game_session_queue_cast_audio(GameSession *session, uint8_t island,
     event->kind = GAME_SESSION_AUDIO_CAST;
     event->owner_id = island;
     event->sound = sound;
+    event->island = island;
     ++session->audio_event_count;
     return 1;
+}
+
+/* FUN_004181a6: every SOUND effect plays only on its first tick, when the
+   instance island (+0x08) equals the displayed island (DAT_0049f53c) and
+   DAT_0062d172 == 3 (the island screen). Bridge events carry no island here
+   (FUN_004669bd's instance island is unresolved) and stay ungated. */
+int game_session_audio_event_is_audible(const GameSessionAudioEvent *event,
+                                        int island_screen,
+                                        int viewed_island)
+{
+    if (event == NULL) return 0;
+    if (event->kind == GAME_SESSION_AUDIO_BRIDGE) return 1;
+    if (event->kind == GAME_SESSION_AUDIO_CAST)
+        return island_screen && event->owner_id == viewed_island;
+    return island_screen && event->island != UINT8_MAX &&
+        (int)event->island == viewed_island;
 }
 
 int game_session_pop_audio_event(GameSession *session,

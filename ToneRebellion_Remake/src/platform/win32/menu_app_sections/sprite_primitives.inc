@@ -140,7 +140,7 @@ static void update_window_title(HWND window)
     else if (g_menu.screen == SCREEN_WORLD_MAP) title = "Tone Rebellion - World Map (Esc: setup, Left/Right: size)";
     else if (g_menu.screen == SCREEN_ISLAND)
         title = "Tone Rebellion - Island (arrows: scroll, Esc: map)";
-    else if (g_menu.screen == SCREEN_LOAD_GAME) title = "Tone Rebellion - Load Game (Esc: back)";
+    else if (g_menu.screen == SCREEN_LOAD_GAME) title = g_load_save_mode ? "Tone Rebellion - Save Game (Esc: back)" : "Tone Rebellion - Load Game (Esc: back)";
     SetWindowTextA(window, title);
     if (g_menu.screen != SCREEN_ISLAND) {
         /* FUN_004489c0 requests ambi1 for the title. The remake keeps this
@@ -258,6 +258,13 @@ static void set_background_tune_mode(const char *tune_id, int loop)
     MCIERROR result;
 
     if (tune_id == NULL || strcmp(g_current_tune, tune_id) == 0) return;
+    if (!g_music_enabled) {
+        /* Music is switched off in the SlideWindow: remember the request. */
+        (void)strncpy(g_music_resume_tune, tune_id, sizeof(g_music_resume_tune) - 1);
+        g_music_resume_tune[sizeof(g_music_resume_tune) - 1] = '\0';
+        g_music_resume_loop = loop;
+        return;
+    }
     for (i = 0; i < sizeof(g_music_tunes) / sizeof(g_music_tunes[0]); ++i) {
         if (strcmp(g_music_tunes[i].id, tune_id) == 0) {
             file_name = g_music_tunes[i].file_name;
@@ -285,6 +292,10 @@ static void set_background_tune_mode(const char *tune_id, int loop)
     (void)strncpy(g_current_tune, tune_id, sizeof(g_current_tune) - 1);
     g_current_tune[sizeof(g_current_tune) - 1] = '\0';
     g_music_loops = loop;
+    (void)strncpy(g_music_resume_tune, tune_id, sizeof(g_music_resume_tune) - 1);
+    g_music_resume_tune[sizeof(g_music_resume_tune) - 1] = '\0';
+    g_music_resume_loop = loop;
+    apply_music_volume();
 }
 
 static void set_background_tune(const char *tune_id)

@@ -270,7 +270,7 @@ int game_session_place_building(GameSession *session,
     /* FUN_004528ca finishes through FUN_00466c8b, which recalculates all
        player budgets and then FUN_00460460's island Leviathan rates. */
     game_session_recalculate_leviathan_island(session, island_index);
-    (void)game_session_queue_audio_event(
-        session, GAME_SESSION_AUDIO_BUILD, player_slot);
+    (void)game_session_queue_audio_event_at(
+        session, GAME_SESSION_AUDIO_BUILD, player_slot, (uint8_t)island_index);
     return 1;
 }

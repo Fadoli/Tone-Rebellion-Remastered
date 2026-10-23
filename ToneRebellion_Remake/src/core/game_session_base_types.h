@@ -50,6 +50,9 @@ typedef struct GameSessionAudioEvent {
     uint8_t kind;
     int16_t owner_id;
     uint8_t sound;
+    /* FUN_00416a9a stores the floater's island (+0x0e) in the effect
+       instance; UINT8_MAX means the event is not island-gated. */
+    uint8_t island;
 } GameSessionAudioEvent;
 
 typedef enum GameSessionWorldEventKind {
