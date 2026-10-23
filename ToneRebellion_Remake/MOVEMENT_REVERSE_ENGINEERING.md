@@ -105,3 +105,7 @@ Evidence: `FUN_00422d27` `ev_dce3014d` et assembleur `ev_12c6e0e8`, `FUN_004672a
 - Voie des tours (`royaume = -1`): le royaume attaquant devient celui de la cible, donc aucun terme de royaume; le port appliquait un terme dérivé du sous-type.
 - Défense: sous-types 0 et 9 ont une défense nulle (le port ajoutait les niveaux pour le sous-type 0); un sous-type 9 prend le royaume de l'attaquant.
 Les globales `DAT_00618e4c/50` ont 3 références chacune hors de ce calcul (`0x438b9b/0x438e45`, `0x438bbb/0x438f9e`), non analysées. Non vérifié en jeu.
+
+### Puissance d'attaque: une seule fonction (`FUN_0041fde6`, `ev_6840e960`; chargeur `FUN_004633a7`, `ev_8709314a`)
+
+`FUN_004200d2` (attaque de floater) et `FUN_00420188` (attaque de site, `ev_18b2df90`) appellent la même `FUN_0041fde6`. Le chargeur écrit les six entiers de chaque ligne aux décalages `+0` (portée), `+2` (royaume), `+6` (PV), `+8` (points d'attaque max, comparés au compteur de charge dans `FUN_0041e569` cas 1), `+0xa` (force d'attaque), `+0xc` (vitesse). La base de `FUN_0041fde6` est donc la force d'attaque (`+0xa`), pas les points d'attaque max (`+8`). Le port utilisait `max_attack_points` pour les sites; corrigé: une seule fonction `floater_attack_power` avec la base `attack_strength` (catégorie 4 ou sous-type non nul chargé), +3 si la source liée a le drapeau `0x8000`, +1 pour les bits de glyphe `0x01/0x40/0x400` du joueur sur une source `0x2c/0x2d/0x2e`, puis niveau × 3 plus part de 1/22 (catégorie 4) ou niveau × 2. Le terme de glyphe était absent de la voie floater. Non vérifié en jeu.

@@ -114,43 +114,24 @@ void game_session_tick_floater_combat(GameSession *session,
 
 #include <stdint.h>
 
-static int32_t floater_attack_power(const GameFloaterStart *floater)
-{
-    int32_t power;
-    int32_t level = floater->attack_level_flags & 0x0fU;
-
-    /* FUN_004207c2 suppresses the row's base attack value except for class 4
-       and charged nonzero subtypes. FUN_0041fde6 then adds the source level
-       contribution. Site/research modifiers are not represented yet. */
-    if (floater->type_index == 4U ||
-        (floater->source_subtype != 0 && floater->charge_current > 0)) {
-        power = floater->attack_strength;
-    } else {
-        power = 0;
-    }
-    if (floater->type_index == 4U) {
-        power += level * 3;
-        power += (((floater->attack_level_flags >> 4) & 0x0fU) * power) / 22;
-    } else {
-        power += level * 2;
-    }
-    return power;
-}
-
-static int32_t floater_site_attack_power(const GameSession *session,
-                                         const GameFloaterStart *floater)
+/* FUN_0041fde6 (ev_6840e960) is the one power function behind both
+   FUN_004200d2 (floater attacks) and FUN_00420188 (site attacks): base pad row
+   +0x0a (attack_strength) only for category 4 or a charged nonzero subtype
+   (FUN_004207c2 == 0); +3 when the linked source has flag 0x8000; +1 for the
+   owner's glyph bit 0x01/0x40/0x400 matching a linked 0x2c/0x2d/0x2e source;
+   then level * 3 plus a 1/22 research share per level nibble for category 4,
+   or level * 2 for everything else. */
+static int32_t floater_attack_power(const GameSession *session,
+                                    const GameFloaterStart *floater)
 {
     int32_t power = 0;
     int32_t level = floater->attack_level_flags & 0x0fU;
 
-    /* FUN_0041fde6 uses max_attack_points as its base, unlike the separate
-       attack-strength formula used by FUN_00420217 for floater combat. Its
-       linked source grants +3 when runtime flag 0x8000 is set. */
     if (floater->type_index == 4U ||
         (floater->source_subtype != 0 && floater->charge_current > 0)) {
-        power = floater->max_attack_points;
+        power = floater->attack_strength;
     }
-    if (floater->source_link_0c >= 0 &&
+    if (session != NULL && floater->source_link_0c >= 0 &&
         floater->charge_source_island < session->island_count &&
         floater->charge_source_location <
             session->islands[floater->charge_source_island].location_count) {
@@ -158,10 +139,15 @@ static int32_t floater_site_attack_power(const GameSession *session,
             floater->charge_source_island].locations[
                 floater->charge_source_location];
         if (source->source_location_slot_18 == floater->source_link_0c &&
-            source->owner_id == (int32_t)floater->owner_slot &&
-            (source->source_flags & 0x8000U) != 0) {
-            /* FUN_0041fde6 adds three before applying level modifiers. */
-            power += 3;
+            source->owner_id == (int32_t)floater->owner_slot) {
+            int32_t source_item = game_session_base_item_id(source);
+            uint16_t glyph_mask = floater->owner_slot < GAME_START_PLAYER_COUNT
+                ? session->economy[floater->owner_slot].glyph_mask : 0U;
+            if ((source->source_flags & 0x8000U) != 0) power += 3;
+            if (((glyph_mask & 0x0001U) != 0 && source_item == 0x2c) ||
+                ((glyph_mask & 0x0040U) != 0 && source_item == 0x2d) ||
+                ((glyph_mask & 0x0400U) != 0 && source_item == 0x2e))
+                power += 1;
         }
     }
     if (floater->type_index == 4U) {
@@ -224,7 +210,7 @@ static int floater_attack_hits(GameSession *session,
     int32_t target_realm = target->attack_realm & 3;
     int32_t defense_power = (target->source_subtype == 0 ||
                              target->source_subtype == 9)
-        ? 0 : floater_attack_power(target);
+        ? 0 : floater_attack_power(session, target);
 
     if ((target->source_runtime_flags & 0x108U) != 0) return 0;
     /* FUN_00420217 treats a subtype-9 target as sharing the attacker realm. */
@@ -240,7 +226,7 @@ int32_t game_session_damage_floater(GameSession *session,
 {
     GameFloaterStart *attacker = &session->floaters[attacker_index];
     GameFloaterStart *target = &session->floaters[target_index];
-    int32_t power = floater_attack_power(attacker);
+    int32_t power = floater_attack_power(session, attacker);
     int32_t random_range = power - 1;
     int32_t damage;
 
@@ -286,7 +272,7 @@ int32_t game_session_damage_floater_from_power(GameSession *session,
        the realm term disappears and only attack + 7 - defense remains. */
     defense_power = (target->source_subtype == 0 ||
                      target->source_subtype == 9)
-        ? 0 : floater_attack_power(target);
+        ? 0 : floater_attack_power(session, target);
     chance = native_hit_chance(session->config.difficulty, attack_power, -1,
                                defense_power, target->attack_realm & 3);
     if (tone_rng_bounded(&session->random_state, 100) >= chance) return 0;
@@ -336,7 +322,7 @@ int32_t game_session_damage_site(GameSession *session,
                            GameRuntimeLocation *target)
 {
     GameFloaterStart *attacker = &session->floaters[attacker_index];
-    int32_t power = floater_site_attack_power(session, attacker);
+    int32_t power = floater_attack_power(session, attacker);
     int32_t damage_range = power > 0 ? power : 1;
     /* FUN_00467260 scales the shared 15-bit RNG by this range, truncates via
        __ftol, adds one, then caps the site damage at six. */
