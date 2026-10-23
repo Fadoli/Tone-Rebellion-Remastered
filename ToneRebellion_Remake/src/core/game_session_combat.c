@@ -173,31 +173,46 @@ static int32_t floater_site_attack_power(const GameSession *session,
     return power;
 }
 
-static int32_t difficulty_attack_modifier(int32_t power, uint8_t difficulty)
+/* FUN_00420217 (assembly 0x4202a7..0x4203f5, ev_d4bb6e22): the hit chance is
+   (int)(60 * score / 14) + 10 with __ftol (0x472c6c) truncating toward zero.
+   score = attack + 7 - defense; the difficulty term is a double:
+   difficulty 0: attack / 4 (floor 1), 1 and 2: attack / 2 (floor 2),
+   3 and 4: attack * 2 / 3 (floor 3). Realm 1 ahead of the target adds it, 1
+   behind subtracts it, any other mismatch adds a signed half of it
+   (DAT_00618e4c / DAT_00618e50 are zero at load: (0 / limit - 0.5) * term,
+   negated when the attacker realm is above 1). attack_realm -1 means "same as
+   the target", which removes the realm term. */
+static int32_t native_hit_chance(uint8_t difficulty, int32_t attack_power,
+                                 int32_t attack_realm, int32_t defense_power,
+                                 int32_t target_realm)
 {
-    int32_t modifier;
-    int32_t floor_value;
+    double term = (double)attack_power;
+    double floor_value;
+    double score = (double)(attack_power + 7 - defense_power);
 
-    if (difficulty == 0) {
-        modifier = power / 4;
-        floor_value = 1;
-    } else if (difficulty == 1) {
-        modifier = power / 2;
-        floor_value = 2;
+    if (difficulty > 4U) difficulty = 4U;
+    if (difficulty == 0U) {
+        term /= 4.0;
+        floor_value = 1.0;
+    } else if (difficulty <= 2U) {
+        term /= 2.0;
+        floor_value = 2.0;
     } else {
-        modifier = (power * 2) / 3;
-        floor_value = 3;
+        term = term * 2.0 / 3.0;
+        floor_value = 3.0;
     }
-    return modifier < floor_value ? floor_value : modifier;
-}
-
-static int32_t source_round_to_int(double value)
-{
-    int32_t whole = (int32_t)value;
-    double fraction = value - whole;
-    if (fraction > 0.5 || (fraction == 0.5 && (whole & 1) != 0)) ++whole;
-    else if (fraction < -0.5 || (fraction == -0.5 && (whole & 1) != 0)) --whole;
-    return whole;
+    if (floor_value > term) term = floor_value;
+    if (attack_realm == -1) attack_realm = target_realm;
+    if (((attack_realm + 1) & 3) == target_realm) {
+        score += term;
+    } else if (((attack_realm + 3) & 3) == target_realm) {
+        score -= term;
+    } else if (attack_realm != target_realm) {
+        double correction = (0.0 / 10000.0 - 0.5) * term;
+        if (attack_realm > 1) correction = -correction;
+        score += correction;
+    }
+    return (int32_t)((60.0 * score) / 14.0) + 10;
 }
 
 static int floater_attack_hits(GameSession *session,
@@ -205,26 +220,18 @@ static int floater_attack_hits(GameSession *session,
                                const GameFloaterStart *target,
                                int32_t attack_power)
 {
-    double score = (double)(attack_power + 7 - floater_attack_power(target));
-    int32_t modifier = difficulty_attack_modifier(attack_power,
-                                                   session->config.difficulty);
     int32_t attack_realm = attacker->attack_realm & 3;
     int32_t target_realm = target->attack_realm & 3;
-    int32_t chance;
+    int32_t defense_power = (target->source_subtype == 0 ||
+                             target->source_subtype == 9)
+        ? 0 : floater_attack_power(target);
 
     if ((target->source_runtime_flags & 0x108U) != 0) return 0;
-
-    if (((attack_realm + 1) & 3) == target_realm) {
-        score += modifier;
-    } else if (((attack_realm + 3) & 3) == target_realm) {
-        score -= modifier;
-    } else if (attack_realm != target_realm) {
-        /* FUN_00420217 uses one of two research-derived corrections. Both
-           globals are zero in the loaded image; classes 2..4 reverse its sign. */
-        score += (attacker->type_index > 1U ? 0.5 : -0.5) * attack_power;
-    }
-    chance = source_round_to_int((60.0 * score) / 14.0) + 10;
-    return tone_rng_bounded(&session->random_state, 100) < chance;
+    /* FUN_00420217 treats a subtype-9 target as sharing the attacker realm. */
+    if (target->source_subtype == 9) target_realm = attack_realm;
+    return tone_rng_bounded(&session->random_state, 100) <
+        native_hit_chance(session->config.difficulty, attack_power,
+                          attack_realm, defense_power, target_realm);
 }
 
 int32_t game_session_damage_floater(GameSession *session,
@@ -266,10 +273,6 @@ int32_t game_session_damage_floater_from_power(GameSession *session,
 {
     GameFloaterStart *target;
     int32_t defense_power;
-    int32_t modifier;
-    double score;
-    int32_t attack_realm;
-    int32_t target_realm;
     int32_t chance;
     int32_t random_range;
     int32_t damage;
@@ -279,25 +282,13 @@ int32_t game_session_damage_floater_from_power(GameSession *session,
     if (!game_session_floater_is_active(target) || attack_power < 0 ||
         (target->source_runtime_flags & 0x108U) != 0) return 0;
 
-    /* FUN_00420217 compares the incoming pad-row strength against the target's
-       FUN_0041fde6 power, adjusts hit chance by difficulty and realm, then
-       rolls three values for damage. */
+    /* FUN_00420217 with realm argument -1 (FUN_004533a8, the tower path):
+       the realm term disappears and only attack + 7 - defense remains. */
     defense_power = (target->source_subtype == 0 ||
                      target->source_subtype == 9)
         ? 0 : floater_attack_power(target);
-    modifier = difficulty_attack_modifier(attack_power,
-                                           session->config.difficulty);
-    score = (double)(attack_power + 7 - defense_power);
-    attack_realm = ((int32_t)target->source_subtype + 1) & 3;
-    target_realm = target->attack_realm & 3;
-    if (attack_realm == target_realm) {
-        score += modifier;
-    } else if (((int32_t)target->source_subtype + 3) % 4 == target_realm) {
-        score -= modifier;
-    } else if (((int32_t)target->source_subtype & 3) != target_realm) {
-        score += (target->type_index > 1U ? 0.5 : -0.5) * attack_power;
-    }
-    chance = source_round_to_int((60.0 * score) / 14.0) + 10;
+    chance = native_hit_chance(session->config.difficulty, attack_power, -1,
+                               defense_power, target->attack_realm & 3);
     if (tone_rng_bounded(&session->random_state, 100) >= chance) return 0;
 
     random_range = attack_power - 1;
