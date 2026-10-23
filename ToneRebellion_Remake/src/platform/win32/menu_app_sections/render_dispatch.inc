@@ -117,6 +117,7 @@ static void render_world_map(HDC dc)
 static void render_load_game(HDC dc)
 {
     int slot;
+    ensure_load_save_art();
     fill_rect(dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
     draw_sprite(dc, &g_load_save_art, 0, 0, 0);
     for (slot = 0; slot < 8; ++slot) {

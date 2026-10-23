@@ -20,17 +20,59 @@ static const RECT k_slide_rects[6] = {
     {271, 45, 339, 100}, {394, 3, 452, 51}, {401, 47, 447, 96}
 };
 
+/* FUN_0044964f formats slidwin%d.shp, loadsav%d.shp, isletmp%d.shp ... with
+   the active player (DAT_0049f538): each tribe has its own colouring of the
+   SlideWindow and Load/Save sheets. */
+static int ui_art_tribe(void)
+{
+    return g_menu.selected_tribe >= 0 && g_menu.selected_tribe < 4
+        ? g_menu.selected_tribe : 0;
+}
+
+static int g_slide_art_tribe = -1;
+static int g_load_save_art_tribe = -1;
+
 static int ensure_slide_art(void)
 {
     CobArchive archive = {0};
     char error[128];
-    if (g_slide_art.frame_count != 0) return 1;
+    char name[32];
+    int tribe = ui_art_tribe();
+    if (g_slide_art.frame_count != 0 && g_slide_art_tribe == tribe) return 1;
+    free_sprite_sheet(&g_slide_art);
+    memset(&g_slide_art, 0, sizeof(g_slide_art));
+    g_slide_art_tribe = -1;
     if (!cob_archive_open("C:\\Program Files\\Tone\\TONE01.COB", &archive,
                           error, sizeof(error))) return 0;
-    (void)load_sprite_sheet(&archive, "data\\slidwin0.shp", g_load_save_palette,
+    (void)snprintf(name, sizeof(name), "data\\slidwin%d.shp", tribe);
+    (void)load_sprite_sheet(&archive, name, g_load_save_palette,
                             &g_slide_art, error, sizeof(error));
     cob_archive_close(&archive);
+    if (g_slide_art.frame_count > 10U) g_slide_art_tribe = tribe;
     return g_slide_art.frame_count > 10U;
+}
+
+/* The Load/Save template of the active tribe (loadsav%d.shp). */
+static void ensure_load_save_art(void)
+{
+    CobArchive archive = {0};
+    char error[128];
+    char name[32];
+    SpriteSheet candidate = {0};
+    int tribe = ui_art_tribe();
+    if (g_load_save_art_tribe == tribe) return;
+    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE01.COB", &archive,
+                          error, sizeof(error))) return;
+    (void)snprintf(name, sizeof(name), "data\\loadsav%d.shp", tribe);
+    if (load_sprite_sheet(&archive, name, g_load_save_palette, &candidate,
+                          error, sizeof(error)) && candidate.frame_count >= 9U) {
+        free_sprite_sheet(&g_load_save_art);
+        g_load_save_art = candidate;
+        g_load_save_art_tribe = tribe;
+    } else {
+        free_sprite_sheet(&candidate);
+    }
+    cob_archive_close(&archive);
 }
 
 /* FUN_004578df message 0x32 (timer, 50 ms): the pane height eases out while
