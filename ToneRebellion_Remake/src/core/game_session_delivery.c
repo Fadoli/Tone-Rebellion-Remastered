@@ -373,10 +373,10 @@ static int construction_task_details(const GameSession *session,
     if (item == NULL || item->size < 0 ||
         item->size > target->construction_site_size ||
         item->building_tone_cost == -1) return 0;
-    /* FUN_004526de compares the pad's +0x0c maintenance cost with the
-       player's gross capacity, before upkeep is subtracted. */
+    /* FUN_004526de compares the pad's +0x0c maintenance cost with player
+       +0x40 (DAT_006191f8): capacity left after upkeep is subtracted. */
     if (item->maintenance_tone_cost >
-        session->economy[(uint8_t)event->player_id].source_maintenance_capacity)
+        session->economy[(uint8_t)event->player_id].source_maintenance_budget)
         return 0;
     if (target_out != NULL) *target_out = target;
     if (item_out != NULL) *item_out = item;

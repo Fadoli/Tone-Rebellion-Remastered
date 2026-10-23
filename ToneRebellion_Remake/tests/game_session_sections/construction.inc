@@ -376,6 +376,7 @@ static void test_construction_assignment_matches_source_candidate_guards(void)
     catalog.items[0x25].building_tone_cost = 2;
     catalog.items[0x25].maintenance_tone_cost = 1;
     session.economy[0].source_maintenance_capacity = 1;
+    session.economy[0].source_maintenance_budget = 1;
 
     floater = &session.floaters[0];
     floater->is_active = 1;
@@ -430,11 +431,13 @@ static void test_construction_assignment_matches_source_candidate_guards(void)
     assert(other_floater->active_order_action == 0);
     site->source_value_14 = -1;
     session.economy[0].source_maintenance_capacity = 0;
+    session.economy[0].source_maintenance_budget = 0;
     game_session_assign_local_resource_tasks(&session, &catalog);
     assert(other_floater->active_order_action == 0);
 
     /* The task cannot claim a pad larger than the marked construction site. */
     session.economy[0].source_maintenance_capacity = 1;
+    session.economy[0].source_maintenance_budget = 1;
     catalog.items[0x25].size = 1;
     game_session_assign_local_resource_tasks(&session, &catalog);
     assert(other_floater->active_order_action == 0);
@@ -460,6 +463,7 @@ static void test_several_workers_share_one_construction_task_from_the_hall(void)
     session.economy[0].hall_island_index = 0;
     session.economy[0].hall_location_index = 1;
     session.economy[0].source_maintenance_capacity = 10;
+    session.economy[0].source_maintenance_budget = 10;
     site = &session.islands[0].locations[0];
     site->renderer_class = 0;
     site->record_value_10 = 1;

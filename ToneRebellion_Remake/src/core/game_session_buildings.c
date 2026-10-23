@@ -183,10 +183,12 @@ int game_session_place_building(GameSession *session,
         set_error(error, error_capacity, "building is not allowed on this site");
         return 0;
     }
+    /* FUN_004526de compares the pad cost with player +0x40 (DAT_006191f8),
+       the capacity left after upkeep, not the gross +0x3c capacity. */
     if (item->maintenance_tone_cost >
-        session->economy[player_slot].source_maintenance_capacity) {
+        session->economy[player_slot].source_maintenance_budget) {
         set_error(error, error_capacity,
-                  "player maintenance capacity is too small for this building");
+                  "player maintenance budget is too small for this building");
         return 0;
     }
     if (base_item_id >= 0x2c && base_item_id <= 0x32) {
