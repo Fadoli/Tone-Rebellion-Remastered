@@ -56,3 +56,9 @@ Correctif (relecture indépendante des changements): la macro `draw_bitmap_label
 elle n'y remplace que les couleurs par défaut choisies à la main (`panel_text_color`), les autres (statuts, avertissements, marqueurs)
 sont conservées. `bigfont` est facultative (repli sur `smfont` pour `NOART`). Autres correctifs: garde de `player_slot` dans le panneau
 Diplomatie, bornes et cas `code == next_code` du décodeur GIF, indicateur de relâchement du clic de carte remis à zéro au clic suivant.
+
+## Correctif couleur: les emplacements de stylo sont des correspondances RGB (relecture des notes `functions/`)
+
+Observation (pseudocode en cache `functions/0011_batch_0007/details-05-01.md`, `functions/0012_batch_0008/details-01-01.md`, `functions/0008_batch_0004/details-02-01.md`; ev_fcb5b3b0…, ev_4b05090f…; pas de nouvelle lecture Ghidra, session REA fermée): `FUN_0042da69` appelle `FUN_0042bfa9` après chaque changement de palette. Celle-ci recalcule `DAT_0049e140[1..6]` = indice de palette le plus proche (`FUN_0041081b`: distance RGB 6 bits au carré, indices 0..254, premier minimum) des cibles stockées à `0x49e148`. Lues dans la section `.data` du fichier (valeurs initiales, non vérifiées à l'exécution): 1 = (63,63,63), 2 = (63,0,0), 3 = (0,63,0), 4 = (0,0,63), 5 = (63,63,0), 6 = (50,50,50). Gamma `_DAT_0049e13c` initial = 1.0.
+Interprétation: le texte par défaut (emplacement 6) est le gris le plus proche de (50,50,50), pas l'indice 6 littéral de `island*.pal` ((42,29,14), brun) — cause du texte rougeâtre. Emplacements 2 et 5 (lignes de tâches) = rouge et jaune les plus proches.
+Port: `native_text_color` (`sprite_primitives.inc`) remplace `palette[6]`/`[2]`/`[5]` pour le texte. Non vérifié: appelants de `end_game_screen.inc:144` (indice passé tel quel), écrivains éventuels de `0x49e148` à l'exécution.

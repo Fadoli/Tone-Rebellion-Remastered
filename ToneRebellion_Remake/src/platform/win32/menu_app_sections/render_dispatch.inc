@@ -32,7 +32,8 @@ static void render_world_map(HDC dc)
         int ramp;
         for (ramp = 0; ramp < 8; ++ramp) {
             int red = (5 + ramp * 7) * 255 / 63;
-            int green = (5 + ramp * 2) * 255 / 63;
+            /* FUN_00471b74 passes local_48 (5 + 7r) for both red and green. */
+            int green = (5 + ramp * 7) * 255 / 63;
             int blue = (45 + ramp * 2) * 255 / 63;
             int best_index = 0;
             unsigned best_distance = 0xffffffffu;
@@ -64,7 +65,13 @@ static void render_world_map(HDC dc)
             world_island_position(b, &bx, &by);
             int dx = bx - ax;
             int dy = by - ay;
-            int length = (int)sqrt((double)dx * dx + (double)dy * dy);
+            /* FUN_00471b74: D = sqrt(dx^2+dy^2); N = ftol(D / 7.0f) steps of
+               D/7 ... i.e. the centre advances 7 px per step, not 1. */
+            float distance = (float)sqrt((double)dx * dx + (double)dy * dy);
+            float step_length = distance / 7.0f;
+            int length = (int)step_length;
+            float step_x = length > 0 ? (float)dx / step_length : 0.0f;
+            float step_y = length > 0 ? (float)dy / step_length : 0.0f;
             int step;
             if (ax < 0 || ax >= LOGICAL_WIDTH || bx < 0 || bx >= LOGICAL_WIDTH ||
                 ay < 0 || ay >= LOGICAL_HEIGHT || by < 0 || by >= LOGICAL_HEIGHT ||
@@ -72,16 +79,17 @@ static void render_world_map(HDC dc)
                 continue;
             }
             for (step = 0; step < length; ++step) {
-                int center_x = ax + dx * step / length;
-                int center_y = ay + dy * step / length;
+                int center_x = (int)((float)ax + (float)step * step_x);
+                int center_y = (int)((float)ay + (float)step * step_y);
                 int width = step * 20 / length;
+                /* Colour index = trunc(rand15 * 8 / 32768) = rand15 >> 12. */
                 unsigned color = bridge_colors[
-                    world_map_visual_sample(g_menu.animation_ticks,
-                                            bridge_index, step, -1) % 8u];
+                    (world_map_visual_sample(g_menu.animation_ticks,
+                                             bridge_index, step, -1) & 0x7fffu) >> 12];
                 int spark;
                 for (spark = 0; spark < 10; ++spark) {
                     uint32_t random_value = world_map_visual_sample(
-                        g_menu.animation_ticks, bridge_index, step, spark);
+                        g_menu.animation_ticks, bridge_index, step, spark) & 0x7fffu;
                     int x_jitter = (width + 1) / 2 -
                         (int)(random_value % (unsigned)(width + 1));
                     int y_jitter = (width + 1) / 2 -
@@ -139,17 +147,17 @@ static void render_load_game(HDC dc)
         }
         if (g_load_slot_date[slot][0] != '\0')
             draw_small_label(dc, g_load_slot_date[slot], x + 2, y + 2,
-                             g_load_save_palette[6]);
+                             native_text_color(g_load_save_palette, 6));
         (void)snprintf(text, sizeof(text), "%s %d", g_hall_surplus_label,
             (int)(g_load_slot_header[slot][0x68] |
                   (g_load_slot_header[slot][0x69] << 8) |
                   (g_load_slot_header[slot][0x6a] << 16) |
                   ((unsigned)g_load_slot_header[slot][0x6b] << 24)));
-        draw_small_label(dc, text, x + 0x69, y + 0x0e, g_load_save_palette[6]);
+        draw_small_label(dc, text, x + 0x69, y + 0x0e, native_text_color(g_load_save_palette, 6));
         (void)snprintf(text, sizeof(text), "%s %d", g_hall_population_label,
             (int)(g_load_slot_header[slot][0x6c] |
                   (g_load_slot_header[slot][0x6d] << 8)));
-        draw_small_label(dc, text, x + 0xe8, y + 0x28, g_load_save_palette[6]);
+        draw_small_label(dc, text, x + 0xe8, y + 0x28, native_text_color(g_load_save_palette, 6));
         {
             /* "%s %d (%d%%)": workers over population, truncated (the native
                value is an FPU quotient converted by __ftol). */
@@ -161,7 +169,7 @@ static void render_load_game(HDC dc)
             (void)snprintf(text, sizeof(text), "%s %d (%d%%)", g_hall_work_label,
                            workers, percentage);
             draw_small_label(dc, text, x + 0xe8, y + 0x32,
-                             g_load_save_palette[6]);
+                             native_text_color(g_load_save_palette, 6));
         }
         {
             /* FUN_0040bf98 draws the saved site record (header +0x08) at
@@ -225,7 +233,7 @@ static void render_load_game(HDC dc)
                                 y + icon_y[tone]);
                 (void)snprintf(text, sizeof(text), "%d", value);
                 draw_small_label(dc, text, x + 153, y + text_y[tone],
-                                 g_load_save_palette[6]);
+                                 native_text_color(g_load_save_palette, 6));
             }
         }
     }

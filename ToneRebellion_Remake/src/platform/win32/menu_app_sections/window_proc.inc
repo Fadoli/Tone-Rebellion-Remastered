@@ -586,6 +586,51 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             }
             return 0;
         }
+        if (wparam == VK_F6 && g_menu.screen == SCREEN_ISLAND &&
+            g_game_session_valid && g_menu.selected_tribe >= 0 &&
+            g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
+            /* Port-only test aid: place a producer (0x25..0x27) on a free site
+               so the native IWMove control can be tried on a cheap building. */
+            unsigned int location_index;
+            const GameRuntimeIsland *island =
+                &g_game_session.islands[g_menu.selected_map_island];
+            int placed = 0;
+            {
+                /* Test aid: top up the Hall so the move cost can be paid. */
+                const GamePlayerEconomy *economy =
+                    &g_game_session.economy[g_menu.selected_tribe];
+                if (economy->hall_island_index < g_game_session.island_count &&
+                    economy->hall_location_index <
+                        g_game_session.islands[economy->hall_island_index]
+                            .location_count) {
+                    unsigned int resource;
+                    GameRuntimeLocation *hall = &g_game_session.islands[
+                        economy->hall_island_index].locations[
+                            economy->hall_location_index];
+                    for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource)
+                        hall->resource_stock[resource] = 100;
+                }
+            }
+            for (location_index = 0;
+                 !placed && location_index < island->location_count;
+                 ++location_index) {
+                unsigned int item;
+                for (item = 0x25; !placed && item <= 0x27; ++item) {
+                    IslandLocation site = {0};
+                    site.kind = ISLAND_LOCATION_PAD;
+                    site.renderer_subtype =
+                        island->locations[location_index].construction_site_size;
+                    placed = game_session_place_building(&g_game_session,
+                        &g_pad_catalog, (uint8_t)g_menu.selected_tribe,
+                        (uint8_t)g_menu.selected_map_island,
+                        (uint16_t)location_index, &site, (uint16_t)item,
+                        NULL, 0);
+                    if (placed) g_selected_location = (int)location_index;
+                }
+            }
+            InvalidateRect(window, NULL, FALSE);
+            return 0;
+        }
         if (wparam == VK_F8 && g_menu.screen == SCREEN_ISLAND &&
             g_game_session_valid && g_menu.selected_tribe >= 0 &&
             g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
@@ -629,6 +674,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         }
         if (wparam == VK_ESCAPE && g_defend_area_armed) {
             g_defend_area_armed = 0;
+            update_interaction_cursor();
             InvalidateRect(window, NULL, FALSE);
             return 0;
         }

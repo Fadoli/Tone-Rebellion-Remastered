@@ -88,7 +88,7 @@ static void draw_hall_info_panel(HDC dc, int panel_state)
     draw_wrapped_small_label(dc, text, panel->pane.left + 6,
                              panel->pane.top + 6 + line_height,
                              pane_width - 8, max_lines, line_height,
-                             g_island_palette[6]);
+                             native_text_color(g_island_palette, 6));
 }
 
 static void draw_diplomacy_initial_worker_icon(HDC dc,
@@ -235,7 +235,7 @@ static void draw_diplomacy_panel(HDC dc, const WindowTemplate *panel,
         int x = panel->pane.left + pane_width / 2 + 15;
         /* Drawn with SMFONT in palette index 6 (FUN_0043e5aa, ev_8f64bfc2). */
         draw_small_label(dc, caption, x, panel->pane.top + 7,
-                         g_island_palette[6]);
+                         native_text_color(g_island_palette, 6));
     }
 }
 

@@ -88,10 +88,21 @@ static void rebuild_island_palette_lookup(void)
 static void update_interaction_cursor(void)
 {
     int slot = 0;
-    if (g_menu.screen == SCREEN_ISLAND &&
-        game_glyph_inventory_cursor_slot(g_selected_glyph,
-                                         g_selected_inventory_item) == 0x0b) {
-        slot = 0x0b;
+    if (g_menu.screen == SCREEN_ISLAND) {
+        /* FUN_0043530b mode -> slot: grab (mode 1) 9; armed item/glyph (mode
+           0x11) 11; building order targets 0x10 -> 3, 0x11 -> 13, 0x12 -> 5,
+           0x13 -> 15. Order genre 6..9 -> mode 0x10..0x13 is interpreted from
+           the "mode 19 = BC_DefendArea" note and the msg 0x40 modes 16..19. */
+        static const int k_order_slots[4] = {3, 13, 5, 15};
+        if (game_glyph_inventory_cursor_slot(g_selected_glyph,
+                                             g_selected_inventory_item) == 0x0b) {
+            slot = 0x0b;
+        } else if (g_defend_area_armed >= 6 && g_defend_area_armed <= 9) {
+            slot = k_order_slots[g_defend_area_armed - 6];
+        } else if (g_game_session_valid &&
+                   g_game_session.location_move_active) {
+            slot = 9;
+        }
     }
     if (g_interaction_cursors[slot] != NULL) {
         SetCursor(g_interaction_cursors[slot]);
@@ -332,6 +343,33 @@ static int load_palette(CobArchive *archive, const char *member_name,
     }
     if (palette_rgb6 != NULL) memcpy(palette_rgb6, bytes, sizeof(bytes));
     return 1;
+}
+
+/* Native text pen slots 1..6 (DAT_0049e140, FUN_0042bfa9): after every palette
+   change the slot holds the palette index nearest (squared RGB distance over
+   6-bit values, indices 0..254, first minimum wins; FUN_0041081b) to the fixed
+   targets at 0x49e148: white, red, green, blue, yellow, grey (50,50,50). */
+static COLORREF native_text_color(const COLORREF palette[256], int slot)
+{
+    static const unsigned char target[7][3] = {
+        {0, 0, 0}, {63, 63, 63}, {63, 0, 0}, {0, 63, 0},
+        {0, 0, 63}, {63, 63, 0}, {50, 50, 50}};
+    int i;
+    int best = 0;
+    int best_distance = 0;
+    if (slot < 1 || slot > 6) return palette[slot & 0xff];
+    for (i = 0; i < 255; ++i) {
+        int r = (int)(GetRValue(palette[i]) * 63u / 255u) - target[slot][0];
+        int g = (int)(GetGValue(palette[i]) * 63u / 255u) - target[slot][1];
+        int b = (int)(GetBValue(palette[i]) * 63u / 255u) - target[slot][2];
+        int distance = r * r + g * g + b * b;
+        if (i == 0 || distance < best_distance) {
+            best = i;
+            best_distance = distance;
+        }
+        if (distance == 0) break;
+    }
+    return palette[best];
 }
 
 static int load_sprite_sheet(CobArchive *archive, const char *member_name,

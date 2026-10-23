@@ -116,7 +116,7 @@ static void draw_iw_construct(HDC dc)
             draw_wrapped_small_label(dc, g_building_descriptions[item_id],
                 info_window->pane.left + 6,
                 info_window->pane.top + 0x58 + line_height,
-                text_width, max_lines, line_height, g_island_palette[6]);
+                text_width, max_lines, line_height, native_text_color(g_island_palette, 6));
         }
     }
 }

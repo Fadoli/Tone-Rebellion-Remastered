@@ -145,12 +145,14 @@ static void handle_click(HWND window, int x, int y)
                     (uint8_t)g_menu.selected_map_island,
                     (uint16_t)g_selected_location, 9, own->x, own->y);
                 g_defend_area_armed = 0;
+                update_interaction_cursor();
                 InvalidateRect(window, NULL, FALSE);
                 return;
             }
             if (order_genre != 0) {
                 g_defend_area_armed =
                     g_defend_area_armed == order_genre ? 0 : order_genre;
+                update_interaction_cursor();
                 InvalidateRect(window, NULL, FALSE);
                 return;
             }
@@ -178,21 +180,7 @@ static void handle_click(HWND window, int x, int y)
                     (unsigned int)g_defend_area_armed,
                     (unsigned int)target, target_y)) {
                 g_defend_area_armed = 0;
-            }
-            InvalidateRect(window, NULL, FALSE);
-            return;
-        }
-        if (location_grab_button_at(x, y) &&
-            (g_game_session.location_move_active ||
-             selected_location_can_be_grabbed())) {
-            if (g_game_session.location_move_active) {
-                (void)game_session_cancel_location_move(&g_game_session,
-                                                        &g_pad_catalog);
-            } else if (selected_location_can_be_grabbed()) {
-                (void)game_session_begin_location_move(&g_game_session,
-                    &g_pad_catalog, (uint8_t)g_menu.selected_tribe,
-                    (uint8_t)g_menu.selected_map_island,
-                    (uint16_t)g_selected_location);
+                update_interaction_cursor();
             }
             InvalidateRect(window, NULL, FALSE);
             return;
@@ -417,8 +405,21 @@ static void handle_click(HWND window, int x, int y)
                                                    action_names, 2);
                 if (action_control != NULL &&
                     strcmp(action_control->name, action_name) == 0) {
-                    /* The source action handler is not resolved. Consume this
-                       control hit so it cannot fall through to location deselect. */
+                    /* The native IWMove / IWHallMove control starts (or, while a
+                       building is held, cancels) the grab/place flow; the
+                       packet behind it is not resolved, so the port uses its
+                       own move model. The hit never falls through to the
+                       location deselect. */
+                    if (g_game_session.location_move_active) {
+                        (void)game_session_cancel_location_move(&g_game_session,
+                                                                &g_pad_catalog);
+                    } else if (selected_location_can_be_grabbed()) {
+                        (void)game_session_begin_location_move(&g_game_session,
+                            &g_pad_catalog, (uint8_t)g_menu.selected_tribe,
+                            (uint8_t)g_menu.selected_map_island,
+                            (uint16_t)g_selected_location);
+                    }
+                    InvalidateRect(window, NULL, FALSE);
                     return;
                 }
             }

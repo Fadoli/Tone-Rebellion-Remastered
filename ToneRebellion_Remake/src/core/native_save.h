@@ -24,6 +24,8 @@ typedef struct NativeSave {
     uint32_t value_8c;    /* DAT_0049f53c: 0..14 across samples, not a difficulty */
     uint16_t island_count;
     uint16_t site_count[NATIVE_SAVE_MAX_ISLANDS];
+    size_t stream2_offset;  /* 15 world scalars, then the world tables */
+    size_t island_offset[NATIVE_SAVE_MAX_ISLANDS]; /* island scalars */
     size_t site_offset[NATIVE_SAVE_MAX_ISLANDS]; /* first 0x60-byte record */
     size_t player_offset;  /* 4 x 0x14a0 records */
     size_t global_offset;  /* 0x1614-byte block */

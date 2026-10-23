@@ -25,5 +25,10 @@ slots 0..16 map to resource IDs `84, 75, 76, 77, 78, 79, 7a, 7b, 7c, 7d,
 uses slot 11 while an inventory item or glyph is armed, and returns to source
 slot 0 immediately after the target click or a screen change. `WM_SETCURSOR`
 also reapplies the state so Windows cannot leave a stale custom cursor visible.
-The other source modes (slots 3, 5, 9, 13, 15 and data-driven 0x15..0x1c) are
-not yet raised by remake actions, so they remain available but inactive.
+Also raised now (island screen, `update_interaction_cursor`): slot 9 while a
+location grab/move is active (message 0x48 sets mode 1, Evidence in
+`functions/0012_batch_0008/details-03-01.md`), and building order targeting
+slots 3/13/5/15 for genres 6/7/8/9 (interpretation: genre 6..9 = mode
+0x10..0x13, from the "mode 19 = BC_DefendArea" note; genre-to-mode link not
+confirmed at the call-site). Escape and target commit restore slot 0. Data-driven
+modes 0x15..0x1c are still not raised.

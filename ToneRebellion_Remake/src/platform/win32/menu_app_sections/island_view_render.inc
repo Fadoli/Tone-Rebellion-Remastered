@@ -316,8 +316,8 @@ static void draw_building_slot_floaters(HDC dc, const WindowTemplate *info,
    (slot 4 for subtype 4); selected own floater -> slot 5.
    Palette slots DAT_0049e140[1..6] are the 6-bit RGB triples at 0x49e148
    matched to the island palette by FUN_0041081b (assumed nearest colour).
-   Remake only: columns outside the explored extent are blacked out, since
-   the camera cannot reach them, and no dot is drawn there. */
+   No explored/fog test: the painter never reads the per-player visibility
+   spans (FUN_00462285), so unexplored columns are drawn like the rest. */
 static COLORREF lilmap_slot_color(int slot)
 {
     static const unsigned char rgb6[7][3] = {
@@ -353,37 +353,14 @@ static void lilmap_fill(HDC dc, int left, int top, int width, int height,
     DeleteObject(brush);
 }
 
-static int lilmap_explored(int island_index, int x)
-{
-    if (!g_game_session_valid || g_menu.selected_tribe < 0) return 1;
-    return game_session_island_x_explored(&g_game_session,
-        (uint8_t)island_index, (uint8_t)g_menu.selected_tribe, x);
-}
-
 static void draw_island_lilmap_dots(HDC dc, const WindowTemplate *mini_map,
                                     const GameRuntimeIsland *island)
 {
     int saved = SaveDC(dc);
     unsigned int n;
-    int column;
-    int pane_width = mini_map->pane.right - mini_map->pane.left + 1;
-    int pane_height = mini_map->pane.bottom - mini_map->pane.top + 1;
     int viewer = g_menu.selected_tribe;
     (void)IntersectClipRect(dc, mini_map->pane.left, mini_map->pane.top,
                             mini_map->pane.right + 1, mini_map->pane.bottom + 1);
-    /* Hide unreachable (unexplored) columns; one minimap pixel = 10 units. */
-    for (column = 0; column < pane_width; ) {
-        int run = column;
-        while (run < pane_width &&
-               !lilmap_explored(g_menu.selected_map_island, run * 10)) ++run;
-        if (run > column) {
-            lilmap_fill(dc, mini_map->pane.left + column, mini_map->pane.top,
-                        run - column, pane_height, RGB(0, 0, 0));
-            column = run;
-        } else {
-            ++column;
-        }
-    }
     if (island != NULL) {
         for (n = 0; n < island->location_count; ++n) {
             const GameRuntimeLocation *loc = &island->locations[n];
@@ -400,7 +377,6 @@ static void draw_island_lilmap_dots(HDC dc, const WindowTemplate *mini_map,
                 if ((loc->source_flags & 1U) != 0) slot = 5;
             }
             if (slot < 0) continue;
-            if (!lilmap_explored(g_menu.selected_map_island, (int)loc->x)) continue;
             lilmap_fill(dc, cx - 1, cy - 1, 3, 3, lilmap_slot_color(slot));
         }
     }
@@ -414,7 +390,6 @@ static void draw_island_lilmap_dots(HDC dc, const WindowTemplate *mini_map,
             int pixel;
             if (!game_session_floater_is_active(fl) ||
                 fl->island_index != g_menu.selected_map_island) continue;
-            if (!lilmap_explored(g_menu.selected_map_island, (int)fl->x)) continue;
             if (own && fl->source_link_0c != -1)
                 slot = fl->source_subtype == 4 ? 4 : 2;
             if (own && (int)n == g_selected_floater) slot = 5;
@@ -870,7 +845,9 @@ static void render_island_view(HDC dc)
                 int label_width;
                 (void)snprintf(worker_label, sizeof(worker_label), "%s %s",
                     g_tribe_names[selected_floater->type_index],
-                    g_unit_label_text[0]);
+                    /* FUN_0044338b: WORKER for subtype 0, AWAKE otherwise. */
+                    g_unit_label_text[selected_floater->source_subtype == 0
+                                      ? 0 : 1]);
                 label_width = measure_bitmap_text(NULL, worker_label,
                                                    strlen(worker_label));
                 draw_bitmap_label(dc, worker_label,
@@ -1406,41 +1383,12 @@ static void draw_location_action_panel(HDC dc)
             }
         }
     }
-    if (panel != NULL && selected_location_can_be_grabbed()) {
-        RECT button_rect;
-        HBRUSH button_brush;
-        HBRUSH border_brush;
-        const char *label = g_game_session.location_move_active
-            ? "CANCEL MOVE" : "GRAB BUILDING";
-        if (location_grab_button_rect(&button_rect)) {
-            COLORREF fill = g_hovered_location_grab
-                ? RGB(72, 91, 126) : RGB(43, 57, 84);
-            button_brush = CreateSolidBrush(fill);
-            border_brush = CreateSolidBrush(RGB(168, 190, 224));
-            if (button_brush != NULL) {
-                (void)FillRect(dc, &button_rect, button_brush);
-                DeleteObject(button_brush);
-            }
-            if (border_brush != NULL) {
-                (void)FrameRect(dc, &button_rect, border_brush);
-                DeleteObject(border_brush);
-            }
-            {
-                int text_width = measure_bitmap_text(NULL, label, strlen(label));
-                int text_height = (int)g_small_font.height;
-                draw_bitmap_label(dc, label,
-                    button_rect.left + ((button_rect.right - button_rect.left) -
-                                        text_width) / 2,
-                    button_rect.top + ((button_rect.bottom - button_rect.top) -
-                                       text_height) / 2,
-                    RGB(240, 244, 255));
-            }
-            if (g_game_session.location_move_active) {
-                draw_bitmap_label(dc, "Click a free site to place",
-                    panel->pane.left + 8, panel->pane.top + 5,
-                    RGB(230, 238, 255));
-            }
-        }
+    /* The grab/place flow starts from the native IWMove / IWHallMove control
+       (THBUTT frame 5, drawn with the other location controls); only the
+       placement hint remains here while a building is held. */
+    if (panel != NULL && g_game_session.location_move_active) {
+        draw_bitmap_label(dc, "Click a free site to place",
+            panel->pane.left + 8, panel->pane.top + 5, RGB(230, 238, 255));
     }
     if (obtain_button_visible()) {
         const WindowTemplate *obtain_control = window_catalog_find(
@@ -1590,7 +1538,7 @@ static void draw_location_action_panel(HDC dc)
         draw_bitmap_label(dc, g_move_button_text,
             text_panel->pane.left + (pane_width - text_width) / 2,
             text_panel->pane.top + (pane_height - text_height) / 2,
-            g_island_palette[6]);
+            native_text_color(g_island_palette, 6));
     }
 }
 

@@ -194,7 +194,7 @@ static COLORREF panel_text_color(COLORREF color)
 {
     if (color == RGB(230, 238, 255) || color == RGB(185, 205, 220) ||
         color == RGB(235, 235, 220) || color == RGB(220, 232, 244) ||
-        color == RGB(232, 236, 244)) return g_island_palette[6];
+        color == RGB(232, 236, 244)) return native_text_color(g_island_palette, 6);
     return color;
 }
 

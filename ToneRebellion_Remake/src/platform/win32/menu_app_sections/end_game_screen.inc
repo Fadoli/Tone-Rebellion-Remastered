@@ -346,6 +346,6 @@ static void render_end_game(HDC dc)
         width = measure_big_text(line, strlen(line));
         draw_big_label(dc, line,
                        END_GAME_PANE_LEFT + (END_GAME_PANE_WIDTH - width) / 2,
-                       END_GAME_PANE_TOP + y, g_end_game_palette[6]);
+                       END_GAME_PANE_TOP + y, native_text_color(g_end_game_palette, 6));
     }
 }

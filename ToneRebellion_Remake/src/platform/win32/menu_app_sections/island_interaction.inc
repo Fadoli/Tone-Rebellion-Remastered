@@ -434,30 +434,6 @@ static int update_location_action_hover(int x, int y)
     return 1;
 }
 
-static int location_grab_button_rect(RECT *rect)
-{
-    const WindowTemplate *panel;
-    if (rect == NULL || g_menu.screen != SCREEN_ISLAND ||
-        !g_game_session_valid ||
-        !island_panel_location_control_visible(g_island_panel_mode) ||
-        !iw_construct_location_control_pane_visible(g_iw_construct_open))
-        return 0;
-    panel = window_catalog_find(&g_window_catalog, "IWLocControl", 3);
-    if (panel == NULL) return 0;
-    rect->left = panel->pane.left + 8;
-    rect->top = panel->pane.bottom - 32;
-    rect->right = rect->left + 104;
-    rect->bottom = rect->top + 24;
-    return 1;
-}
-
-static int location_grab_button_at(int x, int y)
-{
-    RECT rect;
-    return location_grab_button_rect(&rect) && x >= rect.left && x < rect.right &&
-        y >= rect.top && y < rect.bottom;
-}
-
 /* FUN_0045302a lists command 4 (Obtain) for a selected PIT_Object (type 1,
    +0x24 in 5..0x21) without an owner or range test; FUN_0042fa0f (0x39)
    posts the type-0xd task for the selected location. The button position is
@@ -629,7 +605,7 @@ static int ensure_trainb_art(void)
 
 static int update_location_grab_hover(int x, int y)
 {
-    int hovered = location_grab_button_at(x, y) || obtain_button_at(x, y);
+    int hovered = obtain_button_at(x, y);
     int defend_hovered = building_order_button_at(x, y);
     int changed = 0;
     int training_hovered = training_stock_control_at(x, y);

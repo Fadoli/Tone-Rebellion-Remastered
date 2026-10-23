@@ -163,9 +163,21 @@ static void draw_hall_panel(HDC dc, int hall_player)
                             (int8_t)(upgrade_site->record_value_10 == 0x2f ? 6 : 5);
                         row.resource_icon_type = -1;
                     }
+                    /* Original saves hold type-4 tasks for crystal / magic
+                       (payload 2 / 3) aimed at a training building (its
+                       TrnStkC / TrnStkM stock). The port never creates them
+                       itself; they are shown as STOCK rows of that resource. */
+                    const int building_stock_resource =
+                        stock_resource < 0 && upgrade_site == NULL &&
+                        event->action_type == 4 && event->payload_12 >= 2 &&
+                        event->payload_12 <= GAME_RESOURCE_TYPE_COUNT
+                            ? event->payload_12 - 1 : -1;
                     if (!(upgrade_site != NULL ? 1 : stock_resource >= 0
                             ? island_panel_info_stock_task_row(
                                   (unsigned int)stock_resource, &row)
+                            : building_stock_resource >= 0
+                            ? island_panel_info_stock_task_row(
+                                  (unsigned int)building_stock_resource, &row)
                             : island_panel_info_task_row(event->action_type,
                                   event->payload_12, &row)) ||
                         !island_panel_info_task_row_position(task_list_panel,
@@ -175,8 +187,8 @@ static void draw_hall_panel(HDC dc, int hall_player)
                        priority 2 and index 2 for priority 3 before the label
                        and the "[n]" count, then restores index 6. */
                     COLORREF row_text_color = event->priority == 2U
-                        ? g_island_palette[5] : event->priority == 3U
-                        ? g_island_palette[2] : g_island_palette[6];
+                        ? native_text_color(g_island_palette, 5) : event->priority == 3U
+                        ? native_text_color(g_island_palette, 2) : native_text_color(g_island_palette, 6);
                     label = task_label_text(row.label_key);
                     if (label == NULL || label[0] == '\0') continue;
                     if (task_slots[(size_t)offset + visible_index] ==
@@ -245,8 +257,9 @@ static void draw_hall_panel(HDC dc, int hall_player)
                             resource_art[(unsigned int)row.resource_icon_type], 0,
                             task_list_panel->pane.left + position.resource_icon_x,
                             task_list_panel->pane.top + position.y + 7);
-                        draw_task_stock_gauge(dc, task_list_panel, hall_player,
-                            (unsigned int)row.resource_icon_type, position.y);
+                        if (stock_resource >= 0)
+                            draw_task_stock_gauge(dc, task_list_panel, hall_player,
+                                (unsigned int)row.resource_icon_type, position.y);
                     }
                     if (upgrade_site != NULL) {
                         /* Gauge numerator is the building's +0x28 counter
@@ -618,10 +631,10 @@ static void draw_hall_panel(HDC dc, int hall_player)
                 (panel->pane.bottom - panel->pane.top) / 2 - 6;
             if (use_big)
                 draw_big_label(dc, g_empty_inventory_text, x, y,
-                               g_island_palette[6]);
+                               native_text_color(g_island_palette, 6));
             else
                 draw_small_label(dc, g_empty_inventory_text, x, y,
-                                 g_island_palette[6]);
+                                 native_text_color(g_island_palette, 6));
         } else {
             /* FUN_0043d6a3 uses the stored page index directly. If the item
                count shrinks, the source leaves an out-of-range page empty
