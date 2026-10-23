@@ -1173,6 +1173,18 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
         if (game_session_tick_floater_death(session, i)) continue;
         game_session_tick_floater_cast_pulse(floater);
         game_session_update_melee_hold(session, i);
+        /* FUN_0041e569's post-switch block: when a state finishes, a subtype-8
+           floater (outside FA_Cast and the Hall order itself) gets action 9
+           toward its Hall. The remake detects the finished state as a drop to
+           state 0 and only reissues it for non-Hall actions. */
+        if (floater->source_subtype == 8U &&
+            floater->previous_movement_state != 0 &&
+            floater->movement_state == 0 &&
+            floater->active_order_action != 0x13U &&
+            floater->active_order_action != 9U &&
+            !floater->source_order_pending && !floater->has_move_order)
+            (void)game_session_order_floater_home(session, i);
+        floater->previous_movement_state = floater->movement_state;
         if (game_session_tick_ground_object_pickup(session, floater, 0))
             continue;
         if (game_session_tick_repair_task(session, floater, catalog)) continue;

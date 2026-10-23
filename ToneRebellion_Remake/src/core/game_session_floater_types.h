@@ -95,6 +95,9 @@ typedef struct GameFloaterStart {
     /* FUN_00422d27's speed context is resolved before its coordinate step.
        Site bonuses come from the linked source and the owner's glyph mask. */
     uint8_t movement_state;
+    /* Remake bookkeeping: state at the previous tick, used to detect the
+       FUN_0041e569 post-switch (state finished -> subtype 8 returns to Hall). */
+    uint8_t previous_movement_state;
     /* FUN_00466fe4 gives each new world floater a random +0x05 animation phase. */
     uint8_t animation_seed;
     uint8_t near_target_speed_override;
