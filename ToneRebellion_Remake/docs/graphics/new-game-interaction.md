@@ -15,3 +15,8 @@ New Game hit testing follows `FUN_0044e4f8` (`0x44e4f8`): each animated tribe em
 Mouse clicks now play the shipped `data\\button.wav` member referenced by the local `sound.txt`, loaded from `TONE01.COB` and played from memory through Win32 `PlaySound`. The custom font parser validates the observed header and each glyph's bounds before using the masks. The application and new parser build successfully; no screenshot or acoustic comparison against the original has been performed.
 
 The target is the installed 32-bit `FLOAT.EXE`; it was only read for Ghidra static analysis. No original executable or COB archive was changed.
+
+## Correction: métriques de largeur du texte courbe (REA relu: `FUN_00428baa`, `ev_4fa53e73`)
+
+`FUN_00428baa` utilise la même fonction de largeur (`FUN_0042892d`) pour couper les lignes (plus long groupe de mots qui tient, en reculant d'un espace à la fois), pour la largeur naturelle de la ligne et pour l'avance de chaque mot: écart supplémentaire = `(largeur_boîte - largeur_ligne) / nombre_d_espaces` (au moins 1 espace), le reste étant ajouté d'1 pixel aux premiers écarts; chaque mot avance de `largeur_mot + largeur(" ") + écart`. La dernière ligne est justifiée comme les autres.
+Le port dessinait les glyphes à 11/13 de leur largeur mais coupait et espaçait les mots avec les largeurs source (13/13), d'où des écarts énormes entre les mots. `measure_curved_bitmap_text` (`bitmap_text_layout.inc`) utilise maintenant les largeurs réduites (arrondi identique au dessin, minimum 1 pixel) pour la coupe, la largeur naturelle et l'avance des mots. Non vérifié visuellement: la mise en page change (plus de mots par ligne, moins de lignes), l'ancre basse calibrée (`CURVED_TEXT_NEWGAME_LAST_LINE_Y`) reste inchangée.

@@ -55,6 +55,11 @@ static int32_t measure_bitmap_text(void *context, const char *text, size_t lengt
     return width;
 }
 
+/* The New Game paragraphs are drawn with glyphs narrowed to 11/13 of their
+   source width (draw_curved_bitmap_text_at). FUN_00428baa wraps and justifies
+   with the same width function it draws with, so the wrap test, the line's
+   natural width and each word's advance must use these narrowed widths too;
+   mixing source widths here left words drawn narrow but spaced as if wide. */
 static int32_t measure_curved_bitmap_text(void *context, const char *text,
                                           size_t length)
 {
@@ -66,8 +71,12 @@ static int32_t measure_curved_bitmap_text(void *context, const char *text,
         const uint8_t *glyph_pixels;
         uint32_t code = (unsigned char)text[i];
         if (code >= g_bitmap_font.glyph_count) code = (uint32_t)'?';
-        if (bitmap_font_get_glyph(&g_bitmap_font, code, &glyph_width, &glyph_pixels))
-            width += (int32_t)glyph_width;
+        if (bitmap_font_get_glyph(&g_bitmap_font, code, &glyph_width, &glyph_pixels)) {
+            uint32_t narrowed = (glyph_width * CURVED_TEXT_NEWGAME_WIDTH_NUMERATOR +
+                                 CURVED_TEXT_NEWGAME_WIDTH_DENOMINATOR / 2u) /
+                                CURVED_TEXT_NEWGAME_WIDTH_DENOMINATOR;
+            width += (int32_t)(narrowed == 0u ? 1u : narrowed);
+        }
     }
     return width;
 }
