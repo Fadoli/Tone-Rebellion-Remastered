@@ -693,6 +693,80 @@ void game_session_apply_panic_orders(GameSession *session)
     }
 }
 
+void game_session_adopt_building_attack_order(GameSession *session,
+                                              unsigned int floater_index,
+                                              unsigned int genre,
+                                              unsigned int target)
+{
+    GameFloaterStart *floater;
+    if (session == NULL || floater_index >= session->floater_count) return;
+    floater = &session->floaters[floater_index];
+    if (!game_session_floater_is_active(floater) ||
+        (floater->source_runtime_flags & 0x808U) != 0 ||
+        floater->type_index == 4 ||
+        floater->island_index >= session->island_count ||
+        floater->active_order_action == 0x13 ||
+        floater->active_order_action == 9 ||
+        floater->movement_state == 6 || floater->movement_state == 7) return;
+    if (genre == 7) {
+        const GameRuntimeLocation *site;
+        if (floater->active_order_action == 7 &&
+            floater->order_target_location == (int16_t)target) return;
+        if (target >= session->islands[floater->island_index].location_count)
+            return;
+        site = &session->islands[floater->island_index].locations[target];
+        floater->active_order_action = 7;
+        floater->order_target_location = (int16_t)target;
+        floater->order_target_floater = -1;
+        floater->movement_state = 0x10;
+        floater->stop_radius = game_session_floater_approach_radius(session, floater);
+        game_session_set_approach_point(floater, site->x, site->y);
+    } else if (genre == 6 || genre == 8) {
+        const GameFloaterStart *victim;
+        if (target >= session->floater_count || target == floater_index) return;
+        victim = &session->floaters[target];
+        if (!game_session_floater_is_active(victim) ||
+            (victim->source_runtime_flags & 0x008U) != 0 ||
+            victim->island_index != floater->island_index) return;
+        if (genre == 8) {
+            if (floater->active_order_action == 8 &&
+                floater->defend_target_floater == (int16_t)target) return;
+            release_task_claim(session, floater);
+            floater->active_order_action = 8;
+            floater->movement_state = 0;
+            floater->order_target_floater = (int16_t)target;
+            floater->defend_target_floater = (int16_t)target;
+            floater->order_target_location = -1;
+            floater->order_target_island = UINT8_MAX;
+            floater->order_progress = 0;
+            floater->source_order_pending = 0;
+            floater->has_move_order = 0;
+            floater->has_wander_order = 0;
+            floater->wander_timer = 0;
+            return;
+        }
+        if (floater->active_order_action == 6 &&
+            floater->order_target_floater == (int16_t)target) return;
+        floater->active_order_action = 6;
+        floater->order_target_floater = (int16_t)target;
+        floater->order_target_location = -1;
+        floater->movement_state = 0x0f;
+        floater->stop_radius = game_session_floater_approach_radius(session, floater);
+        floater->source_runtime_flags |= 0x004U;
+        game_session_set_approach_point(floater, victim->x, victim->y);
+    } else {
+        return;
+    }
+    release_task_claim(session, floater);
+    floater->order_target_island = floater->island_index;
+    floater->order_timer = 0;
+    floater->order_progress = 1;
+    floater->has_move_order = 1;
+    floater->has_wander_order = 0;
+    floater->wander_timer = 0;
+    floater->source_order_pending = 0;
+}
+
 void game_session_advance_defend_order(GameSession *session,
                                        unsigned int floater_index)
 {

@@ -18,6 +18,11 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             keep_background_tune_playing();
             return 0;
         }
+        if (wparam == 1 && g_menu.screen == SCREEN_END_GAME) {
+            end_game_screen_tick();
+            InvalidateRect(window, NULL, FALSE);
+            return 0;
+        }
         if (wparam == 1 && g_menu.screen == SCREEN_LOGO) {
             /* FUN_0041c46f: logo fade-in, fade-out, then the title state and
                the `start` tune (requested after the logo). */
@@ -167,7 +172,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                     g_hovered_hall_stock = -1;
                     g_hovered_island_button = -1;
                     g_hovered_hall_command = WINDOW_ISLAND_PANEL_NONE;
-                    g_hovered_location_grab = 0;
+                    g_hovered_location_grab = 0; g_hovered_defend_area = 0;
                     g_hovered_location_action = ISLAND_LOCATION_ACTION_NONE;
                     InvalidateRect(window, NULL, FALSE);
                 }
@@ -227,7 +232,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             g_hovered_hall_stock = -1;
             g_hovered_island_button = -1;
             g_hovered_hall_command = WINDOW_ISLAND_PANEL_NONE;
-            g_hovered_location_grab = 0;
+            g_hovered_location_grab = 0; g_hovered_defend_area = 0;
             g_hovered_location_action = ISLAND_LOCATION_ACTION_NONE;
             g_hovered_inventory_item = -1;
             g_diplomacy_hover_valid = 0;
@@ -238,7 +243,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
     case WM_LBUTTONDOWN: {
         /* A release lost outside the window must not swallow a later click. */
         g_swallow_left_button_up = 0;
-        if (g_menu.screen == SCREEN_LOGO) return 0;
+        if (g_menu.screen == SCREEN_LOGO || g_menu.screen == SCREEN_END_GAME) return 0;
         /* FUN_00469f56 delivers the left button press as window message 6
            and drops the release; FUN_00470fe7 enters the hovered island on
            that press. Other screens keep their release-based clicks. */
@@ -292,7 +297,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         int height;
         int x;
         int y;
-        if (g_menu.screen == SCREEN_LOGO) return 0;
+        if (g_menu.screen == SCREEN_LOGO || g_menu.screen == SCREEN_END_GAME) return 0;
         if (g_lilmap_drag) {
             g_lilmap_drag = 0;
             ReleaseCapture();
@@ -403,7 +408,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         return 0;
     case WM_KEYDOWN:
         /* The original logo loop polls no input. */
-        if (g_menu.screen == SCREEN_LOGO) return 0;
+        if (g_menu.screen == SCREEN_LOGO || g_menu.screen == SCREEN_END_GAME) return 0;
         if (g_menu.screen == SCREEN_ISLAND &&
             (wparam == '8' || wparam == VK_SUBTRACT)) {
             if (g_sim_speed > 1U) --g_sim_speed;   /* FUN_0046a5b7: min 1 */
@@ -412,6 +417,22 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         if (g_menu.screen == SCREEN_ISLAND &&
             (wparam == '9' || wparam == VK_ADD)) {
             if (g_sim_speed < 3U) ++g_sim_speed;   /* FUN_0046a5b7: max 3 */
+            return 0;
+        }
+        if (wparam == VK_F11 && (g_menu.screen == SCREEN_WORLD_MAP ||
+                                 g_menu.screen == SCREEN_ISLAND)) {
+            /* Port-only preview: the native state-7 trigger is not established. */
+            if (enter_end_game_screen()) InvalidateRect(window, NULL, FALSE);
+            return 0;
+        }
+        if (wparam == VK_ESCAPE && g_defend_area_armed) {
+            g_defend_area_armed = 0;
+            InvalidateRect(window, NULL, FALSE);
+            return 0;
+        }
+        if (wparam == VK_ESCAPE && g_menu.screen == SCREEN_END_GAME) {
+            g_menu.screen = SCREEN_WORLD_MAP;
+            InvalidateRect(window, NULL, FALSE);
             return 0;
         }
         if (wparam == VK_ESCAPE) {

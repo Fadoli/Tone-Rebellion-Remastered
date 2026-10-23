@@ -40,7 +40,7 @@ enum { LOGICAL_WIDTH = 640, LOGICAL_HEIGHT = 480, ISLAND_NAME_COUNT = 15,
 enum { SITE_TEXT_POOL, SITE_TEXT_POOL_INFECT, SITE_TEXT_PRIME_POOL,
        SITE_TEXT_BRIDGE, SITE_TEXT_SUPPLY0 };
 enum { SCREEN_MAIN_MENU, SCREEN_NEW_GAME, SCREEN_WORLD_MAP, SCREEN_ISLAND, SCREEN_LOAD_GAME,
-       SCREEN_LOGO };
+       SCREEN_LOGO, SCREEN_END_GAME };
 enum { HELP_MAIN_NEWGAME, HELP_MAIN_RESUME, HELP_MAIN_LOAD, HELP_MAIN_EXIT,
        HELP_NEW_EXIT, HELP_NEW_WORLD, HELP_NEW_TRIBE0,
        HELP_NEW_TRIBE1, HELP_NEW_TRIBE2, HELP_NEW_TRIBE3, HELP_NEW_DIFFICULTY,
@@ -238,6 +238,11 @@ static int g_swallow_left_button_up;
 /* DAT_004bf110: simulation ticks per 50 ms frame, 1..3 (keys 8/9). */
 static unsigned g_sim_speed = 1U;
 static int g_hovered_location_grab;
+static int g_hovered_defend_area;
+/* BC_DefendArea armed: the next island click sets the building's area order
+   (FUN_0043530b mode 19). */
+static int g_defend_area_armed;
+static SpriteSheet g_trainb_art;
 static int g_hovered_hall_stock = -1;
 static int g_hovered_island_button = -1;
 static int g_hovered_hall_command = -1;
@@ -321,6 +326,7 @@ static HDC g_sprite_source_dc;
 #undef measure_bitmap_text
 
 #include "menu_app_sections/logo_splash.inc"
+#include "menu_app_sections/end_game_screen.inc"
 
 #include "menu_app_sections/render_dispatch.inc"
 

@@ -1450,6 +1450,18 @@ static void draw_location_action_panel(HDC dc)
                 &g_building_command_art, g_hovered_location_grab);
         }
     }
+    if (defend_area_button_visible() && ensure_trainb_art()) {
+        unsigned int index;
+        for (index = 0; index < 4U; ++index) {
+            const WindowTemplate *control = window_catalog_find(
+                &g_window_catalog, k_building_order_buttons[index], 3);
+            int genre = (int)(6U + index);
+            if (control != NULL)
+                draw_control_with_hover_overlay(dc, control, &g_trainb_art,
+                    g_hovered_defend_area == genre ||
+                    g_defend_area_armed == genre);
+        }
+    }
     button_name = action == ISLAND_LOCATION_ACTION_HALL_MOVE
         ? "IWHallMove" : action == ISLAND_LOCATION_ACTION_MOVE
         ? "IWMove" : NULL;

@@ -1136,6 +1136,92 @@ static void game_session_tick_floater_recruitment(
     }
 }
 
+int game_session_building_has_defend_area(const GameSession *session,
+                                          uint8_t player_slot,
+                                          uint8_t island_index,
+                                          uint16_t location_index)
+{
+    const GameRuntimeLocation *location;
+    int32_t item;
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count)
+        return 0;
+    location = &session->islands[island_index].locations[location_index];
+    item = game_session_base_item_id(location);
+    return location->owner_id == (int32_t)player_slot &&
+           location->source_location_slot_18 != -1 &&
+           item >= 0x2c && item <= 0x2e;
+}
+
+int game_session_set_building_order(GameSession *session, uint8_t player_slot,
+                                    uint8_t island_index,
+                                    uint16_t location_index,
+                                    unsigned int genre, unsigned int target,
+                                    unsigned int target_y)
+{
+    GameRuntimeLocation *location;
+    if (!game_session_building_has_defend_area(session, player_slot,
+                                               island_index, location_index) ||
+        genre < 6 || genre > 9) return 0;
+    location = &session->islands[island_index].locations[location_index];
+    location->building_order_genre = (uint8_t)genre;
+    location->building_order_island = island_index;
+    if (genre == 9) {
+        /* FUN_0041e3eb packs each coordinate as (v + 5) / 10. */
+        location->building_order_coordinate = (uint16_t)(
+            (((target + 5U) / 10U) & 0xffU) << 8 | (((target_y + 5U) / 10U) & 0xffU));
+    } else {
+        location->building_order_coordinate = (uint16_t)target;
+    }
+    return 1;
+}
+
+int game_session_set_building_defend_area(GameSession *session,
+                                          uint8_t player_slot,
+                                          uint8_t island_index,
+                                          uint16_t location_index,
+                                          uint16_t x, uint16_t y)
+{
+    return game_session_set_building_order(session, player_slot, island_index,
+                                           location_index, 9, x, y);
+}
+
+/* FUN_0042219e: a linked floater copies the building's order whenever its own
+   differs; the record is never cleared, so a finished order is reapplied. */
+static void game_session_adopt_building_order(GameSession *session,
+                                              unsigned int floater_index)
+{
+    GameFloaterStart *floater = &session->floaters[floater_index];
+    const GameRuntimeLocation *building;
+    uint16_t coordinate;
+    if (floater->source_link_0c < 0 || floater->source_order_pending ||
+        floater->charge_source_island >= session->island_count ||
+        floater->charge_source_location >=
+            session->islands[floater->charge_source_island].location_count ||
+        floater->active_order_action == 0x13 ||
+        floater->active_order_action == 6 || floater->active_order_action == 7)
+        return;
+    building = &session->islands[floater->charge_source_island].locations[
+        floater->charge_source_location];
+    if (building->building_order_genre < 6 ||
+        building->building_order_genre > 9 ||
+        building->owner_id != (int32_t)floater->owner_slot ||
+        building->source_location_slot_18 != floater->source_link_0c) return;
+    if (building->building_order_genre != 9) {
+        game_session_adopt_building_attack_order(session, floater_index,
+            building->building_order_genre, building->building_order_coordinate);
+        return;
+    }
+    coordinate = building->building_order_coordinate;
+    if (floater->source_order_state_2c == 9 &&
+        floater->source_order_island_28 == building->building_order_island &&
+        floater->source_order_coordinate_30 == coordinate) return;
+    (void)game_session_order_floater_to_coordinate(session,
+        floater->owner_slot, building->building_order_island, floater_index,
+        (uint16_t)((coordinate >> 8) * 10U), (uint16_t)((coordinate & 0xffU) * 10U));
+}
+
 void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
                                      const PadCatalog *catalog)
 {
@@ -1199,6 +1285,8 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
         /* FUN_0041e569 polls FUN_0042219e while idle and once per ten ticks
            while moving. The bridge leaves the linked order pending during
            FA_Cast (0x13), then transfers it to the tick record at a later poll. */
+        if (floater->movement_state == 0 || (source_tick + i) % 10U == 0)
+            game_session_adopt_building_order(session, i);
         if (floater->source_order_pending &&
             floater->active_order_action != 0x13 &&
             (floater->movement_state == 0 || (source_tick + i) % 10U == 0)) {

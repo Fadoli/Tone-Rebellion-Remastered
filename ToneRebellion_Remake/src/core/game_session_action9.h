@@ -28,4 +28,12 @@ void game_session_advance_category4_autonomous_order(
 int game_session_assign_category4_subtype9_order(
     GameSession *session, unsigned int floater_index, uint32_t source_tick);
 
+/* FUN_0042219e copy of a building's genre 6/7/8 order (FUN_0045d867 /
+   FUN_0045d8b2) into a linked floater: 6 attacks a floater, 7 a location,
+   8 defends a floater. `target` is the floater or location index. */
+void game_session_adopt_building_attack_order(GameSession *session,
+                                              unsigned int floater_index,
+                                              unsigned int genre,
+                                              unsigned int target);
+
 #endif

@@ -52,6 +52,28 @@ int game_session_order_floater_to_defend(GameSession *session,
                                          uint8_t island_index,
                                          unsigned int floater_index,
                                          unsigned int target_floater_index);
+/* Building order buttons BC_AttackFlt (genre 6), BC_AttackLoc (7),
+   BC_DefendFlt (8) and BC_DefendArea (9) (cat 1 sub 0x10..0x13 ->
+   FUN_0045d867/FUN_0045d8b2): writes the building's order record for an owned,
+   built 0x2c..0x2e site. `target` is a floater index (6, 8), a location index
+   (7) or a pixel x with `target_y` (9). Linked floaters adopt it on their next
+   order poll (FUN_0042219e). */
+int game_session_set_building_order(GameSession *session, uint8_t player_slot,
+                                    uint8_t island_index,
+                                    uint16_t location_index,
+                                    unsigned int genre, unsigned int target,
+                                    unsigned int target_y);
+int game_session_set_building_defend_area(GameSession *session,
+                                          uint8_t player_slot,
+                                          uint8_t island_index,
+                                          uint16_t location_index,
+                                          uint16_t x, uint16_t y);
+/* True when the building order buttons are offered for the site (FUN_0045d5ba rule R5:
+   owner == player, built, base item 0x2c..0x2e). */
+int game_session_building_has_defend_area(const GameSession *session,
+                                          uint8_t player_slot,
+                                          uint8_t island_index,
+                                          uint16_t location_index);
 /* Order an unlinked local floater to a player-owned charge source (state 11).
    Repeating the order on that same site requests a state-12 debit. */
 int game_session_order_floater_to_charge_site(GameSession *session,

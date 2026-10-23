@@ -141,6 +141,8 @@ static void paint_window(HWND window)
             render_island_view(back);
         } else if (g_menu.screen == SCREEN_LOGO) {
             render_logo(back);
+        } else if (g_menu.screen == SCREEN_END_GAME) {
+            render_end_game(back);
         } else {
             render_load_game(back);
         }

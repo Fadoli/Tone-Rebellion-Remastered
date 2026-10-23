@@ -498,10 +498,64 @@ static int obtain_button_at(int x, int y)
         x < rect.right && y >= rect.top && y < rect.bottom;
 }
 
+/* BC_DefendArea (TRAINB frame 0, pane 453,438..507,471): offered by
+   FUN_0045d5ba for an owned, built 0x2c..0x2e site; a click arms the map
+   target (cursor mode 19), the next island click writes the building order. */
+static int defend_area_button_visible(void)
+{
+    if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
+        g_menu.selected_tribe < 0 ||
+        g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
+        g_menu.selected_map_island < 0 || g_selected_location < 0) return 0;
+    return game_session_building_has_defend_area(&g_game_session,
+        (uint8_t)g_menu.selected_tribe, (uint8_t)g_menu.selected_map_island,
+        (uint16_t)g_selected_location);
+}
+
+/* Genre written by each building order control: BC_AttackFlt 6,
+   BC_AttackLoc 7, BC_DefendFlt 8, BC_DefendArea 9. */
+static const char *const k_building_order_buttons[4] = {
+    "BC_AttackFlt", "BC_AttackLoc", "BC_DefendFlt", "BC_DefendArea"
+};
+
+/* Genre (6..9) of the building order button at (x, y), else 0. */
+static int building_order_button_at(int x, int y)
+{
+    unsigned int index;
+    if (!defend_area_button_visible()) return 0;
+    for (index = 0; index < 4U; ++index) {
+        const WindowTemplate *control = window_catalog_find(
+            &g_window_catalog, k_building_order_buttons[index], 3);
+        if (control != NULL && x >= control->pane.left &&
+            x < control->pane.right && y >= control->pane.top &&
+            y < control->pane.bottom) return (int)(6U + index);
+    }
+    return 0;
+}
+
+static int ensure_trainb_art(void)
+{
+    CobArchive archive = {0};
+    char error[128];
+    if (g_trainb_art.frame_count != 0) return 1;
+    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE01.COB", &archive,
+                          error, sizeof(error))) return 0;
+    (void)load_sprite_sheet(&archive, "data\\trainb.shp", g_island_palette,
+                            &g_trainb_art, error, sizeof(error));
+    cob_archive_close(&archive);
+    return g_trainb_art.frame_count != 0;
+}
+
 static int update_location_grab_hover(int x, int y)
 {
     int hovered = location_grab_button_at(x, y) || obtain_button_at(x, y);
-    if (hovered == g_hovered_location_grab) return 0;
+    int defend_hovered = building_order_button_at(x, y);
+    int changed = 0;
+    if (defend_hovered != g_hovered_defend_area) {
+        g_hovered_defend_area = defend_hovered;
+        changed = 1;
+    }
+    if (hovered == g_hovered_location_grab) return changed;
     g_hovered_location_grab = hovered;
     return 1;
 }

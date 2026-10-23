@@ -86,6 +86,42 @@ static void handle_click(HWND window, int x, int y)
             InvalidateRect(window, NULL, FALSE);
             return;
         }
+        {
+            int order_genre = building_order_button_at(x, y);
+            if (order_genre != 0) {
+                g_defend_area_armed =
+                    g_defend_area_armed == order_genre ? 0 : order_genre;
+                InvalidateRect(window, NULL, FALSE);
+                return;
+            }
+        }
+        if (g_defend_area_armed != 0 && x >= 0 && x < LOGICAL_WIDTH &&
+            y >= 0 && y < 320) {
+            /* FUN_0042fa0f msg 0x40 in modes 16..19: cat 1 sub 0x10..0x13
+               writes the building's order record (FUN_0045d867/FUN_0045d8b2). */
+            int target = -1;
+            unsigned int target_y = 0;
+            if (g_defend_area_armed == 9) {
+                target = x + g_island_scroll_x;
+                target_y = (unsigned int)y;
+            } else if (g_defend_area_armed == 7) {
+                target = island_location_at(x, y);
+            } else {
+                target = game_session_floater_at(&g_game_session,
+                    (uint8_t)g_menu.selected_map_island,
+                    (uint16_t)(x + g_island_scroll_x), (uint16_t)y);
+            }
+            if (target >= 0 && game_session_set_building_order(&g_game_session,
+                    (uint8_t)g_menu.selected_tribe,
+                    (uint8_t)g_menu.selected_map_island,
+                    (uint16_t)g_selected_location,
+                    (unsigned int)g_defend_area_armed,
+                    (unsigned int)target, target_y)) {
+                g_defend_area_armed = 0;
+            }
+            InvalidateRect(window, NULL, FALSE);
+            return;
+        }
         if (location_grab_button_at(x, y) &&
             (g_game_session.location_move_active ||
              selected_location_can_be_grabbed())) {

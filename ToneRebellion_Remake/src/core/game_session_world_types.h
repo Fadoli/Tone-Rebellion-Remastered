@@ -56,6 +56,12 @@ typedef struct GameRuntimeLocation {
     int16_t source_value_40;
     int16_t source_value_42;
     int16_t source_value_46;
+    /* Building order record (FUN_0045d8b2/FUN_0045dcf4 writers, read by
+       FUN_0042219e): +0x2c genre (0 = none, 9 = defend area), +0x28 island,
+       +0x30 packed coordinate (x/10 << 8 | y/10). Reset by FUN_004500c4. */
+    uint8_t building_order_genre;
+    uint8_t building_order_island;
+    uint16_t building_order_coordinate;
     /* FUN_0045c470's eight floater links and +0x24 count. */
     int16_t charge_floater_slots[8];
     uint16_t charge_floater_count;
