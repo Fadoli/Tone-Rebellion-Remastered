@@ -1320,6 +1320,11 @@ void game_session_tick_item_animations_with_floaters(
                     state->source_value_44 = 0;
                     state->source_flags &= ~0x100U;
                 }
+                /* FUN_00450a71 runs FUN_00453a5f after every 0x100 step. */
+                if (game_session_recalculate_location_active_with_visibility(
+                        state)) {
+                    game_session_refresh_player_maintenance_budgets(session);
+                }
             }
 
             /* Lethal site damage sets 0x080 and resets +0x48. The native tick
