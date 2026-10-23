@@ -786,6 +786,7 @@ static void tick_leviathan_defense(GameSession *session,
     uint8_t island_index = (uint8_t)(island - session->islands);
     int started_cycle = 0;
 
+    (void)location_index;
     if (reach < 0) reach = 0;
     if ((state->source_flags & 1U) == 0) return;
 
@@ -793,7 +794,7 @@ static void tick_leviathan_defense(GameSession *session,
        +0x36. V-ATTCK cycles instead reacquire a random target when firing. */
     if ((state->source_flags & 0x002U) == 0 &&
         (item_id < 0x10 || state->resource_retry_tick_36 == -1) &&
-        (session->simulation_tick + 10U - (location_index % 10U)) % 10U == 0) {
+        (session->simulation_tick + 10U - ((uint32_t)item_id % 10U)) % 10U == 0) {
         for (candidate_index = 0; candidate_index < session->floater_count;
              ++candidate_index) {
             const GameFloaterStart *target = &session->floaters[candidate_index];
