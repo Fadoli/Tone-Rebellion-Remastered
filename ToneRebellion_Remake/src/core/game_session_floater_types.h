@@ -65,6 +65,11 @@ typedef struct GameFloaterStart {
     /* FA_DefendFlt keeps its protected floater separate from the current
        combat target resolved into order_target_floater. */
     int16_t defend_target_floater;
+    /* FA_DefendFlt state 8: FUN_00423068 stores a random (rand(200) - 100)
+       offset pair in +0x28/+0x2a; FUN_00422d27 adds the protected floater's
+       position to it every step. */
+    int16_t follow_offset_x;
+    int16_t follow_offset_y;
     /* Action-9 post-arrival stages mirror tick +0x46 and +0x32. The target
        candidate table/policy for non-enemy units is only partly reconstructed. */
     uint8_t order_progress;

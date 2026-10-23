@@ -184,6 +184,48 @@ static int game_session_tick_floater_death(GameSession *session,
     return 1;
 }
 
+/* FUN_0041e569 cases 0xe/0xf: a melee (no ranged attack row) floater that
+   reaches its target in state 0xf, outside action 0x14, marks the target with
+   flag 0x10 and itself with 0x40. A flagged target is held in place because
+   FUN_00422d27 is skipped while (flags & 0x411) != 0. */
+static void game_session_apply_melee_hold(GameSession *session,
+                                          GameFloaterStart *floater)
+{
+    int ranged;
+    GameFloaterStart *target;
+
+    if (floater->active_order_action == 0x14 ||
+        floater->order_target_floater < 0 ||
+        (unsigned int)floater->order_target_floater >= session->floater_count)
+        return;
+    ranged = (floater->type_index == 4U ||
+              (floater->source_subtype != 0 && floater->charge_current > 0)) &&
+             floater->attack_range != 0;
+    if (ranged) return;
+    target = &session->floaters[(unsigned int)floater->order_target_floater];
+    target->source_runtime_flags |= 0x010U;
+    floater->source_runtime_flags |= 0x040U;
+}
+
+/* FUN_0041e569 tail: flag 0x10 stays only while some floater of the same
+   island still targets this one (+0x32) with its own flag 0x40 set. */
+static void game_session_update_melee_hold(GameSession *session,
+                                           unsigned int floater_index)
+{
+    GameFloaterStart *floater = &session->floaters[floater_index];
+    unsigned int other;
+
+    if ((floater->source_runtime_flags & 0x010U) == 0) return;
+    for (other = 0; other < session->floater_count; ++other) {
+        const GameFloaterStart *candidate = &session->floaters[other];
+        if (game_session_floater_is_active(candidate) &&
+            candidate->island_index == floater->island_index &&
+            candidate->order_target_floater == (int16_t)floater_index &&
+            (candidate->source_runtime_flags & 0x040U) != 0) return;
+    }
+    floater->source_runtime_flags &= ~0x010U;
+}
+
 static void game_session_tick_floater_cast_pulse(GameFloaterStart *floater)
 {
     /* FUN_0041e569 tail: flag 0x100 shares the +0x24 counter. FUN_00425296
@@ -1093,6 +1135,7 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
         }
         if (game_session_tick_floater_death(session, i)) continue;
         game_session_tick_floater_cast_pulse(floater);
+        game_session_update_melee_hold(session, i);
         if (game_session_tick_ground_object_pickup(session, floater, 0))
             continue;
         if (game_session_tick_repair_task(session, floater, catalog)) continue;
@@ -1251,92 +1294,40 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
         }
 
         if (floater->movement_state == 8) {
-            int32_t raw_min_x = 0;
-            int32_t raw_max_x = 0x9ff;
-            int32_t target_x;
-            int32_t target_y;
-
-            if (floater->island_index >= session->island_count) {
-                floater->active_order_action = 0;
-                floater->movement_state = 0;
-                floater->has_move_order = 0;
-                continue;
+            /* FUN_00422d27 state 8: the destination is the protected
+               floater's position plus the planned offset, clamped to
+               x 0..0x9ff and y 0x28..0x122, refreshed every step. */
+            if (floater->order_target_floater >= 0 &&
+                (unsigned int)floater->order_target_floater <
+                    session->floater_count) {
+                const GameFloaterStart *followed = &session->floaters[
+                    (unsigned int)floater->order_target_floater];
+                int32_t follow_x = (int32_t)followed->x + floater->follow_offset_x;
+                int32_t follow_y = (int32_t)followed->y + floater->follow_offset_y;
+                if (follow_x < 0) follow_x = 0;
+                if (follow_x > 0x9ff) follow_x = 0x9ff;
+                if (follow_y < 0x28) follow_y = 0x28;
+                if (follow_y > 0x122) follow_y = 0x122;
+                floater->destination_x = (uint16_t)follow_x;
+                floater->destination_y = (uint16_t)follow_y;
+                floater->stop_radius = 0;
+                floater->has_move_order = 1;
             }
-            if (floater->owner_slot != 4U &&
-                floater->owner_slot < GAME_FLOATER_CATEGORY_COUNT) {
-                GameRuntimeIsland *island =
-                    &session->islands[floater->island_index];
-                raw_min_x = island->floater_min_x[floater->owner_slot];
-                raw_max_x = island->floater_max_x[floater->owner_slot];
-            }
-            /* FUN_00423068 resolves state 8 to a fresh +/-100 step around
-               the defender, then rejects X outside the owner's island span.
-               Keep the unsigned position model inside the world at Y=0. */
-            target_x = (int32_t)floater->x - 100 +
-                (int32_t)tone_rng_bounded(&session->random_state, 200);
-            target_y = (int32_t)floater->y - 100 +
-                (int32_t)tone_rng_bounded(&session->random_state, 200);
-            if (raw_min_x > 0 && target_x < raw_min_x) {
-                floater->active_order_action = 0;
-                floater->movement_state = 0;
-                floater->has_move_order = 0;
-                continue;
-            }
-            if (raw_max_x < 0x9ff && target_x > raw_max_x) {
-                floater->active_order_action = 0;
-                floater->movement_state = 0;
-                floater->has_move_order = 0;
-                continue;
-            }
-            if (target_y < 0) target_y = 0;
-            floater->destination_x = (uint16_t)target_x;
-            floater->destination_y = (uint16_t)target_y;
-            floater->stop_radius = 0;
-            floater->has_move_order = 1;
         }
 
-        if (floater->movement_state == 6 &&
-            floater->order_target_floater >= 0 &&
-            (unsigned int)floater->order_target_floater <
-                session->floater_count) {
-            const GameFloaterStart *target = &session->floaters[
-                (unsigned int)floater->order_target_floater];
-            if (game_session_floater_is_active(target) &&
-                target->island_index == floater->island_index) {
-                game_session_set_approach_point(floater, target->x, target->y);
-                floater->stop_radius =
-                    game_session_floater_approach_radius(session, floater);
-                dx = (int32_t)floater->destination_x - floater->x;
-                dy = (int32_t)floater->destination_y - floater->y;
-                distance = dx < 0 ? -dx : dx;
-                if ((dy < 0 ? -dy : dy) > distance)
-                    distance = dy < 0 ? -dy : dy;
-                floater->has_move_order =
-                    (uint8_t)(distance > floater->stop_radius);
-            }
-        } else if (floater->movement_state == 7 &&
-                   floater->island_index < session->island_count &&
-                   floater->order_target_location >= 0 &&
-                   (uint16_t)floater->order_target_location <
-                       session->islands[floater->island_index].location_count) {
-            const GameRuntimeLocation *target =
-                &session->islands[floater->island_index].locations[
-                    (uint16_t)floater->order_target_location];
-            game_session_set_approach_point(floater, target->x, target->y);
-            floater->stop_radius =
-                game_session_floater_approach_radius(session, floater);
-            dx = (int32_t)floater->destination_x - floater->x;
-            dy = (int32_t)floater->destination_y - floater->y;
-            distance = dx < 0 ? -dx : dx;
-            if ((dy < 0 ? -dy : dy) > distance)
-                distance = dy < 0 ? -dy : dy;
-            floater->has_move_order =
-                (uint8_t)(distance > floater->stop_radius);
-        }
+        /* States 6 and 7 are stationary strikes in FUN_0041e569: FUN_00422d27
+           is not called for them, so the attacker does not chase its target. */
+
+        if (floater->movement_state == 6 || floater->movement_state == 7)
+            floater->has_move_order = 0;
         if (!floater->has_move_order) {
             game_session_tick_timed_movement_state(floater);
             continue;
         }
+        /* FUN_0041e569 skips FUN_00422d27 while a melee hold (0x10) is set. */
+        if ((floater->source_runtime_flags & 0x010U) != 0 &&
+            floater->movement_state != 0 && floater->movement_state != 6 &&
+            floater->movement_state != 7) continue;
         dx = (int32_t)floater->destination_x - floater->x;
         dy = (int32_t)floater->destination_y - floater->y;
         /* FUN_00423068 updates facing from the destination independently of
@@ -1354,6 +1345,8 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
                 game_session_advance_local_resource_task(session, catalog, floater);
                 continue;
             }
+            if (floater->movement_state == 0x0f)
+                game_session_apply_melee_hold(session, floater);
             if (floater->movement_state == 9 || floater->movement_state == 0x0f ||
                 floater->movement_state == 0x10) floater->movement_state = 0;
             game_session_tick_timed_movement_state(floater);
@@ -1463,6 +1456,9 @@ int game_session_tick_floater_wander(GameSession *session,
         if (floater->movement_state == 0x0e) floater->movement_state = 0;
     }
     if (!floater->has_wander_order || floater->has_move_order) return 0;
+    /* FUN_0041e569 skips the state-0xe step while a melee hold (0x10) is set. */
+    if ((floater->source_runtime_flags & 0x010U) != 0 &&
+        floater->movement_state == 0x0e) return 1;
     if (floater->island_index >= session->island_count ||
         floater->type_index >= GAME_FLOATER_CATEGORY_COUNT) {
         floater->has_wander_order = 0;

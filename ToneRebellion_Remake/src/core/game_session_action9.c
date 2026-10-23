@@ -714,11 +714,39 @@ void game_session_advance_defend_order(GameSession *session,
             cancel_defend_order(floater);
             return;
         }
+        /* FUN_004211bb ends by calling FUN_00423068, which for state 8 rolls
+           x then y as rand(200) - 100 and rejects the plan (FUN_00421ec1(-1))
+           when the x offset is outside [min, max]: the lower bound is 0 unless
+           the owner's island span starts higher, so negative offsets fail. */
+        {
+            int32_t raw_min_x = 0;
+            int32_t raw_max_x = 0x9ff;
+            int32_t offset_x;
+            int32_t offset_y;
+            if (floater->owner_slot != 4U &&
+                floater->owner_slot < GAME_FLOATER_CATEGORY_COUNT &&
+                floater->island_index < session->island_count) {
+                const GameRuntimeIsland *plan_island =
+                    &session->islands[floater->island_index];
+                if (plan_island->floater_min_x[floater->owner_slot] > 0)
+                    raw_min_x = plan_island->floater_min_x[floater->owner_slot];
+                if (plan_island->floater_max_x[floater->owner_slot] < 0x9ff)
+                    raw_max_x = plan_island->floater_max_x[floater->owner_slot];
+            }
+            offset_x = tone_rng_bounded(&session->random_state, 200) - 100;
+            offset_y = tone_rng_bounded(&session->random_state, 200) - 100;
+            if (offset_x < raw_min_x || offset_x > raw_max_x) {
+                cancel_defend_order(floater);
+                return;
+            }
+            floater->follow_offset_x = (int16_t)offset_x;
+            floater->follow_offset_y = (int16_t)offset_y;
+        }
         floater->order_target_floater = floater->defend_target_floater;
         floater->movement_state = 8;
         floater->stop_radius = 0;
         floater->source_runtime_flags &= ~0x004U;
-        floater->has_move_order = 0;
+        floater->has_move_order = 1;
         floater->order_progress = 1;
         return;
     }
@@ -743,7 +771,11 @@ void game_session_advance_defend_order(GameSession *session,
         candidate_index = action9_find_floater(
             session, floater_index, target->x, target->y, 250);
         if (candidate_index < 0) {
-            floater->order_progress = 0;
+            /* FUN_0041e569 state 8 ends only when a candidate exists or the
+               floater reached its offset point; then the planner re-rolls. */
+            if (floater->x == floater->destination_x &&
+                floater->y == floater->destination_y)
+                floater->order_progress = 0;
             return;
         }
         target = &session->floaters[candidate_index];
