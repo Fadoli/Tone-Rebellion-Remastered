@@ -636,6 +636,43 @@ static int game_session_resolve_cast_destination(
     return 1;
 }
 
+/* FUN_00423068 ends by rejecting a destination whose x lies outside
+   [min, max] of the owner's island span (min defaults to 0, max to 0x9ff,
+   category 4 is unrestricted); the caller then runs FUN_00421ec1(-1). */
+static int game_session_destination_outside_owner_span(
+    const GameSession *session, const GameFloaterStart *floater)
+{
+    int32_t min_x = 0;
+    int32_t max_x = 0x9ff;
+    const GameRuntimeIsland *island;
+
+    if (floater->owner_slot == 4U ||
+        floater->owner_slot >= GAME_FLOATER_CATEGORY_COUNT ||
+        floater->island_index >= session->island_count) return 0;
+    island = &session->islands[floater->island_index];
+    if (island->floater_min_x[floater->owner_slot] > 0)
+        min_x = island->floater_min_x[floater->owner_slot];
+    if (island->floater_max_x[floater->owner_slot] < 0x9ff)
+        max_x = island->floater_max_x[floater->owner_slot];
+    return (int32_t)floater->destination_x < min_x ||
+           (int32_t)floater->destination_x > max_x;
+}
+
+static void game_session_cancel_approach_order(GameFloaterStart *floater)
+{
+    floater->active_order_action = 0;
+    floater->movement_state = 0;
+    floater->order_target_floater = -1;
+    floater->order_target_location = -1;
+    floater->order_progress = 0;
+    floater->source_order_state_2c = 0;
+    floater->source_order_pending = 0;
+    floater->source_runtime_flags &= ~0x065U;
+    floater->has_move_order = 0;
+    floater->has_wander_order = 1;
+    floater->wander_timer = 0;
+}
+
 static void game_session_cancel_cast_order(GameFloaterStart *floater)
 {
     floater->active_order_action = 0;
@@ -1361,6 +1398,10 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
             const GameFloaterStart *target =
                 &session->floaters[(unsigned int)floater->order_target_floater];
             game_session_set_approach_point(floater, target->x, target->y);
+            if (game_session_destination_outside_owner_span(session, floater)) {
+                game_session_cancel_approach_order(floater);
+                continue;
+            }
         } else if (floater->movement_state == 0x10 &&
                    floater->island_index < session->island_count &&
                    floater->order_target_location >= 0 &&
@@ -1370,6 +1411,10 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
                 &session->islands[floater->island_index]
                      .locations[(uint16_t)floater->order_target_location];
             game_session_set_approach_point(floater, target->x, target->y);
+            if (game_session_destination_outside_owner_span(session, floater)) {
+                game_session_cancel_approach_order(floater);
+                continue;
+            }
         }
 
         position.x = floater->x;
