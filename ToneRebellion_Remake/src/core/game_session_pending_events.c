@@ -35,15 +35,14 @@ int game_session_pending_event_add(GameSession *session, int16_t player_id,
         unsigned int other;
         for (other = 0; other < GAME_SESSION_MAX_PENDING_EVENTS; ++other) {
             const GamePendingEvent *candidate = &session->pending_events[other];
-            /* These modeled task records are scoped to a player and island;
-               omitting either field aliases otherwise identical local IDs. */
+            /* FUN_004662b7 refuses a duplicate row of type 5 or 0xd when the
+               player (+8), island (+0xa), site (+0xe) and type match; it does
+               not compare +0xc or the item field (+0x12). */
             if (other == slot || candidate->active == 0 ||
                 candidate->action_type != action_type ||
                 candidate->player_id != player_id ||
                 candidate->payload_0a != payload_0a ||
-                candidate->payload_0c != payload_0c ||
-                candidate->payload_0e != payload_0e ||
-                candidate->payload_12 != payload_12) continue;
+                candidate->payload_0e != payload_0e) continue;
             event->active = 0;
             --session->pending_event_count;
             return -1;

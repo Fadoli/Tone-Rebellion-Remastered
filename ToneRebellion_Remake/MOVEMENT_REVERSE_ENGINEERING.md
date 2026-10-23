@@ -148,3 +148,9 @@ Arrivée (cas 1 de `FUN_0041e569`): drapeau 1 puis 10 ticks d'attente, puis chaq
 
 ### Rejet hors plage (`FUN_00423068`, `ev_f59cd438` lignes `0x4235e2..0x423611`)
 Corrigé pour les états d'approche 0xf/0x10: si le x du point d'arrivée est hors de `[min, max]` du propriétaire (0 et 0x9ff par défaut, catégorie 4 libre), l'ordre est annulé comme `FUN_00421ec1(-1)` (drapeaux `0x65` effacés, retour à l'errance) au lieu d'être suivi. Les autres états (3/4 livraison, 9 coordonnée) ne vérifient pas encore cette borne.
+
+### Table de tâches (relu: `FUN_004662b7` `ev_1a99fa08`, `FUN_00422031` `ev_bd805382`; revue par agent pour le reste)
+
+- Corrigé: la détection de doublon de `FUN_004662b7` (types 5 et 0xd) compare joueur, île `+0xa`, site `+0xe` et type seulement; le port comparait aussi `+0xc` et l'objet (`+0x12`), donc acceptait deux lignes pour le même site.
+- Corrigé: `FUN_00422031` cas 0x12 teste le mot porté (`in_ECX[6]` = `+0x18`), pas le sous-type: un ouvrier portant du Build Tone est éligible, sinon il faut une source de Build Tone accessible. Le port excluait le sous-type 1.
+- Écarts restants rapportés (agent, non relus): lignes de type 6/0x11 absentes du test « urgent », détachement plus large que `FUN_00421ec1` (le port arrête aussi le déplacement et l'errance), compteurs de ligne recalculés par heuristique (`reclaim_orphaned_task_claim`), pas de suppression de la ligne d'objet lors d'un échange (`FUN_00466533(ancien)`), gardes inventées (plafond Build Tone 20, réservation de coût, finisseur unique), ordre de choix « moins servi d'abord » au lieu de la première ligne éligible, livraison limitée à l'île de la ligne.

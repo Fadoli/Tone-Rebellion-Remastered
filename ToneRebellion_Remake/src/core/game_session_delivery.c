@@ -494,8 +494,14 @@ static int assign_repair_task_for_floater(GameSession *session,
     int16_t current;
     int16_t maximum;
 
-    /* FUN_00422031 admits REPAIR candidates only when floater subtype != 1. */
-    if (floater->source_subtype == 1 ||
+    uint8_t repair_source_island = floater->island_index;
+
+    /* FUN_00422031 case 0x12 tests the carried-item word (+0x18), not the
+       subtype: a worker already carrying Build Tone (1) is eligible, anyone
+       else needs a reachable Build Tone source (FUN_00420dbd). */
+    if ((floater->carried_resource_code != 1 &&
+         construction_refill_source(session, floater,
+                                    &repair_source_island) < 0) ||
         event->active == 0 || event->action_type != 0x12 ||
         event->player_id != floater->owner_slot ||
         event->payload_0a < 0 || event->payload_0a >= session->island_count ||
