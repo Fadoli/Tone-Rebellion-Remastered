@@ -407,6 +407,49 @@ static void draw_island_lilmap_dots(HDC dc, const WindowTemplate *mini_map,
             }
         }
     }
+    /* Tail of 0x4384f2, after the dots: bars over the pane outside the
+       player's explored extent, then two slot-1 vertical lines 63 px apart at
+       scroll/10. */
+    {
+        int first = -1;
+        int last = -1;
+        int cell;
+        int pane_height = mini_map->pane.bottom - mini_map->pane.top + 1;
+        int line_x;
+        if (g_game_session_valid && viewer >= 0 &&
+            g_menu.selected_map_island >= 0) {
+            for (cell = 0; cell < GAME_ISLAND_EXPLORED_CELLS; ++cell) {
+                if (!game_session_island_x_explored(&g_game_session,
+                        (uint8_t)g_menu.selected_map_island,
+                        (uint8_t)viewer, cell * 10)) continue;
+                if (first < 0) first = cell;
+                last = cell;
+            }
+        }
+        if (first >= 0) {
+            int bar_left[2];
+            int bar_right[2];
+            int bar;
+            bar_left[0] = mini_map->pane.left;
+            bar_right[0] = mini_map->pane.left + first;
+            bar_left[1] = mini_map->pane.left + last + 1;
+            bar_right[1] = mini_map->pane.right + 1;
+            for (bar = 0; bar < 2; ++bar) {
+                if (bar_right[bar] <= bar_left[bar]) continue;
+                /* Default path ([0x4c2bac] == 0, set only by a float.cfg
+                   "temphole" line): FillRect8 with palette index
+                   [0x4c2b08] == 0 ("holecolor" in float.cfg overrides). */
+                lilmap_fill(dc, bar_left[bar], mini_map->pane.top,
+                            bar_right[bar] - bar_left[bar], pane_height,
+                            g_island_palette[0]);
+            }
+        }
+        line_x = mini_map->pane.left + g_island_scroll_x / 10;
+        lilmap_fill(dc, line_x, mini_map->pane.top, 1, pane_height,
+                    lilmap_slot_color(1));
+        lilmap_fill(dc, line_x + 63, mini_map->pane.top, 1, pane_height,
+                    lilmap_slot_color(1));
+    }
     if (saved != 0) RestoreDC(dc, saved);
 }
 
@@ -769,22 +812,6 @@ static void render_island_view(HDC dc)
                         (uint32_t)g_island_surface_id,
                         mini_map->pane.left, mini_map->pane.top);
             draw_island_lilmap_dots(dc, mini_map, runtime_island);
-            /* Remake: outline of the 640px view on the 1/10 scale minimap. */
-            {
-                HPEN pen = CreatePen(PS_SOLID, 1, RGB(255, 255, 255));
-                HGDIOBJ old_pen = SelectObject(dc, pen);
-                HGDIOBJ old_brush = SelectObject(dc, GetStockObject(NULL_BRUSH));
-                int view_left = mini_map->pane.left + g_island_scroll_x / 10;
-                int view_right = view_left + LOGICAL_WIDTH / 10;
-                /* Two nested outlines so the frame stays readable on any art. */
-                Rectangle(dc, view_left, mini_map->pane.top,
-                          view_right + 1, mini_map->pane.bottom + 1);
-                Rectangle(dc, view_left + 1, mini_map->pane.top + 1,
-                          view_right, mini_map->pane.bottom);
-                SelectObject(dc, old_brush);
-                SelectObject(dc, old_pen);
-                DeleteObject(pen);
-            }
         }
     }
 
