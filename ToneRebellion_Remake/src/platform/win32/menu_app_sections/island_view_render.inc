@@ -411,29 +411,27 @@ static void draw_island_lilmap_dots(HDC dc, const WindowTemplate *mini_map,
        player's explored extent, then two slot-1 vertical lines 63 px apart at
        scroll/10. */
     {
-        int first = -1;
-        int last = -1;
-        int cell;
         int pane_height = mini_map->pane.bottom - mini_map->pane.top + 1;
         int line_x;
+        const GameRuntimeIsland *bounds_island = NULL;
         if (g_game_session_valid && viewer >= 0 &&
-            g_menu.selected_map_island >= 0) {
-            for (cell = 0; cell < GAME_ISLAND_EXPLORED_CELLS; ++cell) {
-                if (!game_session_island_x_explored(&g_game_session,
-                        (uint8_t)g_menu.selected_map_island,
-                        (uint8_t)viewer, cell * 10)) continue;
-                if (first < 0) first = cell;
-                last = cell;
-            }
-        }
-        if (first >= 0) {
+            viewer < GAME_FLOATER_CATEGORY_COUNT &&
+            g_menu.selected_map_island >= 0 &&
+            g_menu.selected_map_island < (int)g_game_session.island_count)
+            bounds_island = &g_game_session.islands[g_menu.selected_map_island];
+        if (bounds_island != NULL) {
+            /* island+0x408 / +0x40c per player (floater_min_x / floater_max_x):
+               left bar when left > 0, right bar when right < 0x9ff. */
+            int left = bounds_island->floater_min_x[viewer];
+            int right = bounds_island->floater_max_x[viewer];
             int bar_left[2];
             int bar_right[2];
             int bar;
             bar_left[0] = mini_map->pane.left;
-            bar_right[0] = mini_map->pane.left + first;
-            bar_left[1] = mini_map->pane.left + last + 1;
-            bar_right[1] = mini_map->pane.right + 1;
+            bar_right[0] = mini_map->pane.left + (left > 0 ? left / 10 : 0);
+            bar_left[1] = mini_map->pane.left + right / 10;
+            bar_right[1] = right < 0x9ff ? mini_map->pane.right + 1
+                                         : bar_left[1];
             for (bar = 0; bar < 2; ++bar) {
                 if (bar_right[bar] <= bar_left[bar]) continue;
                 /* Default path ([0x4c2bac] == 0, set only by a float.cfg

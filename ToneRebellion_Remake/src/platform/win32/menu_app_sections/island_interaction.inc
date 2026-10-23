@@ -1,30 +1,22 @@
-/* Remake: keep the camera inside the player's explored x extent (sticky
-   cells from the FUN_00462285 visibility spans). Falls back to 0..1920 when no
-   session or nothing is explored. */
+/* FUN_00435ea7: clamp the camera x to [left, right - 0x27f] of the current
+   player's island+0x408/+0x40c bounds (floater_min_x / floater_max_x), then to
+   [0, 0x781]. Falls back to 0..1920 when no session is available. */
 static int island_clamp_scroll(int scroll)
 {
     int lo = 0;
     int hi = 1920;
     if (g_game_session_valid && g_menu.selected_tribe >= 0 &&
+        g_menu.selected_tribe < GAME_FLOATER_CATEGORY_COUNT &&
         g_menu.selected_map_island >= 0 &&
         g_menu.selected_map_island < g_game_session.island_count) {
-        int first = -1;
-        int last = -1;
-        int cell;
-        for (cell = 0; cell < GAME_ISLAND_EXPLORED_CELLS; ++cell) {
-            if (!game_session_island_x_explored(&g_game_session,
-                    (uint8_t)g_menu.selected_map_island,
-                    (uint8_t)g_menu.selected_tribe, cell * 10)) continue;
-            if (first < 0) first = cell;
-            last = cell;
-        }
-        if (first >= 0) {
-            lo = first * 10;
-            hi = (last + 1) * 10 - LOGICAL_WIDTH;
-            if (hi < lo) hi = lo;
-            if (lo > 1920) lo = 1920;
-            if (hi > 1920) hi = 1920;
-        }
+        const GameRuntimeIsland *island =
+            &g_game_session.islands[g_menu.selected_map_island];
+        lo = island->floater_min_x[g_menu.selected_tribe];
+        hi = island->floater_max_x[g_menu.selected_tribe] - 0x27f;
+        if (lo < 0) lo = 0;
+        if (hi > 1920) hi = 1920;
+        if (hi < lo) hi = lo;
+        if (lo > 1920) lo = 1920;
     }
     return scroll < lo ? lo : scroll > hi ? hi : scroll;
 }
