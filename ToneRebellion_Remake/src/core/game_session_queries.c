@@ -259,8 +259,8 @@ unsigned int game_session_clip_slot(GameSession *session, uint8_t player_slot,
     if (island_index != NULL) *island_index = session->clip_slot_island[slot];
     if (location_index != NULL) *location_index = session->clip_slot_location[slot];
     {
-        /* Dots = sub-slot + 1; buildings whose sub-slot is unassigned (-1) still
-           show one dot so their shortcut is visible. */
+        /* Returns the instance number +0x60 plus one (1 when unassigned), so a
+           used slot is never 0; FUN_004391ab draws that number minus one. */
         int16_t sub_slot = session->islands[session->clip_slot_island[slot]]
             .locations[session->clip_slot_location[slot]].source_category_slot_60;
         return sub_slot >= 0 ? (unsigned int)sub_slot + 1U : 1U;

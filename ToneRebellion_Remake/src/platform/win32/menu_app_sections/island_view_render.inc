@@ -1815,12 +1815,18 @@ static void draw_clipboard_strip(HDC dc)
             dots = game_session_clip_slot(&g_game_session,
                 (uint8_t)g_menu.selected_tribe, index, &clip_island, &clip_location);
             if (dots != 0) {
-                /* FUN_004391ab: dots at step 5, five per row from (1,1), frame =
-                   the owner's tribe (clamped 0..3). */
-                uint32_t frame = (uint32_t)(g_menu.selected_tribe > 3
-                                            ? 3 : g_menu.selected_tribe);
+                /* FUN_004391ab (ev_ee7544ff): the building through FUN_0040bf98
+                   at (12, 30) with flags 0x6000, then bildicon dots: count =
+                   the 0-based instance number +0x60 (FUN_0045ee26, ev_a4a51711),
+                   step 5, five per row from (1, 1), frame = clamp(owner, 0..3). */
+                const GameRuntimeLocation *building =
+                    &g_game_session.islands[clip_island].locations[clip_location];
+                uint32_t frame = (uint32_t)(building->owner_id < 0 ? 0
+                    : building->owner_id > 3 ? 3 : building->owner_id);
                 unsigned int dot;
-                for (dot = 0; dot < dots && dot < 10U; ++dot) {
+                (void)draw_runtime_item_scaled(dc, building,
+                    slot->pane.left + 12, slot->pane.top + 30, 0x6000U);
+                for (dot = 0; dot + 1U < dots && dot < 10U; ++dot) {
                     if (frame < g_bildicon_art.frame_count)
                         draw_sprite(dc, &g_bildicon_art, frame,
                             slot->pane.left + 1 + (int)(dot % 5U) * 5,
