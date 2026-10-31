@@ -396,3 +396,229 @@ static void test_producer_cadence_starts_prod_and_waits_for_output_consumption(v
     game_session_tick_item_animations(&session, &catalog);
     assert(location->record_value_24 == 2);
 }
+
+static void make_leviathan_pads(PadCatalog *pads)
+{
+    unsigned int item;
+    memset(pads, 0, sizeof(*pads));
+    pads->item_count = 22;
+    for (item = 0; item < pads->item_count; ++item) {
+        pads->items[item].item_id = (uint16_t)item;
+        pads->items[item].hit_points = 30;
+    }
+}
+
+/* Render rows are descriptor-less but present: items 0/1 only reach the
+   neutral-replacement switch when the catalog has a row for them. */
+static void make_leviathan_buildings(BuildingRenderCatalog *buildings)
+{
+    unsigned int item;
+    memset(buildings, 0, sizeof(*buildings));
+    buildings->item_count = 22;
+    for (item = 0; item < buildings->item_count; ++item) {
+        buildings->items[item].item_id = (uint16_t)item;
+        buildings->items[item].present = 1;
+    }
+}
+
+static void make_leviathan_marker(GameRuntimeLocation *marker,
+                                  uint8_t renderer_class, int32_t item_id)
+{
+    memset(marker, 0, sizeof(*marker));
+    marker->renderer_class = renderer_class;
+    marker->record_value_10 = item_id;
+    marker->owner_id = 4;
+    marker->source_value_14 = 4;
+    marker->source_value_22 = 0x00ff;
+    marker->source_value_32 = 1;
+    marker->source_flags = 0x4f;
+    marker->animation_rate = 1;
+    marker->leviathan_spawned_floater = -1;
+}
+
+static unsigned int ticks_until_marker_changes(GameSession *session,
+                                               const PadCatalog *pads,
+                                               const GameRuntimeLocation *marker,
+                                               unsigned int limit)
+{
+    BuildingRenderCatalog buildings = {0};
+    int32_t before = marker->record_value_10;
+    unsigned int tick;
+    make_leviathan_buildings(&buildings);
+    for (tick = 1; tick <= limit; ++tick) {
+        game_session_tick_item_animations_with_floaters(
+            session, &buildings, NULL, pads);
+        if (marker->record_value_10 != before) return tick;
+    }
+    return 0;
+}
+
+static void test_leviathan_marker_becomes_defense_building_with_time(void)
+{
+    /* Class-1 item 5 is the Leviathan seed: its +0x30 counter grows by +0x32
+       per tick and fires at 0x4b0 - 100 * difficulty (FUN_00450a71 case 5). */
+    unsigned int difficulty;
+    for (difficulty = 0; difficulty < 5; ++difficulty) {
+        GameSession session = {0};
+        PadCatalog pads;
+        GameRuntimeLocation *marker = &session.islands[0].locations[0];
+        unsigned int fired;
+
+        make_leviathan_pads(&pads);
+        session.island_count = 1;
+        session.config.difficulty = (uint8_t)difficulty;
+        session.islands[0].location_count = 1;
+        make_leviathan_marker(marker, 1, 5);
+
+        fired = ticks_until_marker_changes(&session, &pads, marker, 2000);
+        assert(fired == 0x4b0U - difficulty * 100U);
+        /* Replacement stays Leviathan-owned and picks a spawner type 6..9. */
+        assert(marker->record_value_10 >= 6 && marker->record_value_10 <= 9);
+        assert(marker->owner_id == 4 && marker->source_value_14 == 4);
+        assert(marker->charge_source_value_30 == 0);
+        assert(marker->source_value_34 == 30);
+    }
+}
+
+static void test_leviathan_spread_waits_while_marker_rate_is_zero(void)
+{
+    GameSession session = {0};
+    PadCatalog pads;
+    GameRuntimeLocation *marker = &session.islands[0].locations[0];
+
+    make_leviathan_pads(&pads);
+    session.island_count = 1;
+    session.islands[0].location_count = 1;
+    make_leviathan_marker(marker, 1, 5);
+    marker->source_value_32 = 0;
+    assert(ticks_until_marker_changes(&session, &pads, marker, 3000) == 0);
+    assert(marker->charge_source_value_30 == 0);
+}
+
+static void test_neutral_pool_is_contaminated_then_matures(void)
+{
+    /* Neutral class-1 POOL (item 0) -> item 5 immediately, then item 5 ->
+       defense building after the difficulty delay: full island takeover chain. */
+    GameSession session = {0};
+    PadCatalog pads;
+    GameRuntimeLocation *pool = &session.islands[0].locations[0];
+    unsigned int first;
+    unsigned int second;
+
+    make_leviathan_pads(&pads);
+    session.island_count = 1;
+    session.islands[0].location_count = 1;
+    make_leviathan_marker(pool, 1, 0);
+
+    first = ticks_until_marker_changes(&session, &pads, pool, 10);
+    assert(first == 1 && pool->record_value_10 == 5);
+    assert(pool->owner_id == 4 && (pool->source_flags & 0x400U) != 0);
+    second = ticks_until_marker_changes(&session, &pads, pool, 2000);
+    assert(second == 0x4b0U);
+    assert(pool->record_value_10 >= 6 && pool->record_value_10 <= 9);
+}
+
+static void test_player_owned_pool_is_not_contaminated(void)
+{
+    GameSession session = {0};
+    PadCatalog pads;
+    GameRuntimeLocation *pool = &session.islands[0].locations[0];
+
+    make_leviathan_pads(&pads);
+    session.island_count = 1;
+    session.islands[0].location_count = 1;
+    make_leviathan_marker(pool, 1, 0);
+    pool->owner_id = 0;
+    pool->source_value_14 = 0;
+    assert(ticks_until_marker_changes(&session, &pads, pool, 3000) == 0);
+    assert(pool->record_value_10 == 0 && pool->owner_id == 0);
+}
+
+static void test_class0_neutral_pad_needs_affordable_leviathan_cost(void)
+{
+    GameSession session = {0};
+    PadCatalog pads;
+    GameRuntimeLocation *pad = &session.islands[0].locations[0];
+
+    make_leviathan_pads(&pads);
+    pads.items[5].building_tone_cost = 40;
+    session.island_count = 1;
+    session.islands[0].location_count = 1;
+    make_leviathan_marker(pad, 0, 1); /* class-0 item 0 is skipped by the tick; 1 is the empty pad */
+    pad->producer_cadence = 39; /* cost > raw +0x0c: FUN_00452656 refuses */
+    assert(ticks_until_marker_changes(&session, &pads, pad, 50) == 0);
+    pad->producer_cadence = 40;
+    assert(ticks_until_marker_changes(&session, &pads, pad, 50) == 1);
+    assert(pad->record_value_10 == 5 && pad->owner_id == 4);
+}
+
+static void test_leviathan_spread_only_converts_its_own_island(void)
+{
+    GameSession session = {0};
+    PadCatalog pads;
+    BuildingRenderCatalog buildings = {0};
+    unsigned int tick;
+
+    make_leviathan_buildings(&buildings);
+    make_leviathan_pads(&pads);
+    session.island_count = 2;
+    session.islands[0].location_count = 1;
+    session.islands[1].location_count = 1;
+    make_leviathan_marker(&session.islands[0].locations[0], 1, 5);
+    make_leviathan_marker(&session.islands[1].locations[0], 1, 0);
+    session.islands[1].locations[0].owner_id = 0;
+    session.islands[1].locations[0].source_value_14 = 0;
+    for (tick = 0; tick < 0x4b0; ++tick)
+        game_session_tick_item_animations_with_floaters(
+            &session, &buildings, NULL, &pads);
+    assert(session.islands[0].locations[0].record_value_10 >= 6);
+    assert(session.islands[1].locations[0].record_value_10 == 0);
+    assert(session.islands[1].locations[0].owner_id == 0);
+}
+
+static void test_leviathan_spawner_births_units_on_its_island_over_time(void)
+{
+    /* Class-1 items 6..9 accumulate +0x0c by their rate each tick and birth a
+       type-4 unit at the site once the world-time/difficulty threshold is hit
+       (10000 ticks at difficulty 0/1). */
+    static GameSession session;
+    PadCatalog pads;
+    BuildingRenderCatalog buildings = {0};
+    FloaterCatalog floaters = {0};
+    GameRuntimeLocation *spawner;
+    unsigned int tick;
+    unsigned int subtype;
+
+    for (subtype = 9; subtype <= 17; ++subtype) {
+        floaters.rows[subtype + 27U].hit_points = 20;
+        floaters.rows[subtype + 27U].attack_strength = 3;
+        floaters.rows[subtype + 27U].movement_speed = 2;
+    }
+    memset(&session, 0, sizeof(session));
+    make_leviathan_pads(&pads);
+    make_leviathan_buildings(&buildings);
+    session.island_count = 2;
+    session.islands[1].location_count = 1;
+    spawner = &session.islands[1].locations[0];
+    make_leviathan_marker(spawner, 1, 6);
+    spawner->x = 123;
+    spawner->y = 45;
+    spawner->source_flags = 0x001U;
+    session.islands[1].leviathan_floater_budget = 6;
+    session.islands[1].leviathan_site_budget = 1;
+
+    for (tick = 0; tick < 9998; ++tick)
+        game_session_tick_item_animations_with_floaters(
+            &session, &buildings, &floaters, &pads);
+    assert(session.floater_count == 0);
+    for (tick = 0; tick < 4; ++tick)
+        game_session_tick_item_animations_with_floaters(
+            &session, &buildings, &floaters, &pads);
+    assert(session.floater_count >= 1);
+    assert(session.floaters[0].type_index == 4);
+    assert(session.floaters[0].owner_slot == 4);
+    assert(session.floaters[0].island_index == 1);
+    assert(session.floaters[0].source_subtype >= 9 &&
+           session.floaters[0].source_subtype <= 17);
+    assert(session.floaters[0].current_hit_points >= 20);
+}

@@ -481,6 +481,13 @@ int main(void)
     test_inci_animation_uses_source_counter_and_delayed_activation();
     test_active_item_four_and_twenty_two_counter_stops_at_32();
     test_class0_item5_spawns_neutral_item_after_difficulty_delay();
+    test_leviathan_marker_becomes_defense_building_with_time();
+    test_leviathan_spread_waits_while_marker_rate_is_zero();
+    test_neutral_pool_is_contaminated_then_matures();
+    test_player_owned_pool_is_not_contaminated();
+    test_class0_neutral_pad_needs_affordable_leviathan_cost();
+    test_leviathan_spread_only_converts_its_own_island();
+    test_leviathan_spawner_births_units_on_its_island_over_time();
     test_item_animation_uses_source_flags_and_per_object_counters();
     test_tone_pool_uses_two_source_counter_sequences();
     test_active_cons_and_prod_counters_finish_at_source_limits();
