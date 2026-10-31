@@ -1973,6 +1973,10 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
         speed_context.owner_slot = floater->owner_slot;
         speed_context.floater_subtype = floater->source_subtype;
         speed_context.state = floater->movement_state;
+        /* The remake's artifact-delivery leg reuses state 14 (0x0e) with a
+           route; only the native idle wander (no route) walks at speed 1. */
+        if (floater->movement_state == 0x0e && !floater->has_wander_order)
+            speed_context.state = 13;
         speed_context.owner_speed_modifier =
             floater->owner_slot < GAME_START_PLAYER_COUNT
                 ? session->economy[floater->owner_slot]

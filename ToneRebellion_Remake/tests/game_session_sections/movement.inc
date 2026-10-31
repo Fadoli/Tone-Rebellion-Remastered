@@ -94,6 +94,49 @@ static void test_bridge_crossing_keeps_soldier_hall_link(void)
     assert(hall->charge_floater_slots[0] == -1);
 }
 
+/* One island, a worker of player 2 at (100, 100) and a ground artifact
+   (item 6) at `object_x`. */
+static GameFloaterStart *setup_obtain_island(GameSession *session,
+                                             uint16_t object_x)
+{
+    GameRuntimeLocation *object;
+    GameFloaterStart *floater;
+    unsigned int slot;
+
+    memset(session, 0, sizeof(*session));
+    session->island_count = 1;
+    session->floater_count = 1;
+    session->islands[0].location_count = 2;
+    session->islands[0].floater_max_x[2] = 0x9ff;
+    floater = &session->floaters[0];
+    floater->island_index = 0;
+    floater->owner_slot = 2;
+    floater->is_active = 1;
+    floater->linked_task_slot = -1;
+    floater->source_link_0c = -1;
+    floater->order_target_floater = -1;
+    floater->order_target_location = -1;
+    floater->movement_speed = 3;
+    floater->x = 100;
+    floater->y = 100;
+    object = &session->islands[0].locations[0];
+    object->renderer_class = 0;
+    object->owner_id = -1;
+    object->source_value_14 = -1;
+    object->record_value_10 = 1;
+    object->record_value_24 = 6;
+    object->x = object_x;
+    object->y = 100;
+    object->charge_staff_task_handle = -1;
+    object->leviathan_spawned_floater = -1;
+    object->source_location_slot_18 = -1;
+    object->source_category_slot_60 = -1;
+    for (slot = 0; slot < 8; ++slot) object->charge_floater_slots[slot] = -1;
+    for (slot = 0; slot < GAME_RESOURCE_TYPE_COUNT; ++slot)
+        object->source_task_slot[slot] = -1;
+    return floater;
+}
+
 static void test_floater_pickup_order_collects_ground_artifact(void)
 {
     GameSession session = {0};
@@ -215,6 +258,33 @@ static void test_obtain_task_crosses_bridge_to_ground_artifact(void)
     assert(floater->island_index == 1);
     assert(floater->carried_resource_code == 6);
     assert(object->record_value_10 == 0 && object->record_value_24 == 0);
+}
+
+static void test_artifact_delivery_walks_at_unit_speed(void)
+{
+    static GameSession session;
+    GameFloaterStart *floater = setup_obtain_island(&session, 100);
+    GameRuntimeLocation *hall = &session.islands[0].locations[1];
+    uint16_t x;
+    unsigned int tick;
+
+    hall->renderer_class = 0;
+    hall->owner_id = 2;
+    hall->record_value_10 = 0x2a + 2 * 16;
+    hall->x = 400;
+    hall->y = 100;
+    assert(game_session_queue_obtain_task(&session, 2, 0, 0));
+    for (tick = 1; tick < 5 && floater->movement_state != 14; ++tick)
+        game_session_tick_floater_moves(&session, tick, NULL);
+    assert(floater->movement_state == 14);
+    assert(floater->carried_resource_code == 6);
+    x = floater->x;
+    game_session_tick_floater_moves(&session, tick, NULL);
+    /* The idle-wander speed of 1 must not apply to the carrying leg. */
+    assert(floater->x == x + 3);
+    for (++tick; tick < 400 && floater->carried_resource_code == 6; ++tick)
+        game_session_tick_floater_moves(&session, tick, NULL);
+    assert(session.economy[2].inventory_count[1] == 1);
 }
 
 static void test_floater_move_state_advances_only_simulation_assigned_destinations(void)
