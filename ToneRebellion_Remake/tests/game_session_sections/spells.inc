@@ -1695,3 +1695,65 @@ static void test_wounded_soldier_heals_in_its_building(void)
     assert((wounded->source_runtime_flags & 1U) == 0);
     assert(wounded->active_order_action != 2);
 }
+
+static void test_wounded_soldier_crosses_a_bridge_to_heal(void)
+{
+    /* FUN_0042219e sets action 2 toward a building on another island;
+       FUN_004211bb stage 0 sends the floater over the bridge (state 0x11,
+       action 9 with +0x46 = 1). The retreat check must not restart the
+       order while the crossing runs, or the floater turns back on the
+       bridge forever. */
+    static GameSession session;
+    PadCatalog pads;
+    GameRuntimeLocation *bridge;
+    GameRuntimeLocation *home;
+    GameFloaterStart *wounded;
+    unsigned int tick;
+    unsigned int index;
+    int crossed = 0;
+    int entered = 0;
+
+    make_pad_catalog(&pads);
+    memset(&session, 0, sizeof(session));
+    session.island_count = 2;
+    session.islands[0].location_count = 2;
+    session.islands[1].location_count = 1;
+    for (index = 0; index < 5; ++index) {
+        session.islands[0].floater_max_x[index] = 0x9ff;
+        session.islands[1].floater_max_x[index] = 0x9ff;
+    }
+    home = school(&session, 0, 0, 600);
+    home->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 50;
+    bridge = &session.islands[0].locations[1];
+    bridge->renderer_class = 2;
+    bridge->source_flags = 1;
+    bridge->owner_id = -1;
+    bridge->bridge_neighbor_island = 1;
+    bridge->x = 900;
+    bridge->y = 200;
+    bridge = &session.islands[1].locations[0];
+    bridge->renderer_class = 2;
+    bridge->source_flags = 1;
+    bridge->owner_id = -1;
+    bridge->bridge_neighbor_island = 0;
+    bridge->x = 300;
+    bridge->y = 230;
+    soldier(&session, 0, 0, 700, 0);
+    wounded = &session.floaters[0];
+    wounded->island_index = 1;
+    wounded->current_hit_points = 10; /* under 60 / 3 */
+
+    for (tick = 1; tick <= 3000 && wounded->current_hit_points < 60; ++tick) {
+        game_session_tick_floater_moves(&session, tick, &pads);
+        if (wounded->island_index == 0) crossed = 1;
+        if ((wounded->source_runtime_flags & 1U) != 0) {
+            entered = 1;
+            assert(wounded->island_index == 0);
+            assert(wounded->x == home->x);
+            assert(wounded->active_order_action == 2);
+        }
+    }
+    assert(crossed);
+    assert(entered);
+    assert(wounded->current_hit_points == 60);
+}

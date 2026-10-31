@@ -1359,7 +1359,12 @@ static int game_session_check_linked_retreat(GameSession *session,
     int32_t charge_limit;
     int32_t pool;
     int mode = -1;
-    uint8_t action = floater->active_order_action;
+    /* FUN_004210a9 writes only +0x2c/+0x30/+0x32 (ev_dd046f00): the
+       original +0x3c keeps the order during a crossing, which the remake
+       parks in handoff_resume_action. Without this a retreat (action 2)
+       restarts its own crossing every tick and stays on the bridge. */
+    uint8_t action = floater->movement_state == 0x11
+        ? floater->handoff_resume_action : floater->active_order_action;
 
     if (building->charge_recent_floater == (int16_t)floater_index) return 1;
     if (action == 2 && (floater->source_runtime_flags & 1U) != 0) return 1;

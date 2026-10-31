@@ -570,6 +570,7 @@ int main(void)
     test_soldiers_fight_through_building_orders();
     test_building_order_crosses_a_bridge_and_keeps_the_link();
     test_wounded_soldier_heals_in_its_building();
+    test_wounded_soldier_crosses_a_bridge_to_heal();
     test_effect_instances_queue_their_sound_with_position();
     (void)puts("game session unit tests passed");
     return 0;
