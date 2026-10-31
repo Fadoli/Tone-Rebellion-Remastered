@@ -813,10 +813,12 @@ static void game_session_cancel_ground_pickup_order(GameSession *session,
 
 /* Remake interpretation (player request, not a native path): an artifact
    picked up by Obtain is carried to the nearest owned Hall or recruiter
-   building and credited to the owner's Inventory there. Returns 1 when a
-   delivery leg was started. */
-static int game_session_start_artifact_delivery(GameSession *session,
-                                                GameFloaterStart *floater)
+   building and credited to the owner's Inventory there. With none on this
+   island, the worker crosses toward its Hall island first and resumes the
+   leg there (resume action 0xd, state 14). Returns 1 when a delivery leg
+   was started. */
+int game_session_start_artifact_delivery(GameSession *session,
+                                         GameFloaterStart *floater)
 {
     const GameRuntimeIsland *island;
     const GameRuntimeLocation *best = NULL;
@@ -842,7 +844,21 @@ static int game_session_start_artifact_delivery(GameSession *session,
             best_distance = distance;
         }
     }
-    if (best == NULL) return 0;
+    if (best == NULL) {
+        uint8_t hall_island =
+            session->economy[floater->owner_slot].hall_island_index;
+        if (hall_island >= session->island_count ||
+            hall_island == floater->island_index) return 0;
+        floater->active_order_action = 0x0d;
+        if (!game_session_begin_floater_handoff(session, floater,
+                                                hall_island)) {
+            floater->active_order_action = 0;
+            return 0;
+        }
+        floater->handoff_resume_action = 0x0d;
+        floater->handoff_resume_state = 14;
+        return 1;
+    }
     floater->movement_state = 14;
     floater->destination_x = best->x;
     floater->destination_y = best->y;

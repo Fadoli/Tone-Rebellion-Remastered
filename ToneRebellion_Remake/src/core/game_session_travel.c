@@ -336,6 +336,16 @@ int game_session_tick_floater_handoff(GameSession *session,
                 return 1;
             }
             return 1;
+        } else if (resume_action == 0x0d && resume_state == 14) {
+            /* Remake artifact delivery: next bridge, or the Hall leg. */
+            floater->has_move_order = 0;
+            if (!game_session_start_artifact_delivery(session, floater)) {
+                floater->movement_state = 0;
+                floater->active_order_action = 0;
+                floater->has_wander_order = 1;
+                floater->wander_timer = 0;
+            }
+            return 1;
         } else if (resume_action == 2 && resume_state == 2) {
             /* FA_Recharge across a bridge: state 2 toward the building. */
             if (floater->order_target_island != floater->island_index ||

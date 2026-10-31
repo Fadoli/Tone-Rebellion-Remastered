@@ -517,6 +517,7 @@ int main(void)
     test_bridge_crossing_keeps_soldier_hall_link();
     test_floater_pickup_order_collects_ground_artifact();
     test_obtain_task_crosses_bridge_to_ground_artifact();
+    test_obtained_artifact_crosses_back_to_the_hall_island();
     test_obtain_worker_drops_its_tone_cargo();
     test_artifact_delivery_walks_at_unit_speed();
     test_floater_move_state_advances_only_simulation_assigned_destinations();

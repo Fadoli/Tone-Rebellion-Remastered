@@ -253,11 +253,62 @@ static void test_obtain_task_crosses_bridge_to_ground_artifact(void)
     assert(floater->handoff_resume_action == 0x0d);
     for (tick = 2; tick < 2000 && floater->carried_resource_code != 6; ++tick) {
         game_session_tick_floater_moves(&session, tick, NULL);
-        if (floater->movement_state == 0x11) assert(floater->linked_task_slot >= 0);
+        if (floater->movement_state == 0x11 &&
+            floater->carried_resource_code != 6)
+            assert(floater->linked_task_slot >= 0);
     }
     assert(floater->island_index == 1);
     assert(floater->carried_resource_code == 6);
     assert(object->record_value_10 == 0 && object->record_value_24 == 0);
+}
+
+static void test_obtained_artifact_crosses_back_to_the_hall_island(void)
+{
+    static GameSession session;
+    GameFloaterStart *floater = setup_obtain_island(&session, 520);
+    GameRuntimeLocation *hall;
+    GameRuntimeLocation *object;
+    unsigned int tick;
+
+    /* Island 0: bridge + Hall; island 1: bridge + artifact. */
+    session.island_count = 2;
+    session.islands[1] = session.islands[0];
+    object = &session.islands[1].locations[1];
+    *object = session.islands[0].locations[0];
+    memset(&session.islands[1].locations[0], 0,
+           sizeof(session.islands[1].locations[0]));
+    session.islands[1].locations[0].renderer_class = 2;
+    session.islands[1].locations[0].source_flags = 1;
+    session.islands[1].locations[0].bridge_neighbor_island = 0;
+    session.islands[1].locations[0].x = 500;
+    session.islands[1].locations[0].y = 260;
+    memset(&session.islands[0].locations[0], 0,
+           sizeof(session.islands[0].locations[0]));
+    session.islands[0].locations[0].renderer_class = 2;
+    session.islands[0].locations[0].source_flags = 1;
+    session.islands[0].locations[0].bridge_neighbor_island = 1;
+    session.islands[0].locations[0].x = 300;
+    session.islands[0].locations[0].y = 200;
+    hall = &session.islands[0].locations[1];
+    memset(hall, 0, sizeof(*hall));
+    hall->renderer_class = 0;
+    hall->owner_id = 2;
+    hall->record_value_10 = 0x2a + 2 * 16;
+    hall->x = 150;
+    hall->y = 100;
+    session.economy[2].hall_island_index = 0;
+    session.economy[2].hall_location_index = 1;
+    floater->x = 300;
+    floater->y = 200;
+
+    assert(game_session_queue_obtain_task(&session, 2, 1, 1));
+    for (tick = 1; tick < 3000 &&
+         session.economy[2].inventory_count[1] == 0; ++tick)
+        game_session_tick_floater_moves(&session, tick, NULL);
+    assert(object->record_value_10 == 0);
+    assert(floater->island_index == 0);
+    assert(floater->carried_resource_code == 0);
+    assert(session.economy[2].inventory_count[1] == 1);
 }
 
 static void test_obtain_worker_drops_its_tone_cargo(void)
