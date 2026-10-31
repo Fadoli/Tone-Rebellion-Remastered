@@ -680,6 +680,17 @@ void game_session_tick_leviathan_ai(GameSession *session)
             }
         }
     }
+    /* FUN_00460989's tail: when the tick is a multiple of 6000 it queues
+       world event {10, tick / 6000 - 1} while that value is below 8
+       (ev_c9f9710e). Tick 0 would queue -1, which FUN_004334ce shows as an
+       AWAKE caption through the unresolved DAT_0049f538; it is not ported. */
+    if (session->simulation_tick != 0 && session->simulation_tick % 6000U == 0) {
+        uint32_t bond = session->simulation_tick / 6000U - 1U;
+        if (bond < 8U)
+            (void)game_session_queue_world_event(
+                session, GAME_SESSION_WORLD_EVENT_LEVIATHAN_BOND, 0,
+                (int32_t)bond);
+    }
 }
 
 unsigned int game_session_recalculate_active_locations(GameSession *session)

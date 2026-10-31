@@ -63,6 +63,9 @@ typedef struct GameSessionAudioEvent {
 
 typedef enum GameSessionWorldEventKind {
     GAME_SESSION_WORLD_EVENT_BUILDING_DESTROYED = 8,
+    /* FUN_00460989: every 6000 ticks, payload n = tick / 6000 - 1 (0..7);
+       FUN_004334ce shows newtext.txt LEVIBRK + BOND<n> + ".". */
+    GAME_SESSION_WORLD_EVENT_LEVIATHAN_BOND = 10,
     GAME_SESSION_WORLD_EVENT_ISLAND_REACHED = 12
 } GameSessionWorldEventKind;
 

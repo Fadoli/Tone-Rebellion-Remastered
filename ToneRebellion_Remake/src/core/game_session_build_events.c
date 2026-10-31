@@ -203,6 +203,7 @@ int game_session_queue_world_event(GameSession *session, uint8_t kind,
 
     if (session == NULL ||
         (kind != GAME_SESSION_WORLD_EVENT_BUILDING_DESTROYED &&
+         kind != GAME_SESSION_WORLD_EVENT_LEVIATHAN_BOND &&
          kind != GAME_SESSION_WORLD_EVENT_ISLAND_REACHED) ||
         island_index >= session->island_count ||
         session->world_event_count >= GAME_SESSION_MAX_WORLD_EVENTS) return 0;

@@ -1708,7 +1708,8 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
         if (game_session_tick_merge_completion(session, i, floater)) continue;
         if (game_session_advance_category4_subtype9_order(session, i)) continue;
         game_session_advance_category4_autonomous_order(session, i);
-        (void)game_session_assign_category4_autonomous_order(session, i);
+        (void)game_session_assign_category4_autonomous_order(session, i,
+                                                             source_tick);
         (void)game_session_assign_category4_subtype9_order(
             session, i, source_tick);
 

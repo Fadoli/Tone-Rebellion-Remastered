@@ -22,7 +22,7 @@ int game_session_panic_active(const GameSession *session, uint8_t player_slot,
 void game_session_apply_panic_orders(GameSession *session);
 /* FUN_0042219e's autonomous category-4 floater target selection. */
 int game_session_assign_category4_autonomous_order(
-    GameSession *session, unsigned int floater_index);
+    GameSession *session, unsigned int floater_index, uint32_t source_tick);
 void game_session_advance_category4_autonomous_order(
     GameSession *session, unsigned int floater_index);
 int game_session_assign_category4_subtype9_order(

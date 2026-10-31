@@ -169,6 +169,8 @@ undefined4 FUN_00422031(int param_1)
 
 Cette routine réévalue les ordres de chaque floater. Elle ignore les états runtime 6/7 et le garde global `DAT_006191b4`. Catégorie Leviathan 4 / sous-type 9 (`vspore`) possède une branche dédiée : sélection mode 2, ordre `FA_Move` (1), puis dommage périodique si aucune cible n’est retenue. Les sous-types 10–17 partagent une branche qui, depuis `FA_Wander` ou `FA_Nothing`, peut écrire `FA_AttackFlt` (6) ou `FA_AttackLoc` (7) selon un scan local, un score/threshold et un tirage aléatoire ; le flag `0x10` délègue à `FUN_00421d82`. Les floaters réguliers ont des branches distinctes pour engagement, tâche, entraînement, recharge et errance. Les identités métier des champs candidats et priorités restent partiellement inconnues. Evidence pseudocode actualisé `ev_4c7ea2d2c94eba918c2e82e0709966a1d9d2c60e1d2c705361285aceb05e5dea`; table d’action et détails dans [l’analyse enemy AI](../../behavior/enemy-ai.md).
 
+**Relecture 2026-10-28 (asm `0x4221b3..0x42250c`, pseudo `ev_7b65b088…`).** Spore : seuls gardes `+0x2c` 6/7, `DAT_006191b4`, puis maintien si action `+0x3c == 1` et site `+0x32` encore `+0x14 == -1`; aucun test d'action ni de flags avant la recherche. Deux recherches inconditionnelles (classe 1 puis 0, `FUN_00420d97(2,v)`), puis classe 1 retenue si `DAT_0061f9d4[île] > 0` et (`DAT_0061f9b6[île] == 0`, sinon `rand(4) == 0`, sinon classe 0 vide) — le tirage a lieu dès que le budget est non nul (`0x422266..0x4222b6`). Île = short `+0x0e`. Non-Spore : flag `0x10` testé d'abord (`FUN_00421d82`), puis action `+0x3c` ∈ {0, 14}; `0x08` non testé; `0x80` seulement lu (seuil 150/3000).
+
 ### Appels directs
 
 - `0x40100f` — `thunk_FUN_00420d97`

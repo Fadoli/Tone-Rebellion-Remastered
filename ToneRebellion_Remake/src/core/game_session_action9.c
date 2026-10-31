@@ -274,33 +274,34 @@ int game_session_assign_category4_subtype9_order(
     if (!game_session_floater_is_active(floater) || floater->type_index != 4U ||
         floater->source_subtype != 9U ||
         (floater->source_runtime_flags & 0x008U) != 0 ||
+        floater->movement_state == 6 || floater->movement_state == 7 ||
         floater->island_index >= session->island_count) return 0;
     island = &session->islands[floater->island_index];
 
-    /* FUN_0042219e keeps a Move order only while its target's raw +0x14 is
-       still -1; once another Spore (or anything else) claimed the site, the
-       next reevaluation (every 10th tick while moving, FUN_0041e569) picks a
-       new one instead of letting this Spore reach an already claimed site. */
-    moving_retarget = floater->active_order_action == 1 &&
-        floater->movement_state == 1 && floater->has_move_order;
-    if (moving_retarget) {
-        if ((source_tick + floater_index) % 10U != 0) return 0;
-        if (floater->order_target_location >= 0 &&
-            (unsigned int)floater->order_target_location <
-                island->location_count &&
-            island->locations[(unsigned int)floater->order_target_location]
-                    .source_value_14 == -1) return 0;
-    } else if ((floater->active_order_action != 0 &&
-                floater->active_order_action != 0x0e) ||
-               floater->movement_state != 0 || floater->has_move_order) {
-        return 0;
-    }
+    /* FUN_0041e569 polls FUN_0042219e every tick in state 0, otherwise once
+       per ten ticks. */
+    if (floater->movement_state != 0 &&
+        (source_tick + floater_index) % 10U != 0) return 0;
+    /* FUN_0042219e has no action gate for the Spore: it keeps only a Move
+       (+0x3c == 1) whose site +0x32 is still unowned (+0x14 == -1), and
+       otherwise searches again (asm 0x4221fa..0x42222a), so a Spore never
+       reaches a site another floater claimed meanwhile. */
+    moving_retarget = floater->active_order_action == 1;
+    if (moving_retarget &&
+        floater->source_order_parameter_32 < island->location_count &&
+        island->locations[floater->source_order_parameter_32]
+                .source_value_14 == -1) return 0;
+    /* Remake guard: keep the PROD exit step, which this model drives as a
+       bare move order rather than a traced FA_* action. */
+    if (!moving_retarget && floater->has_move_order) return 0;
 
     /* FUN_0042219e queries site class 1 (Tone sources) before class 0
        (building pads). The class-1 site replaces the class-0 one when the
        island still has remaining markers (DAT_0061f9d4 = +0x159c) and either
        its site budget (DAT_0061f9b6 = +0x157e) is zero, FUN_00467260(4)
-       returns 0, or no class-0 site exists; the roll is short-circuited. */
+       returns 0, or no class-0 site exists; the roll is short-circuited.
+       Both globals are FUN_00460460's arrays on ECX = 0x61e438
+       (FUN_00453a5f, ev_470cc388). */
     target_class1 = action9_find_category4_subtype9_site(session, floater, 1);
     target_class0 = action9_find_category4_subtype9_site(session, floater, 0);
     if (target_class1 >= 0 && island->leviathan_remaining_markers > 0 &&
@@ -346,7 +347,7 @@ int game_session_assign_category4_subtype9_order(
 }
 
 int game_session_assign_category4_autonomous_order(
-    GameSession *session, unsigned int floater_index)
+    GameSession *session, unsigned int floater_index, uint32_t source_tick)
 {
     GameFloaterStart *floater;
     int32_t search_distance;
@@ -368,8 +369,16 @@ int game_session_assign_category4_autonomous_order(
         floater->type_index != 4U || floater->source_subtype == 9U ||
         (floater->active_order_action != 0 &&
          floater->active_order_action != 0x0e) ||
-        floater->movement_state != 0 || floater->has_move_order ||
         floater->island_index >= session->island_count) return 0;
+    /* FUN_0042219e accepts FA_Nothing or FA_Wander (asm 0x422372..0x422378);
+       FUN_0041e569 polls a moving floater once per ten ticks, so a wandering
+       Leviathan (state 0x0e) notices targets on the way. A bare remake move
+       order (PROD exit step) is not an FA_* action and is left alone. */
+    if (floater->movement_state == 0x0e && floater->has_wander_order) {
+        if ((source_tick + floater_index) % 10U != 0) return 0;
+    } else if (floater->movement_state != 0 || floater->has_move_order) {
+        return 0;
+    }
 
     search_distance = (floater->source_runtime_flags & 0x080U) != 0
         ? 3000 : 0x96;

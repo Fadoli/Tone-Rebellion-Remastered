@@ -25,8 +25,8 @@ Ordre choisi : chaque étape débloque la suivante.
 
 ## Phase 2 — Adversaires
 
-1. Tick IA `FUN_00460989` et `FUN_00460460` (portés partiellement, `TODO_TASKS` l.7) : décompiler/lire en entier, porter la prise de décision.
-2. Leviathan : contamination et défense ont des tests; relier à l'IA et aux ordres d'attaque de la phase 1.
+1. ~~Tick IA `FUN_00460989` et `FUN_00460460`~~ : relus en entier et portés le 2026-10-28 (`TODO_TASKS` l.7). Il n'existe pas de planificateur de tribu adverse : l'adversaire solo est le Léviathan (Spores qui contaminent sites et marqueurs, marqueurs qui produisent, unités 10..17 qui attaquent floaters et bâtiments, vagues `0x80` élargissant la portée à 3000). Reste : garde `DAT_006191b4` (fin de partie, phase 3).
+2. Leviathan : contamination, défense, production et attaques autonomes (`FA_AttackFlt`/`FA_AttackLoc`, riposte `FUN_00421d82`) sont reliés; une Spore peut maintenant contaminer un marqueur classe 1 et étendre la production. À vérifier en jeu.
 3. Effet monde du clic glyphe : sens de `DAT_004befe0`, ordre `0x13` (TODO_OTHER l.5).
 
 ## Phase 3 — Fin de partie
