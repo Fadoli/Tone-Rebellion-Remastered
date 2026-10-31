@@ -938,15 +938,6 @@ static void draw_island_feature(HDC dc, int island_id, const IslandLocation *sit
    bits {0,1,3}/{6,7,5}/{10,11,9} draw, and whether x advances only on a drawn
    icon, is an interpretation of the pseudocode; the owner-parity test is
    observed but unexplained. */
-/* Port records keep owner-specific item IDs (base + owner * 16); native Hall
-   text and icon predicates test the base ID. */
-static int32_t location_base_item_id(const GameRuntimeLocation *location)
-{
-    int32_t item = location->record_value_10;
-    if (location->owner_id >= 0 && location->owner_id < GAME_START_PLAYER_COUNT)
-        item -= location->owner_id * 16;
-    return item;
-}
 
 static void draw_hall_feature_icons(HDC dc, const WindowTemplate *info,
                                     int32_t item, int32_t owner)

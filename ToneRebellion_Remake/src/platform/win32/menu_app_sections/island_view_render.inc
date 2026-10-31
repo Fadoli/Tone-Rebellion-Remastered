@@ -440,8 +440,11 @@ static int building_slot_floater_layout(const GameRuntimeLocation *location,
     unsigned int slot;
 
     for (slot = 0; slot < 6U; ++slot) slots[slot] = -1;
-    *xs = location->record_value_10 == 0x2f ? x_hall : x_default;
-    *ys = location->record_value_10 == 0x2f ? y_hall : y_default;
+    /* FUN_00440567 tests the base +0x10 ID; the port's record_value_10 is
+       owner-specific, so normalize it or non-slot-0 tribes get the warrior
+       table. */
+    *xs = location_base_item_id(location) == 0x2f ? x_hall : x_default;
+    *ys = location_base_item_id(location) == 0x2f ? y_hall : y_default;
     if (!g_game_session_valid || location->source_location_slot_18 == -1)
         return 0;
     for (kind = 0; kind < 3U; ++kind) {
@@ -1576,7 +1579,8 @@ static void render_island_view(HDC dc)
                         /* FUN_00440567 shifts training halls right by level
                            (location +0x4a) to leave room for the staff. */
                         sprite_x += island_panel_info_training_hall_x_shift(
-                            raw_item_id, selected_location->source_capacity_4a);
+                            location_base_item_id(selected_location),
+                            selected_location->source_capacity_4a);
                         /* FUN_0044338b passes full scale (0x10000) and a
                            pane-relative width/height anchor to FUN_0042704b. */
                         (void)draw_runtime_item_scaled(dc, selected_location,
@@ -1891,8 +1895,8 @@ static void draw_location_action_panel(HDC dc)
             island->locations[g_selected_location].owner_id ==
                 g_menu.selected_tribe &&
             island->locations[g_selected_location].source_location_slot_18 >= 0 &&
-            (island->locations[g_selected_location].record_value_10 == 0x2f ||
-             island->locations[g_selected_location].record_value_10 == 0x30)) {
+            (location_base_item_id(&island->locations[g_selected_location]) == 0x2f ||
+             location_base_item_id(&island->locations[g_selected_location]) == 0x30)) {
             unsigned int spell_index;
             for (spell_index = 0; spell_index < 8; ++spell_index) {
                 int kind = game_session_cast_kind_for_action(

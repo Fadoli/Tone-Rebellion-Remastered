@@ -160,7 +160,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
                         row.label_key = spread_row ? "UPGSPREAD" : "UPGRADE";
                         row.task_icon_frame = 2;
                         row.secondary_task_icon_frame =
-                            (int8_t)(upgrade_site->record_value_10 == 0x2f ? 6 : 5);
+                            (int8_t)(location_base_item_id(upgrade_site) == 0x2f ? 6 : 5);
                         row.resource_icon_type = -1;
                     }
                     /* Original saves hold type-4 tasks for crystal / magic

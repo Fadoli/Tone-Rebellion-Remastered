@@ -1,3 +1,13 @@
+/* Port records keep owner-specific item IDs (base + owner * 16); native
+   predicates such as the 0x2f spell-caster hall tests read the base ID. */
+static int32_t location_base_item_id(const GameRuntimeLocation *location)
+{
+    int32_t item = location->record_value_10;
+    if (location->owner_id >= 0 && location->owner_id < GAME_START_PLAYER_COUNT)
+        item -= location->owner_id * 16;
+    return item;
+}
+
 /* FUN_00435ea7: clamp the camera x to [left, right - 0x27f] of the current
    player's island+0x408/+0x40c bounds (floater_min_x / floater_max_x), then to
    [0, 0x781]. Falls back to 0..1920 when no session is available. */
@@ -353,8 +363,8 @@ static int selected_cast_action_at(int x, int y)
     if (location->renderer_class != 0 ||
         location->owner_id != g_menu.selected_tribe ||
         location->source_location_slot_18 < 0 ||
-        (location->record_value_10 != 0x2f &&
-         location->record_value_10 != 0x30)) return -1;
+        (location_base_item_id(location) != 0x2f &&
+         location_base_item_id(location) != 0x30)) return -1;
 
     button = window_catalog_hit_test_names(&g_window_catalog, 3, x, y,
         spell_names, sizeof(spell_names) / sizeof(spell_names[0]));
@@ -423,7 +433,7 @@ static int hovered_spell_button_kind(int x, int y)
     if (location->renderer_class != 0 ||
         location->owner_id != g_menu.selected_tribe ||
         location->source_location_slot_18 < 0 ||
-        location->record_value_10 != 0x2f) return -1;
+        location_base_item_id(location) != 0x2f) return -1;
     button = window_catalog_hit_test_names(&g_window_catalog, 3, x, y,
         spell_names, sizeof(spell_names) / sizeof(spell_names[0]));
     if (button == NULL) return -1;
@@ -964,7 +974,8 @@ static int selected_hall_roster_hit_test(int x, int y)
     for (slot = 0; slot < count; ++slot) occupied |= (uint8_t)(1u << slot);
     island = &g_game_session.islands[selection_island()];
     if ((uint16_t)g_selected_location < island->location_count) {
-        special_layout = island->locations[g_selected_location].record_value_10 == 0x2f;
+        special_layout = location_base_item_id(
+            &island->locations[g_selected_location]) == 0x2f;
     }
     info = window_catalog_find(&g_window_catalog, "IWLocInfo", 3);
     if (info == NULL) return -1;
