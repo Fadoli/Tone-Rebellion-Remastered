@@ -40,6 +40,11 @@ int game_session_mark_bridge_constructed(GameSession *session,
 int game_session_mark_bridge_constructed_at(GameSession *session,
                                             uint8_t island_index,
                                             uint16_t location_index);
+/* Nonzero when the WORLDPOS bridge joining this class-2 marker's island to its
+   neighbor is flagged active (inactive bridges are disabled). */
+int game_session_bridge_marker_is_active(const GameSession *session,
+                                         uint8_t island_index,
+                                         uint16_t location_index);
 /* FUN_004669bd reads the contributor/faction slot stored at marker +0x2c and
    acquires the neighbor island for that player. */
 int game_session_acquire_island_access(GameSession *session,

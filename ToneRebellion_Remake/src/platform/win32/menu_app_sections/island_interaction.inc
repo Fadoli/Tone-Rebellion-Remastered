@@ -118,6 +118,8 @@ static int enter_bridge_destination(HWND window, int location_index)
     if (bridge->renderer_class != 2 || !bridge->bridge_constructed ||
         bridge->bridge_neighbor_island < 0 ||
         bridge->bridge_neighbor_island >= g_game_session.island_count) return 0;
+    if (!game_session_bridge_marker_is_active(&g_game_session, (uint8_t)origin,
+                                              (uint16_t)location_index)) return 0;
     target = &g_game_session.islands[bridge->bridge_neighbor_island];
     for (i = 0; i < target->location_count; ++i) {
         if (target->locations[i].renderer_class == 2 &&
@@ -747,8 +749,10 @@ static int hall_default_selected(void)
     if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
         g_menu.selected_tribe < 0 ||
         g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
-        g_selected_location >= 0 || g_selected_floater >= 0) return 0;
-    economy = &g_game_session.economy[g_menu.selected_tribe];
+        g_selected_location >= 0) return 0;
+    /* FUN_0042f8f7 falls back to mode 0 (Hall) for an unlinked floater, so a
+       selected floater no longer disables the default. */
+    economy =&g_game_session.economy[g_menu.selected_tribe];
     return economy->hall_island_index < g_game_session.island_count &&
         economy->hall_location_index <
             g_game_session.islands[economy->hall_island_index].location_count;
@@ -840,10 +844,18 @@ static void select_floater_source_building(int floater_index)
         g_menu.selected_map_island < 0 ||
         g_menu.selected_map_island >= g_game_session.island_count) return;
     floater = &g_game_session.floaters[floater_index];
-    if (floater->source_link_0c < 0 ||
-        floater->charge_source_island != (uint8_t)g_menu.selected_map_island)
-        return;
     island = &g_game_session.islands[g_menu.selected_map_island];
+    if (floater->source_link_0c < 0) {
+        /* FUN_0042f8f7: no linked row and the kept location is null or has
+           +0x18 == -1 (no staff slot) -> FUN_0042f303(0), the Hall default. */
+        if (g_selected_location >= 0 &&
+            (uint16_t)g_selected_location < island->location_count &&
+            island->locations[g_selected_location].source_location_slot_18 ==
+                -1) g_selected_location = -1;
+        return;
+    }
+    if (floater->charge_source_island != (uint8_t)g_menu.selected_map_island)
+        return;
     if (floater->charge_source_location >= island->location_count) return;
     g_selected_location = floater->charge_source_location;
 }

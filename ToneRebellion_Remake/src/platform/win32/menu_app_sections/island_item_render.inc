@@ -1000,8 +1000,10 @@ static void draw_building_stock_gauge(HDC dc, const WindowTemplate *info,
         (int)((int64_t)interior_height * stock / capacity);
     draw_sprite(dc, &g_task_icon_art, 8U, gauge_x, gauge_y);
     if (filled < interior_height) {
-        fill_rect(dc, gauge_x + 2, gauge_y + 2, gauge_x + 4,
-                  gauge_y + 2 + (interior_height - filled),
+        /* FUN_00406604 fills an inclusive rect: the 7x56 sprite interior is
+           x2..x4 by y2..y53, so the exclusive GDI rect needs +1 on both. */
+        fill_rect(dc, gauge_x + 2, gauge_y + 2, gauge_x + 4 + 1,
+                  gauge_y + 2 + (interior_height - filled) + 1,
                   g_island_palette[0]);
     }
 }

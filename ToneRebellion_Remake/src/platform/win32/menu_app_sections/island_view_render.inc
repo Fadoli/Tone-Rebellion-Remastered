@@ -619,6 +619,19 @@ static void draw_island_lilmap_dots(HDC dc, const WindowTemplate *mini_map,
     if (saved != 0) RestoreDC(dc, saved);
 }
 
+/* FUN_0042f8f7 hides IWTextInfo while IWFltInfo (same 456,328 pane) shows the
+   selected floater. */
+static int island_floater_info_shown(void)
+{
+    if (!g_game_session_valid || g_selected_floater < 0 ||
+        (unsigned int)g_selected_floater >= g_game_session.floater_count ||
+        g_menu.selected_map_island < 0) return 0;
+    return g_game_session.floaters[g_selected_floater].island_index ==
+            g_menu.selected_map_island &&
+        game_session_floater_is_active(
+            &g_game_session.floaters[g_selected_floater]);
+}
+
 static void render_island_view(HDC dc)
 {
     const int image_top = 0;
@@ -653,7 +666,10 @@ static void render_island_view(HDC dc)
             g_selected_floater < g_game_session.floater_count) {
             const GameFloaterStart *candidate =
                 &g_game_session.floaters[g_selected_floater];
-            if (candidate->island_index == g_menu.selected_map_island) {
+            /* FUN_0044338b: a released/dying unit (flag 0x8, +0x24 >= 40)
+               hides IWFltInfo, posts 0x44 and the location stays selected. */
+            if (candidate->island_index == g_menu.selected_map_island &&
+                game_session_floater_is_active(candidate)) {
                 selected_floater = candidate;
             }
         }
@@ -707,6 +723,12 @@ static void render_island_view(HDC dc)
         if (runtime_location != NULL && location->renderer_class == 2 &&
             runtime_location->bridge_neighbor_island < 0) {
             runtime_class = 0;
+        }
+        /* A bridge whose WORLDPOS flag is disabled is not drawn. */
+        if (runtime_location != NULL && runtime_class == 2 &&
+            !game_session_bridge_marker_is_active(&g_game_session,
+                (uint8_t)g_menu.selected_map_island, location_index)) {
+            continue;
         }
         /* PIT_Object has no building SHP of its own; generated collectible
            items draw their TRIGGERS frame from +0x24 below. PIT_FeatureTrigger
@@ -1093,17 +1115,21 @@ static void render_island_view(HDC dc)
             }
             if (saved_info_dc != 0) RestoreDC(dc, saved_info_dc);
         }
-    } else if (selected_floater != NULL && selected_floater->type_index < 4 &&
+    }
+    /* FUN_0042f8f7 (floater select) keeps the source building in
+       IWLocInfo/IWLocControl and shows the floater in IWFltInfo, the
+       456,328 pane shared with the hidden IWTextInfo. */
+    if (selected_floater != NULL && selected_floater->type_index < 4 &&
         island_panel_location_info_visible(g_island_panel_mode)) {
         const WindowTemplate *info = window_catalog_find(
-            &g_window_catalog, "IWLocInfo", 3);
-        if (info != NULL && g_temp_hole_art.frame_count > 1) {
+            &g_window_catalog, "IWFltInfo", 3);
+        if (info != NULL && g_temp_hole_art.frame_count > 2) {
             RECT pane = {info->pane.left, info->pane.top,
                          info->pane.right + 1, info->pane.bottom + 1};
             int saved_info_dc = SaveDC(dc);
             (void)IntersectClipRect(dc, pane.left, pane.top,
                                     pane.right, pane.bottom);
-            draw_sprite(dc, &g_temp_hole_art, 1,
+            draw_sprite(dc, &g_temp_hole_art, (uint32_t)info->shape_frame,
                         info->pane.left, info->pane.top);
 
             /* FUN_0044338b (Iwloc.cpp) draws the selected object's details in
@@ -1334,8 +1360,8 @@ static void render_island_view(HDC dc)
                selected_floater->source_subtype <= 17U &&
                island_panel_location_info_visible(g_island_panel_mode)) {
         const WindowTemplate *info = window_catalog_find(
-            &g_window_catalog, "IWLocInfo", 3);
-        if (info != NULL && g_temp_hole_art.frame_count > 1) {
+            &g_window_catalog, "IWFltInfo", 3);
+        if (info != NULL && g_temp_hole_art.frame_count > 2) {
             RECT pane = {info->pane.left, info->pane.top,
                          info->pane.right + 1, info->pane.bottom + 1};
             int saved_info_dc = SaveDC(dc);
@@ -1346,7 +1372,7 @@ static void render_island_view(HDC dc)
             int row_y;
             (void)IntersectClipRect(dc, pane.left, pane.top,
                                     pane.right, pane.bottom);
-            draw_sprite(dc, &g_temp_hole_art, 1,
+            draw_sprite(dc, &g_temp_hole_art, (uint32_t)info->shape_frame,
                         info->pane.left, info->pane.top);
 
             /* FUN_0044338b, category-4 (Leviathan) unit branch (Evidence
@@ -1388,9 +1414,12 @@ static void render_island_view(HDC dc)
                 info->pane.top + (info->pane.bottom - info->pane.top) / 2 + 5);
             if (saved_info_dc != 0) RestoreDC(dc, saved_info_dc);
         }
-    } else if (island_panel_location_info_visible(g_island_panel_mode) &&
-               effective_info_location(&info_island, &info_location,
-                                       &info_island_index)) {
+    }
+    if (!(selected_ground_item >= 0 &&
+          island_panel_location_info_visible(g_island_panel_mode)) &&
+        island_panel_location_info_visible(g_island_panel_mode) &&
+        effective_info_location(&info_island, &info_location,
+                                &info_island_index)) {
         const GameRuntimeLocation *selected_location =
             &info_island->locations[info_location];
         int32_t raw_item_id = selected_location->record_value_10;
@@ -1645,7 +1674,9 @@ static void draw_location_action_panel(HDC dc)
     /* IWTextInfo is the selected-location description pane. The source UI
        fills it for a selected building; the remake previously left it empty
        unless a move control was hovered. */
-    if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL &&
+    if (island_floater_info_shown()) {
+        /* IWTextInfo is hidden; the floater panel owns this pane. */
+    } else if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL &&
         selected_location->record_value_10 >= 0x25 &&
         selected_location->record_value_10 < PAD_CATALOG_MAX_ITEMS &&
         g_building_descriptions[selected_location->record_value_10][0] != '\0') {

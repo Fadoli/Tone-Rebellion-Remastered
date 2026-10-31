@@ -161,6 +161,30 @@ int game_session_mark_bridge_constructed_at(GameSession *session,
     return 0;
 }
 
+int game_session_bridge_marker_is_active(const GameSession *session,
+                                         uint8_t island_index,
+                                         uint16_t location_index)
+{
+    const GameRuntimeLocation *marker;
+    unsigned int bridge_index;
+    if (session == NULL || island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count) return 0;
+    marker = &session->islands[island_index].locations[location_index];
+    if (marker->renderer_class != 2 || marker->bridge_neighbor_island < 0) return 0;
+    for (bridge_index = 0; bridge_index < session->world_bridge_count;
+         ++bridge_index) {
+        const WorldBridge *bridge = &session->world_bridges[bridge_index];
+        if (((bridge->island_a == island_index &&
+              bridge->island_b == marker->bridge_neighbor_island) ||
+             (bridge->island_b == island_index &&
+              bridge->island_a == marker->bridge_neighbor_island)) &&
+            game_session_bridge_is_active(session, (uint8_t)bridge_index,
+                                          session->world_bridge_count))
+            return 1;
+    }
+    return 0;
+}
+
 int game_session_acquire_island_access(GameSession *session,
                                        uint8_t player_slot,
                                        uint8_t source_island,
