@@ -245,8 +245,10 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                     (viewport.right - viewport.left);
                 int logical_y = ((y - viewport.top) * LOGICAL_HEIGHT) /
                     (viewport.bottom - viewport.top);
-                if (island_lilmap_scroll_to(logical_x, logical_y, 1))
-                    InvalidateRect(window, NULL, FALSE);
+                /* No repaint here: the island screen redraws on every 20 Hz
+                   frame, and a WM_PAINT per mouse move outranks WM_TIMER,
+                   starving the frame clock into catch-up bursts. */
+                (void)island_lilmap_scroll_to(logical_x, logical_y, 1);
                 return 0;
             }
         }
