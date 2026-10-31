@@ -622,3 +622,127 @@ static void test_leviathan_spawner_births_units_on_its_island_over_time(void)
            session.floaters[0].source_subtype <= 17);
     assert(session.floaters[0].current_hit_points >= 20);
 }
+
+static void add_test_worker(GameSession *session, unsigned int index,
+                            uint8_t island, uint16_t x, uint16_t y, uint8_t owner)
+{
+    GameFloaterStart *worker = &session->floaters[index];
+    memset(worker, 0, sizeof(*worker));
+    worker->is_active = 1;
+    worker->island_index = island;
+    worker->type_index = 0;
+    worker->owner_slot = owner;
+    worker->x = x;
+    worker->y = y;
+    worker->current_hit_points = 200;
+    worker->max_hit_points = 200;
+    if (index >= session->floater_count)
+        session->floater_count = (uint16_t)(index + 1U);
+}
+
+static void test_leviathan_defense_hurts_only_workers_in_reach_on_its_island(void)
+{
+    /* V-ATTCK (item 0x0a, class 0, owner 4) scans its own island's workers
+       with the fixed Chebyshev gate < 0x3c, then hits at PROD tick 30. */
+    static GameSession session;
+    PadCatalog pads;
+    BuildingRenderCatalog buildings = {0};
+    GameRuntimeLocation *tower;
+    unsigned int tick;
+
+    memset(&session, 0, sizeof(session));
+    make_leviathan_pads(&pads);
+    make_leviathan_buildings(&buildings);
+    pads.items[0].movement_cost[2] = 50; /* attack power vs. a tribe-0 worker */
+    session.island_count = 2;
+    session.islands[0].location_count = 1;
+    tower = &session.islands[0].locations[0];
+    make_leviathan_marker(tower, 0, 0x0a);
+    tower->x = 500;
+    tower->y = 500;
+    tower->source_flags = 0x001U;
+    add_test_worker(&session, 0, 0, 520, 480, 0); /* in reach */
+    add_test_worker(&session, 1, 0, 500 + 0x3c, 500, 0); /* gate is strict */
+    add_test_worker(&session, 2, 1, 505, 505, 0); /* other island */
+
+    for (tick = 0; tick < 600; ++tick)
+        game_session_tick_item_animations_with_floaters(
+            &session, &buildings, NULL, &pads);
+    assert(session.floaters[0].current_hit_points < 200);
+    assert(session.floaters[1].current_hit_points == 200);
+    assert(session.floaters[2].current_hit_points == 200);
+}
+
+static void test_inactive_leviathan_defense_does_not_fire(void)
+{
+    static GameSession session;
+    PadCatalog pads;
+    BuildingRenderCatalog buildings = {0};
+    GameRuntimeLocation *tower;
+    unsigned int tick;
+
+    memset(&session, 0, sizeof(session));
+    make_leviathan_pads(&pads);
+    make_leviathan_buildings(&buildings);
+    pads.items[0].movement_cost[2] = 50;
+    session.island_count = 1;
+    session.islands[0].location_count = 1;
+    tower = &session.islands[0].locations[0];
+    make_leviathan_marker(tower, 0, 0x0a);
+    tower->x = 500;
+    tower->y = 500;
+    tower->source_flags = 0; /* bit 0 clear: not running */
+    add_test_worker(&session, 0, 0, 510, 510, 0);
+    for (tick = 0; tick < 600; ++tick)
+        game_session_tick_item_animations_with_floaters(
+            &session, &buildings, NULL, &pads);
+    assert(session.floaters[0].current_hit_points == 200);
+}
+
+static void test_tone_producers_output_their_own_resource_for_every_tribe(void)
+{
+    /* P-BLDTON/P-MAGTON/P-CRYTON (0x25/0x26/0x27) emit Build/Magic/Crystal
+       Tone codes 1/2/3; owner-specific PAD ids (+16 per tribe) normalize. */
+    static const struct { int32_t base; uint16_t code; } producers[3] = {
+        {0x25, 1}, {0x26, 3}, {0x27, 2}
+    };
+    unsigned int producer;
+    unsigned int owner;
+
+    for (producer = 0; producer < 3; ++producer) {
+        for (owner = 0; owner < GAME_START_PLAYER_COUNT; ++owner) {
+            static GameSession session;
+            BuildingRenderCatalog catalog = {0};
+            GameRuntimeLocation *site;
+            unsigned int tick;
+
+            memset(&session, 0, sizeof(session));
+            session.island_count = 1;
+            session.islands[0].location_count = 1;
+            site = &session.islands[0].locations[0];
+            site->renderer_class = 0;
+            site->record_value_10 = producers[producer].base + (int32_t)owner * 16;
+            site->owner_id = (int32_t)owner;
+            site->source_value_14 = (int32_t)owner;
+            site->source_flags = 0x411U;
+            site->source_value_32 = 1;
+            site->animation_rate = 1;
+            catalog.item_count = 0x60;
+            {
+                /* Render rows are looked up by the owner-specific id. */
+                BuildingRenderItem *row =
+                    &catalog.items[site->record_value_10];
+                row->item_id = (uint16_t)site->record_value_10;
+                row->present = 1;
+                row->prod.present = 1;
+                row->prod.threshold = 2;
+                row->prod.first_frame = 1;
+                row->prod.last_frame = 1;
+                row->prod.ticks_per_frame = 2;
+            }
+            for (tick = 0; tick < 30 && site->record_value_24 == 0; ++tick)
+                game_session_tick_item_animations(&session, &catalog);
+            assert(site->record_value_24 == producers[producer].code);
+        }
+    }
+}

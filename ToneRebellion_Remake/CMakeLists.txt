@@ -178,6 +178,12 @@ if(BUILD_TESTING)
     enable_test_assertions(test_game_session)
     add_test(NAME game_session_unit COMMAND test_game_session)
 
+    add_executable(test_native_save tests/test_native_save.c)
+    target_link_libraries(test_native_save PRIVATE tone_core)
+    target_compile_features(test_native_save PRIVATE c_std_11)
+    enable_test_assertions(test_native_save)
+    add_test(NAME native_save_unit COMMAND test_native_save)
+
     add_executable(test_game_inventory tests/test_game_inventory.c)
     target_link_libraries(test_game_inventory PRIVATE tone_core)
     target_compile_features(test_game_inventory PRIVATE c_std_11)
