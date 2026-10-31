@@ -547,9 +547,10 @@ int game_session_unlink_floater_charge(GameSession *session,
     if (session == NULL || floater_index >= session->floater_count ||
         floater_index >= GAME_SESSION_MAX_FLOATERS) return 0;
     floater = &session->floaters[floater_index];
+    /* The +0x0c row is per owner, not per island: a floater that crossed a
+       bridge still unlinks from its home source. */
     if (floater->source_link_0c < 0 ||
         floater->charge_source_island >= session->island_count) return 0;
-    if (floater->island_index != floater->charge_source_island) return 0;
     island = &session->islands[floater->charge_source_island];
     if (floater->charge_source_location >= island->location_count) return 0;
     source = &island->locations[floater->charge_source_location];
