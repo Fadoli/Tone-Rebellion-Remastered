@@ -178,6 +178,21 @@ static int load_newgame_captions(char *error, size_t error_capacity)
             }
         }
     }
+    {
+        static const char *const site_keys[6] = {
+            "INFECT", "BEASTI", "PRIMED", "UNPRIM", "CBRIDGE", "MYSTLOC"
+        };
+        for (i = 0; i < 6; ++i) {
+            if (!extract_help_entry(bytes, member->length, site_keys[i],
+                                    g_site_class_label_text[i],
+                                    sizeof(g_site_class_label_text[i]))) {
+                (void)snprintf(error, error_capacity,
+                               "gamey.txt key %s is missing or empty",
+                               site_keys[i]);
+                goto done;
+            }
+        }
+    }
     /* FUN_0041d70d reads names.txt, skipping blank and comment lines, into
        5 tribe slots (11 chars), 5 plural, 15 island and 18 beast slots. */
     {

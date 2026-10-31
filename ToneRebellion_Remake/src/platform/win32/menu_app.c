@@ -203,6 +203,8 @@ static char g_hall_surplus_label[64];
 static char g_move_button_text[128];
 /* gamey.txt WORKER, AWAKE, LEVEL, HITS, STRENGTH, CHARGE (FUN_00429ebe). */
 static char g_unit_label_text[6][64];
+/* gamey.txt INFECT, BEASTI, PRIMED, UNPRIM, CBRIDGE, MYSTLOC (FUN_00441b36). */
+static char g_site_class_label_text[6][64];
 /* gamey.txt TRZERO and TRDOIT: Trade button hover captions (FUN_0043edac). */
 static char g_trade_caption_text[2][64];
 /* names.txt slots filled by FUN_0041d70d: tribes, then beasts. */

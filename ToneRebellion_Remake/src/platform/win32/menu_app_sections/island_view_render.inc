@@ -1670,6 +1670,45 @@ static void render_island_view(HDC dc)
             }
         }
     }
+    /* FUN_00440567 sends non-building sites (class != 0) to FUN_00441b36
+       (ev_ef973ec0): a gamey.txt caption centred at ((W - w) / 2, H / 2 - 10).
+       Class 1: owner 4 -> INFECT (item 5) or BEASTI, else PRIMED / UNPRIM by
+       the viewer's bit of +0x22; class 2 CBRIDGE; class 3 MYSTLOC. */
+    if (!(selected_ground_item >= 0 &&
+          island_panel_location_info_visible(g_island_panel_mode)) &&
+        island_panel_location_info_visible(g_island_panel_mode) &&
+        effective_info_location(&info_island, &info_location,
+                                &info_island_index) &&
+        info_island->locations[info_location].renderer_class != 0) {
+        const GameRuntimeLocation *site = &info_island->locations[info_location];
+        const WindowTemplate *info = window_catalog_find(
+            &g_window_catalog, "IWLocInfo", 3);
+        const char *caption = NULL;
+        if (site->renderer_class == 1) {
+            if (site->owner_id == 4)
+                caption = g_site_class_label_text[
+                    site->record_value_10 == 5 ? 0 : 1];
+            else if (g_menu.selected_tribe >= 0 && g_menu.selected_tribe < 8)
+                caption = g_site_class_label_text[
+                    (site->source_value_22 >> g_menu.selected_tribe) & 1U ? 2 : 3];
+        } else if (site->renderer_class == 2) {
+            caption = g_site_class_label_text[4];
+        } else if (site->renderer_class == 3) {
+            caption = g_site_class_label_text[5];
+        }
+        if (info != NULL && caption != NULL && caption[0] != 0) {
+            int width = measure_bitmap_text(NULL, caption, strlen(caption));
+            if (g_temp_hole_art.frame_count > 1)
+                draw_sprite(dc, &g_temp_hole_art, 1,
+                            info->pane.left, info->pane.top);
+            draw_bitmap_label(dc, caption,
+                info->pane.left +
+                    ((info->pane.right - info->pane.left) - width) / 2,
+                info->pane.top +
+                    (info->pane.bottom - info->pane.top) / 2 - 10,
+                RGB(230, 238, 255));
+        }
+    }
     /* IWLocInfo's selected-building painter clears and redraws this pane, so
        render the Hall's economy view after it. */
     if (island_panel_location_info_visible(g_island_panel_mode)) {
