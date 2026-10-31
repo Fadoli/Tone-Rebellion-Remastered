@@ -233,6 +233,6 @@ Facts (REA, Ghidra output): `FUN_00416ff8` [ev_04c78e7b] decides "arrived" throu
 
 Remake: an arrived atteff visual now becomes the realm IMPACT in place when the strike-time damage was positive (`finish_attack_visual`), at the effect's own position. Damage itself is still resolved at the strike, not at arrival. Consistent with the level choice above (attacker `+0x0a` nibble).
 
-Conflict, unverified: pass 5 reads path A as `FUN_004207c2() == 0`, pass 6 as `!= 0`. The remake keeps `== 0`; `FUN_004207c2` [ev_42b992f3] returns 0 for owner 4 or a charged nonzero subtype, so path A covers Leviathan units (vecc, verc, vnrb, vprb, vsrc) and charged specials. Re-read `FUN_0041e569` case 5/6 to settle it.
+Settled (pass 7, assembly): `FUN_0041e569` at 0x41EC02 calls `FUN_004207c2`, `TEST EAX,EAX`, `JNZ 0x41EC3E`; the fall-through (result 0) checks shape `+0x48 != -1` and calls `FUN_00415fc6` with param_2 = 0 (atteff); the nonzero block uses param_2 = 1 (realm IMPACT). `FUN_004207c2` [ev_d69be43f] returns 0 when the owner is 4 or the subtype is nonzero with charge (`+0x22`) > 0, else 1. So the atteff path covers Leviathan units and charged specials (vecc, verc, vnrb, vprb, vsrc, trained fighters); the remake already does this. The pass-6 "!= 0" reading was wrong. Unread: the 0x4024be thunk (assumed to jump to `FUN_004207c2`).
 
 Still unknown: the slot blitter (`FUN_00417f44` plays a positional sound at screen x = s5 - scroll + 0x140 but does not draw), LIGHTNING's draw use of `s6 = rand(0x8000)`, hit damage in `FUN_00420217`/`FUN_00450817`.
