@@ -602,7 +602,10 @@ static int draw_building_preview(HDC dc, uint16_t item_id, uint8_t player_slot,
     memset(&preview, 0, sizeof(preview));
     preview.record_value_10 = item_id;
     preview.owner_id = player_slot;
-    preview.source_flags = 0x410U;
+    /* FUN_0040d3e1 builds its record through FUN_004500c4, which clears the
+       +0x1c flags (ev_9a4cf759): no 0x10 placement ramp, whose ground mark
+       and downward shift hid the full-size IWConstructInfo building. */
+    preview.source_flags = 0U;
     preview.animation_rate = 1;
     return draw_runtime_item_scaled(dc, &preview, x, y, scale_16_16);
 }
