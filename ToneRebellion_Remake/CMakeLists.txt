@@ -3,6 +3,15 @@ project(tone_rebellion_remake LANGUAGES C)
 
 include(CTest)
 
+# 32-bit GCC defaults to x87 math, which keeps float temporaries in
+# extended precision: the new-game orbit dots then land one pixel off the
+# 64-bit (SSE) and WebAssembly builds. SSE math gives every build the
+# same results.
+if(CMAKE_C_COMPILER_ID STREQUAL "GNU" AND CMAKE_SIZEOF_VOID_P EQUAL 4 AND
+   CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86|X86|i[3-6]86|AMD64)$")
+    add_compile_options(-msse2 -mfpmath=sse)
+endif()
+
 add_library(tone_core STATIC
     src/data/cob_archive.c
     src/data/iso9660.c
@@ -285,4 +294,24 @@ if(WIN32)
         COMMENT "Updating the ready-to-launch ToneRebellion_Remake.exe"
         VERBATIM
     )
+
+    # SDL3 shell over the same game code (TODO_WEB.md step 3); built when
+    # an SDL3 package is found (MSYS2: mingw-w64-ucrt-x86_64-sdl3).
+    find_package(SDL3 CONFIG QUIET)
+    if(SDL3_FOUND)
+        add_executable(remake_sdl WIN32 src/platform/win32/menu_app.c)
+        target_compile_definitions(remake_sdl PRIVATE TONE_PLATFORM_SDL=1)
+        target_link_libraries(remake_sdl PRIVATE tone_core tone_render SDL3::SDL3
+                              user32 gdi32 winmm ws2_32)
+        target_compile_features(remake_sdl PRIVATE c_std_11)
+        if(NOT MSVC)
+            target_link_libraries(remake_sdl PRIVATE m)
+        endif()
+        add_custom_command(TARGET remake_sdl POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_RUNTIME_DLLS:remake_sdl> $<TARGET_FILE_DIR:remake_sdl>
+            COMMENT "Copying SDL3.dll next to remake_sdl"
+            COMMAND_EXPAND_LISTS
+        )
+    endif()
 endif()

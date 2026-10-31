@@ -23,7 +23,8 @@ Scenarios (`--bench-scenario`), the "fake environment":
 flat out. `--bench-screen title|newgame|map|load` measures another screen over
 the same session; `--bench-client WxH` sets the window client size;
 `--bench-dump FILE` writes the last composed frame as a
-640x480 BMP (used to compare renderers pixel for pixel); `--bench-panel N`
+640x480 BMP (used to compare renderers pixel for pixel); `--bench-dump-set DIR`
+writes the 34 parity frames as `DIR/NAME.bmp` from one hidden process; `--bench-panel N`
 (island panel mode) and `--bench-construct` (IWConstruct open, first column
 hovered) fix more UI for those dumps. `--bench-profile` adds a sampling profiler: a thread suspends the
 main thread about every 2 ms and stores its EBP-chain call stack. Use a build
@@ -130,3 +131,34 @@ tested per pixel) and a 16 KB column table on the stack rendered battle in
 0.77 ms, slower than before. The kept blit copies unscaled spans without a
 table, splits the plain loop from the masked/transformed one, and keeps the
 table at 2 KB (no stack probe).
+
+## SDL3 shell and 64-bit build (2026-10-31)
+
+`remake_sdl` (MSYS2 UCRT64, GCC 16.2, SDL3 3.4.18, 64-bit) renders the
+same `RenderSurface` and presents it through a streaming texture. The 34
+`--bench-dump-set` frames are byte identical across the 32-bit MinGW.org
+build, the 64-bit Win32 build and `remake_sdl`.
+
+Two 32/64-bit differences came up first, both fixed:
+
+- Load screen: the original game's saves sit in the UAC VirtualStore
+  (`%LOCALAPPDATA%VirtualStoreProgram FilesTone`). Windows redirects
+  reads there only for 32-bit processes without a manifest; the slot scan
+  now looks there itself.
+- New-game orbit dots: 32-bit x87 kept `angle` in extended precision, so
+  `(int)(cos(angle) * 150)` gave 75 instead of 74 at some steps (one pixel).
+  `-fexcess-precision=standard` did not change GCC 6.3's result;
+  `-msse2 -mfpmath=sse` on 32-bit GCC builds did.
+
+Battle, 1024x781 client, mean ms (one run each):
+
+| shell | frames | frame | render | present |
+|---|---|---|---|---|
+| Win32 64-bit | 2000 flat out | 0.90 | 0.53 | 0.31 |
+| SDL3 | 2000 flat out | 2.56 | 0.63 | 1.87 (p95 frame 11.6) |
+| SDL3 | 200 at 20 Hz | 1.51 | 0.77 | 0.67 |
+
+Flat out, `SDL_RenderPresent` stalls on the GPU queue; at the game's 20 Hz
+the SDL shell costs 3.0 % of a core against about 1.8 % for GDI. Untried:
+rendering straight into `SDL_LockTexture` memory to skip the 1.2 MB upload
+copy.

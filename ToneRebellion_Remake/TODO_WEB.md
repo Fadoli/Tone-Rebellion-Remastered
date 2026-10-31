@@ -13,7 +13,7 @@
 
 ## Choix
 
-- Adaptateur SDL3 (règle de `AGENTS.md`), Emscripten `--use-port=sdl3`. Le même adaptateur sert Linux/macOS.
+- Adaptateur SDL3 (règle de `AGENTS.md`), Emscripten `--use-port=sdl3`. Chaîne bureau : MSYS2 UCRT64 (`C:msys64`), voir [build](docs/build-and-validation.md#sdl3-build). Le même adaptateur sert Linux/macOS.
 - Rendu logiciel conservé : tampon RGBA 32 bits présenté par une texture SDL (WebGL en dessous). Pas de rendu WebGL direct : un seul blit plein écran par image.
 
 ## Étapes
@@ -21,6 +21,8 @@
 1. [x] **Surface portable, encore sous Win32.** `src/render/render_surface.{h,c}` (bibliothèque `tone_render`, sans en-tête Windows) : pixels 0xAARRGGBB, pile de découpe (rectangle + masque par pixel à la place des régions GDI), remplissage, cadre, pixel, blit prémultiplié avec mise à l'échelle au plus proche et transformation (brume). Les `SpriteFrame` portent des tableaux de pixels; les fonctions de rendu prennent un `RenderSurface *`. Seuls `ensure_paint_buffer`/`present_back_buffer` (`render_dispatch.inc`) touchent GDI. Parité : 38 captures `--bench-dump` identiques octet pour octet à la build précédente, et un banc hors dépôt GDI contre `RenderSurface` (découpe, masque, `AlphaBlend` à l'échelle, `FillRect`, `FrameRect`, `Rectangle`, `SetPixel`/`GetPixel`) sans écart sur 20 000 tirages ([mesures](bench/gameplay_hotspots.md#rendersurface-2026-10-31)).
 2. [ ] **Interfaces plateforme.** Isoler entrée (souris, clavier, molette), horloge (`GetTickCount`), audio (effets + flux musique), fichiers (dossiers de sauvegarde, `FindFirstFileA`, `CreateDirectoryA`), boîtes d'erreur (`MessageBoxA` ×10) derrière de petites interfaces C; implémentation Win32 inchangée en comportement.
 3. [ ] **Adaptateur SDL3 bureau.** Fenêtre, présentation du tampon, événements, `SDL_AudioStream` pour le mixeur et les musiques WAV. Parité avec Win32 avant la cible Web.
+   - Fait : `remake_sdl` (`src/platform/sdl/sdl_app.inc`, MSYS2 UCRT64, SDL3 3.4.18). SDL gère fenêtre, boucle, horloge 20 Hz, présentation (texture, trois modes d’échelle) et traduit ses événements en messages Win32 pour `menu_window_proc` : une seule logique d’entrée pour les deux shells. 34 captures `--bench-dump-set` identiques à Win32 32 et 64 bits ([mesures](bench/gameplay_hotspots.md#sdl3-shell-and-64-bit-build-2026-10-31)).
+   - Reste : audio (`waveOut`, `PlaySoundA`, MCI) vers `SDL_AudioStream`; le HWND sert encore aux titres, `MessageBoxA`, capture souris, curseurs d’origine (ressources de `FLOAT.EXE`) et `WSAAsyncSelect`; horloge `QueryPerformanceCounter`. À retirer avec l’étape 2 avant Linux/Web.
 4. [ ] **Cible Emscripten.** Préréglage CMake (`emcmake`), boucle `emscripten_set_main_loop`, page HTML minimale, `-sALLOW_MEMORY_GROWTH`. Mesurer taille `.wasm` et temps de chargement.
 5. [ ] **Données utilisateur.** Sélecteur de fichier (ISO ou dossier `THING1`/`THING2`) vers le système de fichiers virtuel, cache persistant `IDBFS` (équivalent de `iso_cache`); aucune donnée originale hébergée.
 6. [ ] **Sauvegardes et options.** `saves/` et `float.cfg` sur `IDBFS`, synchronisation après écriture; export/import manuel d'une sauvegarde.

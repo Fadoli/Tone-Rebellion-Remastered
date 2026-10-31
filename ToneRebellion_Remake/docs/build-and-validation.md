@@ -4,9 +4,21 @@ An independent, modern C implementation informed by the static analysis document
 
 ## Current milestone
 
-The current implementation contains a portable C11 reader for the observed COB archive directory, parsers for the world map, island locations and construction catalog, an SHP RLE decoder, and a Windows menu executable. The COB API opens archives read-only, validates the fixed-width directory and member ranges, lists entries, and reads a selected member into caller-owned memory. The world parser accepts either an extracted `worldpos.txt` or `data\\worldpos.txt` directly from a COB. SDL3 is not installed in this environment, so the current desktop adapter uses built-in Win32/GDI; the core remains separate so the adapter can later be replaced by SDL3.
+The current implementation contains a portable C11 reader for the observed COB archive directory, parsers for the world map, island locations and construction catalog, an SHP RLE decoder, and a Windows menu executable. The COB API opens archives read-only, validates the fixed-width directory and member ranges, lists entries, and reads a selected member into caller-owned memory. The world parser accepts either an extracted `worldpos.txt` or `data\\worldpos.txt` directly from a COB. Two desktop shells share the game code: `remake_menu` (Win32/GDI) and `remake_sdl` (SDL3 window, events and presentation; audio, files and sockets still Win32), see [SDL3 build](#sdl3-build).
 
 Build with CMake and a C11 compiler. `remake_inspect_cob <archive.cob>` lists archive entries. Run `remake_inspect_worlds <path-to-WORLDPOS.TXT>` for an extracted table, or `remake_inspect_worlds --cob <archive.cob> data\\worldpos.txt` to read the member without extracting or modifying the archive. On Windows, the ready-to-launch executable is `ToneRebellion_Remake.exe` in this directory; it reads the original data read-only and needs no installation: `--game-dir <path>`, `TONE_REBELLION_GAME_DIR`, the executable folder (or its `THING1`), `C:Program FilesTone`, `THING1` of any drive (mounted ISO) and `C:	oneIsoTHING1` are tried in that order, first folder containing `TONE01.COB` wins. Music is read from the sibling `THING2`. A disc image works directly too: drag the `.iso` (or a game folder) onto `ToneRebellion_Remake.exe`, or use `--iso <file.iso>`, `TONE_REBELLION_ISO`, an ISO next to the executable, or `C:\TONE116F.ISO` (last resort). `src/data/iso9660.c` reads the image read-only (cooked 2048 or raw 2352 sectors) and copies the needed files once into `%LOCALAPPDATA%\ToneRebellion_Remake\iso_cache`; tunes are copied on first play.
+
+## SDL3 build
+
+MSYS2 (`C:msys64`, UCRT64 shell) provides GCC, CMake, Ninja and SDL3:
+`pacman -S mingw-w64-ucrt-x86_64-{gcc,sdl3,cmake,ninja,pkgconf}`. From a UCRT64 shell:
+
+```sh
+cmake -S . -B build/ucrt64 -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build/ucrt64
+```
+
+This builds 64-bit `remake_menu` and, when CMake finds SDL3, `remake_sdl` with `SDL3.dll` copied beside it. Both executables need only system DLLs otherwise. The 32-bit MinGW.org build keeps working; 32-bit GCC builds use SSE math (`-msse2 -mfpmath=sse`) so every build places float-computed pixels identically. Remake saves go to `saves` beside each executable.
 
 ## Build status
 

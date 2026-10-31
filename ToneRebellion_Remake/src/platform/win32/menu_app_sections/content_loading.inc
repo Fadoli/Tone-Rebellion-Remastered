@@ -690,6 +690,17 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
         g_random_state = (uint32_t)seed.LowPart;
     }
 
+#ifdef TONE_PLATFORM_SDL
+    (void)window_class;
+    message.wParam = 0;   /* the exit code returned below */
+    (void)instance;
+    window = sdl_create_window();
+    if (window == NULL) {
+        MessageBoxA(NULL, SDL_GetError(), "Tone Rebellion remake - SDL",
+                    MB_OK | MB_ICONERROR);
+        return 1;
+    }
+#else
     memset(&window_class, 0, sizeof(window_class));
     window_class.lpfnWndProc = menu_window_proc;
     window_class.hInstance = instance;
@@ -710,6 +721,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
                     "Tone Rebellion remake", MB_OK | MB_ICONERROR);
         return 1;
     }
+#endif
     add_scale_menu(window);
     g_net_window = window;
     {
@@ -746,14 +758,26 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
         int exit_code;
         free(g_logo_pixels);
         g_logo_pixels = NULL;
-        ShowWindow(window, show_command);
-        UpdateWindow(window);
+        /* The dump set only renders: its window stays hidden. */
+        if (strstr(command_line, "--bench-dump-set") == NULL) {
+#ifdef TONE_PLATFORM_SDL
+            SDL_ShowWindow(g_sdl_window);
+#else
+            ShowWindow(window, show_command);
+            UpdateWindow(window);
+#endif
+        }
         exit_code = bench_run(window, command_line);
         (void)timeEndPeriod(1);
         /* No DestroyWindow: WM_DESTROY would write the bench session over
            the resume save. The process exit releases the window. */
         return exit_code;
     }
+#ifdef TONE_PLATFORM_SDL
+    (void)show_command;
+    sdl_run(window);
+    sdl_destroy_window();
+#else
     (void)SetTimer(window, 1, 10, NULL);
     (void)SetTimer(window, 2, 1000, NULL);
     ShowWindow(window, show_command);
@@ -762,6 +786,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
         TranslateMessage(&message);
         DispatchMessageA(&message);
     }
+#endif
     (void)timeEndPeriod(1);
     if (g_original_cursor_module != NULL) {
         for (cursor_index = 0; cursor_index < GAME_CURSOR_SLOT_COUNT;

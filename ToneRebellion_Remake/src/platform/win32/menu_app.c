@@ -3,6 +3,13 @@
 #include <winsock2.h>
 #include <windows.h>
 #include <windowsx.h>
+#ifdef TONE_PLATFORM_SDL
+/* remake_sdl: SDL3 shell (src/platform/sdl/sdl_app.inc). */
+#include <SDL3/SDL.h>
+/* WinMain stays the entry point; SDL_SetMainReady tells SDL so. */
+#define SDL_MAIN_HANDLED
+#include <SDL3/SDL_main.h>
+#endif
 
 #include "cob_archive.h"
 #include "iso9660.h"
@@ -574,6 +581,9 @@ static void clear_island_messages(void);
 
 #include "menu_app_sections/e2e_state.inc"
 #include "menu_app_sections/window_proc.inc"
+#ifdef TONE_PLATFORM_SDL
+#include "../sdl/sdl_app.inc"
+#endif
 #include "menu_app_sections/bench.inc"
 
 #include "menu_app_sections/content_loading.inc"

@@ -12,7 +12,8 @@
    --bench-screen title|newgame|map|load, --bench-client WxH,
    --bench-panel N (island panel mode, WINDOW_ISLAND_PANEL_*),
    --bench-construct (IWConstruct open on the first buildable site, first
-   column hovered): fixed UI states for --bench-dump comparisons. */
+   column hovered): fixed UI states for --bench-dump comparisons;
+   --bench-dump-set DIR (all parity frames from one hidden process). */
 
 enum { BENCH_PHASE_IDLE, BENCH_PHASE_SIM, BENCH_PHASE_RENDER,
        BENCH_PHASE_PRESENT, BENCH_PHASE_COUNT };
@@ -21,7 +22,7 @@ enum { BENCH_STACK_DEPTH = 24, BENCH_MAX_SAMPLES = 400000 };
 typedef struct BenchSample {
     uint8_t phase;
     uint8_t depth;
-    DWORD frames[BENCH_STACK_DEPTH];
+    uintptr_t frames[BENCH_STACK_DEPTH];
 } BenchSample;
 
 static volatile LONG g_bench_phase;
@@ -30,14 +31,14 @@ static volatile LONG g_bench_stop;
 static BenchSample *g_bench_samples;
 static volatile LONG g_bench_sample_count;
 static HANDLE g_bench_main_thread;
-static DWORD g_bench_stack_low;
-static DWORD g_bench_stack_high;
+static uintptr_t g_bench_stack_low;
+static uintptr_t g_bench_stack_high;
 
 static const char *const g_bench_phase_names[BENCH_PHASE_COUNT] = {
     "idle", "sim", "render", "present"
 };
 
-/* Stack walk over the EBP chain of the suspended main thread. Frames must
+/* Stack walk over the frame-pointer (EBP/RBP) chain of the suspended main thread. Frames must
    stay inside its stack and grow upwards; system DLLs keep frame pointers,
    the bench build adds -fno-omit-frame-pointer for ours. */
 static DWORD WINAPI bench_sampler_thread(LPVOID parameter)
@@ -55,16 +56,22 @@ static DWORD WINAPI bench_sampler_thread(LPVOID parameter)
             ZeroMemory(&context, sizeof(context));
             context.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
             if (GetThreadContext(g_bench_main_thread, &context)) {
-                DWORD frame = context.Ebp;
+#if defined(_M_X64) || defined(__x86_64__)
+                uintptr_t frame = (uintptr_t)context.Rbp;
+                uintptr_t pc = (uintptr_t)context.Rip;
+#else
+                uintptr_t frame = (uintptr_t)context.Ebp;
+                uintptr_t pc = (uintptr_t)context.Eip;
+#endif
                 unsigned depth = 0;
                 sample->phase = (uint8_t)g_bench_phase;
-                sample->frames[depth++] = context.Eip;
+                sample->frames[depth++] = pc;
                 while (depth < BENCH_STACK_DEPTH &&
                        frame >= g_bench_stack_low &&
-                       frame + 8U <= g_bench_stack_high &&
-                       (frame & 3U) == 0U) {
-                    const DWORD *record = (const DWORD *)(uintptr_t)frame;
-                    DWORD next = record[0];
+                       frame + 2U * sizeof(uintptr_t) <= g_bench_stack_high &&
+                       (frame & (sizeof(uintptr_t) - 1U)) == 0U) {
+                    const uintptr_t *record = (const uintptr_t *)frame;
+                    uintptr_t next = record[0];
                     sample->frames[depth++] = record[1];
                     if (next <= frame) break;
                     frame = next;
@@ -80,7 +87,7 @@ static DWORD WINAPI bench_sampler_thread(LPVOID parameter)
 
 /* Nearest export at or below address in a loaded system module, read from
    its in-memory export directory. */
-static const char *bench_nearest_export(HMODULE module, DWORD address,
+static const char *bench_nearest_export(HMODULE module, uintptr_t address,
                                         DWORD *out_offset)
 {
     const unsigned char *base = (const unsigned char *)module;
@@ -91,11 +98,12 @@ static const char *bench_nearest_export(HMODULE module, DWORD address,
     const DWORD *functions;
     const DWORD *names;
     const WORD *ordinals;
-    DWORD rva = address - (DWORD)(uintptr_t)module;
+    DWORD rva = (DWORD)(address - (uintptr_t)module);
     DWORD best_rva = 0;
     const char *best = NULL;
     DWORD size;
     DWORD i;
+    if (address < (uintptr_t)module) return NULL;
     /* Stack garbage can point into any mapped image, including ones not
        laid out as loaded modules: bound every table by SizeOfImage. */
     if (dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0 ||
@@ -137,18 +145,18 @@ static const char *bench_nearest_export(HMODULE module, DWORD address,
    slow and the same few system addresses repeat in every sample). */
 enum { BENCH_FRAME_CACHE = 8192 };
 typedef struct BenchFrameName {
-    DWORD address;
+    uintptr_t address;
     char text[96];
 } BenchFrameName;
 static BenchFrameName *g_bench_frame_names;
 
-static void bench_write_frame(FILE *file, DWORD address)
+static void bench_write_frame(FILE *file, uintptr_t address)
 {
     HMODULE module = NULL;
     HMODULE self = GetModuleHandleA(NULL);
     const IMAGE_NT_HEADERS *nt = (const IMAGE_NT_HEADERS *)
         ((const unsigned char *)self + ((const IMAGE_DOS_HEADER *)self)->e_lfanew);
-    DWORD self_base = (DWORD)(uintptr_t)self;
+    uintptr_t self_base = (uintptr_t)self;
     BenchFrameName *entry;
     char path[MAX_PATH];
     const char *name;
@@ -163,7 +171,7 @@ static void bench_write_frame(FILE *file, DWORD address)
         g_bench_frame_names = (BenchFrameName *)calloc(BENCH_FRAME_CACHE,
                                                        sizeof(BenchFrameName));
     if (g_bench_frame_names == NULL) return;
-    entry = &g_bench_frame_names[(address * 2654435761U) >> 19];
+    entry = &g_bench_frame_names[(uint32_t)((uint32_t)address * 2654435761U) >> 19];
     if (entry->address == address && entry->text[0] != '\0') {
         fprintf(file, " %s", entry->text);
         return;
@@ -311,6 +319,63 @@ static void bench_pump_messages(void)
         TranslateMessage(&message);
         DispatchMessageA(&message);
     }
+#ifdef TONE_PLATFORM_SDL
+    /* The SDL events those messages queued are not input to replay. */
+    SDL_PumpEvents();
+    SDL_FlushEvents(SDL_EVENT_FIRST, SDL_EVENT_LAST);
+#endif
+}
+
+/* Presentation through the shell in use: GDI StretchBlt or the SDL
+   texture. */
+static int bench_begin_present(HWND window, HDC *screen)
+{
+#ifdef TONE_PLATFORM_SDL
+    (void)window;
+    *screen = NULL;
+    return sdl_ensure_back_buffer();
+#else
+    *screen = GetDC(window);
+    return ensure_paint_buffer(*screen);
+#endif
+}
+
+static void bench_end_present(HWND window, HDC screen)
+{
+#ifdef TONE_PLATFORM_SDL
+    (void)window;
+    (void)screen;
+#else
+    ReleaseDC(window, screen);
+#endif
+}
+
+static void bench_present(HDC screen, const RECT *client)
+{
+#ifdef TONE_PLATFORM_SDL
+    (void)screen;
+    (void)client;
+    sdl_present();
+#else
+    present_back_buffer(screen, client);
+    (void)GdiFlush();
+#endif
+}
+
+static void bench_set_client_size(HWND window, unsigned width, unsigned height)
+{
+#ifdef TONE_PLATFORM_SDL
+    (void)window;
+    (void)SDL_SetWindowSize(g_sdl_window, (int)width, (int)height);
+    (void)SDL_SyncWindow(g_sdl_window);
+#else
+    RECT frame = {0, 0, (LONG)width, (LONG)height};
+    (void)AdjustWindowRect(&frame, WS_OVERLAPPEDWINDOW, FALSE);
+    SetWindowPos(window, NULL, 0, 0, frame.right - frame.left,
+                 frame.bottom - frame.top,
+                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+#endif
+    bench_pump_messages();
 }
 
 /* Writes the 640x480 back buffer as a top-down 32-bit BMP. */
@@ -350,43 +415,27 @@ static unsigned bench_option(const char *command_line, const char *name,
     return (unsigned)strtoul(value, NULL, 10);
 }
 
-/* Runs the benchmark and returns the process exit code. */
-static int bench_run(HWND window, const char *command_line)
+/* Session and screen setup shared by a timed run and the dump set: fixed
+   world, tribe 0, easiest difficulty, constant seed. Returns 0 on error. */
+static int bench_prepare(HWND window, const char *command_line,
+                         char *scenario, size_t scenario_size,
+                         int *bench_screen, unsigned *active)
 {
-    char scenario[32] = "idle";
-    char out_path[MAX_PATH];
     char error[256];
-    unsigned frames = bench_option(command_line, "--bench-frames", 600U);
     unsigned warmup = bench_option(command_line, "--bench-warmup", 300U);
-    int paced = strstr(command_line, "--bench-paced") != NULL;
-    int profile = strstr(command_line, "--bench-profile") != NULL;
-    double *frame_ms;
-    double phase_total[BENCH_PHASE_COUNT] = {0};
-    double phase_max[BENCH_PHASE_COUNT] = {0};
-    LONGLONG wall_start, wall_end, thread_cpu_start, thread_cpu_end;
-    LONGLONG process_cpu_start, process_cpu_end;
-    HANDLE sampler = NULL;
-    FILE *file;
     unsigned frame;
-    unsigned active = 0;
-    int bench_screen;
-    RECT client;
-    HDC screen;
-
-    if (frames == 0U) frames = 1U;
+    /* What a fresh process starts with, so every dump of a set sees the
+       same state as its own process would. */
+    g_menu.screen = SCREEN_MAIN_MENU;
+    g_menu.animation_ticks = 0;
+    g_menu.selected_map_island = -1;
+    g_game_session_valid = 0;
+    g_island_scroll_x = 0;
+    g_island_panel_mode = WINDOW_ISLAND_PANEL_GENERAL;
+    snprintf(scenario, scenario_size, "idle");
     (void)command_line_value(command_line, "--bench-scenario", scenario,
-                             sizeof(scenario));
-    if (!command_line_value(command_line, "--bench-out", out_path,
-                            sizeof(out_path))) {
-        DWORD length = GetModuleFileNameA(NULL, out_path, sizeof(out_path));
-        char *slash = length != 0 ? strrchr(out_path, '\\') : NULL;
-        if (slash == NULL) out_path[0] = '\0';
-        else slash[1] = '\0';
-        strncat(out_path, "bench_report.txt",
-                sizeof(out_path) - strlen(out_path) - 1U);
-    }
-
-    /* Fixed setup: world, tribe 0, easiest difficulty, constant seed. */
+                             scenario_size);
+    *active = 0;
     g_menu.world_index = (int)bench_option(command_line, "--bench-world", 0U);
     if (g_menu.world_index >= g_menu.world_map.world_count) g_menu.world_index = 0;
     g_menu.selected_tribe = 0;
@@ -395,13 +444,13 @@ static int bench_run(HWND window, const char *command_line)
     g_sim_speed = 1U;
     if (!load_game_session_for_selected_world(error, sizeof(error))) {
         MessageBoxA(window, error, "Tone Rebellion remake - bench", MB_OK);
-        return 1;
+        return 0;
     }
     g_menu.setup_accepted = 1;
     if (!bench_open_home_island(window)) {
         MessageBoxA(window, "No enterable island.", "Tone Rebellion remake - bench",
                     MB_OK);
-        return 1;
+        return 0;
     }
     if (strcmp(scenario, "crowd") == 0 || strcmp(scenario, "battle") == 0) {
         uint8_t island = (uint8_t)g_menu.selected_map_island;
@@ -435,7 +484,7 @@ static int bench_run(HWND window, const char *command_line)
             else if (strcmp(screen_name, "load") == 0)
                 g_menu.screen = SCREEN_LOAD_GAME;
         }
-        bench_screen = g_menu.screen;
+        *bench_screen = g_menu.screen;
     }
     if (strstr(command_line, "--bench-panel") != NULL)
         g_island_panel_mode = (int)bench_option(command_line, "--bench-panel",
@@ -451,7 +500,120 @@ static int bench_run(HWND window, const char *command_line)
     }
     for (frame = 0; frame < g_game_session.floater_count; ++frame)
         if (game_session_floater_is_active(&g_game_session.floaters[frame]))
-            ++active;
+            ++*active;
+    return 1;
+}
+
+/* --bench-dump-set DIR: the parity frames (idle, crowd and battle at three
+   warmups, panels 1..7, IWConstruct, other screens, world 3) written as
+   DIR/NAME.bmp from one hidden process instead of one run each. */
+static const char *const g_bench_dump_set[][2] = {
+    {"idle_40", "--bench-scenario idle --bench-warmup 40"},
+    {"idle_300", "--bench-scenario idle --bench-warmup 300"},
+    {"idle_1500", "--bench-scenario idle --bench-warmup 1500"},
+    {"crowd_40", "--bench-scenario crowd --bench-warmup 40"},
+    {"crowd_300", "--bench-scenario crowd --bench-warmup 300"},
+    {"crowd_1500", "--bench-scenario crowd --bench-warmup 1500"},
+    {"battle_40", "--bench-scenario battle --bench-warmup 40"},
+    {"battle_300", "--bench-scenario battle --bench-warmup 300"},
+    {"battle_1500", "--bench-scenario battle --bench-warmup 1500"},
+    {"panel1_idle", "--bench-scenario idle --bench-warmup 300 --bench-panel 1"},
+    {"panel1_battle", "--bench-scenario battle --bench-warmup 300 --bench-panel 1"},
+    {"panel2_idle", "--bench-scenario idle --bench-warmup 300 --bench-panel 2"},
+    {"panel2_battle", "--bench-scenario battle --bench-warmup 300 --bench-panel 2"},
+    {"panel3_idle", "--bench-scenario idle --bench-warmup 300 --bench-panel 3"},
+    {"panel3_battle", "--bench-scenario battle --bench-warmup 300 --bench-panel 3"},
+    {"panel4_idle", "--bench-scenario idle --bench-warmup 300 --bench-panel 4"},
+    {"panel4_battle", "--bench-scenario battle --bench-warmup 300 --bench-panel 4"},
+    {"panel5_idle", "--bench-scenario idle --bench-warmup 300 --bench-panel 5"},
+    {"panel5_battle", "--bench-scenario battle --bench-warmup 300 --bench-panel 5"},
+    {"panel6_idle", "--bench-scenario idle --bench-warmup 300 --bench-panel 6"},
+    {"panel6_battle", "--bench-scenario battle --bench-warmup 300 --bench-panel 6"},
+    {"panel7_idle", "--bench-scenario idle --bench-warmup 300 --bench-panel 7"},
+    {"panel7_battle", "--bench-scenario battle --bench-warmup 300 --bench-panel 7"},
+    {"construct", "--bench-scenario idle --bench-warmup 300 --bench-construct"},
+    {"screen_title_idle", "--bench-scenario idle --bench-warmup 40 --bench-screen title"},
+    {"screen_title_battle", "--bench-scenario battle --bench-warmup 40 --bench-screen title"},
+    {"screen_newgame_idle", "--bench-scenario idle --bench-warmup 40 --bench-screen newgame"},
+    {"screen_newgame_battle", "--bench-scenario battle --bench-warmup 40 --bench-screen newgame"},
+    {"screen_map_idle", "--bench-scenario idle --bench-warmup 40 --bench-screen map"},
+    {"screen_map_battle", "--bench-scenario battle --bench-warmup 40 --bench-screen map"},
+    {"screen_load_idle", "--bench-scenario idle --bench-warmup 40 --bench-screen load"},
+    {"screen_load_battle", "--bench-scenario battle --bench-warmup 40 --bench-screen load"},
+    {"x_crowd_40", "--bench-scenario crowd --bench-warmup 40 --bench-world 3"},
+    {"x_crowd_300", "--bench-scenario crowd --bench-warmup 300 --bench-world 3"}
+};
+
+static int bench_dump_set(HWND window, const char *directory)
+{
+    unsigned i;
+    for (i = 0; i < sizeof(g_bench_dump_set) / sizeof(g_bench_dump_set[0]); ++i) {
+        char scenario[32];
+        char path[MAX_PATH];
+        int bench_screen;
+        unsigned active;
+        unsigned frame;
+        if (!bench_prepare(window, g_bench_dump_set[i][1], scenario,
+                           sizeof(scenario), &bench_screen, &active)) return 1;
+        /* Two frames, as a --bench-frames 2 run. */
+        for (frame = 0; frame < 2U; ++frame) {
+            run_ui_frame(window, 1);
+            render_back_buffer(&g_back_surface);
+            if (g_menu.screen != bench_screen) break;
+        }
+        (void)snprintf(path, sizeof(path), "%s/%s.bmp", directory,
+                       g_bench_dump_set[i][0]);
+        bench_dump_back_buffer(path);
+    }
+    return 0;
+}
+
+/* Runs the benchmark and returns the process exit code. */
+static int bench_run(HWND window, const char *command_line)
+{
+    char scenario[32] = "idle";
+    char out_path[MAX_PATH];
+    unsigned frames = bench_option(command_line, "--bench-frames", 600U);
+    unsigned warmup = bench_option(command_line, "--bench-warmup", 300U);
+    int paced = strstr(command_line, "--bench-paced") != NULL;
+    int profile = strstr(command_line, "--bench-profile") != NULL;
+    double *frame_ms;
+    double phase_total[BENCH_PHASE_COUNT] = {0};
+    double phase_max[BENCH_PHASE_COUNT] = {0};
+    LONGLONG wall_start, wall_end, thread_cpu_start, thread_cpu_end;
+    LONGLONG process_cpu_start, process_cpu_end;
+    HANDLE sampler = NULL;
+    FILE *file;
+    unsigned frame;
+    unsigned active = 0;
+    int bench_screen;
+    RECT client;
+    HDC screen;
+
+    if (frames == 0U) frames = 1U;
+    {
+        char directory[MAX_PATH];
+        if (command_line_value(command_line, "--bench-dump-set", directory,
+                               sizeof(directory))) {
+            int exit_code = 1;
+            if (bench_begin_present(window, &screen))
+                exit_code = bench_dump_set(window, directory);
+            bench_end_present(window, screen);
+            return exit_code;
+        }
+    }
+    if (!command_line_value(command_line, "--bench-out", out_path,
+                            sizeof(out_path))) {
+        DWORD length = GetModuleFileNameA(NULL, out_path, sizeof(out_path));
+        char *slash = length != 0 ? strrchr(out_path, '\\') : NULL;
+        if (slash == NULL) out_path[0] = '\0';
+        else slash[1] = '\0';
+        strncat(out_path, "bench_report.txt",
+                sizeof(out_path) - strlen(out_path) - 1U);
+    }
+
+    if (!bench_prepare(window, command_line, scenario, sizeof(scenario),
+                       &bench_screen, &active)) return 1;
 
     {
         /* --bench-client WxH: the client size to present into. */
@@ -462,23 +624,17 @@ static int bench_run(HWND window, const char *command_line)
                                sizeof(size)) &&
             sscanf(size, "%ux%u", &width, &height) == 2 &&
             width > 0U && height > 0U) {
-            RECT frame = {0, 0, (LONG)width, (LONG)height};
-            (void)AdjustWindowRect(&frame, WS_OVERLAPPEDWINDOW, FALSE);
-            SetWindowPos(window, NULL, 0, 0, frame.right - frame.left,
-                         frame.bottom - frame.top,
-                         SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
-            bench_pump_messages();
+            bench_set_client_size(window, width, height);
         }
     }
     GetClientRect(window, &client);
-    screen = GetDC(window);
-    if (!ensure_paint_buffer(screen)) {
-        ReleaseDC(window, screen);
+    if (!bench_begin_present(window, &screen)) {
+        bench_end_present(window, screen);
         return 1;
     }
     frame_ms = (double *)calloc(frames, sizeof(double));
     if (frame_ms == NULL) {
-        ReleaseDC(window, screen);
+        bench_end_present(window, screen);
         return 1;
     }
 
@@ -491,8 +647,8 @@ static int bench_run(HWND window, const char *command_line)
                             GetCurrentProcess(), &g_bench_main_thread,
                             THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT,
                             FALSE, 0)) {
-            g_bench_stack_low = (DWORD)(uintptr_t)tib->StackLimit;
-            g_bench_stack_high = (DWORD)(uintptr_t)tib->StackBase;
+            g_bench_stack_low = (uintptr_t)tib->StackLimit;
+            g_bench_stack_high = (uintptr_t)tib->StackBase;
             sampler = CreateThread(NULL, 0, bench_sampler_thread, NULL, 0, NULL);
         }
         g_bench_sampling = sampler != NULL;
@@ -521,8 +677,7 @@ static int bench_run(HWND window, const char *command_line)
         render_back_buffer(&g_back_surface);
         t2 = bench_now();
         g_bench_phase = BENCH_PHASE_PRESENT;
-        present_back_buffer(screen, &client);
-        (void)GdiFlush();
+        bench_present(screen, &client);
         t3 = bench_now();
         g_bench_phase = BENCH_PHASE_IDLE;
         ValidateRect(window, NULL);
@@ -546,7 +701,7 @@ static int bench_run(HWND window, const char *command_line)
         WaitForSingleObject(sampler, INFINITE);
         CloseHandle(sampler);
     }
-    ReleaseDC(window, screen);
+    bench_end_present(window, screen);
     if (frame < frames) frames = frame + 1U;
     {
         char dump_path[MAX_PATH];
@@ -588,8 +743,8 @@ static int bench_run(HWND window, const char *command_line)
         if (g_bench_samples != NULL) {
             LONG count = g_bench_sample_count;
             LONG s;
-            fprintf(file, "image_base %lx\nsamples %ld\n",
-                    (unsigned long)(uintptr_t)GetModuleHandleA(NULL), (long)count);
+            fprintf(file, "image_base %llx\nsamples %ld\n",
+                    (unsigned long long)(uintptr_t)GetModuleHandleA(NULL), (long)count);
             for (s = 0; s < count; ++s) {
                 const BenchSample *sample = &g_bench_samples[s];
                 unsigned f;

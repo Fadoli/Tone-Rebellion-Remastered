@@ -103,11 +103,23 @@ static void scan_load_slots(void)
         }
         { char native_name[16]; (void)snprintf(native_name, sizeof(native_name), "%02d.SAV", slot);
         (void)snprintf(path, sizeof(path), "%s", game_file_path(native_name)); }
-        if (save_header_is_valid(path)) {
-            g_load_slot_valid[slot] = 1;
-            g_load_slot_native[slot] = 1;
-            read_slot_details(slot, path);
+        if (!save_header_is_valid(path)) {
+            /* Saves the original wrote under Program Files went to the UAC
+               VirtualStore. Windows redirects reads there only for 32-bit
+               processes without a manifest, so look there explicitly. */
+            char store[MAX_PATH];
+            DWORD length = GetEnvironmentVariableA("LOCALAPPDATA", store,
+                                                   (DWORD)sizeof(store));
+            const char *game = game_file_path("");
+            if (length == 0 || length >= sizeof(store) || game[0] == '\0' ||
+                game[1] != ':') continue;
+            (void)snprintf(path, sizeof(path), "%s\\VirtualStore%s%02d.SAV",
+                           store, game + 2, slot);
+            if (!save_header_is_valid(path)) continue;
         }
+        g_load_slot_valid[slot] = 1;
+        g_load_slot_native[slot] = 1;
+        read_slot_details(slot, path);
     }
 }
 
