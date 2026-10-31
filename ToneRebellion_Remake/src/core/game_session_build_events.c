@@ -56,6 +56,40 @@ int game_session_cast_sound_id(uint8_t kind, uint8_t owner)
     return owner < 4U ? (int)owner : -1;
 }
 
+int game_session_cast_effect_visual(const GameSession *session,
+                                    unsigned int slot, int *visual,
+                                    unsigned int *frame)
+{
+    /* Zero-based [first, last] frames of LEVELFRAMES level 1 (effects.txt). */
+    static const uint8_t last_frame[GAME_CAST_VISUAL_COUNT] = {
+        16, 15, 16, 23, 14, 7, 16, 16, 3, 41, 5, 16
+    };
+    const struct GameCastEffectState *effect;
+    int id;
+    unsigned int index;
+
+    if (session == NULL || visual == NULL || frame == NULL ||
+        slot >= GAME_SESSION_MAX_CAST_EFFECTS) return 0;
+    effect = &session->cast_effects[slot];
+    if (!effect->active || effect->caster_index >= session->floater_count)
+        return 0;
+    if (effect->animation_phase == 2) {
+        id = 10;
+    } else if (effect->animation_phase == 3) {
+        id = 11;
+    } else {
+        const GameFloaterStart *caster = &session->floaters[effect->caster_index];
+        id = game_session_cast_sound_id(effect->step, caster->owner_slot);
+        if (id < 0 || id >= 10) return 0;
+    }
+    index = effect->animation_ticks / 2U; /* one frame per two updates */
+    if (id == 10) index %= (unsigned int)last_frame[id] + 1U; /* travel loops */
+    else if (index > last_frame[id]) index = last_frame[id];
+    *visual = id;
+    *frame = index;
+    return 1;
+}
+
 int game_session_queue_cast_audio(GameSession *session, uint8_t island,
                                   uint8_t sound)
 {

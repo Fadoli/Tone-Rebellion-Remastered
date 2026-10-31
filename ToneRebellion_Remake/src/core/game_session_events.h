@@ -137,6 +137,18 @@ enum {
     GAME_CAST_SOUND_COUNT = 10
 };
 int game_session_cast_sound_id(uint8_t kind, uint8_t owner);
+/* Cast visuals: effects.txt SPECIAL records. Indices 0..9 share the order of
+   game_session_cast_sound_id (PCAST/SCAST/MCAST/LCAST, SPL6E, SPL13, SPL20,
+   SPL5, SPL04, ACAST); 10 is UPGRADE (SPL8B, travel), 11 FREEZESC (SPL21).
+   Evidence: FUN_0041660b picks the effect name, FUN_004153b8/FUN_00415063
+   step one frame per two updates. World anchor and level frame range are
+   interpretations (see docs/building-rendering.md). */
+enum { GAME_CAST_VISUAL_COUNT = 12 };
+/* Visual id and zero-based frame of an active cast effect slot; returns 0
+   when the slot has nothing to draw. */
+int game_session_cast_effect_visual(const GameSession *session,
+                                    unsigned int slot, int *visual,
+                                    unsigned int *frame);
 /* `island` is the caster's island: the sound is only audible while that island
    is being viewed. */
 int game_session_queue_cast_audio(GameSession *session, uint8_t island,

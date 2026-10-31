@@ -1351,12 +1351,15 @@ int game_session_schedule_cast_effect_step(
         effect->target_location_index = target_location_index;
         effect->animation_phase = 0;
         effect->phase_odd_updates_remaining = 0;
+        effect->animation_ticks = 0;
+        effect->visual_phase = 0;
         effect->effect_x = session->floaters[caster_index].x;
         effect->effect_y = session->floaters[caster_index].y;
         if (step == 0x16 && odd_updates_until_impact == 0) {
             /* TONE00.COB effects.txt: ASCEND has 42 frames. FUN_00415063
                checks completion only after advancing once past the last. */
             effect->animation_phase = 1;
+            effect->visual_phase = 1;
             effect->phase_odd_updates_remaining = 43;
         }
         ++session->active_cast_effect_count;
@@ -1375,6 +1378,11 @@ void game_session_tick_cast_effects(GameSession *session,
     for (slot = 0; slot < GAME_SESSION_MAX_CAST_EFFECTS; ++slot) {
         struct GameCastEffectState *effect = &session->cast_effects[slot];
         if (!effect->active) continue;
+        if (effect->visual_phase != effect->animation_phase) {
+            effect->visual_phase = effect->animation_phase;
+            effect->animation_ticks = 0;
+        }
+        if (effect->animation_ticks < UINT16_MAX) ++effect->animation_ticks;
         if (effect->animation_phase == 0) {
             if ((source_tick & 1U) == 0) continue;
             if (effect->odd_updates_remaining > 0)

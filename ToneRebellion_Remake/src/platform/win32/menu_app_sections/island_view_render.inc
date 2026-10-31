@@ -742,6 +742,30 @@ static void render_island_view(HDC dc)
             if (frame >= effect_art->frame_count) continue;
             draw_sprite(dc, effect_art, frame, x, y);
         }
+        /* FA_Cast visuals (FUN_0041660b names, FUN_00415063 frame stepping).
+           Anchor on the effect position is an interpretation; the original
+           effect-slot blitter is not located. Drawn after floaters. */
+        for (projectile_index = 0; projectile_index < GAME_SESSION_MAX_CAST_EFFECTS;
+             ++projectile_index) {
+            int visual;
+            unsigned int cast_frame;
+            const SpriteSheet *cast_art;
+            int x;
+            int y;
+            if (!game_session_cast_effect_visual(&g_game_session,
+                    projectile_index, &visual, &cast_frame)) continue;
+            if (g_game_session.floaters[g_game_session.cast_effects[
+                    projectile_index].caster_index].island_index !=
+                g_menu.selected_map_island) continue;
+            cast_art = &g_cast_effect_art[visual];
+            if (cast_frame >= cast_art->frame_count) continue;
+            x = (int)g_game_session.cast_effects[projectile_index].effect_x -
+                g_island_scroll_x;
+            y = image_top +
+                (int)g_game_session.cast_effects[projectile_index].effect_y;
+            if (x < -64 || x >= LOGICAL_WIDTH + 64) continue;
+            draw_sprite(dc, cast_art, cast_frame, x, y);
+        }
     }
     if (focus != NULL) {
         int x = (int)focus->x - g_island_scroll_x;

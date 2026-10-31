@@ -533,6 +533,7 @@ int main(void)
     test_leviathan_spawner_freeze_hits_every_spawner_on_the_island();
     test_leviathan_reevaluation_cast_starts_the_island_timer();
     test_cast_steps_reject_invalid_callers();
+    test_cast_visual_uses_owner_effect_and_one_frame_per_two_ticks();
     (void)puts("game session unit tests passed");
     return 0;
 }

@@ -200,3 +200,11 @@ Correction (relecture `FUN_00450a71` cases 0xa..0x15): la cadence de recherche d
 Correction (pseudocode de `FUN_00411478` relu directement, `ev_2a41b7e7`): après l'écriture du pixel `(x, y)` et, si le second index n'est pas 4, du pixel `(x+1, y)`, le natif copie `(x+1, y)` vers `(x, y+1)`, puis `(x, y+1)` vers `(x-1, y)`, puis `(x-1, y)` vers `(x, y-1)`. Le rapport du sous-agent omettait la copie vers `(x-1, y)`; le port l'inclut maintenant.
 
 Vérification directe (`FUN_004106dd`, `ev_f8e0a7fb`): le paramètre 1 sélectionne `DAT_004b20f0 + niveau*0x100` (non nul) ou `DAT_004bc530 + niveau*0x100` (nul), niveau 0..7 (assertion `NUM_HAZE`). La rampe de placement passe `propriétaire != 4` et le drapeau `0x100` passe 1: le port utilise le même sélecteur 1 pour `0x100`, cohérent avec la table de brume d'île déjà chargée (`island_haze`).
+
+## FA_Cast visuals (partial)
+
+Facts (REA, Ghidra decompiler output): `FUN_0041660b` [ev_4615c5ce] names the effect from the owner table (`pspell/sspell/mspell/lspell`, 0x49bdc0) with per-kind overrides (FLTARMOR, FASTPROD, SACRIF, KILLBEAS, DESTSUPP, ASCEND); `FUN_004153b8` [ev_d6fcf75d] parses `effects.txt` (LEVELFRAMES stored 0-based, SPEED default 5); `FUN_00415063` [ev_67ca77ef] steps one frame per odd global update. The remake draws the matching SPECIAL records (PCAST/SCAST/MCAST/LCAST, SPL6E, SPL13, SPL20, SPL5, SPL04, ACAST) and the ASCEND-UPGRADE-FREEZESC chain (SPL8B travel, SPL21 impact) via `game_session_cast_effect_visual`.
+
+Interpretations: anchor at the effect position (caster at spawn, then the modeled travel), level-1 frame range (DESTSUPP's three level ranges are not mapped), drawn after floaters.
+
+Unknown: the 32-slot effect blitter (not in `FUN_00440567`, `FUN_0044338b`, `FUN_0045858a`) and the spawner of tribe attack effects (BHOOD, GAZER, NINJA...): `FUN_0041660b` only accepts cast records. These attacks are still not drawn. `FUN_0041511b` was not read.

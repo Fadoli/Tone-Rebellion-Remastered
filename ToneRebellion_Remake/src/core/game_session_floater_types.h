@@ -186,6 +186,9 @@ typedef struct GameSession {
         int16_t target_location_index;
         uint16_t effect_x;
         uint16_t effect_y;
+        /* Draw-only clock: ticks spent in `visual_phase` (reset on change). */
+        uint16_t animation_ticks;
+        uint8_t visual_phase;
     } cast_effects[GAME_SESSION_MAX_CAST_EFFECTS];
     uint8_t active_cast_effect_count;
     /* Tower bolts reuse the source effect's per-frame target pursuit and

@@ -688,6 +688,8 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
         free_sprite_sheet(&g_leviathan_projectile_art[effect_index]);
         free_sprite_sheet(&g_leviathan_impact_art[effect_index]);
     }
+    for (unsigned int effect_index = 0; effect_index < GAME_CAST_VISUAL_COUNT; ++effect_index)
+        free_sprite_sheet(&g_cast_effect_art[effect_index]);
     free_sprite_sheet(&g_floater_info_art);
     free_sprite_sheet(&g_hall_command_art);
     free_sprite_sheet(&g_glyph_inventory_art);
