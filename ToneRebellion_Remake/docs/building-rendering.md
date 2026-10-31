@@ -208,3 +208,13 @@ Facts (REA, Ghidra decompiler output): `FUN_0041660b` [ev_4615c5ce] names the ef
 Interpretations: anchor at the effect position (caster at spawn, then the modeled travel), level-1 frame range (DESTSUPP's three level ranges are not mapped), drawn after floaters.
 
 Unknown: the 32-slot effect blitter (not in `FUN_00440567`, `FUN_0044338b`, `FUN_0045858a`) and the spawner of tribe attack effects (BHOOD, GAZER, NINJA...): `FUN_0041660b` only accepts cast records. These attacks are still not drawn. `FUN_0041511b` was not read.
+
+## Floater attack effects (partial)
+
+Facts (REA, Ghidra output): all slot writers scan the 32 slots for a free marker and set the record index and def index: `FUN_0041660b` (cast), `FUN_00415fc6` [ev_686d2438] (floater attack, called from `FUN_0041e569` cases 5/6), `FUN_00416342` [ev_4c6d730c] (from `FUN_00450a71`) and `FUN_00416a9a` [ev_89e5ca34] (world events: births, deaths, builds, bridge, crumble). `FUN_00415fc6` takes the attack effect def from the unit's shape record `+0x48` (`FUN_00464242`/`FUN_0045575c`); with no def it falls back to the realm IMPACT def (`phyimp/supimp/ethimp/natimp`). `FUN_0041511b` [ev_3e39191e] is the SPEED mover (snap when within speed).
+
+Local data fact: `fltinf.txt` carries a per-item `atteff` (e.g. `ptrain1 bhood`, `ptrain2 gazecast`, `ptrain3 ninja`); the link of that field to shape record `+0x48` is an interpretation. `atteff` is not parsed yet.
+
+Remake: the hit IMPACT of an attack is drawn at the target (`game_session_attack_effect_visual`, realm from the attacker, level from damage, one frame per odd update). The pre-hit `atteff` effect (ONESHOT/BULLET/LIGHTNING/CAST+CHAIN) is not drawn: spawn timing between `FUN_0041e569` cases 5 and 6, bullet flight and jitter are unverified.
+
+Still unknown: the 32-slot blitter, the effect manager global, `FUN_00416e7d`, and the bodies of `FUN_00450a71` callers.

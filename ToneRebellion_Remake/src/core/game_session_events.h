@@ -144,6 +144,13 @@ int game_session_cast_sound_id(uint8_t kind, uint8_t owner);
    step one frame per two updates. World anchor and level frame range are
    interpretations (see docs/building-rendering.md). */
 enum { GAME_CAST_VISUAL_COUNT = 12 };
+/* Hit IMPACT of an active floater attack (realm 0..3 = PHY/SUP/ETH/NAT,
+   absolute frame in that realm's impact sheet, world x/y). */
+int game_session_attack_effect_visual(const GameSession *session,
+                                      unsigned int floater_index,
+                                      unsigned int *realm,
+                                      unsigned int *frame,
+                                      uint16_t *x, uint16_t *y);
 /* Visual id and zero-based frame of an active cast effect slot; returns 0
    when the slot has nothing to draw. */
 int game_session_cast_effect_visual(const GameSession *session,

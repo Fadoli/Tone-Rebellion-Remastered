@@ -742,6 +742,28 @@ static void render_island_view(HDC dc)
             if (frame >= effect_art->frame_count) continue;
             draw_sprite(dc, effect_art, frame, x, y);
         }
+        /* Floater attack hit: the realm IMPACT instance FUN_0041e569 starts
+           when damage lands (frames per effects.txt). The target anchor is an
+           interpretation, as for tower bolt impacts. */
+        for (projectile_index = 0; projectile_index < g_game_session.floater_count;
+             ++projectile_index) {
+            unsigned int impact_realm;
+            unsigned int impact_frame;
+            uint16_t world_x;
+            uint16_t world_y;
+            const SpriteSheet *impact_art;
+            int x;
+            if (!game_session_attack_effect_visual(&g_game_session,
+                    projectile_index, &impact_realm, &impact_frame,
+                    &world_x, &world_y)) continue;
+            if (g_game_session.floaters[projectile_index].island_index !=
+                g_menu.selected_map_island) continue;
+            impact_art = &g_leviathan_impact_art[impact_realm];
+            if (impact_frame >= impact_art->frame_count) continue;
+            x = (int)world_x - g_island_scroll_x;
+            if (x < -64 || x >= LOGICAL_WIDTH + 64) continue;
+            draw_sprite(dc, impact_art, impact_frame, x, image_top + (int)world_y);
+        }
         /* FA_Cast visuals (FUN_0041660b names, FUN_00415063 frame stepping).
            Anchor on the effect position is an interpretation; the original
            effect-slot blitter is not located. Drawn after floaters. */

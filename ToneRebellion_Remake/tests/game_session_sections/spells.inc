@@ -560,3 +560,41 @@ static void test_cast_visual_uses_owner_effect_and_one_frame_per_two_ticks(void)
     assert(!game_session_cast_effect_visual(&session, 32, &visual, &frame));
     assert(!game_session_cast_effect_visual(NULL, 0, &visual, &frame));
 }
+
+static void test_attack_impact_visual_steps_one_frame_per_odd_update(void)
+{
+    static GameSession session;
+    GameFloaterStart *attacker;
+    unsigned int realm = 9;
+    unsigned int frame = 99;
+    uint16_t x = 0;
+    uint16_t y = 0;
+    unsigned int tick;
+
+    memset(&session, 0, sizeof(session));
+    session.island_count = 1;
+    attacker = spell_caster(&session, 0, 0, 0, 0);
+    attacker->attack_realm = 2;
+    attacker->attack_impact_frame_counts[1] = 4;
+    session.effect_impact_frame_starts[2][1] = 10;
+
+    assert(!game_session_attack_effect_visual(&session, 0, &realm, &frame, &x, &y));
+    game_session_start_attack_effect(&session, attacker, 3, 321, 123); /* level 1 */
+    assert(attacker->attack_effect_active && session.active_attack_effect_count == 1);
+    assert(game_session_attack_effect_visual(&session, 0, &realm, &frame, &x, &y));
+    assert(realm == 2 && frame == 10 && x == 321 && y == 123);
+    game_session_tick_combat_effects(&session, 1); /* odd tick: next frame */
+    assert(game_session_attack_effect_visual(&session, 0, &realm, &frame, &x, &y));
+    assert(frame == 11);
+    game_session_tick_combat_effects(&session, 2); /* even tick: unchanged */
+    assert(game_session_attack_effect_visual(&session, 0, &realm, &frame, &x, &y));
+    assert(frame == 11);
+    for (tick = 3; tick < 9; tick += 2)
+        game_session_tick_combat_effects(&session, tick);
+    assert(game_session_attack_effect_visual(&session, 0, &realm, &frame, &x, &y));
+    assert(frame == 13); /* clamped on the last of 4 frames */
+    game_session_tick_combat_effects(&session, 9);
+    assert(!attacker->attack_effect_active); /* released after frames + 1 */
+    assert(!game_session_attack_effect_visual(&session, 0, &realm, &frame, &x, &y));
+    assert(session.active_attack_effect_count == 0);
+}

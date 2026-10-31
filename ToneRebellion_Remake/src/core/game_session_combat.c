@@ -64,6 +64,8 @@ void game_session_tick_floater_combat(GameSession *session,
        its IMPACT instance to finish and release the shared effect slot. */
     if (floater->attack_timer == floater->attack_period) {
         int32_t damage = 0;
+        uint16_t impact_x = floater->x;
+        uint16_t impact_y = floater->y;
         if (state == GAME_FLOATER_STATE_ATTACK &&
             floater->order_target_floater >= 0 &&
             (unsigned int)floater->order_target_floater < session->floater_count) {
@@ -72,6 +74,8 @@ void game_session_tick_floater_combat(GameSession *session,
             damage = game_session_damage_floater(
                 session, floater_index,
                 (unsigned int)floater->order_target_floater);
+            impact_x = target->x;
+            impact_y = target->y;
             /* FUN_004200d2 reads +0x22 on the indexed target floater and
                consumes one charge after resolving this attack attempt. */
             if (attack_calls_charge_helper(floater)) {
@@ -90,6 +94,8 @@ void game_session_tick_floater_combat(GameSession *session,
                 damage = game_session_damage_site(session, floater_index,
                     floater->island_index,
                     (uint16_t)floater->order_target_location, target);
+                impact_x = target->x;
+                impact_y = target->y;
                 if (damage > 0) ++target->source_progress_08;
                 /* FUN_00420188 decrements raw +0x22 after every state-7
                    site attack, even though its low byte also backs the
@@ -102,7 +108,8 @@ void game_session_tick_floater_combat(GameSession *session,
             }
         }
         if (damage > 0)
-            game_session_start_attack_effect(session, floater, damage);
+            game_session_start_attack_effect(session, floater, damage,
+                                             impact_x, impact_y);
     } else if (floater->attack_timer > floater->attack_period &&
                !floater->attack_effect_active) {
         floater->movement_state = 0;
@@ -1455,7 +1462,8 @@ void game_session_tick_cast_effects(GameSession *session,
 
 void game_session_start_attack_effect(GameSession *session,
                                      GameFloaterStart *attacker,
-                                     int32_t damage)
+                                     int32_t damage,
+                                     uint16_t target_x, uint16_t target_y)
 {
     unsigned int level;
     uint8_t frame_count;
@@ -1469,6 +1477,9 @@ void game_session_start_attack_effect(GameSession *session,
     frame_count = attacker->attack_impact_frame_counts[level];
     if (frame_count == 0) return;
     attacker->attack_effect_active = 1;
+    attacker->attack_effect_level = (uint8_t)level;
+    attacker->attack_effect_x = target_x;
+    attacker->attack_effect_y = target_y;
     /* FUN_00415063 tests completion only after stepping past the last frame. */
     attacker->attack_effect_odd_updates_remaining = (uint8_t)(frame_count + 1U);
     ++session->active_attack_effect_count;
@@ -1492,4 +1503,38 @@ void game_session_tick_combat_effects(GameSession *session,
                 --session->active_attack_effect_count;
         }
     }
+}
+
+int game_session_attack_effect_visual(const GameSession *session,
+                                      unsigned int floater_index,
+                                      unsigned int *realm,
+                                      unsigned int *frame,
+                                      uint16_t *x, uint16_t *y)
+{
+    const GameFloaterStart *floater;
+    unsigned int level;
+    unsigned int frame_count;
+    unsigned int elapsed;
+    unsigned int impact_realm;
+
+    if (session == NULL || realm == NULL || frame == NULL || x == NULL ||
+        y == NULL || floater_index >= session->floater_count) return 0;
+    floater = &session->floaters[floater_index];
+    if (!game_session_floater_is_active(floater) ||
+        !floater->attack_effect_active || floater->attack_effect_level > 3U)
+        return 0;
+    level = floater->attack_effect_level;
+    frame_count = floater->attack_impact_frame_counts[level];
+    if (frame_count == 0 || floater->attack_realm < 0) return 0;
+    impact_realm = (unsigned int)floater->attack_realm & 3U;
+    /* The slot starts with frame_count + 1 odd updates left; one frame per
+       odd update (FUN_00415063), clamped to the last impact frame. */
+    elapsed = frame_count + 1U - floater->attack_effect_odd_updates_remaining;
+    if (elapsed >= frame_count) elapsed = frame_count - 1U;
+    *realm = impact_realm;
+    *frame = (unsigned int)session->effect_impact_frame_starts[impact_realm][level] +
+             elapsed;
+    *x = floater->attack_effect_x;
+    *y = floater->attack_effect_y;
+    return 1;
 }

@@ -534,6 +534,7 @@ int main(void)
     test_leviathan_reevaluation_cast_starts_the_island_timer();
     test_cast_steps_reject_invalid_callers();
     test_cast_visual_uses_owner_effect_and_one_frame_per_two_ticks();
+    test_attack_impact_visual_steps_one_frame_per_odd_update();
     (void)puts("game session unit tests passed");
     return 0;
 }

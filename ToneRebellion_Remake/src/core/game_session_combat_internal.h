@@ -28,6 +28,7 @@ void game_session_clear_cast_site(GameSession *session,
 
 void game_session_start_attack_effect(GameSession *session,
                                      GameFloaterStart *attacker,
-                                     int32_t damage);
+                                     int32_t damage,
+                                     uint16_t target_x, uint16_t target_y);
 
 #endif

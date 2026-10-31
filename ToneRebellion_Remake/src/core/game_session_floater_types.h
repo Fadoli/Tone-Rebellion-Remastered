@@ -44,6 +44,11 @@ typedef struct GameFloaterStart {
     uint8_t attack_impact_frame_counts[4];
     uint8_t attack_effect_active;
     uint8_t attack_effect_odd_updates_remaining;
+    /* Draw state of that IMPACT instance: damage-derived level and the world
+       position it was started at (the target's, an interpretation). */
+    uint8_t attack_effect_level;
+    uint16_t attack_effect_x;
+    uint16_t attack_effect_y;
     /* Raw floater +0x24: death timer for flag 0x008 and pulse counter for
        FA_Cast kind 0x13's flag 0x2000. */
     uint16_t source_death_timer;
