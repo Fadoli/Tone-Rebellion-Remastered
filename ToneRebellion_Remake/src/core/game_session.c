@@ -68,6 +68,10 @@ int game_session_initialize(const WorldDefinition *world,
                 floater_catalog->rows[row].attack_offset_x;
             next.attack_effect_row_offset_y[row] =
                 floater_catalog->rows[row].attack_offset_y;
+            next.grasp_row_offset_x[row] =
+                floater_catalog->rows[row].grasp_offset_x;
+            next.grasp_row_offset_y[row] =
+                floater_catalog->rows[row].grasp_offset_y;
         }
     }
     memcpy(next.effect_impact_frame_counts, floater_catalog->impact_frame_counts,

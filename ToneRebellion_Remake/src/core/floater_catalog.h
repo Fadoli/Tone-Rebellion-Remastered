@@ -53,6 +53,9 @@ typedef struct FloaterStats {
     int16_t attack_effect_def;
     int16_t attack_offset_x;
     int16_t attack_offset_y;
+    /* fltinf.txt graspxy: cargo hand point, shape record +0x4a/+0x4c. */
+    int16_t grasp_offset_x;
+    int16_t grasp_offset_y;
 } FloaterStats;
 
 typedef struct FloaterCatalog {

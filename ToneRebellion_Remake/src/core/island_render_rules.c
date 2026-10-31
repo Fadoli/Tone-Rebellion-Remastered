@@ -1,5 +1,7 @@
 #include "island_render_rules.h"
 
+#include <math.h>
+
 int island_pad_size_group(IslandLocationKind kind)
 {
     switch (kind) {
@@ -184,6 +186,14 @@ uint32_t island_worker_legs_frame(uint8_t worker_type, int has_cargo,
     last = has_cargo ? carry_last[worker_type] : HOVER_LAST;
     frame_count = last - first + 1U;
     return first + (animation_ticks / TICKS_PER_FRAME) % frame_count;
+}
+
+int island_worker_hover_bob(uint32_t animation_ticks, uint8_t phase)
+{
+    /* sin(n * 0.13089958333333332) * 3.0 + 0.5, then __ftol (truncation). */
+    double angle = (double)((animation_ticks + phase) % 48U) *
+        0.13089958333333332;
+    return (int)(sin(angle) * 3.0 + 0.5);
 }
 
 uint32_t island_worker_attack_legs_frame(uint16_t first_frame,

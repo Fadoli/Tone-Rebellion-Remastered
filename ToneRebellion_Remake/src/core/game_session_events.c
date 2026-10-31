@@ -609,7 +609,6 @@ unsigned int game_session_dispatch_cast_actions(GameSession *session)
         const GameCastActionRequest request = session->cast_actions[request_index];
         GameRuntimeIsland *building_island;
         GameRuntimeLocation *building;
-        GameRuntimeLocation *hall;
         GameFloaterStart *caster = NULL;
         uint8_t kind;
         uint32_t magic_cost;
@@ -670,17 +669,16 @@ unsigned int game_session_dispatch_cast_actions(GameSession *session)
         }
         if (caster == NULL) continue;
 
-        /* Native validation and caster selection precede both stock debits.
-           Check together so a failed request cannot spend only one resource. */
-        hall = game_session_player_hall(session, request.player_slot);
-        if (hall == NULL ||
-            hall->resource_stock[GAME_RESOURCE_MAGIC_TONE] < magic_cost ||
-            hall->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] < crystal_cost)
+        /* FUN_0045da2a (gate) and FUN_0045da80 (debit) use the casting
+           building's own pools, site +0x2c (magic) and +0x2a (crystal), not
+           the Hall. Check together so a request cannot spend only one. */
+        if (building->resource_stock[GAME_RESOURCE_MAGIC_TONE] < magic_cost ||
+            building->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] < crystal_cost)
             continue;
-        hall->resource_stock[GAME_RESOURCE_MAGIC_TONE] =
-            (uint16_t)(hall->resource_stock[GAME_RESOURCE_MAGIC_TONE] - magic_cost);
-        hall->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] =
-            (uint16_t)(hall->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] - crystal_cost);
+        building->resource_stock[GAME_RESOURCE_MAGIC_TONE] = (uint16_t)(
+            building->resource_stock[GAME_RESOURCE_MAGIC_TONE] - magic_cost);
+        building->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = (uint16_t)(
+            building->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] - crystal_cost);
 
         caster->active_order_action = 0x13;
         caster->movement_state = 0x13;

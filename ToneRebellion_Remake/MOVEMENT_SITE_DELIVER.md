@@ -52,3 +52,27 @@ analogy with `FA_Deliver`. Evidence: action consumption and island handoff
 state handling `ev_6c3ec9c58f2e2ec6ef837d8737ba3dfece6d35c11a918338523e688a6746c25a`,
 location approach `ev_810f7530a91d83a454c4d310d2142cafe948434cde2b0707fd5847693435b64f`,
 and location validator `ev_ff5099639bbdcb8c257ae4e8f690ea98f0ebdf4321753ff832e66ba4dc11d800`.
+
+### Site approach point (states 3/4/5)
+
+After `FUN_004211bb` picks a state, `FUN_00423068` writes destination
+`+0x28/+0x2a` = location anchor + offset. With `G` = fltinf `graspxy`
+(shape record `+0x4a/+0x4c`, x negated when the anchor lies left of the
+floater) and `H` = `FUN_0040ad94` cargo height (`DAT_0049acbe`, item codes
+5..0x21, else 0):
+- state 3, class 0, not Hall (`+0x10 != 0x2a`) nor linked (`+0x18 == -1`),
+  resource code < 5 or > 0x21: PROD x,y − G (`FUN_00450197` type 5);
+- state 4, class 2: CONS x,y − G − (0, H) (type 4);
+- state 4, class 0, not Hall/linked: item 0x2b CONS − G; items 0/1 −G − (0, H);
+- Hall or linked site (other states): OCCU x,y (type 6), no G;
+- otherwise no offset.
+So the worker's hand meets the bldinf output point. Ported in
+`floater_target_location`. Evidence: `FUN_00423068`
+`ev_78129691c952802bb66118495851b56edaa9c14a1582d21d9162825d0f21f7dd`,
+`FUN_00450197` `ev_8527a41d63b171571a5303617a6f0829b26aad642e5cd26503561c9ed741e39c`,
+`FUN_0040ad94` `ev_49e29bd4d8e8c364833dc070d2881de95f0c185df6a75858bc6b4c8450dec0ff`,
+table bytes `ev_5bb507c256eeba2884c9d5021ffff97c6aedce294f51489a5128f1c3dc8d4e1c`,
+`FUN_004211bb` `ev_3477c4218f2065db070d4efae8de369bbea8abee71d9fdd735ccbdd92f6b39ba`.
+Limits: the remake reads the item's raw `+0x10` ID directly (native resolves
+it with `FUN_004641de(+0x14, +0x10)`); the out-of-bounds X rejection and the
+charge states 11/12 OCCU offset are not ported.

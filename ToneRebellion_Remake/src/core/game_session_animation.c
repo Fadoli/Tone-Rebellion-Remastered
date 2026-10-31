@@ -1395,6 +1395,33 @@ void game_session_tick_item_animations_with_floaters(
     if (session->realm_cycle_b == 0 || session->realm_cycle_b == 7999)
         session->realm_step_b = (int16_t)-session->realm_step_b;
     tick_defense_projectiles(session);
+    {
+        /* FUN_00423068 reads these descriptors through FUN_00450197. */
+        unsigned int item_id;
+        for (item_id = 0; item_id < GAME_SESSION_ITEM_OFFSET_COUNT; ++item_id) {
+            const BuildingRenderItem *offset_item =
+                item_id < catalog->item_count
+                    ? building_render_find(catalog, (uint16_t)item_id) : NULL;
+            const BuildingRenderSegment *segments[3];
+            unsigned int kind;
+            segments[GAME_SESSION_ITEM_OFFSET_CONS] =
+                offset_item != NULL ? &offset_item->cons : NULL;
+            segments[GAME_SESSION_ITEM_OFFSET_PROD] =
+                offset_item != NULL ? &offset_item->prod : NULL;
+            segments[GAME_SESSION_ITEM_OFFSET_OCCU] =
+                offset_item != NULL ? &offset_item->occu : NULL;
+            for (kind = 0; kind < 3; ++kind) {
+                const BuildingRenderSegment *segment = segments[kind];
+                int present = segment != NULL && segment->present;
+                /* The OCCU parser keeps its x,y in parameter_a/b. */
+                int occu = kind == GAME_SESSION_ITEM_OFFSET_OCCU;
+                session->item_site_offset[item_id][kind][0] = !present ? 0
+                    : occu ? segment->parameter_a : segment->offset_x;
+                session->item_site_offset[item_id][kind][1] = !present ? 0
+                    : occu ? segment->parameter_b : segment->offset_y;
+            }
+        }
+    }
     for (island_index = 0; island_index < session->island_count; ++island_index) {
         GameRuntimeIsland *island = &session->islands[island_index];
         unsigned int location_index;

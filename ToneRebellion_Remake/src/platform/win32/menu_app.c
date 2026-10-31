@@ -192,7 +192,7 @@ static char g_newgame_text[8][256];
 static char g_empty_glyph_text[256];
 static char g_empty_inventory_text[256];
 static char g_empty_task_text[256];
-static char g_task_label_text[6][256];
+static char g_task_label_text[7][256];
 static char g_task_stock_text[256];
 static char g_task_building_const_text[256];
 static char g_task_priority_text[3][256];

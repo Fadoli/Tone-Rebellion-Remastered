@@ -299,10 +299,9 @@ int game_session_tick_floater_handoff(GameSession *session,
                 const GameRuntimeLocation *location =
                     &session->islands[destination_island]
                          .locations[(uint16_t)destination_location];
-                floater->destination_x = location->x;
-                floater->destination_y = location->y;
+                floater_target_location(session, floater, location,
+                                        resume_state);
             }
-            floater->movement_state = resume_state;
             floater->active_order_action = resume_action;
         } else if (resume_action == 0 && resume_state == 11 &&
                    floater->source_order_parameter_32 <

@@ -67,7 +67,7 @@ int game_session_start_repair_supply(GameSession *session,
     floater->order_resource_code = 1;
     floater->order_timer = 0;
     if (source_island == floater->island_index) {
-        floater_target_location(floater, source, 3);
+        floater_target_location(session, floater, source, 3);
         return 1;
     }
 
@@ -322,12 +322,12 @@ static int assign_delivery_task_for_floater(GameSession *session,
     floater->order_timer = 0;
     if (floater->carried_resource_code == event->payload_12) {
         floater->order_source_location = -1;
-        floater_target_location(floater,
+        floater_target_location(session, floater,
             &island->locations[(uint16_t)event->payload_0e], 4);
     } else {
         floater->order_source_location = (int16_t)source_index;
         if (source_island == floater->island_index) {
-            floater_target_location(floater,
+            floater_target_location(session, floater,
                 &island->locations[(unsigned int)source_index], 3);
         } else {
             const GameRuntimeLocation *source = &session->islands[source_island]
@@ -447,7 +447,7 @@ static int assign_construction_task_for_floater(
     if (finalize_building) {
         floater->order_source_location = -1;
         if (event->payload_0a == floater->island_index) {
-            floater_target_location(floater, target, 5);
+            floater_target_location(session, floater, target, 5);
         } else {
             floater->source_order_coordinate_30 = (uint16_t)(
                 ((uint16_t)(((uint32_t)target->x + 5U) / 10U) << 8) |
@@ -464,7 +464,7 @@ static int assign_construction_task_for_floater(
     } else if (source_index < 0) {
         floater->order_source_location = -1;
         if (event->payload_0a == floater->island_index) {
-            floater_target_location(floater, target, 4);
+            floater_target_location(session, floater, target, 4);
         } else {
             floater->source_order_coordinate_30 = (uint16_t)(
                 ((uint16_t)(((uint32_t)target->x + 5U) / 10U) << 8) |
@@ -483,7 +483,7 @@ static int assign_construction_task_for_floater(
             .locations[(unsigned int)source_index];
         floater->order_source_location = (int16_t)source_index;
         if (source_island == floater->island_index) {
-            floater_target_location(floater, source, 3);
+            floater_target_location(session, floater, source, 3);
         } else {
             floater->source_order_coordinate_30 = (uint16_t)(
                 ((uint16_t)(((uint32_t)source->x + 5U) / 10U) << 8) |
@@ -545,7 +545,7 @@ static int assign_repair_task_for_floater(GameSession *session,
     floater->order_source_location = -1;
     if (floater->carried_resource_code == 1 &&
         event->payload_0a == floater->island_index) {
-        floater_target_location(floater, target, 4);
+        floater_target_location(session, floater, target, 4);
     } else if (floater->carried_resource_code == 1) {
         floater->source_order_coordinate_30 = (uint16_t)(
             ((uint16_t)(((uint32_t)target->x + 5U) / 10U) << 8) |
@@ -1181,7 +1181,7 @@ static int continue_as_construction_finisher(GameSession *session,
     floater->order_source_location = -1;
     floater->order_timer = 0;
     floater->source_runtime_flags &= ~1U;
-    floater_target_location(floater, target, 5);
+    floater_target_location(session, floater, target, 5);
     floater->has_wander_order = 0;
     floater->wander_timer = 0;
     return 1;
@@ -1459,7 +1459,7 @@ void game_session_advance_local_resource_task(GameSession *session,
         }
         island = &session->islands[floater->order_target_island];
         target = &island->locations[(uint16_t)floater->order_target_location];
-        floater_target_location(floater, target, 4);
+        floater_target_location(session, floater, target, 4);
         return;
     }
     if (floater->movement_state != 4) return;
@@ -1692,12 +1692,91 @@ int refill_source(GameSession *session, const GameFloaterStart *floater,
     return -1;
 }
 
-void floater_target_location(GameFloaterStart *floater,
-                                    const GameRuntimeLocation *location,
-                                    uint8_t state)
+/* FUN_0040ad94: DAT_0049acbe cargo heights for item codes 5..0x21. */
+static int16_t carried_item_height(int16_t code)
 {
-    floater->destination_x = location->x;
-    floater->destination_y = location->y;
+    static const int16_t heights[0x21 - 5 + 1] = {
+        13, 20, 25, 8, 5, 27, 27, 21, 21, 20, 17, 7, 9, 13, 13,
+        15, 24, 5, 5, 18, 18, 5, 28, 20, 20, 42, 42, 24, 24
+    };
+    return code < 5 || code > 0x21 ? 0 : heights[code - 5];
+}
+
+/* FUN_00423068 adds a site offset to the location anchor for states 3/4/5.
+   Producer pickups (3) and plain-site deliveries (4) aim the floater's
+   graspxy hand at the bldinf PROD or CONS point, minus the cargo height;
+   Hall and source-linked sites use OCCU without the hand offset. */
+static void floater_site_offset(const GameSession *session,
+                                const GameFloaterStart *floater,
+                                const GameRuntimeLocation *location,
+                                uint8_t state, int32_t *dx, int32_t *dy)
+{
+    int32_t item = location->record_value_10;
+    int hall_or_linked = item == 0x2a ||
+        location->source_location_slot_18 != -1;
+    int row = floater->type_index == 4U ? (int)floater->source_subtype + 27
+                                        : (int)floater->type_index * 9 +
+                                          (int)floater->source_subtype;
+    int32_t grasp_x = 0;
+    int32_t grasp_y = 0;
+    int16_t code = state == 3 ? floater->order_resource_code
+                              : floater->carried_resource_code;
+    const int16_t *cons;
+    const int16_t *prod;
+    const int16_t *occu;
+
+    *dx = 0;
+    *dy = 0;
+    if (item < 0 || item >= GAME_SESSION_ITEM_OFFSET_COUNT) item = 0;
+    cons = session->item_site_offset[item][GAME_SESSION_ITEM_OFFSET_CONS];
+    prod = session->item_site_offset[item][GAME_SESSION_ITEM_OFFSET_PROD];
+    occu = session->item_site_offset[item][GAME_SESSION_ITEM_OFFSET_OCCU];
+    if (row >= 0 && row < FLOATER_CATALOG_ROW_COUNT) {
+        grasp_x = session->grasp_row_offset_x[row];
+        grasp_y = session->grasp_row_offset_y[row];
+    }
+    /* The hand x mirrors when the anchor lies left of the floater. */
+    if ((int32_t)location->x < (int32_t)floater->x) grasp_x = -grasp_x;
+
+    if (state == 4 && location->renderer_class == 2) {
+        *dx = cons[0] - grasp_x;
+        *dy = cons[1] - grasp_y - carried_item_height(code);
+    } else if (state == 4 && location->renderer_class == 0 &&
+               !hall_or_linked) {
+        if (item == 0x2b) {
+            *dx = cons[0] - grasp_x;
+            *dy = cons[1] - grasp_y;
+        } else if (item == 0 || item == 1) {
+            *dx = -grasp_x;
+            *dy = -grasp_y - carried_item_height(code);
+        }
+    } else if (state == 3 && location->renderer_class == 0 &&
+               !hall_or_linked) {
+        if (code < 5 || code > 0x21) {
+            *dx = prod[0] - grasp_x;
+            *dy = prod[1] - grasp_y;
+        }
+    } else if (hall_or_linked) {
+        *dx = occu[0];
+        *dy = occu[1];
+    }
+}
+
+void floater_target_location(const GameSession *session,
+                             GameFloaterStart *floater,
+                             const GameRuntimeLocation *location,
+                             uint8_t state)
+{
+    int32_t dx = 0;
+    int32_t dy = 0;
+    int32_t x;
+    int32_t y;
+    if (session != NULL) floater_site_offset(session, floater, location, state,
+                                             &dx, &dy);
+    x = (int32_t)location->x + dx;
+    y = (int32_t)location->y + dy;
+    floater->destination_x = (uint16_t)(x < 0 ? 0 : x);
+    floater->destination_y = (uint16_t)(y < 0 ? 0 : y);
     floater->movement_state = state;
     floater->stop_radius = 0;
     floater->has_move_order = 1;

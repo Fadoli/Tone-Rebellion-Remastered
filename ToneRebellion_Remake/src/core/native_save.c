@@ -147,8 +147,10 @@ static void apply_site(GameRuntimeLocation *site, const uint8_t *rec)
     site->source_value_22 = u16_at(rec + 0x22);
     site->tribe_visibility_mask = (uint8_t)site->source_value_22;
     site->record_value_24 = (int32_t)u32_at(rec + 0x24);
-    if (owner >= 0 && owner < GAME_START_PLAYER_COUNT &&
-        item - owner * 16 == HALL_ITEM_ID) {
+    /* +0x28/+0x2a/+0x2c are every site's stocks (Hall, training buildings,
+       pads under construction, producer scratch counter), not only the
+       Hall's. */
+    {
         unsigned int resource;
         for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource)
             site->resource_stock[resource] = u16_at(rec + 0x28 + resource * 2U);

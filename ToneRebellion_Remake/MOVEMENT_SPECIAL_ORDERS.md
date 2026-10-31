@@ -100,3 +100,10 @@ clears it and selects normally (`ev_9fac3ab3`, `ev_0d862ab7`). Port: the cast
 request carries the target site (`game_session_queue_cast_action_at`), the
 UI draws SPELLBUT and arms `g_armed_spell_action`. Interpretation: pressing the
 armed button again disarms it, and Escape cancels.
+
+Cost (objdump of FLOAT.EXE): the gate `FUN_0045da2a` and the debit at the end
+of `FUN_0045da80` read `FUN_004023bf(B)`, the casting building's own site, and
+subtract the magic cost (`FUN_00401636`, glyph discount) from `+0x2c` and
+`spells.txt` CryCost (`0x6188e4 + kind*0x2c`) from `+0x2a`. Port: the
+dispatcher checks and debits the building's `resource_stock[2]/[1]`, not the
+Hall.

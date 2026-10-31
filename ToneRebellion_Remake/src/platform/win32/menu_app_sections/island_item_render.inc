@@ -992,10 +992,9 @@ static void draw_hall_feature_icons(HDC dc, const WindowTemplate *info,
 /* FUN_004118df call at 0x440b2a: TASKICON frame 8 at (x,20), 6x55, inset 2,
    vertical (dir 1): interior x+2..x+4 by y+22..y+73, filled from the bottom
    by ftol(51 * stock / cap), the remaining top part painted with palette
-   index 0. cap = FUN_0045cd27 = 50 + 25 * L, L = short +0x4a of the
-   building's own location entry (taken as source_capacity_4a: interpretation;
-   the 2 px interior width follows the pushed arguments and has no visual
-   cross-check). */
+   index 0. cap = FUN_0045cd27 = 50 + 25 * L. ECX is FUN_00450385's staff
+   block (asm 0x440881/0x4409e6), whose +0/+2 name the building itself
+   (FUN_0045c325), so L is the building's own +0x4a (source_capacity_4a). */
 static void draw_building_stock_gauge(HDC dc, const WindowTemplate *info,
                                       int x, uint16_t stock, int16_t level)
 {
@@ -1071,8 +1070,7 @@ static void draw_spell_cost_bars(HDC dc, const WindowTemplate *info,
 /* Non-summary variant (P+0x18 != -1): bldgage frame 0 at (W/2-18, 0), 36x8,
    inset 2, filled by +0x34 over FUN_00450978's maximum unless the item is
    0x2a or the owner is 4; tonecrys frame 4 at (11,17); for item 0x2f also
-   magctone frame 4 at (38,17). The taskicon stock bars at (8,20)/(35,20) need
-   the staff-record capacity (FUN_0045cd27) and are not ported. */
+   magctone frame 4 at (38,17), each with its taskicon stock bar. */
 static void draw_building_info_extras(HDC dc, const WindowTemplate *info,
                                       const GameRuntimeLocation *location,
                                       uint8_t island_index,

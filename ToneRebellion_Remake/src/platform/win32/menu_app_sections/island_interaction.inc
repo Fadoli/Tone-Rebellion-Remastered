@@ -866,28 +866,6 @@ static int selected_hall_player(void)
     return (int)player;
 }
 
-/* The Hall's population indicator uses one representative worker icon. Keep
-   it linked to a real active player worker, without treating the whole
-   owner list as Hall members. */
-static uint8_t collect_initial_worker_roster(unsigned int player,
-                                             int indices[ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT])
-{
-    uint8_t count = 0;
-    unsigned int i;
-    if (indices == NULL || player >= GAME_START_PLAYER_COUNT ||
-        !g_game_session_valid) return 0;
-    for (i = 0; i < ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT; ++i) indices[i] = -1;
-    for (i = 0; i < g_game_session.floater_count &&
-         count < ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT; ++i) {
-        const GameFloaterStart *floater = &g_game_session.floaters[i];
-        if (!game_session_floater_is_active(floater) ||
-            floater->owner_slot != player || floater->type_index >= 4) continue;
-        indices[count++] = (int)i;
-        break;
-    }
-    return count;
-}
-
 /* FUN_0042f8f7 (floater select, message 0x3f) resolves the floater's +0x0c
    link through FUN_004207f2/FUN_0045c3bb to its source building and shows it
    via FUN_0042f755, on any island. With no link the current location is kept
@@ -1005,32 +983,6 @@ static void island_right_click(int clicked_floater, int x, int y)
         select_location_on_view(-1);
         g_island_panel_mode = WINDOW_ISLAND_PANEL_GENERAL;
     }
-}
-
-static int selected_hall_roster_hit_test(int x, int y)
-{
-    int roster[ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT];
-    const WindowTemplate *info;
-    int player = selected_hall_player();
-    uint8_t count;
-    uint8_t occupied = 0;
-    uint8_t slot;
-    int special_layout = 0;
-    const GameRuntimeIsland *island;
-    if (player < 0) return -1;
-    count = collect_initial_worker_roster((unsigned int)player, roster);
-    if (count == 0) return -1;
-    for (slot = 0; slot < count; ++slot) occupied |= (uint8_t)(1u << slot);
-    island = &g_game_session.islands[selection_island()];
-    if ((uint16_t)g_selected_location < island->location_count) {
-        special_layout = location_base_item_id(
-            &island->locations[g_selected_location]) == 0x2f;
-    }
-    info = window_catalog_find(&g_window_catalog, "IWLocInfo", 3);
-    if (info == NULL) return -1;
-    slot = (uint8_t)island_panel_info_roster_hit_test(
-        info->pane.left, info->pane.top, x, y, special_layout, occupied);
-    return slot < ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT ? roster[slot] : -1;
 }
 
 static int hall_stock_control_at(int x, int y)

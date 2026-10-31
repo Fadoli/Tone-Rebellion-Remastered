@@ -160,6 +160,20 @@ Port: le masque est `special_feature_island_mask` (bits = index d'île). Hypoth�
 `DAT_006136b0` = nombre d'îles (aucun écrivain statique, valeur initiale 0).
 Inconnues: nombre de frames d'acticon.shp, survol/infobulle (aucun dans le corps).
 
+### Ouvrier du résumé du Hall (port)
+
+Observation (pseudocode stocké ev_cb0962ae…, ev_a5f6ff6c… `FUN_0041e4e4`, ev_6e955bf9…
+`FUN_00426fd0`, ev_d21d92e7… `FUN_0042704b`; objdump 0x4412e4-0x44138c, session REA
+fermée): la figure n'est pas une unité réelle. Floater temporaire sur la pile, construit
+par `FUN_0041e4e4` (état +0x2c 0, cargaison +0x18 0, drapeaux +0x1c 0), `+0` = `P+0x14`
+(propriétaire, classe), `+4` = 0 (sous-type ouvrier). Dessin `FUN_0042704b(x=200,
+y=bob+0x11, param_5=1)`, y −3 si `DAT_0049f538 == 3`, globals d'overlay `0x5c37f4..fc`
+mis à 0 pendant l'appel. Bob `FUN_00426fd0` = trunc(sin(((`DAT_00618e44`+`+0x14`) mod 48)
+× 2π/48) × 3 + 0.5) (constantes 0x494138/40/48). Jambes: plage hover (cargaison 0) phasée
+par `DAT_00618e44`. Aucun lien vers la table floaters: aucun clic ne sélectionne d'unité.
+Port: ouvrier synthétique animé (hover + bob, corps frame 0), clic retiré.
+Inconnue: octet de phase `+0x14` non initialisé par le constructeur (pile), le port prend 0.
+
 ### Variante non-résumé du Hall (P+0x18 != -1) — port partiel
 
 Observation (ev_671a14319b…, ev_9bd33459…, ev_7cbbb9a2…, ev_b5f6de1a…, asm

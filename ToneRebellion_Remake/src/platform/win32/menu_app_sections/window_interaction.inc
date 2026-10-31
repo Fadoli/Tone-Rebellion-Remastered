@@ -537,9 +537,6 @@ static void handle_click(HWND window, int x, int y)
             int stock_control = hall_player >= 0 &&
                 island_panel_location_control_visible(g_island_panel_mode)
                 ? hall_stock_control_at(x, y) : -1;
-            int clicked_roster_floater = hall_player >= 0 &&
-                island_panel_location_info_visible(g_island_panel_mode)
-                ? selected_hall_roster_hit_test(x, y) : -1;
             int hall_panel_mode = hall_control != NULL
                 ? window_catalog_hall_panel_mode(hall_control->name)
                 : WINDOW_ISLAND_PANEL_NONE;
@@ -649,18 +646,6 @@ static void handle_click(HWND window, int x, int y)
             } else if (stock_control >= 0) {
                 (void)ISSUE_COMMAND(GAME_COMMAND_CYCLE_RESOURCE_STOCK, (uint8_t)hall_player,
                     (GameResourceType)stock_control);
-            } else if (clicked_roster_floater >= 0) {
-                IslandPanelSelection selection = {
-                    g_selected_location, g_selected_floater
-                };
-                /* FUN_0042fa0f's 0x3f branch changes the floater selection
-                   while retaining the selected IWLocInfo location context. */
-                island_panel_select_floater(&selection,
-                                             clicked_roster_floater);
-                select_location_anywhere(selection_island(), selection.location_index);
-                g_selected_floater = clicked_roster_floater;
-                select_floater_source_building(clicked_roster_floater);
-                g_hovered_location = -1;
             } else {
                 /* FUN_00435581 has no explored-cell gate on the floater pass. */
                 int clicked_floater = g_game_session_valid

@@ -350,7 +350,7 @@ static int game_session_tick_repair_task(GameSession *session,
     if (floater->island_index != floater->order_target_island) goto cancel;
     if (floater->has_move_order) return 0;
     if (floater->x != target->x || floater->y != target->y) {
-        floater_target_location(floater, target, 4);
+        floater_target_location(session, floater, target, 4);
         return 0;
     }
     if (floater->movement_state != 0x12) {

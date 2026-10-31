@@ -163,21 +163,36 @@ static void draw_hall_panel(HDC dc, int hall_player)
                             (int8_t)(location_base_item_id(upgrade_site) == 0x2f ? 6 : 5);
                         row.resource_icon_type = -1;
                     }
-                    /* Original saves hold type-4 tasks for crystal / magic
-                       (payload 2 / 3) aimed at a training building (its
-                       TrnStkC / TrnStkM stock). The port never creates them
-                       itself; they are shown as STOCK rows of that resource. */
-                    const int building_stock_resource =
-                        stock_resource < 0 && upgrade_site == NULL &&
+                    /* FUN_004459e6 SUPPLY row: a type-4 crystal / magic
+                       request (payload 2 / 3, TrnStkC / TrnStkM) aimed at a
+                       training building with a staff block. Gauge = that
+                       building's +0x2a (crystal) or +0x2c (magic) over
+                       FUN_0045cd27 = 50 + 25 * its +0x4a. */
+                    const GameRuntimeLocation *supply_site = NULL;
+                    if (stock_resource < 0 && upgrade_site == NULL &&
                         event->action_type == 4 && event->payload_12 >= 2 &&
-                        event->payload_12 <= GAME_RESOURCE_TYPE_COUNT
-                            ? event->payload_12 - 1 : -1;
+                        event->payload_12 <= GAME_RESOURCE_TYPE_COUNT &&
+                        event->payload_0a >= 0 &&
+                        (unsigned int)event->payload_0a <
+                            g_game_session.island_count &&
+                        event->payload_0e >= 0 &&
+                        (unsigned int)event->payload_0e <
+                            g_game_session.islands[event->payload_0a]
+                                .location_count &&
+                        g_game_session.islands[event->payload_0a]
+                            .locations[event->payload_0e]
+                            .source_location_slot_18 != -1)
+                        supply_site = &g_game_session.islands[event->payload_0a]
+                            .locations[event->payload_0e];
+                    const int supply_resource = supply_site != NULL
+                        ? event->payload_12 - 1 : -1;
                     if (!(upgrade_site != NULL ? 1 : stock_resource >= 0
                             ? island_panel_info_stock_task_row(
                                   (unsigned int)stock_resource, &row)
-                            : building_stock_resource >= 0
-                            ? island_panel_info_stock_task_row(
-                                  (unsigned int)building_stock_resource, &row)
+                            : supply_site != NULL
+                            ? island_panel_info_supply_task_row(
+                                  (unsigned int)supply_resource,
+                                  location_base_item_id(supply_site), &row)
                             : island_panel_info_task_row(event->action_type,
                                   event->payload_12, &row)) ||
                         !island_panel_info_task_row_position(task_list_panel,
@@ -282,6 +297,16 @@ static void draw_hall_panel(HDC dc, int hall_player)
                                 20U;
                         draw_task_gauge(dc, task_list_panel, position.y,
                                         upgrade_fill);
+                    } else if (supply_site != NULL) {
+                        unsigned int supply_fill;
+                        const int32_t capacity =
+                            (int32_t)supply_site->source_capacity_4a * 25 + 50;
+                        if (capacity > 0 && capacity <= INT16_MAX &&
+                            island_panel_info_task_gauge_fill(
+                                (int16_t)supply_site->resource_stock[supply_resource],
+                                (int16_t)capacity, 0x46U - 4U, &supply_fill))
+                            draw_task_gauge(dc, task_list_panel, position.y,
+                                            supply_fill);
                     } else if (event->action_type == 0x12) {
                         draw_task_repair_gauge(dc, task_list_panel, event,
                                                position.y);

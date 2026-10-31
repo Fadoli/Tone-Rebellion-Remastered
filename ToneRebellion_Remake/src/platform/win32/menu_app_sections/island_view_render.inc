@@ -1457,8 +1457,9 @@ static void render_island_view(HDC dc)
                     }
                 }
                 /* Combat-stat frame and anchor are independently derived from
-                   FUN_0042704b / FUN_00420f28. */
-                if (g_floater_info_art.frame_count >= 26) {
+                   FUN_0042704b / FUN_00420f28. Ascended Ones have no body
+                   frame to anchor it, as in the world-view badge path. */
+                if (g_floater_info_art.frame_count >= 26 && body_frame != NULL) {
                     uint32_t stat_frame;
                     int32_t badge_x;
                     int32_t badge_y;
@@ -1600,52 +1601,42 @@ static void render_island_view(HDC dc)
         draw_hall_stock_summary(dc, hall_player, runtime_island);
     }
 
-    /* Show one representative worker beside the Hall's population summary.
-       The Hall is not a roster container, so don't paint every player worker
-       as if they were attached to this building. */
+    /* The Hall summary's worker is not a real unit: FUN_00440567
+       (0x4412e4..0x44138c) builds a stack floater with FUN_0041e4e4 (state 0,
+       no cargo, flags 0), sets class = Hall owner and subtype 0 (worker), then
+       draws it with FUN_0042704b at pane (200, FUN_00426fd0 bob + 0x11, -3 more
+       for active tribe 3) with the three overlay globals cleared. The phase
+       byte +0x14 is left unset by the constructor; the port uses 0. */
     {
         int player = selected_hall_player();
-        if (player >= 0 &&
+        if (player >= 0 && player < 4 &&
             island_panel_location_info_visible(g_island_panel_mode)) {
             const WindowTemplate *info = window_catalog_find(
                 &g_window_catalog, "IWLocInfo", 3);
-            int roster[ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT];
-            uint8_t count = collect_initial_worker_roster((unsigned int)player,
-                                                          roster);
-            uint8_t slot;
-            if (info != NULL && count != 0) {
+            if (info != NULL) {
+                const SpriteSheet *body_art = &g_initial_floater_bodies[player];
+                const SpriteSheet *leg_art = &g_initial_floater_legs[player];
                 RECT pane = {info->pane.left, info->pane.top,
                              info->pane.right + 1, info->pane.bottom + 1};
-                int saved_roster_dc = SaveDC(dc);
+                int saved_worker_dc = SaveDC(dc);
+                int x = info->pane.left + 200;
+                int y = info->pane.top + 0x11 +
+                    island_worker_hover_bob(g_menu.animation_ticks, 0);
+                uint32_t body_frame;
+                uint32_t leg_frame = island_worker_legs_frame(
+                    (uint8_t)player, 0, g_menu.animation_ticks);
+                if (ui_art_tribe() == 3) y -= 3;
                 (void)IntersectClipRect(dc, pane.left, pane.top,
                                         pane.right, pane.bottom);
-                for (slot = 0; slot < count; ++slot) {
-                    const GameFloaterStart *floater =
-                        &g_game_session.floaters[roster[slot]];
-                    const SpriteSheet *body_art;
-                    const SpriteSheet *leg_art;
-                    int offset_x;
-                    int offset_y;
-                    if (!island_panel_info_roster_position(slot, 0,
-                                                          &offset_x, &offset_y)) {
-                        continue;
-                    }
-                    body_art = island_floater_body_art(floater);
-                    leg_art = island_floater_legs_art(floater);
-                    if (body_art->frame_count != 0) {
-                        draw_sprite(dc, body_art,
-                            island_floater_body_sprite_frame(floater, body_art),
-                            info->pane.left + offset_x,
-                            info->pane.top + offset_y);
-                    }
-                    if (leg_art->frame_count != 0) {
-                        draw_sprite(dc, leg_art,
-                            island_floater_legs_frame(floater),
-                            info->pane.left + offset_x,
-                            info->pane.top + offset_y);
-                    }
-                }
-                if (saved_roster_dc != 0) RestoreDC(dc, saved_roster_dc);
+                if (body_art->frame_count != 0 &&
+                    island_floater_body_frame((uint8_t)player, 0, 0,
+                                              &body_frame) &&
+                    body_frame < body_art->frame_count)
+                    draw_sprite(dc, body_art, body_frame, x, y);
+                if (leg_art->frame_count != 0 &&
+                    leg_frame < leg_art->frame_count)
+                    draw_sprite(dc, leg_art, leg_frame, x, y);
+                if (saved_worker_dc != 0) RestoreDC(dc, saved_worker_dc);
             }
         }
     }

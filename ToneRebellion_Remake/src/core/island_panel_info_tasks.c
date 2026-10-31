@@ -58,6 +58,18 @@ int island_panel_info_stock_task_row(unsigned int resource_type,
     return 1;
 }
 
+int island_panel_info_supply_task_row(unsigned int resource_type,
+                                      int32_t building_item_id,
+                                      IslandTaskRow *row)
+{
+    if (row == NULL || resource_type < 1 || resource_type >= 3) return 0;
+    row->label_key = "SUPPLY";
+    row->task_icon_frame = 3;
+    row->secondary_task_icon_frame = (int8_t)(building_item_id == 0x2f ? 6 : 5);
+    row->resource_icon_type = (int8_t)resource_type;
+    return 1;
+}
+
 int island_panel_info_stock_gauge_fill(uint16_t stock,
                                        int16_t source_field_4a,
                                        unsigned int gauge_width,

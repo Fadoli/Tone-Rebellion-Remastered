@@ -3,6 +3,14 @@
 
 #include "game_session_world_types.h"
 
+/* Raw item IDs covered by item_site_offset (pad.txt's maximum row count). */
+enum { GAME_SESSION_ITEM_OFFSET_COUNT = 128 };
+enum {
+    GAME_SESSION_ITEM_OFFSET_CONS = 0,
+    GAME_SESSION_ITEM_OFFSET_PROD = 1,
+    GAME_SESSION_ITEM_OFFSET_OCCU = 2
+};
+
 typedef struct GameFloaterStart {
     uint8_t island_index;
     uint8_t type_index;
@@ -219,6 +227,13 @@ typedef struct GameSession {
     int16_t attack_effect_row_def[FLOATER_CATALOG_ROW_COUNT];
     int16_t attack_effect_row_offset_x[FLOATER_CATALOG_ROW_COUNT];
     int16_t attack_effect_row_offset_y[FLOATER_CATALOG_ROW_COUNT];
+    /* fltinf graspxy per floater.txt row (shape record +0x4a/+0x4c), which
+       FUN_00423068 subtracts so the carried cargo meets the site point. */
+    int16_t grasp_row_offset_x[FLOATER_CATALOG_ROW_COUNT];
+    int16_t grasp_row_offset_y[FLOATER_CATALOG_ROW_COUNT];
+    /* bldinf CONS/PROD/OCCU x,y per raw item ID (FUN_00450197 anim types
+       4/5/6), refreshed from the render catalog by the item-animation tick. */
+    int16_t item_site_offset[GAME_SESSION_ITEM_OFFSET_COUNT][3][2];
     /* Visual-only instances of those effects (ONESHOT, BULLET, CAST+CHAIN). */
     struct GameAttackVisual {
         uint8_t active;

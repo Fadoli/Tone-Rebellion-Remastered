@@ -145,6 +145,12 @@ int island_panel_info_task_row(int16_t action_type, int16_t item_id,
    one of the three resource shapes. */
 int island_panel_info_stock_task_row(unsigned int resource_type,
                                      IslandTaskRow *row);
+/* FUN_004459e6's SUPPLY row for a type-4 crystal/magic request aimed at a
+   site with a staff block (FUN_00450385 != 0): TASKICON 3, secondary
+   (item == 0x2f) + 5, tonecrys (resource 1) or magctone (resource 2). */
+int island_panel_info_supply_task_row(unsigned int resource_type,
+                                      int32_t building_item_id,
+                                      IslandTaskRow *row);
 /* FUN_004459e6 uses stock / (short(Hall+0x4a) * 50 + 150), capped at 1,
    for the TASKICON frame-9 gauge. Returns false for a nonpositive divisor. */
 int island_panel_info_stock_gauge_fill(uint16_t stock,

@@ -255,6 +255,7 @@ static const char *task_label_text(const char *key)
     if (strcmp(key, "OARTIFACT") == 0) return g_task_label_text[3];
     if (strcmp(key, "UPGRADE") == 0) return g_task_label_text[4];
     if (strcmp(key, "UPGSPREAD") == 0) return g_task_label_text[5];
+    if (strcmp(key, "SUPPLY") == 0) return g_task_label_text[6];
     if (strcmp(key, "STOCK") == 0) return g_task_stock_text;
     if (strcmp(key, "TNORM") == 0) return g_task_priority_text[0];
     if (strcmp(key, "THIGH") == 0) return g_task_priority_text[1];
