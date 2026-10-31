@@ -591,6 +591,8 @@ static void test_construction_task_delivers_cost_before_deferred_placement(void)
     session.island_count = 1;
     session.floater_count = 1;
     session.islands[0].location_count = 2;
+    /* FUN_00420a55 only offers sources inside the island's X window. */
+    session.islands[0].floater_max_x[0] = 0x9ff;
     session.economy[0].hall_island_index = 0;
     session.economy[0].hall_location_index = 1;
     site = &session.islands[0].locations[0];

@@ -449,6 +449,8 @@ static void test_repair_task_repeats_supply_and_heals_after_40_ticks(void)
     session.island_count = 1;
     session.floater_count = 1;
     session.islands[0].location_count = 2;
+    /* FUN_00420a55 only offers sources inside the island's X window. */
+    session.islands[0].floater_max_x[0] = 0x9ff;
     hall = &session.islands[0].locations[0];
     hall->renderer_class = 0;
     hall->record_value_10 = 0x2a;
