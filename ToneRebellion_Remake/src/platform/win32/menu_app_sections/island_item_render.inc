@@ -122,19 +122,6 @@ static void draw_iw_construct(HDC dc)
     }
 }
 
-static COLORREF island_location_color(const char *type)
-{
-    if (strcmp(type, "tone") == 0) return RGB(255, 202, 68);
-    if (strcmp(type, "bridge") == 0) return RGB(61, 218, 248);
-    if (strcmp(type, "special") == 0 || strcmp(type, "levhub") == 0) {
-        return RGB(238, 95, 218);
-    }
-    if (strcmp(type, "feature") == 0 || strcmp(type, "feattrig") == 0) {
-        return RGB(131, 237, 116);
-    }
-    return RGB(104, 174, 255);
-}
-
 /* Only explicit size tags use PAD.SHP. Class/subtype alone is insufficient:
    Tone pools and Leviathan shields share class-0/subtype-0 in the source. */
 static int island_pad_group(const IslandLocation *location)
@@ -603,39 +590,6 @@ static int draw_ground_item_icon(HDC dc,
     if (!ground_item_icon_frame(runtime_location, &frame_index)) return 0;
     draw_sprite(dc, &g_inventory_item_art, frame_index, x, y);
     return 1;
-}
-
-/* Occupied runtime records without a drawable SHP need a neutral marker when
-   no inventory icon exists (the normal icon path handles IDs 5..33). */
-static void draw_ground_item_fallback(HDC dc,
-                                      const GameRuntimeLocation *runtime_location,
-                                      int x, int y)
-{
-    uint32_t frame_index;
-    if (runtime_location == NULL) return;
-    if (ground_item_icon_frame(runtime_location, &frame_index)) return;
-
-    /* Keep a neutral marker only for occupied records with no known frame. */
-    {
-        HPEN outline = CreatePen(PS_SOLID, 1, RGB(96, 62, 24));
-        HBRUSH fill = CreateSolidBrush(RGB(244, 197, 77));
-        HGDIOBJ previous_pen;
-        HGDIOBJ previous_brush;
-        if (outline == NULL || fill == NULL) {
-            if (outline != NULL) DeleteObject(outline);
-            if (fill != NULL) DeleteObject(fill);
-            return;
-        }
-        previous_pen = SelectObject(dc, outline);
-        previous_brush = SelectObject(dc, fill);
-        Ellipse(dc, x - 6, y - 12, x + 7, y + 1);
-        MoveToEx(dc, x, y - 11, NULL);
-        LineTo(dc, x, y);
-        SelectObject(dc, previous_brush);
-        SelectObject(dc, previous_pen);
-        DeleteObject(fill);
-        DeleteObject(outline);
-    }
 }
 
 /* FUN_0040d3e1 builds a temporary default item and calls FUN_0040bf98 with

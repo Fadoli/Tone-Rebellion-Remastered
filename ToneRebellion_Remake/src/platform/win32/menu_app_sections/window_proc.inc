@@ -25,11 +25,6 @@ static void simulate_session_tick(uint32_t source_tick)
     while (game_session_pop_world_event(&g_game_session,
                                         &world_event)) {
         if (world_event.kind ==
-            GAME_SESSION_WORLD_EVENT_ISLAND_REACHED) {
-            g_island_access_notice_level = world_event.payload;
-            g_island_access_notice_until =
-                g_menu.animation_ticks + 90U;
-        } else if (world_event.kind ==
             GAME_SESSION_WORLD_EVENT_BUILDING_DESTROYED) {
             /* FUN_0042fa0f message 5, event 8: only a selected destroyed
                site matters; FUN_0042f303(0) returns to the Hall default. */

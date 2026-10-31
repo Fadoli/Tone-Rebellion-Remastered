@@ -192,22 +192,6 @@ static uint32_t island_leviathan_legs_frame(const GameFloaterStart *floater,
     return phase % ((uint32_t)move_last[sheet_index] + 1U);
 }
 
-static void draw_island_access_notice(HDC dc)
-{
-    char label[96];
-    const char *island_name;
-    int level = g_island_access_notice_level;
-    if (level < 0 || level >= ISLAND_NAME_COUNT ||
-        g_menu.animation_ticks >= g_island_access_notice_until) return;
-    island_name = g_island_names[level][0] != '\0'
-        ? g_island_names[level] : "?";
-    /* The bundled bitmap font is byte-oriented; keep this caption ASCII. */
-    (void)snprintf(label, sizeof(label), "ACCES OUVERT : %.32s", island_name);
-    fill_rect(dc, 176, 10, 464, 34, RGB(20, 30, 35));
-    fill_rect(dc, 178, 12, 462, 32, RGB(47, 77, 75));
-    draw_bitmap_label(dc, label, 188, 18, RGB(238, 226, 177));
-}
-
 /* Badge frame is 0x15 - n, n clamped to 10: frame 11 is the full gauge and 21
    the empty one, so n is the filled tenths, current/max hits * 10 (truncated
    like __ftol). Interpretation: the x87 operands before __ftol are not in the
@@ -696,9 +680,7 @@ static void render_island_view(HDC dc)
 {
     const int image_top = 0;
     const int status_top = 320;
-    const IslandLocation *focus = NULL;
     const GameFloaterStart *selected_floater = NULL;
-    int focus_index = g_hovered_location >= 0 ? g_hovered_location : view_selected_location();
     int hall_player = selected_hall_player();
     int saved_dc;
     uint16_t i;
@@ -744,15 +726,11 @@ static void render_island_view(HDC dc)
     if (g_island_height_data == NULL ||
         g_island_height_length != ISLAND_HAZE_FILE_BYTES) {
         draw_sprite(dc, &g_island_template_art, 0, 0, status_top);
-        draw_island_access_notice(dc);
         return;
     }
     draw_sprite_region(dc, &g_island_surface_art, 0, g_island_scroll_x, 0,
                        LOGICAL_WIDTH, 320, 0, image_top);
 
-    if (focus_index >= 0 && focus_index < g_island_surface_data.location_count) {
-        focus = &g_island_surface_data.locations[focus_index];
-    }
     /* windows.txt defines ISLEVIEW as the 640x320 upper pane. Clip sprites to
        that view so tall SHP frames cannot overwrite the ISLETEMP controls. */
     saved_dc = SaveDC(dc);
@@ -767,9 +745,6 @@ static void render_island_view(HDC dc)
         int y = image_top + (int)location->y;
         int pad_group = island_pad_group(location);
         int runtime_class = location->renderer_class;
-        COLORREF color = island_location_color(location->type);
-        int dx;
-        int dy;
         if (location->renderer_class == 3 &&
             (location->renderer_variant == 4 || location->renderer_variant == 0x16)) {
             draw_island_feature(dc, g_island_surface_id, location,
@@ -806,7 +781,6 @@ static void render_island_view(HDC dc)
             continue;
         }
         {
-            int drew_location = 0;
         /* Island TXT `tone` rows denote unoccupied Tone pools. shapes.txt maps
            POOL to tone.shp; bldinf.txt gives the 2..40 ping-pong animation. */
         {
@@ -833,7 +807,6 @@ static void render_island_view(HDC dc)
             draw_sprite(dc, &g_tone_field_art, ISLAND_TONE_POOL_BASE_FRAME, x, y);
             draw_sprite(dc, &g_tone_field_art, frame, x, y);
             draw_island_worker_birth(dc, runtime_location, x, y);
-            drew_location = 1;
         }
         }
         /* FUN_0040bf98 draws an installed runtime item at this record. Such an
@@ -861,19 +834,16 @@ static void render_island_view(HDC dc)
                 runtime_location->record_value_10 > 0 && !resource_pile;
             int has_runtime_item = is_item_render_site && !resource_pile
                 ? draw_runtime_item(dc, runtime_location, x, y) : 0;
-            if (occupied && !has_runtime_item &&
-                !draw_ground_item_icon(dc, runtime_location, x, y)) {
-                draw_ground_item_fallback(dc, runtime_location, x, y);
-            }
-            if (has_runtime_item || occupied) drew_location = 1;
-            else if (island_site_should_draw_pad(pad_group, occupied) &&
-                                          g_pad_art.frame_count == 27) {
+            if (occupied && !has_runtime_item)
+                (void)draw_ground_item_icon(dc, runtime_location, x, y);
+            if (!has_runtime_item && !occupied &&
+                island_site_should_draw_pad(pad_group, occupied) &&
+                g_pad_art.frame_count == 27) {
                 uint32_t frame = island_pad_frame(g_menu.animation_ticks,
                                                   location->x,
                                                   (unsigned)pad_group,
                                                   location->renderer_subtype);
                 draw_sprite(dc, &g_pad_art, frame, x, y);
-                drew_location = 1;
             }
             /* FUN_0040ae4d draws the PADS ring, then the pad's resource pile:
                FUN_004502dc gives +0x24 when +0x10 == 1, and code 1 selects
@@ -894,15 +864,8 @@ static void render_island_view(HDC dc)
                 if (frame >= g_bildtone_art.frame_count)
                     frame = g_bildtone_art.frame_count - 1U;
                 draw_sprite(dc, &g_bildtone_art, frame, x, y);
-                drew_location = 1;
             }
         }
-        if (drew_location) continue;
-        }
-        for (dy = -2; dy <= 2; ++dy) {
-            for (dx = -2; dx <= 2; ++dx) {
-                if (dx * dx + dy * dy <= 5) (void)SetPixelV(dc, x + dx, y + dy, color);
-            }
         }
     }
     /* FUN_0046466f creates four idle type-0 floaters for each player at the
@@ -1095,17 +1058,6 @@ static void render_island_view(HDC dc)
             if (x < -64 || x >= LOGICAL_WIDTH + 64) continue;
             draw_sprite(dc, cast_art, cast_frame, x, y);
         }
-    }
-    if (focus != NULL) {
-        int x = (int)focus->x - g_island_scroll_x;
-        int y = image_top + (int)focus->y;
-        HPEN pen = CreatePen(PS_SOLID, 1, RGB(255, 255, 255));
-        HGDIOBJ old_pen = SelectObject(dc, pen);
-        HGDIOBJ old_brush = SelectObject(dc, GetStockObject(NULL_BRUSH));
-        Ellipse(dc, x - 8, y - 8, x + 9, y + 9);
-        SelectObject(dc, old_brush);
-        SelectObject(dc, old_pen);
-        DeleteObject(pen);
     }
     if (saved_dc != 0) RestoreDC(dc, saved_dc);
 
@@ -1724,7 +1676,6 @@ static void render_island_view(HDC dc)
             }
         }
     }
-    draw_island_access_notice(dc);
 }
 
 /* CLIPSEL1-3 / CLIPBD1-3 are not among the 16 windows FUN_0042f303 hides, so

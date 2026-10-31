@@ -81,8 +81,6 @@ typedef struct MenuState {
 } MenuState;
 
 static MenuState g_menu;
-static int g_island_access_notice_level = -1;
-static unsigned int g_island_access_notice_until;
 static SpriteSheet g_title_art;
 static SpriteSheet g_new_background;
 static SpriteSheet g_new_buttons;
