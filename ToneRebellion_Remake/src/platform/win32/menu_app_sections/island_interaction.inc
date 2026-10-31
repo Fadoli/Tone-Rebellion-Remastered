@@ -329,8 +329,12 @@ static int selected_upgrade_button_visible(void)
     island = &g_game_session.islands[selection_island()];
     if ((unsigned int)g_selected_location >= island->location_count) return 0;
     location = &island->locations[g_selected_location];
+    /* FUN_0045302a lists BC_Upgrade (id 2, through FUN_0045d5ba) only for
+       an owned site with a source record (+0x18 != -1, ev_acb06186,
+       ev_ae0e78b3); a building left without a record has no button. */
     if (location->renderer_class != 0 ||
-        location->owner_id != g_menu.selected_tribe) return 0;
+        location->owner_id != g_menu.selected_tribe ||
+        location->source_location_slot_18 == -1) return 0;
     base_item_id = location->record_value_10 -
         (int32_t)g_menu.selected_tribe * 16;
 
