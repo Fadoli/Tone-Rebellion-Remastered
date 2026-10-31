@@ -527,7 +527,7 @@ static int load_island_surface(int island_id, int map_island_index,
             char mirror_error[96];
             free_sprite_sheet(&g_attack_impact_art_flipped[effect_index]);
             if (!mirror_sprite_sheet_horizontally(
-                    &defense_impact_candidates[effect_index],
+                    &g_leviathan_impact_art[effect_index],
                     &g_attack_impact_art_flipped[effect_index], mirror_error,
                     sizeof(mirror_error)))
                 free_sprite_sheet(&g_attack_impact_art_flipped[effect_index]);
@@ -542,7 +542,7 @@ static int load_island_surface(int island_id, int map_island_index,
                 effect->type != FLOATER_EFFECT_BULLET &&
                 effect->type != FLOATER_EFFECT_LIGHTNING &&
                 effect->type != FLOATER_EFFECT_CAST) continue;
-            (void)snprintf(member, sizeof(member), "data\%s.shp", effect->shape);
+            (void)snprintf(member, sizeof(member), "data\\%s.shp", effect->shape);
             for (c = 0; member[c] != '\0'; ++c)
                 if (member[c] >= 'A' && member[c] <= 'Z')
                     member[c] = (char)(member[c] - 'A' + 'a');
