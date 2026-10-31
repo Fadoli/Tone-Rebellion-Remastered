@@ -25,7 +25,9 @@ Revue REA statique (ev_53d66012…, ev_70fb3a4e…, ev_8d56945f…, ev_10224cb4�
 
 `g_small_font` (`data\smfont.fnt` de TONE01.COB), `draw_small_label`, `measure_small_text`, `draw_wrapped_small_label`;
 `bitmap_font_render_pixels` traite maintenant comme encre toute valeur différente de 0 et 255. Appliqué à `IWTextInfo`,
-à la légende de la Diplomatie et à la description d'`IWConstructInfo` (indice de palette 6, h = 8). Les autres textes
+à la légende de la Diplomatie et à la description d'`IWConstructInfo` (indice de palette 6, h = 8). Les descriptions
+de bâtiment et de site dans `IWTextInfo` passent aussi par `draw_iw_text_info_text` (avant: `bgoutfnt` mesuré à 11/13,
+d'où des lignes hors écran). Les autres textes
 (libellés de tâches, compteurs, panneau Hall…) gardent `bgoutfnt` et leurs couleurs: la police native de chacun
 n'est pas établie.
 Non porté: police et couleur des autres libellés (lecture des appelants des thunks `0x4014c9` et `0x401c30`),

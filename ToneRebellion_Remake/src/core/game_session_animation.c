@@ -1499,14 +1499,7 @@ void game_session_tick_item_animations_with_floaters(
                     (uint16_t)state->source_value_48 + 1U);
                 if (state->source_value_48 > 100) {
                     state->source_flags &= ~0x080U;
-                    /* FUN_00452ae7 queues type 8 with (island << 16) | site
-                       before running the shared site destruction cleanup. */
-                    (void)game_session_queue_world_event(session,
-                        GAME_SESSION_WORLD_EVENT_BUILDING_DESTROYED,
-                        (uint8_t)island_index,
-                        (int32_t)(((uint32_t)island_index << 16) |
-                                  (uint32_t)location_index));
-                    game_session_clear_cast_site(session,
+                    game_session_destroy_site(session,
                         (uint8_t)island_index, (uint16_t)location_index, state);
             continue;
                 }

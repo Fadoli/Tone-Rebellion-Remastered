@@ -29,6 +29,10 @@ void game_session_clear_cast_site(GameSession *session,
                                   uint8_t island_index,
                                   uint16_t location_index,
                                   GameRuntimeLocation *target);
+/* FUN_00452ae7: queues world event 8 for the site, then clears it. */
+void game_session_destroy_site(GameSession *session, uint8_t island_index,
+                               uint16_t location_index,
+                               GameRuntimeLocation *target);
 
 /* attacker_index >= 0 defers the hit to the visual's arrival; -1 keeps the
    visual cosmetic with `damage` as its impact level source. */

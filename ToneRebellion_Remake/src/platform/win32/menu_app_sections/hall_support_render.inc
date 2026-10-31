@@ -1,12 +1,11 @@
+static void draw_iw_text_info_text(HDC dc, const WindowTemplate *panel,
+                                   const char *text);
+
 static void draw_hall_info_panel(HDC dc, int panel_state)
 {
     const WindowTemplate *panel;
     const char *text = NULL;
     char hover_text[256];
-    int pane_width;
-    int pane_height;
-    int line_height;
-    int max_lines;
 
     if (panel_state == WINDOW_ISLAND_PANEL_INVENTORY) {
         if (g_inventory_info_mode == ISLAND_PANEL_INFO_INVENTORY_DETAIL) {
@@ -71,6 +70,15 @@ static void draw_hall_info_panel(HDC dc, int panel_state)
         (uint32_t)panel->shape_frame >= g_temp_hole_art.frame_count) return;
     draw_sprite(dc, &g_temp_hole_art, (uint32_t)panel->shape_frame,
                 panel->pane.left, panel->pane.top);
+    draw_iw_text_info_text(dc, panel, text);
+}
+
+static void draw_iw_text_info_text(HDC dc, const WindowTemplate *panel,
+                                   const char *text)
+{
+    int pane_width;
+    int line_height;
+    int max_lines;
     if (text == NULL || text[0] == '\0') return;
 
     /* FUN_00439673 passes (10,6) to FUN_00428baa, whose callback FUN_0043954d
@@ -80,7 +88,6 @@ static void draw_hall_info_panel(HDC dc, int panel_state)
        the glyph-row top and has no native line limit; the port only stops at the
        screen bottom. */
     pane_width = panel->pane.right - panel->pane.left;
-    pane_height = panel->pane.bottom - panel->pane.top;
     /* The text uses SMFONT (FUN_0042de0d returns &DAT_005c30b8, height 8) in
        palette index 6 (FUN_0042da69), so h = 8 and the pitch is 9. */
     line_height = (int)g_small_font.height + 1;

@@ -393,12 +393,19 @@ void game_session_clear_cast_site(GameSession *session, uint8_t island_index,
                                   uint16_t location_index,
                                   GameRuntimeLocation *target);
 
+/* FUN_00450847 queues message 7 with (island << 16) | site; the island view
+   (FUN_0042fa0f message 5) turns it into FUN_00416a9a world event 7, the
+   SoundOnly CRUMBLE effect, for the viewed island only. The audible-event
+   filter applies that island gate. */
 static void mark_site_destroyed(GameSession *session,
                                 GameRuntimeLocation *target,
                                 uint8_t island_index)
 {
     target->source_flags |= 0x80U;
     target->source_value_48 = 0;
+    (void)game_session_queue_effect_sound(session,
+        game_session_effect_def_index(session, "CRUMBLE"), island_index,
+        target->x);
     if (game_session_recalculate_location_active_with_visibility(target)) {
         if (target->source_value_14 == 4) {
             game_session_recalculate_leviathan_island(session, island_index);
@@ -438,9 +445,9 @@ int32_t game_session_damage_site(GameSession *session,
         if (damage * 2 < (int16_t)*stock) {
             *stock = (uint16_t)((int32_t)*stock - damage * 2);
         } else {
-            /* FUN_00450847 routes an exhausted PIT_Object through the same
-               site-clear path used by the cast resolver. */
-            game_session_clear_cast_site(session, island_index, location_index, target);
+            /* FUN_00450847 routes an exhausted PIT_Object through
+               FUN_00452ae7, as the cast resolver does. */
+            game_session_destroy_site(session, island_index, location_index, target);
         }
         return 1;
     }
@@ -448,7 +455,7 @@ int32_t game_session_damage_site(GameSession *session,
     target->source_value_34 = (int16_t)(target->source_value_34 - damage);
     if (target->source_value_34 < 1) {
         if (item_id == 5) {
-            game_session_clear_cast_site(session, island_index, location_index, target);
+            game_session_destroy_site(session, island_index, location_index, target);
         } else {
             mark_site_destroyed(session, target, attacker->island_index);
         }
@@ -670,6 +677,19 @@ void game_session_clear_cast_site(GameSession *session, uint8_t island_index,
     }
 }
 
+/* FUN_00452ae7 queues message 8 with (island << 16) | site, runs
+   FUN_0045efd2 for an owned site (not modeled), then FUN_00452a15. The island
+   view (FUN_0042fa0f message 5) only drops that site's selection. */
+void game_session_destroy_site(GameSession *session, uint8_t island_index,
+                               uint16_t location_index,
+                               GameRuntimeLocation *target)
+{
+    (void)game_session_queue_world_event(session,
+        GAME_SESSION_WORLD_EVENT_BUILDING_DESTROYED, island_index,
+        (int32_t)(((uint32_t)island_index << 16) | (uint32_t)location_index));
+    game_session_clear_cast_site(session, island_index, location_index, target);
+}
+
 static int32_t cast_round_to_even(double value)
 {
     int32_t whole = (int32_t)value;
@@ -704,10 +724,9 @@ int32_t game_session_apply_cast_site_effect(GameSession *session,
             target->resource_stock[GAME_RESOURCE_BUILD_TONE] =
                 (uint16_t)((int32_t)target->resource_stock[GAME_RESOURCE_BUILD_TONE] - drain);
         } else {
-            /* FUN_00452ae7/FUN_00452a15 clear the placed runtime object. Its
-               four engine callbacks and queued type-8 notification are not
-               part of this session model. */
-            game_session_clear_cast_site(session, island_index, location_index, target);
+            /* FUN_00452ae7 queues world event 8, then FUN_00452a15 clears
+               the placed runtime object. */
+            game_session_destroy_site(session, island_index, location_index, target);
         }
         return 1;
     }
@@ -721,7 +740,7 @@ int32_t game_session_apply_cast_site_effect(GameSession *session,
     }
     if (target->source_value_34 < 1) {
         if (item_id == 5) {
-            game_session_clear_cast_site(session, island_index, location_index, target);
+            game_session_destroy_site(session, island_index, location_index, target);
         } else {
             mark_site_destroyed(session, target, island_index);
         }

@@ -1746,18 +1746,12 @@ static void draw_location_action_panel(HDC dc)
         text_panel = window_catalog_find(&g_window_catalog, "IWTextInfo", 3);
         if (text_panel != NULL && text_panel->shape_frame >= 0 &&
             (uint32_t)text_panel->shape_frame < g_temp_hole_art.frame_count) {
-            int pane_width = text_panel->pane.right - text_panel->pane.left;
-            int pane_height = text_panel->pane.bottom - text_panel->pane.top;
-            int line_height = (int)g_bitmap_font.height + 2;
-            int max_lines = line_height > 0
-                ? (pane_height - 0x10) / line_height : 0;
             draw_sprite(dc, &g_temp_hole_art,
                         (uint32_t)text_panel->shape_frame,
                         text_panel->pane.left, text_panel->pane.top);
-            draw_wrapped_bitmap_label(dc,
-                g_building_descriptions[selected_location->record_value_10],
-                text_panel->pane.left + 10, text_panel->pane.top + 0x10,
-                pane_width - 20, max_lines, RGB(230, 238, 255));
+            /* Same FUN_00439673 SMFONT wrap as the Hall info text. */
+            draw_iw_text_info_text(dc, text_panel,
+                g_building_descriptions[selected_location->record_value_10]);
         }
     } else if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL &&
                selected_location->owner_id == 4 &&
@@ -1790,19 +1784,12 @@ static void draw_location_action_panel(HDC dc)
         text_panel = window_catalog_find(&g_window_catalog, "IWTextInfo", 3);
         if (text_panel != NULL && text_panel->shape_frame >= 0 &&
             (uint32_t)text_panel->shape_frame < g_temp_hole_art.frame_count) {
-            int pane_width = text_panel->pane.right - text_panel->pane.left;
-            int pane_height = text_panel->pane.bottom - text_panel->pane.top;
-            int line_height = (int)g_bitmap_font.height + 2;
-            int max_lines = line_height > 0
-                ? (pane_height - 0x10) / line_height : 0;
             draw_sprite(dc, &g_temp_hole_art,
                         (uint32_t)text_panel->shape_frame,
                         text_panel->pane.left, text_panel->pane.top);
-            draw_wrapped_bitmap_label(dc,
+            draw_iw_text_info_text(dc, text_panel,
                 island_site_info_text(selected_location,
-                                      g_menu.selected_tribe),
-                text_panel->pane.left + 10, text_panel->pane.top + 0x10,
-                pane_width - 20, max_lines, RGB(230, 238, 255));
+                                      g_menu.selected_tribe));
         }
     }
 

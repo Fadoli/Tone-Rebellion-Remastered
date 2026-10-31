@@ -93,6 +93,23 @@ static void draw_bitmap_label_pixels(const char *text, int x, int y,
         LOGICAL_WIDTH, x, y, dib_pixel);
 }
 
+/* draw_bitmap_label advances by the full glyph width; measure_bitmap_text
+   returns the narrowed New Game widths, which let wrapped lines overrun. */
+static int32_t measure_plain_bitmap_text(const char *text, size_t length)
+{
+    size_t i;
+    int32_t width = 0;
+    for (i = 0; i < length; ++i) {
+        uint32_t glyph_width;
+        const uint8_t *glyph_pixels;
+        uint32_t code = (unsigned char)text[i];
+        if (code >= g_bitmap_font.glyph_count) code = (uint32_t)'?';
+        if (bitmap_font_get_glyph(&g_bitmap_font, code, &glyph_width, &glyph_pixels))
+            width += (int32_t)glyph_width;
+    }
+    return width;
+}
+
 static void draw_wrapped_bitmap_label_pitch(HDC dc, const char *text, int x,
                                             int y, int max_width, int max_lines,
                                             int line_height, COLORREF color)
@@ -117,7 +134,7 @@ static void draw_wrapped_bitmap_label_pitch(HDC dc, const char *text, int x,
                 ++scan;
                 continue;
             }
-            if (measure_bitmap_text(NULL, line_start, (size_t)(word_end - line_start)) >
+            if (measure_plain_bitmap_text(line_start, (size_t)(word_end - line_start)) >
                 max_width) {
                 if (last_space != NULL && last_space > line_start) scan = last_space;
                 else scan = word_end;
