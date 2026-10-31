@@ -495,6 +495,84 @@ static void test_artifact_carrier_never_loses_its_artifact(void)
     assert(worker->linked_task_slot == -1);
 }
 
+static void test_worker_crossing_to_train_keeps_its_charge_task(void)
+{
+    /* A worker sent across a bridge to a training school is on action 9
+       with resume state 11; the orphan-claim check must not cancel it. */
+    static GameSession session;
+    GameRuntimeLocation *school;
+    GameFloaterStart *worker;
+    int slot;
+    unsigned int index;
+
+    memset(&session, 0, sizeof(session));
+    session.island_count = 2;
+    session.floater_count = 1;
+    session.islands[0].location_count = 1;
+    session.islands[1].location_count = 2;
+    session.islands[0].floater_max_x[0] = 0x9ff;
+    session.islands[1].floater_max_x[0] = 0x9ff;
+    session.islands[0].locations[0].renderer_class = 2;
+    session.islands[0].locations[0].source_flags = 1;
+    session.islands[0].locations[0].bridge_neighbor_island = 1;
+    session.islands[0].locations[0].x = 300;
+    session.islands[1].locations[0].renderer_class = 2;
+    session.islands[1].locations[0].source_flags = 1;
+    session.islands[1].locations[0].bridge_neighbor_island = 0;
+    session.islands[1].locations[0].x = 500;
+    school = &session.islands[1].locations[1];
+    school->renderer_class = 0;
+    school->owner_id = 0;
+    school->record_value_10 = 0x2c;
+    school->source_location_slot_18 = 0;
+    school->resource_stock[1] = 50;
+    school->charge_recent_floater = -1;
+    school->x = 700;
+    for (index = 0; index < 8; ++index) school->charge_floater_slots[index] = -1;
+    worker = &session.floaters[0];
+    worker->is_active = 1;
+    worker->owner_slot = 0;
+    worker->island_index = 0;
+    worker->source_link_0c = -1;
+    worker->linked_task_slot = -1;
+    worker->order_target_floater = -1;
+    worker->x = 100;
+    worker->movement_speed = 3;
+    slot = game_session_pending_event_add(&session, 0, 1, 0x0b, 1, 0, 0);
+    assert(slot >= 0);
+    school->charge_staff_task_handle = (int16_t)slot;
+
+    game_session_assign_local_resource_tasks(&session, NULL);
+    assert(worker->linked_task_slot == slot);
+    assert(worker->movement_state == 0x11);
+    /* Without the fix the claim is dropped and re-taken every tick, which
+       restarts the crossing so the worker never reaches the school island. */
+    for (index = 1; index < 600 && worker->island_index != 1; ++index) {
+        game_session_assign_local_resource_tasks(&session, NULL);
+        game_session_tick_floater_moves(&session, index, NULL);
+        assert(worker->linked_task_slot == slot);
+    }
+    assert(worker->island_index == 1);
+    assert(session.pending_events[slot].assigned_floater_count == 1);
+}
+
+static void test_worker_left_on_a_finished_move_is_idle_again(void)
+{
+    /* An unlinked worker whose move order ended (action 9, state 0, no
+       route) must rejoin the idle pool and take the next task. */
+    GameSession session;
+    int slot_a = setup_two_delivery_tasks(&session, 1, 3);
+    GameFloaterStart *worker = &session.floaters[0];
+
+    make_workers_idle(&session);
+    worker->active_order_action = 9;
+    worker->movement_state = 0;
+    worker->has_move_order = 0;
+    game_session_assign_local_resource_tasks(&session, NULL);
+    assert(worker->active_order_action != 9);
+    (void)slot_a;
+}
+
 static void test_worker_tasks_and_panic(void)
 {
     test_reallocation_does_not_wait_for_the_ten_tick_phase();
@@ -518,4 +596,6 @@ static void test_worker_tasks_and_panic(void)
     test_orphaned_order_without_claim_is_released();
     test_task_assignment_drops_a_stale_melee_hold();
     test_artifact_carrier_never_loses_its_artifact();
+    test_worker_crossing_to_train_keeps_its_charge_task();
+    test_worker_left_on_a_finished_move_is_idle_again();
 }

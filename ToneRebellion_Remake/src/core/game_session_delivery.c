@@ -591,8 +591,18 @@ static void reclaim_orphaned_task_claim(GameSession *session,
         /* Delivery/construction/repair orders always carry a claim. Several
            paths (movement, events, combat) drop the claim without clearing
            the order, which leaves a worker that no scheduler can pick up. */
-        if ((floater->active_order_action == 4 ||
-             floater->active_order_action == 0x12) &&
+        /* Remake safeguard: an unlinked worker whose move/obtain/charge
+           order has ended (state 0, no route, not crossing) is idle too;
+           left on that action it would never be offered another task. */
+        int finished_worker_order = floater->type_index < 4U &&
+            floater->source_subtype == 0 && floater->source_link_0c == -1 &&
+            floater->movement_state == 0 &&
+            (floater->active_order_action == 9 ||
+             floater->active_order_action == 0x0b ||
+             floater->active_order_action == 0x0d);
+        if (((floater->active_order_action == 4 ||
+              floater->active_order_action == 0x12) ||
+             finished_worker_order) &&
             !floater->has_move_order) {
             floater->active_order_action = 0;
             floater->movement_state = 0;
@@ -613,8 +623,11 @@ static void reclaim_orphaned_task_claim(GameSession *session,
             event->payload_0a == floater->order_target_island &&
             event->action_type == 0x0b &&
             event->payload_0c == floater->order_target_location) {
-            /* CHARGE workers are linked with no active order action. */
-            task_matches = floater->active_order_action == 0;
+            /* CHARGE workers are linked with no active order action, or on
+               action 9 while crossing to the school (resume state 11). */
+            task_matches = floater->active_order_action == 0 ||
+                (floater->active_order_action == 9 &&
+                 floater->handoff_resume_state == 11);
         } else if (event->active != 0 && event->player_id == floater->owner_slot &&
             event->payload_0a == floater->order_target_island &&
             event->payload_0e == floater->order_target_location) {
