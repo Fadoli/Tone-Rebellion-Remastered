@@ -19,5 +19,7 @@ void game_session_advance_local_resource_task(GameSession *session,
 /* Route an active REPAIR task to its next Build Tone pickup source. */
 int game_session_start_repair_supply(GameSession *session,
                                      GameFloaterStart *floater);
+/* FUN_0040ad94: DAT_0049acbe cargo height of item codes 5..0x21, else 0. */
+int16_t game_session_carried_item_height(int16_t code);
 
 #endif

@@ -1713,7 +1713,7 @@ int refill_source(GameSession *session, const GameFloaterStart *floater,
 }
 
 /* FUN_0040ad94: DAT_0049acbe cargo heights for item codes 5..0x21. */
-static int16_t carried_item_height(int16_t code)
+int16_t game_session_carried_item_height(int16_t code)
 {
     static const int16_t heights[0x21 - 5 + 1] = {
         13, 20, 25, 8, 5, 27, 27, 21, 21, 20, 17, 7, 9, 13, 13,
@@ -1760,7 +1760,7 @@ static void floater_site_offset(const GameSession *session,
 
     if (state == 4 && location->renderer_class == 2) {
         *dx = cons[0] - grasp_x;
-        *dy = cons[1] - grasp_y - carried_item_height(code);
+        *dy = cons[1] - grasp_y - game_session_carried_item_height(code);
     } else if (state == 4 && location->renderer_class == 0 &&
                !hall_or_linked) {
         if (item == 0x2b) {
@@ -1768,7 +1768,7 @@ static void floater_site_offset(const GameSession *session,
             *dy = cons[1] - grasp_y;
         } else if (item == 0 || item == 1) {
             *dx = -grasp_x;
-            *dy = -grasp_y - carried_item_height(code);
+            *dy = -grasp_y - game_session_carried_item_height(code);
         }
     } else if (state == 3 && location->renderer_class == 0 &&
                !hall_or_linked) {

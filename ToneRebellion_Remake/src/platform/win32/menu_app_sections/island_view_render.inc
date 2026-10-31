@@ -192,6 +192,9 @@ static void draw_island_floater_layer(HDC dc, const SpriteSheet *art,
     RestoreDC(dc, -1);
 }
 
+/* FUN_0042704b (ev_4bbcbdab) draws the cargo full size through FUN_00404770:
+   bildtone/tonecrys/magctone frame 0, or TRIGGERS (alltrigs.shp) frame
+   code - 5, at the hand point plus FUN_0040ad94's height for artifacts. */
 static void draw_island_floater_cargo(HDC dc, const GameFloaterStart *floater,
                                       int x, int y, int stipple_level)
 {
@@ -213,7 +216,7 @@ static void draw_island_floater_cargo(HDC dc, const GameFloaterStart *floater,
             (unsigned int)floater->carried_resource_code - 1U];
         if (cargo_art->frame_count != 0)
             draw_island_floater_layer(dc, cargo_art, 0, hand_x, hand_y,
-                                      0x00008000U, stipple_level);
+                                      0x00010000U, stipple_level);
     } else if (floater->carried_resource_code >= GAME_INVENTORY_ITEM_FIRST_ID &&
                floater->carried_resource_code <
                    GAME_INVENTORY_ITEM_FIRST_ID + GAME_INVENTORY_ITEM_COUNT &&
@@ -223,7 +226,10 @@ static void draw_island_floater_cargo(HDC dc, const GameFloaterStart *floater,
         draw_island_floater_layer(dc, &g_inventory_item_art,
                                   (uint32_t)(floater->carried_resource_code -
                                       GAME_INVENTORY_ITEM_FIRST_ID),
-                                  hand_x, hand_y, 0x00008000U, stipple_level);
+                                  hand_x, hand_y +
+                                      game_session_carried_item_height(
+                                          floater->carried_resource_code),
+                                  0x00010000U, stipple_level);
     }
 }
 
