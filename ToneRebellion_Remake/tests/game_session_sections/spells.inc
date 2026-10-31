@@ -82,7 +82,8 @@ static void test_cast_sound_ids_match_effect_names(void)
 }
 
 /* One hall (location 0) and one 0x2f building (location 1) for `owner` with
-   a linked caster at floater 0. */
+   a linked caster at floater 0. The cast pools live on the building
+   (FUN_0045da2a/FUN_0045da80); the Hall holds an unrelated decoy stock. */
 static void setup_cast_dispatch(GameSession *session, uint8_t owner,
                                 uint8_t level, uint16_t magic, uint16_t crystal)
 {
@@ -97,11 +98,13 @@ static void setup_cast_dispatch(GameSession *session, uint8_t owner,
     hall = &session->islands[0].locations[0];
     hall->record_value_10 = 0x2a + owner * 16;
     hall->owner_id = owner;
-    hall->resource_stock[GAME_RESOURCE_MAGIC_TONE] = magic;
-    hall->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = crystal;
+    hall->resource_stock[GAME_RESOURCE_MAGIC_TONE] = 500;
+    hall->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 500;
     building = &session->islands[0].locations[1];
     building->record_value_10 = 0x2f + owner * 16;
     building->owner_id = owner;
+    building->resource_stock[GAME_RESOURCE_MAGIC_TONE] = magic;
+    building->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = crystal;
     building->source_value_14 = owner;
     building->source_location_slot_18 = 0;
     building->charge_floater_slots[0] = 0;
@@ -111,30 +114,30 @@ static void setup_cast_dispatch(GameSession *session, uint8_t owner,
 static void test_cast_dispatch_debits_both_tones_only_when_both_suffice(void)
 {
     static GameSession session;
-    GameRuntimeLocation *hall;
+    GameRuntimeLocation *site;
 
     /* Owner 1 subtype 0x15 is kind 0: 9 Magic + 7 Crystal. */
     setup_cast_dispatch(&session, 1, 0, 8, 7);
-    hall = &session.islands[0].locations[0];
+    site = &session.islands[0].locations[1];
     assert(game_session_queue_cast_action(&session, 1, 0, 1, 0x15));
     assert(game_session_dispatch_cast_actions(&session) == 0);
-    assert(hall->resource_stock[GAME_RESOURCE_MAGIC_TONE] == 8);
-    assert(hall->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] == 7);
+    assert(site->resource_stock[GAME_RESOURCE_MAGIC_TONE] == 8);
+    assert(site->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] == 7);
     assert(session.cast_action_count == 0);
     assert(session.floaters[0].active_order_action == 0);
 
     setup_cast_dispatch(&session, 1, 0, 9, 6);
     assert(game_session_queue_cast_action(&session, 1, 0, 1, 0x15));
     assert(game_session_dispatch_cast_actions(&session) == 0);
-    assert(session.islands[0].locations[0]
+    assert(session.islands[0].locations[1]
                .resource_stock[GAME_RESOURCE_MAGIC_TONE] == 9);
 
     setup_cast_dispatch(&session, 1, 0, 10, 8);
     assert(game_session_queue_cast_action(&session, 1, 0, 1, 0x15));
     assert(game_session_dispatch_cast_actions(&session) == 1);
-    hall = &session.islands[0].locations[0];
-    assert(hall->resource_stock[GAME_RESOURCE_MAGIC_TONE] == 1);
-    assert(hall->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] == 1);
+    site = &session.islands[0].locations[1];
+    assert(site->resource_stock[GAME_RESOURCE_MAGIC_TONE] == 1);
+    assert(site->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] == 1);
     assert(session.floaters[0].active_order_action == 0x13);
     assert(session.floaters[0].cast_spell_kind == 0);
     assert(session.floaters[0].order_target_location == 1);
@@ -143,15 +146,15 @@ static void test_cast_dispatch_debits_both_tones_only_when_both_suffice(void)
 static void test_cast_glyph_eight_discounts_magic_only(void)
 {
     static GameSession session;
-    GameRuntimeLocation *hall;
+    GameRuntimeLocation *site;
 
     setup_cast_dispatch(&session, 1, 0, 6, 7);
     session.economy[1].glyph_mask = 0x0100U;
     assert(game_session_queue_cast_action(&session, 1, 0, 1, 0x15));
     assert(game_session_dispatch_cast_actions(&session) == 1); /* 9*2/3 = 6 */
-    hall = &session.islands[0].locations[0];
-    assert(hall->resource_stock[GAME_RESOURCE_MAGIC_TONE] == 0);
-    assert(hall->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] == 0);
+    site = &session.islands[0].locations[1];
+    assert(site->resource_stock[GAME_RESOURCE_MAGIC_TONE] == 0);
+    assert(site->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] == 0);
 
     setup_cast_dispatch(&session, 1, 0, 100, 6);
     session.economy[1].glyph_mask = 0x0100U; /* crystal is never discounted */
@@ -167,14 +170,14 @@ static void test_cast_dispatch_needs_caster_level_and_free_worker(void)
     setup_cast_dispatch(&session, 0, 0, 200, 200);
     assert(game_session_queue_cast_action(&session, 0, 0, 1, 0x19));
     assert(game_session_dispatch_cast_actions(&session) == 0);
-    assert(session.islands[0].locations[0]
+    assert(session.islands[0].locations[1]
                .resource_stock[GAME_RESOURCE_MAGIC_TONE] == 200);
 
     setup_cast_dispatch(&session, 0, 1, 200, 200);
     assert(game_session_queue_cast_action(&session, 0, 0, 1, 0x19));
     assert(game_session_dispatch_cast_actions(&session) == 1);
     assert(session.floaters[0].cast_spell_kind == 11);
-    assert(session.islands[0].locations[0]
+    assert(session.islands[0].locations[1]
                .resource_stock[GAME_RESOURCE_MAGIC_TONE] == 200 - 33);
 
     /* A worker already casting is skipped, so nobody can take the order. */
@@ -182,6 +185,33 @@ static void test_cast_dispatch_needs_caster_level_and_free_worker(void)
     session.floaters[0].active_order_action = 0x13;
     assert(game_session_queue_cast_action(&session, 0, 0, 1, 0x19));
     assert(game_session_dispatch_cast_actions(&session) == 0);
+}
+
+static void test_cast_pools_are_the_buildings_not_the_halls(void)
+{
+    static GameSession session;
+    const GameRuntimeLocation *hall;
+
+    /* FUN_0045da2a reads the casting site's +0x2c/+0x2a: a full Hall does
+       not pay for an empty building. */
+    setup_cast_dispatch(&session, 1, 0, 0, 0);
+    hall = &session.islands[0].locations[0];
+    assert(game_session_queue_cast_action(&session, 1, 0, 1, 0x15));
+    assert(game_session_dispatch_cast_actions(&session) == 0);
+    assert(hall->resource_stock[GAME_RESOURCE_MAGIC_TONE] == 500);
+    assert(hall->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] == 500);
+
+    /* FUN_0045da80 debits only the building. */
+    setup_cast_dispatch(&session, 1, 0, 9, 7);
+    hall = &session.islands[0].locations[0];
+    assert(game_session_queue_cast_action(&session, 1, 0, 1, 0x15));
+    assert(game_session_dispatch_cast_actions(&session) == 1);
+    assert(session.islands[0].locations[1]
+               .resource_stock[GAME_RESOURCE_MAGIC_TONE] == 0);
+    assert(session.islands[0].locations[1]
+               .resource_stock[GAME_RESOURCE_CRYSTAL_TONE] == 0);
+    assert(hall->resource_stock[GAME_RESOURCE_MAGIC_TONE] == 500);
+    assert(hall->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] == 500);
 }
 
 static void test_cast_queue_rejects_foreign_or_malformed_requests(void)
@@ -209,7 +239,7 @@ static void test_kill_beast_cast_requires_a_leviathan_target(void)
     add_test_worker(&session, 1, 0, 1010, 1000, 0);
     assert(game_session_queue_cast_action_target(&session, 0, 0, 1, 0x18, 1));
     assert(game_session_dispatch_cast_actions(&session) == 0);
-    assert(session.islands[0].locations[0]
+    assert(session.islands[0].locations[1]
                .resource_stock[GAME_RESOURCE_MAGIC_TONE] == 200);
 
     session.floaters[1].owner_slot = 4;
@@ -1223,6 +1253,156 @@ static void test_spore_deaths_go_through_the_native_damage_guard(void)
     assert(spore->current_hit_points == 0);
     assert(game_session_pop_audio_event(&session, &event));
     assert(event.kind == GAME_SESSION_AUDIO_FLOATER_DEATH);
+}
+
+/* Island 0 with a Spore (floater 0) at (100, 100) and free sites of the given
+   renderer classes along y = 100, ten units apart starting at x = 200. */
+static GameFloaterStart *setup_spore_sites(GameSession *session,
+                                           const uint8_t *classes,
+                                           unsigned int count)
+{
+    GameFloaterStart *spore;
+    unsigned int index;
+
+    memset(session, 0, sizeof(*session));
+    session->island_count = 1;
+    session->islands[0].location_count = (uint16_t)count;
+    for (index = 0; index < count; ++index) {
+        GameRuntimeLocation *site = &session->islands[0].locations[index];
+        site->renderer_class = classes[index];
+        site->owner_id = -1;
+        site->source_value_14 = -1;
+        site->source_location_slot_18 = -1;
+        site->x = (uint16_t)(200 + index * 10);
+        site->y = 100;
+    }
+    add_test_worker(session, 0, 0, 100, 100, 4);
+    spore = &session->floaters[0];
+    spore->type_index = 4;
+    spore->source_subtype = 9;
+    spore->current_hit_points = 4;
+    spore->order_target_location = -1;
+    spore->order_target_floater = -1;
+    return spore;
+}
+
+static void test_spore_prefers_building_pads_until_markers_allow_sources(void)
+{
+    static GameSession session;
+    static const uint8_t pad_and_source[2] = {0, 1};
+    static const uint8_t source_only[1] = {1};
+    GameFloaterStart *spore;
+
+    /* FUN_0042219e: with no remaining marker the class-1 site is ignored. */
+    spore = setup_spore_sites(&session, pad_and_source, 2);
+    assert(game_session_assign_category4_subtype9_order(&session, 0, 1));
+    assert(spore->active_order_action == 1);
+    assert(spore->order_target_location == 0);
+    assert(spore->movement_state == 1);
+    assert(spore->has_move_order);
+    assert(spore->destination_x == 200 && spore->destination_y == 100);
+
+    /* Markers left and a zero site budget: the source replaces the pad
+       without a roll. */
+    spore = setup_spore_sites(&session, pad_and_source, 2);
+    session.islands[0].leviathan_remaining_markers = 1;
+    assert(game_session_assign_category4_subtype9_order(&session, 0, 1));
+    assert(spore->order_target_location == 1);
+
+    /* No pad at all: a marker is enough, whatever the roll returns. */
+    spore = setup_spore_sites(&session, source_only, 1);
+    session.islands[0].leviathan_remaining_markers = 1;
+    session.islands[0].leviathan_site_budget = 3;
+    assert(game_session_assign_category4_subtype9_order(&session, 0, 1));
+    assert(spore->order_target_location == 0);
+
+    /* ...and without markers the Spore finds nothing. */
+    spore = setup_spore_sites(&session, source_only, 1);
+    assert(!game_session_assign_category4_subtype9_order(&session, 0, 1));
+    assert(spore->active_order_action == 0);
+    assert(spore->order_target_location == -1);
+}
+
+static void test_spore_skips_claimed_sites_and_its_own_position(void)
+{
+    static GameSession session;
+    static const uint8_t pads[3] = {0, 0, 0};
+    GameFloaterStart *spore;
+
+    spore = setup_spore_sites(&session, pads, 3);
+    session.islands[0].locations[0].source_value_14 = 4; /* already claimed */
+    session.islands[0].locations[1].x = 100;             /* distance 0 */
+    assert(game_session_assign_category4_subtype9_order(&session, 0, 1));
+    assert(spore->order_target_location == 2);
+
+    /* A claimed record still qualifies when +0x10 and +0x24 are both 1. */
+    spore = setup_spore_sites(&session, pads, 1);
+    session.islands[0].locations[0].source_value_14 = 4;
+    session.islands[0].locations[0].record_value_10 = 1;
+    session.islands[0].locations[0].record_value_24 = 1;
+    assert(game_session_assign_category4_subtype9_order(&session, 0, 1));
+    assert(spore->order_target_location == 0);
+
+    /* Other floaters never take this path. */
+    spore = setup_spore_sites(&session, pads, 1);
+    spore->source_subtype = 8;
+    assert(!game_session_assign_category4_subtype9_order(&session, 0, 1));
+    spore->source_subtype = 9;
+    spore->source_runtime_flags = 0x008U; /* dying */
+    assert(!game_session_assign_category4_subtype9_order(&session, 0, 1));
+    assert(!game_session_assign_category4_subtype9_order(&session, 1, 1));
+    assert(!game_session_assign_category4_subtype9_order(NULL, 0, 1));
+}
+
+static void test_moving_spore_retargets_only_on_its_cadence_once_claimed(void)
+{
+    static GameSession session;
+    static const uint8_t pads[2] = {0, 0};
+    GameFloaterStart *spore;
+
+    spore = setup_spore_sites(&session, pads, 2);
+    session.islands[0].locations[1].source_value_14 = 4;
+    assert(game_session_assign_category4_subtype9_order(&session, 0, 1));
+    assert(spore->order_target_location == 0);
+
+    /* While the target's +0x14 is still -1 the Move order is kept, even on
+       a reevaluation tick. */
+    assert(!game_session_assign_category4_subtype9_order(&session, 0, 10));
+    assert(spore->order_target_location == 0 && spore->has_move_order);
+
+    /* Another Spore claims it and site 1 frees up: nothing happens off the
+       (tick + index) % 10 cadence of FUN_0041e569. */
+    session.islands[0].locations[0].source_value_14 = 4;
+    session.islands[0].locations[1].source_value_14 = -1;
+    assert(!game_session_assign_category4_subtype9_order(&session, 0, 11));
+    assert(spore->order_target_location == 0 && spore->has_move_order);
+    assert(game_session_assign_category4_subtype9_order(&session, 0, 20));
+    assert(spore->order_target_location == 1);
+    assert(spore->destination_x == 210);
+
+    /* With no free site left the stale Move is dropped in place. */
+    session.islands[0].locations[1].source_value_14 = 4;
+    spore->x = 150;
+    assert(!game_session_assign_category4_subtype9_order(&session, 0, 30));
+    assert(spore->active_order_action == 0);
+    assert(spore->order_target_location == -1);
+    assert(spore->movement_state == 0 && !spore->has_move_order);
+    assert(spore->destination_x == 150 && spore->destination_y == 100);
+}
+
+static void test_targetless_spore_loses_one_hp_every_128_ticks(void)
+{
+    static GameSession session;
+    static const uint8_t none[1] = {0};
+    GameFloaterStart *spore;
+
+    spore = setup_spore_sites(&session, none, 0);
+    assert(!game_session_assign_category4_subtype9_order(&session, 0, 127));
+    assert(spore->current_hit_points == 4);
+    assert(!game_session_assign_category4_subtype9_order(&session, 0, 128));
+    assert(spore->current_hit_points == 3);
+    assert(!game_session_assign_category4_subtype9_order(&session, 0, 256));
+    assert(spore->current_hit_points == 2);
 }
 
 static void test_training_refreshes_the_new_subtype_combat_row(void)

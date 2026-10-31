@@ -400,3 +400,68 @@ static void test_location_panel_level_uses_original_low_nibble_plus_one(void)
     assert(game_session_location_display_level(&location) == 15);
     assert(game_session_location_display_level(NULL) == 0);
 }
+
+static void test_worker_site_point_follows_bldinf_offsets_and_graspxy(void)
+{
+    /* FUN_00423068: location anchor plus the bldinf CONS/PROD/OCCU offset,
+       minus the floater's graspxy hand and the DAT_0049acbe cargo height. */
+    static GameSession session;
+    GameRuntimeLocation location;
+    GameFloaterStart floater;
+
+    memset(&session, 0, sizeof(session));
+    session.item_site_offset[2][GAME_SESSION_ITEM_OFFSET_CONS][0] = 5;
+    session.item_site_offset[2][GAME_SESSION_ITEM_OFFSET_CONS][1] = -30;
+    session.item_site_offset[0x10][GAME_SESSION_ITEM_OFFSET_PROD][0] = 7;
+    session.item_site_offset[0x10][GAME_SESSION_ITEM_OFFSET_PROD][1] = -20;
+    session.item_site_offset[0x2a][GAME_SESSION_ITEM_OFFSET_OCCU][0] = -3;
+    session.item_site_offset[0x2a][GAME_SESSION_ITEM_OFFSET_OCCU][1] = -40;
+    session.grasp_row_offset_x[0] = 4; /* type 0, subtype 0 */
+    session.grasp_row_offset_y[0] = 6;
+
+    /* State 4 on a bridge: CONS minus hand minus code-5 cargo height 13. */
+    memset(&location, 0, sizeof(location));
+    location.renderer_class = 2;
+    location.record_value_10 = 2;
+    location.source_location_slot_18 = -1;
+    location.x = 300;
+    location.y = 200;
+    memset(&floater, 0, sizeof(floater));
+    floater.x = 100;
+    floater.carried_resource_code = 5;
+    floater_target_location(&session, &floater, &location, 4);
+    assert(floater.movement_state == 4);
+    assert(floater.destination_x == 300 + 5 - 4);
+    assert(floater.destination_y == 200 - 30 - 6 - 13);
+
+    /* The hand x mirrors when the anchor lies left of the floater. */
+    floater.x = 400;
+    floater_target_location(&session, &floater, &location, 4);
+    assert(floater.destination_x == 300 + 5 + 4);
+
+    /* State 3 at a plain producer aims the hand at PROD; no cargo height
+       for a Tone code below 5. */
+    location.renderer_class = 0;
+    location.record_value_10 = 0x10;
+    floater.x = 100;
+    floater.order_resource_code = 2;
+    floater_target_location(&session, &floater, &location, 3);
+    assert(floater.destination_x == 300 + 7 - 4);
+    assert(floater.destination_y == 200 - 20 - 6);
+
+    /* The Hall uses OCCU without the hand offset, whatever the state. */
+    location.record_value_10 = 0x2a;
+    floater_target_location(&session, &floater, &location, 5);
+    assert(floater.movement_state == 5);
+    assert(floater.destination_x == 300 - 3);
+    assert(floater.destination_y == 200 - 40);
+
+    /* A negative point clamps to 0; no session means the bare anchor. */
+    location.x = 1;
+    location.y = 10;
+    floater_target_location(&session, &floater, &location, 5);
+    assert(floater.destination_x == 0);
+    assert(floater.destination_y == 0);
+    floater_target_location(NULL, &floater, &location, 4);
+    assert(floater.destination_x == 1 && floater.destination_y == 10);
+}

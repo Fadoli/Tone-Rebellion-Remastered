@@ -12,7 +12,9 @@ function collectMarkdown(directory) {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
         const fullPath = path.join(directory, entry.name);
         if (entry.isDirectory()) {
-            if (entry.name !== '.git' && entry.name !== 'build' && entry.name !== 'node_modules') {
+            // .claude holds agent worktrees: whole repository copies on other branches.
+            if (entry.name !== '.git' && entry.name !== '.claude' && entry.name !== 'build' &&
+                entry.name !== 'node_modules') {
                 collectMarkdown(fullPath);
             }
         } else if (entry.isFile() && entry.name.endsWith('.md')) {

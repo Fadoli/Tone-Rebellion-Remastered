@@ -264,24 +264,51 @@ int game_session_assign_category4_subtype9_order(
     GameSession *session, unsigned int floater_index, uint32_t source_tick)
 {
     GameFloaterStart *floater;
+    const GameRuntimeIsland *island;
     int target_class1;
     int target_class0;
+    int moving_retarget;
 
     if (session == NULL || floater_index >= session->floater_count) return 0;
     floater = &session->floaters[floater_index];
     if (!game_session_floater_is_active(floater) || floater->type_index != 4U ||
         floater->source_subtype != 9U ||
         (floater->source_runtime_flags & 0x008U) != 0 ||
-        (floater->active_order_action != 0 &&
-         floater->active_order_action != 0x0e) ||
-        floater->movement_state != 0 || floater->has_move_order ||
         floater->island_index >= session->island_count) return 0;
+    island = &session->islands[floater->island_index];
 
-    /* FUN_0042219e queries site class 1 before class 0. Its class-1 preference
-       globals are zero in FLOAT.EXE's loaded image and have no direct writers. */
+    /* FUN_0042219e keeps a Move order only while its target's raw +0x14 is
+       still -1; once another Spore (or anything else) claimed the site, the
+       next reevaluation (every 10th tick while moving, FUN_0041e569) picks a
+       new one instead of letting this Spore reach an already claimed site. */
+    moving_retarget = floater->active_order_action == 1 &&
+        floater->movement_state == 1 && floater->has_move_order;
+    if (moving_retarget) {
+        if ((source_tick + floater_index) % 10U != 0) return 0;
+        if (floater->order_target_location >= 0 &&
+            (unsigned int)floater->order_target_location <
+                island->location_count &&
+            island->locations[(unsigned int)floater->order_target_location]
+                    .source_value_14 == -1) return 0;
+    } else if ((floater->active_order_action != 0 &&
+                floater->active_order_action != 0x0e) ||
+               floater->movement_state != 0 || floater->has_move_order) {
+        return 0;
+    }
+
+    /* FUN_0042219e queries site class 1 (Tone sources) before class 0
+       (building pads). The class-1 site replaces the class-0 one when the
+       island still has remaining markers (DAT_0061f9d4 = +0x159c) and either
+       its site budget (DAT_0061f9b6 = +0x157e) is zero, FUN_00467260(4)
+       returns 0, or no class-0 site exists; the roll is short-circuited. */
     target_class1 = action9_find_category4_subtype9_site(session, floater, 1);
     target_class0 = action9_find_category4_subtype9_site(session, floater, 0);
-    (void)target_class1;
+    if (target_class1 >= 0 && island->leviathan_remaining_markers > 0 &&
+        (island->leviathan_site_budget == 0 ||
+         tone_rng_bounded(&session->random_state, 4U) == 0 ||
+         target_class0 < 0)) {
+        target_class0 = target_class1;
+    }
     if (target_class0 >= 0) {
         GameRuntimeLocation *target = &session->islands[
             floater->island_index].locations[(unsigned int)target_class0];
@@ -304,6 +331,14 @@ int game_session_assign_category4_subtype9_order(
     floater->active_order_action = 0;
     floater->order_target_location = -1;
     floater->order_target_floater = -1;
+    if (moving_retarget) {
+        /* FUN_00421ec1(-1) dropped the stale Move order. */
+        floater->order_progress = 0;
+        floater->movement_state = 0;
+        floater->has_move_order = 0;
+        floater->destination_x = floater->x;
+        floater->destination_y = floater->y;
+    }
     /* FUN_0042219e: FUN_004204bc(1, -1) every 128 ticks without a target. */
     if ((source_tick & 0x7fU) == 0)
         game_session_apply_floater_damage(session, floater, 1, -1);

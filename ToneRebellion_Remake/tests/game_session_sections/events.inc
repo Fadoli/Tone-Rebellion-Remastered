@@ -74,8 +74,6 @@ static void test_cast_kind_one_applies_area_and_expires_site_state(void)
     session.economy[1].hall_location_index = 0;
     session.islands[0].locations[0].record_value_10 = 0x2a + 16;
     session.islands[0].locations[0].owner_id = 1;
-    session.islands[0].locations[0].resource_stock[GAME_RESOURCE_MAGIC_TONE] = 16;
-    session.islands[0].locations[0].resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 11;
     caster = &session.floaters[0];
     caster->is_active = 1;
     caster->owner_slot = 1;
@@ -83,6 +81,8 @@ static void test_cast_kind_one_applies_area_and_expires_site_state(void)
     building = &session.islands[0].locations[4];
     building->record_value_10 = 0x2f + 16;
     building->owner_id = 1;
+    building->resource_stock[GAME_RESOURCE_MAGIC_TONE] = 16;
+    building->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 11;
     building->source_value_14 = 1;
     building->source_location_slot_18 = 0;
     building->charge_floater_slots[0] = 0;
@@ -587,9 +587,13 @@ static void test_code_five_delivery_starts_bridge_cons_for_its_owner(void)
     assert(floater->carried_resource_code == 5);
     assert(floater->movement_state == 4);
 
+    /* FUN_00423068 aims state 4 at the CONS point minus the code-5 cargo
+       height (13) and the zero graspxy of this test session. */
+    assert(floater->destination_x == bridge->x);
+    assert(floater->destination_y == bridge->y - 13);
     /* Exact-arrival state 4 reaches the class-2/code-5 helper branch. */
-    floater->x = bridge->x;
-    floater->y = bridge->y;
+    floater->x = floater->destination_x;
+    floater->y = floater->destination_y;
     game_session_advance_local_resource_task(&session, &pad_catalog, floater);
     assert((bridge->source_flags & 0x004U) != 0);
     assert(bridge->construction_progress == 0);

@@ -520,11 +520,13 @@ int main(void)
     test_initial_worker_accepts_coordinate_move_order();
     test_workstr_counts_subtype_zero_and_truncates_percentage();
     test_location_panel_level_uses_original_low_nibble_plus_one();
+    test_worker_site_point_follows_bldinf_offsets_and_graspxy();
     test_cast_kind_table_follows_owner_and_action_subtype();
     test_cast_kind_costs_follow_spells_txt();
     test_cast_sound_ids_match_effect_names();
     test_cast_dispatch_debits_both_tones_only_when_both_suffice();
     test_cast_glyph_eight_discounts_magic_only();
+    test_cast_pools_are_the_buildings_not_the_halls();
     test_cast_dispatch_needs_caster_level_and_free_worker();
     test_cast_queue_rejects_foreign_or_malformed_requests();
     test_kill_beast_cast_requires_a_leviathan_target();
@@ -557,6 +559,10 @@ int main(void)
     test_attack_bookkeeping_goes_to_the_attacker();
     test_out_of_range_caster_walks_then_casts();
     test_spore_deaths_go_through_the_native_damage_guard();
+    test_spore_prefers_building_pads_until_markers_allow_sources();
+    test_spore_skips_claimed_sites_and_its_own_position();
+    test_moving_spore_retargets_only_on_its_cadence_once_claimed();
+    test_targetless_spore_loses_one_hp_every_128_ticks();
     test_training_refreshes_the_new_subtype_combat_row();
     test_building_order_keeps_the_target_island();
     test_soldiers_fight_through_building_orders();
