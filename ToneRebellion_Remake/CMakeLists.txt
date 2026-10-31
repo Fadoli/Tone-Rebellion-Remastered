@@ -180,6 +180,11 @@ if(BUILD_TESTING)
     target_link_libraries(test_game_session PRIVATE tone_core)
     target_compile_features(test_game_session PRIVATE c_std_11)
     enable_test_assertions(test_game_session)
+    if(MSVC)
+        # Several cases keep one or two GameSession values on the stack,
+        # which no longer fit the default 1 MiB Windows stack.
+        target_link_options(test_game_session PRIVATE /STACK:67108864)
+    endif()
     add_test(NAME game_session_unit COMMAND test_game_session)
 
     add_executable(test_native_save tests/test_native_save.c)

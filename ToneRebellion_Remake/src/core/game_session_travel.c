@@ -267,8 +267,10 @@ int game_session_tick_floater_handoff(GameSession *session,
             floater->y = arrival_y;
             floater->destination_x = arrival->x;
             floater->destination_y = arrival_y;
-            /* State 17 leaves +0x0c alone: the CHARGE link to the home
-               source survives the crossing (charge_source_island keys it). */
+            /* FUN_0041e569 case 0x10 writes only the position and +0x0e:
+               the building link +0x0c (a per-player row, island-free) is
+               kept, so a linked group still adopts its building's orders
+               on another island (charge_source_island names the building). */
             floater->island_index = floater->handoff_target_island;
         }
     }
@@ -346,6 +348,20 @@ int game_session_tick_floater_handoff(GameSession *session,
             }
             floater->movement_state = 2;
             floater->active_order_action = 2;
+        } else if (resume_action == 6 || resume_action == 7 ||
+                   resume_action == 8) {
+            /* A building order whose target island differed: FUN_004211bb
+               now finds +0x40 == +0x0e and runs the action from stage 0. */
+            int16_t target = resume_action == 7
+                ? floater->order_target_location : floater->order_target_floater;
+            floater->movement_state = 0;
+            floater->has_move_order = 0;
+            floater->active_order_action = 0;
+            if (target >= 0)
+                game_session_adopt_building_attack_order(session,
+                    (unsigned int)(floater - session->floaters), resume_action,
+                    floater->island_index, (unsigned int)target);
+            return 1;
         } else if (resume_action == 0x0e) {
             floater->movement_state = 0;
             floater->active_order_action = 0x0e;

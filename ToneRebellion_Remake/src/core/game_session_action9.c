@@ -828,14 +828,47 @@ void game_session_adopt_building_attack_order(GameSession *session,
     GameFloaterStart *floater;
     if (session == NULL || floater_index >= session->floater_count) return;
     floater = &session->floaters[floater_index];
-    /* Remake limit: a target on another island than the floater's is not
-       adopted (the native FUN_004211bb bridge routing is not ported). */
-    if (target_island != floater->island_index) return;
     if (!game_session_floater_is_active(floater) ||
         (floater->source_runtime_flags & 0x808U) != 0 ||
         floater->island_index >= session->island_count ||
         floater->active_order_action == 0x13 ||
         floater->movement_state == 6 || floater->movement_state == 7) return;
+    if (target_island != floater->island_index) {
+        /* FUN_004211bb: for any action but 4/5/0xd/0x12, a +0x40 island
+           other than +0x0e first crosses through FUN_004210a9 (failure:
+           FUN_00421ec1(-1)); the action is kept and replayed by the switch
+           once the floater is on that island (ev_96f90fdc). The remake's
+           crossing resumes through game_session_tick_floater_handoff. */
+        int16_t *held;
+        if (target_island >= session->island_count) return;
+        held = genre == 7 ? &floater->order_target_location
+                          : &floater->order_target_floater;
+        if (floater->movement_state == 0x11 &&
+            floater->handoff_target_island == target_island &&
+            floater->handoff_resume_action == genre &&
+            *held == (int16_t)target) return;
+        release_task_claim(session, floater);
+        floater->movement_state = 0;
+        floater->has_move_order = 0;
+        floater->order_progress = 0;
+        floater->source_order_state_2c = 0;
+        floater->source_order_pending = 0;
+        floater->source_runtime_flags &= ~0x065U;
+        floater->order_target_floater = -1;
+        floater->order_target_location = -1;
+        floater->defend_target_floater = genre == 8 ? (int16_t)target : -1;
+        *held = (int16_t)target;
+        floater->order_target_island = target_island;
+        floater->active_order_action = (uint8_t)genre;
+        if (!game_session_begin_floater_handoff(session, floater,
+                                                target_island)) {
+            floater->active_order_action = 0;
+            floater->order_target_floater = -1;
+            floater->order_target_location = -1;
+            floater->defend_target_floater = -1;
+        }
+        return;
+    }
     /* FUN_00421ec1(-1) ends a running DefendArea (action 9) before the new
        order is written, as for any other action. */
     if (floater->active_order_action == 9) {

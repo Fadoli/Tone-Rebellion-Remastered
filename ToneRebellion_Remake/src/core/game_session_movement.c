@@ -1535,10 +1535,30 @@ static void game_session_adopt_building_order(GameSession *session,
         game_session_check_linked_retreat(session, floater_index,
             &session->islands[floater->charge_source_island].locations[
                 floater->charge_source_location])) return;
-    if (building->building_order_genre < 6 ||
-        building->building_order_genre > 9 ||
-        building->owner_id != (int32_t)floater->owner_slot ||
+    if (building->owner_id != (int32_t)floater->owner_slot ||
         building->source_location_slot_18 != floater->source_link_0c) return;
+    /* The copy has no value test: an empty record (genre 0, never ordered)
+       ends any other action through FUN_00421ec1(-1) and leaves +0x3c = 0
+       (FUN_0042219e compare/copy block, ev_787dc785). The remake compares
+       the action only; the zero +0x40/+0x42/+0x44 of that record have no
+       consumer since FUN_004211bb does not run for action 0. */
+    if (building->building_order_genre == 0) {
+        if (floater->active_order_action != 0) {
+            release_task_claim(session, floater);
+            floater->active_order_action = 0;
+            floater->movement_state = 0;
+            floater->order_target_floater = -1;
+            floater->order_target_location = -1;
+            floater->order_progress = 0;
+            floater->order_resource_code = 0;
+            floater->source_order_state_2c = 0;
+            floater->has_move_order = 0;
+            floater->source_runtime_flags &= ~0x065U;
+        }
+        return;
+    }
+    if (building->building_order_genre < 6 ||
+        building->building_order_genre > 9) return;
     if (building->building_order_genre != 9) {
         /* Remake interpretation (player request): FUN_0042219e re-copies the
            record whenever the floater's order differs and no native writer
@@ -1564,14 +1584,20 @@ static void game_session_adopt_building_order(GameSession *session,
         game_session_adopt_building_attack_order(session, floater_index,
             building->building_order_genre, building->building_order_island,
             building->building_order_coordinate);
+        /* +0x44 = rec+0x32, which every order writer (FUN_0045d867,
+           FUN_0045d8b2, FUN_0045dcf4) sets to 0. */
+        if (floater->active_order_action == building->building_order_genre)
+            floater->order_resource_code = 0;
         return;
     }
     coordinate = building->building_order_coordinate;
     if (floater->source_order_state_2c == 9 &&
         floater->source_order_island_28 == building->building_order_island &&
         floater->source_order_coordinate_30 == coordinate) return;
-    /* FUN_00421ec1(-1) ends the previous order before the copy. */
-    if (floater->active_order_action >= 6 && floater->active_order_action <= 8) {
+    /* FUN_00421ec1(-1) ends the previous order, whatever it is, before the
+       copy. */
+    if (floater->active_order_action != 0) {
+        release_task_claim(session, floater);
         floater->active_order_action = 0;
         floater->movement_state = 0;
         floater->order_target_floater = -1;
@@ -1580,6 +1606,7 @@ static void game_session_adopt_building_order(GameSession *session,
         floater->has_move_order = 0;
         floater->source_runtime_flags &= ~0x065U;
     }
+    floater->order_resource_code = 0;
     (void)game_session_order_floater_to_coordinate(session,
         floater->owner_slot, building->building_order_island, floater_index,
         (uint16_t)((coordinate >> 8) * 10U), (uint16_t)((coordinate & 0xffU) * 10U));

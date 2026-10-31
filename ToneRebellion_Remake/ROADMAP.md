@@ -19,7 +19,7 @@
 Ordre choisi : chaque étape débloque la suivante.
 
 1. **Déplacement manuel** (`TODO_MOVEMENT` l.9) : chemin `FUN_0043530b(0x13)` → `FUN_00435826` (pas de 10, msg `0x4c`) → `FUN_0042fa0f`. Prérequis de tous les ordres.
-2. **Ordres de bâtiment** (`TODO_INTERFACE` l.22, l.27) : enregistrement d'ordre dans le bâtiment + adoption par les floaters liés; finir `BC_*` restants (champs `B+0x28..`), `Recall`. Le filtrage ami/ennemi par `DAT_00619290` est établi.
+2. ~~**Ordres de bâtiment**~~ (`TODO_INTERFACE` l.22, l.27) : fait — enregistrement `B+0x28..0x32`, `BC_*` (Attack/Defend/Recall/TrnStk), clic droit filtré par `DAT_00619290`, adoption `FUN_0042219e` (genre 0 compris), routage interîles par pont, lien gardé à la traversée. Reste: vérification en jeu de l'interîles.
 3. **Tâches restantes** : `Obtain` (tâche `0xd`, état 13), `SUPPLY`/`UPGSPREAD` (table genre 0/1 de `FUN_0045fcbe`), Hall type 4, gardes type 5 ↔ `FA_Build`, transition native vers `REPAIR`, cas de `FUN_00450385`.
 4. **Producteur de `PIT_Object`** : contexte des appels à `FUN_004503bd` (TODO_OTHER l.4, TODO_TASKS l.8).
 
@@ -69,7 +69,6 @@ Combat des soldats (REA `FUN_004633a7`, `FUN_004211bb`, `FUN_0042219e`, `FUN_004
 Écarts confirmés, non corrigés :
 
 
-- Adoption d'un ordre dont la cible est sur une autre île que le floater : le routage par pont de `FUN_004211bb` n'est pas porté (le floater l'ignore).
 - Contre-attaque des Léviathans tenus en mêlée (`FUN_0042219e` -> `FUN_00421d82`, flag 0x10) absente.
 - Tirage `FUN_00467260(3)` de `FUN_0042219e` fait dès qu'une cible floater existe; le port ne tire qu'avec une cible lieu aussi (séquence RNG décalée).
 - Traversée de pont : le port force l'action 9 au départ et l'état 9 à l'arrivée; le natif garde l'action et finit en état 0 (`FUN_004210a9`, cas 0x10).

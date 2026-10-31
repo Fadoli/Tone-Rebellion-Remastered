@@ -1588,6 +1588,70 @@ static void test_soldiers_fight_through_building_orders(void)
     assert(session.floaters[3].order_target_floater == 1);
 }
 
+static void test_building_order_crosses_a_bridge_and_keeps_the_link(void)
+{
+    /* FUN_004211bb sends an order whose +0x40 island differs through
+       FUN_004210a9 and replays it on arrival; FUN_0041e569 case 0x10 keeps
+       +0x0c, and FUN_0042219e copies even an empty record (genre 0). */
+    static GameSession session;
+    PadCatalog pads;
+    GameRuntimeLocation *bridge;
+    GameFloaterStart *warrior;
+    unsigned int tick;
+    unsigned int index;
+
+    make_pad_catalog(&pads);
+    memset(&session, 0, sizeof(session));
+    session.island_count = 2;
+    session.islands[0].location_count = 2;
+    session.islands[1].location_count = 1;
+    for (index = 0; index < 5; ++index) {
+        session.islands[0].floater_max_x[index] = 0x9ff;
+        session.islands[1].floater_max_x[index] = 0x9ff;
+    }
+    session.random_state = 5;
+    (void)school(&session, 0, 0, 600);
+    bridge = &session.islands[0].locations[1];
+    bridge->renderer_class = 2;
+    bridge->source_flags = 1;
+    bridge->owner_id = -1;
+    bridge->bridge_neighbor_island = 1;
+    bridge->x = 900;
+    bridge->y = 200;
+    bridge = &session.islands[1].locations[0];
+    bridge->renderer_class = 2;
+    bridge->source_flags = 1;
+    bridge->owner_id = -1;
+    bridge->bridge_neighbor_island = 0;
+    bridge->x = 300;
+    bridge->y = 230;
+    soldier(&session, 0, 0, 700, 0);
+    warrior = &session.floaters[0];
+    soldier(&session, 1, 1, 600, 0);
+    session.floaters[1].island_index = 1;
+    session.floaters[1].source_link_0c = -1;
+
+    /* Empty record: another action is ended. */
+    warrior->active_order_action = 0x0e;
+    game_session_tick_floater_moves(&session, 1, &pads);
+    assert(warrior->active_order_action == 0);
+
+    assert(game_session_set_building_order(&session, 0, 0, 0, 6, 1, 1, 0));
+    game_session_tick_floater_moves(&session, 2, &pads);
+    assert(warrior->movement_state == 0x11);
+    assert(warrior->handoff_resume_action == 6);
+    assert(warrior->order_target_floater == 1);
+    for (tick = 3; tick < 1000 && warrior->island_index != 1; ++tick)
+        game_session_tick_floater_moves(&session, tick, &pads);
+    assert(warrior->island_index == 1);
+    for (index = 0; index < 400 && warrior->active_order_action != 6; ++index)
+        game_session_tick_floater_moves(&session, tick++, &pads);
+    assert(warrior->active_order_action == 6);
+    assert(warrior->order_target_floater == 1);
+    assert(warrior->source_link_0c == 0);
+    assert(warrior->charge_source_island == 0);
+}
+
 static void test_wounded_soldier_heals_in_its_building(void)
 {
     /* FUN_0042219e sends a linked floater under a third of its hit points
