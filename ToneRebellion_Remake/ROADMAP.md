@@ -40,7 +40,7 @@ Items à faible risque, parallélisables : polices (`bigfont` des étiquettes), 
 
 ## Phase 5 — Audio
 
-Volume/pan par distance, bullets et impacts des producteurs (`FUN_00450a71`, table d'attaque à lire), sons d'île.
+Porté : volume/pan par distance (`FUN_0045b24d`), bullets/impacts des producteurs (items Léviathan 0x0a..0x15, seuls appelants de `FUN_00416342`), sons d'île `FEATnn`. Reste : `CRUMBLE` (émetteur de `FUN_0042fa0f` 5/7 inconnu) et phases SPECIAL de `FUN_0041760b`.
 
 ## Phase 6 — Portage Web (dernière priorité)
 

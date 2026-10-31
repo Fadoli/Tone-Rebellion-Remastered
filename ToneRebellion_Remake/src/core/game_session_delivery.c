@@ -1,5 +1,6 @@
 #include <limits.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "game_session_delivery.h"
@@ -1061,6 +1062,20 @@ static void credit_floater_delivery(GameSession *session,
                         (uint16_t)(1U << (unsigned int)pair_side));
                     if (((uint16_t)feature->source_capacity_4a & 3U) == 3U) {
                         feature->source_flags |= 1U;
+                        /* FUN_004503bd emits world event 4 (0x4507b4) on
+                           every hit that leaves both bits set; FUN_00416a9a
+                           case 4 plays FEAT%02d of the island's WORLDPOS
+                           shape (word IB+0x29e0) at the feature x. */
+                        {
+                            char feat_name[8];
+                            (void)snprintf(feat_name, sizeof(feat_name),
+                                "FEAT%02d",
+                                (int)island->leviathan_marker_shape_id);
+                            (void)game_session_queue_effect_sound(session,
+                                game_session_effect_def_index(session,
+                                    feat_name),
+                                floater->island_index, feature->x);
+                        }
                         uint16_t island_bit = (uint16_t)(
                             1U << floater->island_index);
                         if ((session->economy[floater->owner_slot]
