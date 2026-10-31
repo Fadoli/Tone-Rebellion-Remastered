@@ -1471,6 +1471,29 @@ void game_session_tick_cast_effects(GameSession *session,
 #include "game_session.h"
 #include "game_session_combat_internal.h"
 
+static uint16_t visual_random15(GameSession *session)
+{
+    uint32_t state = session->visual_random_state;
+    if (state == 0) state = 0x9e3779b9U;
+    state ^= state << 13;
+    state ^= state >> 17;
+    state ^= state << 5;
+    session->visual_random_state = state;
+    return (uint16_t)(state & 0x7fffU);
+}
+
+static void init_lightning_visual(GameSession *session,
+                                  struct GameAttackVisual *visual)
+{
+    /* FUN_00416ff8/FUN_00415fc6 start a LIGHTNING slot with random s5/s6;
+       the bolt is anchored on the target (FUN_004182c8). */
+    visual->bolt_seed = visual_random15(session);
+    visual->bolt_bits = visual_random15(session);
+    visual->x = visual->target_x;
+    visual->y = visual->target_y;
+    visual->ticks = 0;
+}
+
 static int attack_effect_row(const GameFloaterStart *floater)
 {
     int row = floater->type_index == 4U ? (int)floater->source_subtype + 27
@@ -1501,10 +1524,10 @@ int game_session_spawn_attack_visual(GameSession *session,
     def_index = session->attack_effect_row_def[row];
     if (def_index < 0 || def_index >= FLOATER_EFFECT_MAX) return 0;
     def = &session->attack_effect_defs[def_index];
-    /* LIGHTNING has no known end condition yet; IMPACT/SPECIAL are not
-       attack effects. */
+    /* IMPACT/SPECIAL defs are not attack effects. */
     if (def->type != FLOATER_EFFECT_ONESHOT &&
         def->type != FLOATER_EFFECT_BULLET &&
+        def->type != FLOATER_EFFECT_LIGHTNING &&
         def->type != FLOATER_EFFECT_CAST) return 0;
     if (def->level_count == 0) return 0;
     for (slot = 0; slot < GAME_SESSION_MAX_CAST_EFFECTS; ++slot) {
@@ -1529,6 +1552,7 @@ int game_session_spawn_attack_visual(GameSession *session,
         visual->x = (uint16_t)(x < 0 ? 0 : x);
         visual->y = (uint16_t)(y < 0 ? 0 : y);
         visual->island_index = attacker->island_index;
+        visual->mirrored = attacker->facing_left ? 1U : 0U;
         visual->target_floater = state == GAME_FLOATER_STATE_ATTACK
             ? attacker->order_target_floater : -1;
         visual->target_x = target_x;
@@ -1537,6 +1561,8 @@ int game_session_spawn_attack_visual(GameSession *session,
         visual->impact_realm = attacker->attack_realm >= 0 &&
                                attacker->attack_realm < 4
             ? (int8_t)attacker->attack_realm : (int8_t)-1;
+        if (def->type == FLOATER_EFFECT_LIGHTNING)
+            init_lightning_visual(session, visual);
         return 1;
     }
     return 0;
@@ -1589,7 +1615,22 @@ static void tick_attack_visuals(GameSession *session)
                def->level_frames[visual->level] - 1U;
         /* FUN_00415063/FUN_0041521a advance one frame per odd update. */
         ++visual->frame;
-        if (def->type == FLOATER_EFFECT_BULLET) {
+        if (def->type == FLOATER_EFFECT_LIGHTNING) {
+            /* FUN_004152bd: reveal counter s3 grows and s6 is redrawn each
+               update; FUN_00416ecf ends the bolt once s3 > 19. The bolt
+               follows its target floater. */
+            if (visual->target_floater >= 0 &&
+                (unsigned int)visual->target_floater < session->floater_count &&
+                game_session_floater_is_active(
+                    &session->floaters[visual->target_floater])) {
+                visual->target_x = session->floaters[visual->target_floater].x;
+                visual->target_y = session->floaters[visual->target_floater].y;
+                visual->x = visual->target_x;
+                visual->y = visual->target_y;
+            }
+            visual->bolt_bits = visual_random15(session);
+            if (++visual->ticks > 19U) finish_attack_visual(session, visual);
+        } else if (def->type == FLOATER_EFFECT_BULLET) {
             int32_t dx;
             int32_t dy;
             double distance;
@@ -1629,12 +1670,15 @@ static void tick_attack_visuals(GameSession *session)
                 const FloaterEffectDef *next =
                     &session->attack_effect_defs[def->chain];
                 if ((next->type == FLOATER_EFFECT_BULLET ||
-                     next->type == FLOATER_EFFECT_ONESHOT) &&
+                     next->type == FLOATER_EFFECT_ONESHOT ||
+                     next->type == FLOATER_EFFECT_LIGHTNING) &&
                     next->level_count != 0) {
                     visual->def = def->chain;
                     visual->level = attack_visual_level(next, visual->level);
                     visual->frame = next->level_start[visual->level];
                     visual->ticks = 0;
+                    if (next->type == FLOATER_EFFECT_LIGHTNING)
+                        init_lightning_visual(session, visual);
                     continue;
                 }
             }
@@ -1642,6 +1686,62 @@ static void tick_attack_visuals(GameSession *session)
             finish_attack_visual(session, visual);
         }
     }
+}
+
+int game_session_lightning_segments(const GameSession *session,
+                                    unsigned int slot,
+                                    GameLightningSegment out[GAME_LIGHTNING_MAX_SEGMENTS])
+{
+    /* FUN_004182c8 tables DAT_0049bd78/80 (frame, dx; ev_81b0a826,
+       ev_8cb8f9b8). Index >= 3 is drawn mirrored (DAT_0049bd88). */
+    static const uint8_t frame_by_index[6] = {0, 2, 4, 0, 2, 4};
+    static const int8_t dx_by_index[6] = {0, 19, 38, 1, -18, -37};
+    const struct GameAttackVisual *visual;
+    uint32_t pattern = 0;
+    int32_t x;
+    int32_t y;
+    int count = 0;
+    unsigned int iteration;
+
+    if (session == NULL || out == NULL ||
+        slot >= GAME_SESSION_MAX_CAST_EFFECTS) return 0;
+    visual = &session->attack_visuals[slot];
+    if (!visual->active || visual->impact_phase || visual->def < 0 ||
+        visual->def >= FLOATER_EFFECT_MAX ||
+        session->attack_effect_defs[visual->def].type != FLOATER_EFFECT_LIGHTNING)
+        return 0;
+    x = visual->target_x;
+    y = visual->target_y;
+    for (iteration = 0; iteration < GAME_LIGHTNING_MAX_SEGMENTS; ++iteration) {
+        unsigned int local = 9U - iteration; /* the original's local_20 */
+        unsigned int index;
+        int mirrored;
+        if (iteration == 0 || local == 5U) pattern = visual->bolt_seed;
+        y -= 0x28;
+        if (y < 0) break;
+        index = ((pattern & 7U) % 6U);
+        pattern >>= 3;
+        x += dx_by_index[index];
+        mirrored = index > 2U;
+        if (local <= visual->ticks) {
+            out[count].x = x;
+            out[count].y = y;
+            out[count].frame = (uint8_t)(frame_by_index[index] +
+                ((visual->bolt_bits >> iteration) & 1U));
+            out[count].mirrored = (uint8_t)mirrored;
+            ++count;
+        }
+        if (mirrored) x -= 1;
+    }
+    return count;
+}
+
+int game_session_attack_visual_mirrored(const GameSession *session,
+                                        unsigned int slot)
+{
+    return session != NULL && slot < GAME_SESSION_MAX_CAST_EFFECTS &&
+           session->attack_visuals[slot].active &&
+           session->attack_visuals[slot].mirrored;
 }
 
 int game_session_attack_visual(const GameSession *session, unsigned int slot,

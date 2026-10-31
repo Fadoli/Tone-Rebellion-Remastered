@@ -152,6 +152,23 @@ int game_session_attack_visual(const GameSession *session, unsigned int slot,
                                int *def, unsigned int *frame, uint16_t *x,
                                uint16_t *y, uint8_t *island,
                                int *impact_realm);
+/* One stacked LIGHTNING sprite (FUN_004182c8): world position, zero-based
+   frame in the effect's shape and mirror flag. */
+typedef struct GameLightningSegment {
+    int32_t x;
+    int32_t y;
+    uint8_t frame;
+    uint8_t mirrored;
+} GameLightningSegment;
+enum { GAME_LIGHTNING_MAX_SEGMENTS = 10 };
+/* Visible segments of a LIGHTNING visual, bottom to top as drawn; returns the
+   count (0 when the slot is not an active lightning). */
+int game_session_lightning_segments(const GameSession *session,
+                                    unsigned int slot,
+                                    GameLightningSegment out[GAME_LIGHTNING_MAX_SEGMENTS]);
+/* Horizontal mirror flag of an active attack visual (slot flag 0x1). */
+int game_session_attack_visual_mirrored(const GameSession *session,
+                                        unsigned int slot);
 /* Hit IMPACT of an active floater attack (realm 0..3 = PHY/SUP/ETH/NAT,
    absolute frame in that realm's impact sheet, world x/y). */
 int game_session_attack_effect_visual(const GameSession *session,

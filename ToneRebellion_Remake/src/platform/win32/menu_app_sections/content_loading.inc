@@ -692,8 +692,12 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     }
     for (unsigned int effect_index = 0; effect_index < GAME_CAST_VISUAL_COUNT; ++effect_index)
         free_sprite_sheet(&g_cast_effect_art[effect_index]);
-    for (unsigned int effect_index = 0; effect_index < FLOATER_EFFECT_MAX; ++effect_index)
+    for (unsigned int effect_index = 0; effect_index < FLOATER_EFFECT_MAX; ++effect_index) {
         free_sprite_sheet(&g_attack_effect_art[effect_index]);
+        free_sprite_sheet(&g_attack_effect_art_flipped[effect_index]);
+    }
+    for (unsigned int effect_index = 0; effect_index < 4; ++effect_index)
+        free_sprite_sheet(&g_attack_impact_art_flipped[effect_index]);
     free_sprite_sheet(&g_floater_info_art);
     free_sprite_sheet(&g_hall_command_art);
     free_sprite_sheet(&g_glyph_inventory_art);

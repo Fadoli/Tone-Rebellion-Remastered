@@ -765,16 +765,71 @@ static void test_bullet_visual_applies_attxy_mirroring_and_timeout(void)
     assert(tick == 201);
 }
 
-static void test_lightning_and_missing_effects_are_not_spawned(void)
+static void test_lightning_visual_grows_toward_the_target_then_ends(void)
 {
     static GameSession session;
     GameFloaterStart *attacker;
+    GameLightningSegment segments[GAME_LIGHTNING_MAX_SEGMENTS];
+    int def;
+    int impact;
+    unsigned int frame;
+    uint16_t x;
+    uint16_t y;
+    uint8_t island;
+    unsigned int tick;
 
     setup_attack_visual_session(&session, 1, 3, 3); /* LIGHTNING */
     attacker = spell_caster(&session, 0, 0, 0, 0);
     attacker->type_index = 1;
     attacker->source_subtype = 3;
-    assert(!game_session_spawn_attack_visual(&session, attacker, 6, 1, 1, 0));
+    assert(game_session_spawn_attack_visual(&session, attacker, 7, 700, 1000, 0));
+    /* The bolt is anchored on the target. */
+    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island,
+                                      &impact));
+    assert(x == 700 && y == 1000);
+    session.attack_visuals[0].bolt_seed = 0; /* every segment: index 0 */
+    session.attack_visuals[0].bolt_bits = 0;
+    assert(game_session_lightning_segments(&session, 0, segments) == 1);
+    assert(segments[0].x == 700 && segments[0].y == 600 && segments[0].frame == 0);
+    for (tick = 0; tick < 4; ++tick) game_session_tick_combat_effects(&session, 1);
+    session.attack_visuals[0].bolt_bits = 0;
+    assert(game_session_lightning_segments(&session, 0, segments) == 5);
+    assert(segments[4].y == 1000 - 0x28 * 10);
+    /* Seed 5: iteration 0 uses index 5 (dx -37, mirrored, x -= 1 after), the
+       pattern reloads at iteration 4, so the first visible segment (iteration
+       5, reveal 4) sits at x = 700 - 38 - 38 and is plain index 0. */
+    session.attack_visuals[0].bolt_seed = 5;
+    session.attack_visuals[0].bolt_bits = 1U << 5; /* +1 frame on iteration 5 */
+    assert(game_session_lightning_segments(&session, 0, segments) == 5);
+    assert(segments[0].x == 700 - 76 && segments[0].frame == 1 &&
+           segments[0].mirrored == 0);
+    /* Index 3..5 are mirrored: seed 0b101 with the reload at iteration 4
+       makes iteration 4 (hidden at reveal 4) mirrored; reveal 5 shows it. */
+    session.attack_visuals[0].ticks = 5;
+    assert(game_session_lightning_segments(&session, 0, segments) == 6);
+    assert(segments[0].mirrored == 1 && segments[0].frame == 4 &&
+           segments[0].x == 700 - 38 - 37);
+    /* Ends after the reveal counter passes 19. */
+    session.attack_visuals[0].ticks = 4;
+    for (tick = 4; tick < 19; ++tick) game_session_tick_combat_effects(&session, 1);
+    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island,
+                                      &impact));
+    game_session_tick_combat_effects(&session, 1);
+    assert(!game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island,
+                                       &impact));
+    assert(game_session_lightning_segments(&session, 0, segments) == 0);
+    /* A non-lightning slot has no segments. */
+    assert(game_session_lightning_segments(&session, 5, segments) == 0);
+}
+
+static void test_missing_atteff_rows_are_not_spawned(void)
+{
+    static GameSession session;
+    GameFloaterStart *attacker;
+
+    setup_attack_visual_session(&session, 1, 3, 3);
+    attacker = spell_caster(&session, 0, 0, 0, 0);
+    attacker->type_index = 1;
     attacker->source_subtype = 4; /* row without atteff */
     assert(!game_session_spawn_attack_visual(&session, attacker, 6, 1, 1, 0));
     assert(!game_session_spawn_attack_visual(NULL, attacker, 6, 1, 1, 0));

@@ -505,8 +505,19 @@ static int load_island_surface(int island_id, int map_island_index,
        a missing sheet only hides that effect. */
     {
         unsigned int effect_index;
-        for (effect_index = 0; effect_index < FLOATER_EFFECT_MAX; ++effect_index)
+        for (effect_index = 0; effect_index < FLOATER_EFFECT_MAX; ++effect_index) {
             free_sprite_sheet(&g_attack_effect_art[effect_index]);
+            free_sprite_sheet(&g_attack_effect_art_flipped[effect_index]);
+        }
+        for (effect_index = 0; effect_index < 4; ++effect_index) {
+            char mirror_error[96];
+            free_sprite_sheet(&g_attack_impact_art_flipped[effect_index]);
+            if (!mirror_sprite_sheet_horizontally(
+                    &defense_impact_candidates[effect_index],
+                    &g_attack_impact_art_flipped[effect_index], mirror_error,
+                    sizeof(mirror_error)))
+                free_sprite_sheet(&g_attack_impact_art_flipped[effect_index]);
+        }
         for (effect_index = 0; effect_index < g_floater_catalog.effect_count;
              ++effect_index) {
             const FloaterEffectDef *effect = &g_floater_catalog.effects[effect_index];
@@ -515,6 +526,7 @@ static int load_island_surface(int island_id, int map_island_index,
             size_t c;
             if (effect->type != FLOATER_EFFECT_ONESHOT &&
                 effect->type != FLOATER_EFFECT_BULLET &&
+                effect->type != FLOATER_EFFECT_LIGHTNING &&
                 effect->type != FLOATER_EFFECT_CAST) continue;
             (void)snprintf(member, sizeof(member), "data\%s.shp", effect->shape);
             for (c = 0; member[c] != '\0'; ++c)
@@ -524,6 +536,11 @@ static int load_island_surface(int island_id, int map_island_index,
                     &g_attack_effect_art[effect_index], effect_error,
                     sizeof(effect_error)))
                 free_sprite_sheet(&g_attack_effect_art[effect_index]);
+            else if (!mirror_sprite_sheet_horizontally(
+                         &g_attack_effect_art[effect_index],
+                         &g_attack_effect_art_flipped[effect_index],
+                         effect_error, sizeof(effect_error)))
+                free_sprite_sheet(&g_attack_effect_art_flipped[effect_index]);
         }
     }
     for (hall_index = 0; hall_index < GAME_CAST_VISUAL_COUNT; ++hall_index) {

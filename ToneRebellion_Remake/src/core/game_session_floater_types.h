@@ -198,6 +198,9 @@ typedef struct GameSession {
         uint8_t visual_phase;
     } cast_effects[GAME_SESSION_MAX_CAST_EFFECTS];
     uint8_t active_cast_effect_count;
+    /* Draw-only random stream (FUN_004152bd draws rand(0x8000) every tick);
+       kept apart from random_state so visuals never change the simulation. */
+    uint32_t visual_random_state;
     /* fltinf atteff per floater.txt row (FUN_00415fc6 path A): the effects.txt
        defs plus each row's def index and attxy spawn offset. */
     FloaterEffectDef attack_effect_defs[FLOATER_EFFECT_MAX];
@@ -221,6 +224,11 @@ typedef struct GameSession {
         int8_t impact_realm;     /* -1: none */
         uint8_t impact_phase;
         uint8_t impact_frames_left;
+        uint8_t mirrored; /* slot flag 0x1: horizontal flip (FUN_004182c8) */
+        /* LIGHTNING slot words s5/s6: segment pattern and per-tick frame bits
+           (random values drawn from visual_random_state). */
+        uint16_t bolt_seed;
+        uint16_t bolt_bits;
     } attack_visuals[GAME_SESSION_MAX_CAST_EFFECTS];
     /* Tower bolts reuse the source effect's per-frame target pursuit and
        impact damage path; the platform resolves the source EFFECTS SHP art. */

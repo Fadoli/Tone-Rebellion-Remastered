@@ -765,11 +765,42 @@ static void render_island_view(HDC dc)
                     &def_index, &effect_frame, &world_x, &world_y,
                     &effect_island, &visual_realm)) continue;
             if (effect_island != g_menu.selected_map_island) continue;
+            if (visual_realm < 0 && def_index >= 0 && def_index < FLOATER_EFFECT_MAX &&
+                g_floater_catalog.effects[def_index].type == FLOATER_EFFECT_LIGHTNING) {
+                /* FUN_004182c8: up to ten stacked sprites growing down onto
+                   the target; segments 3..5 of the pattern are mirrored. */
+                GameLightningSegment segments[GAME_LIGHTNING_MAX_SEGMENTS];
+                int segment_count = game_session_lightning_segments(
+                    &g_game_session, projectile_index, segments);
+                int segment;
+                for (segment = 0; segment < segment_count; ++segment) {
+                    const SpriteSheet *bolt_art =
+                        segments[segment].mirrored &&
+                        g_attack_effect_art_flipped[def_index].frame_count != 0
+                            ? &g_attack_effect_art_flipped[def_index]
+                            : &g_attack_effect_art[def_index];
+                    int bolt_x = segments[segment].x - g_island_scroll_x;
+                    if (segments[segment].frame >= bolt_art->frame_count ||
+                        bolt_x < -64 || bolt_x >= LOGICAL_WIDTH + 64) continue;
+                    draw_sprite(dc, bolt_art, segments[segment].frame, bolt_x,
+                                image_top + segments[segment].y);
+                }
+                continue;
+            }
+            /* FUN_004182c8 flips the slot horizontally when flag 0x1 is set. */
             if (visual_realm >= 0) {
                 effect_art = &g_leviathan_impact_art[visual_realm & 3];
+                if (game_session_attack_visual_mirrored(&g_game_session,
+                        projectile_index) &&
+                    g_attack_impact_art_flipped[visual_realm & 3].frame_count != 0)
+                    effect_art = &g_attack_impact_art_flipped[visual_realm & 3];
             } else {
                 if (def_index < 0 || def_index >= FLOATER_EFFECT_MAX) continue;
                 effect_art = &g_attack_effect_art[def_index];
+                if (game_session_attack_visual_mirrored(&g_game_session,
+                        projectile_index) &&
+                    g_attack_effect_art_flipped[def_index].frame_count != 0)
+                    effect_art = &g_attack_effect_art_flipped[def_index];
             }
             if (effect_frame >= effect_art->frame_count) continue;
             x = (int)world_x - g_island_scroll_x;
