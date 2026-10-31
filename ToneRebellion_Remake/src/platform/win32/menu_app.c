@@ -520,6 +520,9 @@ static void select_building_warrior(void)
 
 #include "menu_app_sections/island_interaction.inc"
 
+/* Defined in island_messages.inc; a new or loaded session starts empty. */
+static void clear_island_messages(void);
+
 #include "menu_app_sections/save_game.inc"
 
 #include "menu_app_sections/slide_panel.inc"
@@ -535,6 +538,8 @@ static void select_building_warrior(void)
 #include "menu_app_sections/hall_panel_render.inc"
 
 #include "menu_app_sections/island_item_render.inc"
+
+#include "menu_app_sections/island_messages.inc"
 
 #include "menu_app_sections/island_view_render.inc"
 #undef draw_bitmap_label

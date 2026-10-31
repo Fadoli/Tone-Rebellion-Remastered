@@ -117,6 +117,7 @@ static int load_game_session_for_selected_world(char *error, size_t error_capaci
     game_music_state_init(&g_game_music);
     g_game_session_world_index = g_menu.world_index;
     g_game_session_valid = 1;
+    clear_island_messages();
     return 1;
 }
 

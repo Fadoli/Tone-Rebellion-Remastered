@@ -1772,6 +1772,7 @@ static void render_island_view(HDC dc)
             }
         }
     }
+    draw_island_message(dc);
 }
 
 /* CLIPSEL1-3 / CLIPBD1-3 are not among the 16 windows FUN_0042f303 hides, so

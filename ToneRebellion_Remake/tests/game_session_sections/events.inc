@@ -74,6 +74,24 @@ static void test_last_island_seals_start_victory_sequence(void)
     assert(game_session_tick_world_sequence(&session) == -1);
 }
 
+static void test_leviathan_bond_notices_follow_world_tick(void)
+{
+    GameSession session = {0};
+    int32_t bond = 99;
+
+    assert(!game_session_leviathan_bond_notice(&session, &bond));
+    session.simulation_tick = 1;
+    assert(game_session_leviathan_bond_notice(&session, &bond) && bond == -1);
+    session.simulation_tick = 6000;
+    assert(!game_session_leviathan_bond_notice(&session, &bond));
+    session.simulation_tick = 6001;
+    assert(game_session_leviathan_bond_notice(&session, &bond) && bond == 0);
+    session.simulation_tick = 48001;
+    assert(game_session_leviathan_bond_notice(&session, &bond) && bond == 7);
+    session.simulation_tick = 54001;
+    assert(!game_session_leviathan_bond_notice(&session, &bond));
+}
+
 static void test_cast_action_accepts_owner_variant_ids(void)
 {
     GameSession session = {0};

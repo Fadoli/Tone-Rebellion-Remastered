@@ -235,6 +235,13 @@ void game_session_recalculate_leviathan_island(GameSession *session,
    states 2..5. Returns the queued window state (2 = world view at tick 100
    of state 3, 7 = end screen at tick 100 of state 5) or -1. */
 int game_session_tick_world_sequence(GameSession *session);
+/* FUN_00460989 tail: on a world tick t (DAT_00618e44, read before
+   FUN_00466ce2 increments it) with t % 6000 == 0 and k = t / 6000 - 1 < 8,
+   queue world event 10 with argument k: -1 is the AWAKE<player> notice,
+   0..7 the LEVIBRK + BOND<k> notice. Call after game_session_tick_leviathan_ai
+   (simulation_tick is already t + 1 then). Returns 1 and sets *bond. */
+int game_session_leviathan_bond_notice(const GameSession *session,
+                                       int32_t *bond);
 void game_session_tick_leviathan_ai(GameSession *session);
 /* Queue/pop source event IDs 2 (build), 3 (bridge), and the modeled floater
    birth event for the platform audio adapter. */

@@ -577,6 +577,22 @@ int game_session_tick_world_sequence(GameSession *session)
     return request;
 }
 
+int game_session_leviathan_bond_notice(const GameSession *session,
+                                       int32_t *bond)
+{
+    uint32_t tick;
+    int32_t index;
+
+    if (session == NULL || bond == NULL || session->simulation_tick == 0)
+        return 0;
+    tick = session->simulation_tick - 1U;
+    if (tick % 6000U != 0) return 0;
+    index = (int32_t)(tick / 6000U) - 1;
+    if (index >= 8) return 0;
+    *bond = index;
+    return 1;
+}
+
 static void tick_leviathan_attack_rank(GameSession *session,
                                       uint8_t island_index)
 {

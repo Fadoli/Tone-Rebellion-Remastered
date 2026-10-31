@@ -22,6 +22,11 @@ static void simulate_session_tick(uint32_t source_tick)
                                     &g_pad_catalog);
     (void)game_session_update_resource_requests(&g_game_session);
     game_session_tick_leviathan_ai(&g_game_session);
+    {
+        int32_t bond;
+        if (game_session_leviathan_bond_notice(&g_game_session, &bond))
+            queue_leviathan_bond_notice(bond);
+    }
     while (game_session_pop_world_event(&g_game_session,
                                         &world_event)) {
         if (world_event.kind ==
@@ -136,6 +141,10 @@ static void run_ui_frame(HWND window, WPARAM wparam)
                 g_game_session.economy[g_menu.selected_tribe]
                     .source_maintenance_capacity < 1) {
                 ++g_defeat_ticks;
+                /* FUN_0045eaa7 queues world event 0xb (p << 16 | 3) with
+                   the flag; FUN_004334ce plays `loosend` for the local
+                   player through FUN_0045aafd(name, 0, 0, 0). */
+                if (g_defeat_ticks == 1U) set_background_tune_once("loosend");
                 if (g_defeat_ticks == 200U &&
                     g_menu.screen == SCREEN_ISLAND) {
                     g_menu.screen = SCREEN_WORLD_MAP;
@@ -166,7 +175,13 @@ static void run_ui_frame(HWND window, WPARAM wparam)
            game, so the session ends with the end screen. */
         if (g_game_session_valid && !g_net_in_game &&
             g_game_session.world_sequence_state >= 2) {
-            int request = game_session_tick_world_sequence(&g_game_session);
+            int request;
+            /* State 2 queues world event 0xb (0) at tick 0; FUN_004334ce
+               answers with the `winend` tune. */
+            if (g_game_session.world_sequence_state == 2 &&
+                g_game_session.world_sequence_tick == 0)
+                set_background_tune_once("winend");
+            request = game_session_tick_world_sequence(&g_game_session);
             if (request == 2 && g_menu.screen == SCREEN_ISLAND) {
                 g_menu.screen = SCREEN_WORLD_MAP;
                 g_hovered_location = -1;

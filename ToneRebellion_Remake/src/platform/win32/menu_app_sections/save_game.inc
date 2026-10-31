@@ -129,6 +129,7 @@ static int read_save_file(HWND window, const char *path)
     game_music_state_init(&g_game_music);
     g_game_session_world_index = body.world_index;
     g_game_session_valid = 1;
+    clear_island_messages();
     g_menu.world_index = body.world_index;
     g_menu.difficulty = body.difficulty;
     g_menu.selected_tribe = body.selected_tribe;
