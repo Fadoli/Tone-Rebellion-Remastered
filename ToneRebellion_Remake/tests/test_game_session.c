@@ -514,6 +514,7 @@ int main(void)
     test_charge_order_accepts_each_players_source_variant();
     test_bridge_crossing_keeps_soldier_hall_link();
     test_floater_pickup_order_collects_ground_artifact();
+    test_obtain_task_crosses_bridge_to_ground_artifact();
     test_floater_move_state_advances_only_simulation_assigned_destinations();
     test_floater_selection_uses_original_hit_radius_and_island();
     test_initial_worker_accepts_coordinate_move_order();

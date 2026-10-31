@@ -213,8 +213,8 @@ static int assign_charge_task_for_floater(GameSession *session,
 
 /* Task 0xd (Obtain): FUN_00422031 has no case for it, so any free worker of
    the player is admitted. FUN_004211bb then sends it to the site (state 13).
-   The remake attaches only workers already on the task's island; the native
-   travel leg for other islands (FUN_004210a9) is not ported. */
+   A worker on another island first crosses through FUN_004210a9 (state
+   0x11, resume action 0xd). */
 static int assign_obtain_task_for_floater(GameSession *session,
                                           GameFloaterStart *floater,
                                           unsigned int floater_index,
@@ -618,7 +618,9 @@ static void reclaim_orphaned_task_claim(GameSession *session,
                  event->action_type == 0x0d) ||
                 (floater->active_order_action == 9 &&
                  (floater->handoff_resume_action == 4 ||
-                  floater->handoff_resume_action == 0x12));
+                  floater->handoff_resume_action == 0x12 ||
+                  (floater->handoff_resume_action == 0x0d &&
+                   event->action_type == 0x0d)));
         }
     }
     /* An active delivery/construction/repair order clears the wander fallback

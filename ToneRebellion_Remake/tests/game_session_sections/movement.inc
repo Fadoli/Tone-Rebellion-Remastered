@@ -149,6 +149,74 @@ static void test_floater_pickup_order_collects_ground_artifact(void)
     assert(session.islands[0].locations[1].record_value_24 == 5);
 }
 
+static void test_obtain_task_crosses_bridge_to_ground_artifact(void)
+{
+    GameSession session = {0};
+    GameFloaterStart *floater;
+    GameRuntimeLocation *object;
+    unsigned int slot;
+    unsigned int tick;
+
+    session.island_count = 2;
+    session.floater_count = 1;
+    session.islands[0].location_count = 1;
+    session.islands[1].location_count = 2;
+    session.islands[0].floater_max_x[2] = 0x9ff;
+    session.islands[1].floater_max_x[2] = 0x9ff;
+    session.islands[0].locations[0].renderer_class = 2;
+    session.islands[0].locations[0].source_flags = 1;
+    session.islands[0].locations[0].bridge_neighbor_island = 1;
+    session.islands[0].locations[0].x = 300;
+    session.islands[0].locations[0].y = 200;
+    session.islands[1].locations[0].renderer_class = 2;
+    session.islands[1].locations[0].source_flags = 1;
+    session.islands[1].locations[0].bridge_neighbor_island = 0;
+    session.islands[1].locations[0].x = 500;
+    session.islands[1].locations[0].y = 260;
+    floater = &session.floaters[0];
+    floater->island_index = 0;
+    floater->owner_slot = 2;
+    floater->source_subtype = 0;
+    floater->is_active = 1;
+    floater->linked_task_slot = -1;
+    floater->source_link_0c = -1;
+    floater->order_target_floater = -1;
+    floater->order_target_location = -1;
+    floater->x = 300;
+    floater->y = 200;
+    floater->movement_speed = 3;
+    object = &session.islands[1].locations[1];
+    object->renderer_class = 0;
+    object->owner_id = -1;
+    object->record_value_10 = 1;
+    object->record_value_24 = 6;
+    object->x = 520;
+    object->y = 230;
+    object->charge_staff_task_handle = -1;
+    object->leviathan_spawned_floater = -1;
+    object->source_location_slot_18 = -1;
+    object->source_category_slot_60 = -1;
+    object->source_value_14 = -1;
+    for (slot = 0; slot < 8; ++slot)
+        object->charge_floater_slots[slot] = -1;
+    for (slot = 0; slot < GAME_RESOURCE_TYPE_COUNT; ++slot)
+        object->source_task_slot[slot] = -1;
+
+    /* The scheduler sends the worker over the bridge (state 0x11, resume
+       action 0xd); the task claim must survive the crossing. */
+    assert(game_session_queue_obtain_task(&session, 2, 1, 1));
+    game_session_tick_floater_moves(&session, 1, NULL);
+    assert(floater->movement_state == 0x11);
+    assert(floater->handoff_resume_action == 0x0d);
+    for (tick = 2; tick < 2000 && floater->carried_resource_code != 6; ++tick) {
+        game_session_tick_floater_moves(&session, tick, NULL);
+        if (floater->movement_state == 0x11) assert(floater->linked_task_slot >= 0);
+    }
+    assert(floater->island_index == 1);
+    assert(floater->carried_resource_code == 6);
+    assert(object->record_value_10 == 0 && object->record_value_24 == 0);
+}
+
 static void test_floater_move_state_advances_only_simulation_assigned_destinations(void)
 {
     GameSession session;

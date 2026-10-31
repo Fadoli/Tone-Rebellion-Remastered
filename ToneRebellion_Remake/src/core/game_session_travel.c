@@ -307,6 +307,19 @@ int game_session_tick_floater_handoff(GameSession *session,
             floater->movement_state = 11;
             floater->active_order_action = 0;
         } else if (resume_action == 0x0d && resume_state == 13) {
+            /* FUN_004211bb case 0xc re-runs FUN_004210a9(+0x40) while
+               +0x0e != +0x40: a route through an intermediate island takes
+               the next bridge before the pickup starts. */
+            if (floater->order_target_island != floater->island_index) {
+                if (!game_session_begin_floater_handoff(session, floater,
+                        floater->order_target_island)) {
+                    cancel_handoff(session, floater);
+                    return 1;
+                }
+                floater->handoff_resume_action = 0x0d;
+                floater->handoff_resume_state = 13;
+                return 1;
+            }
             if (!game_session_start_floater_ground_pickup(session,
                     (unsigned int)(floater - session->floaters),
                     floater->island_index,
