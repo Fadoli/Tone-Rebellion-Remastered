@@ -443,13 +443,13 @@ static int bench_prepare(HWND window, const char *command_line,
     g_random_state = 0x13572468U;
     g_sim_speed = 1U;
     if (!load_game_session_for_selected_world(error, sizeof(error))) {
-        MessageBoxA(window, error, "Tone Rebellion remake - bench", MB_OK);
+        platform_message_box(window, error, "Tone Rebellion remake - bench", 0);
         return 0;
     }
     g_menu.setup_accepted = 1;
     if (!bench_open_home_island(window)) {
-        MessageBoxA(window, "No enterable island.", "Tone Rebellion remake - bench",
-                    MB_OK);
+        platform_message_box(window, "No enterable island.", "Tone Rebellion remake - bench",
+                             0);
         return 0;
     }
     if (strcmp(scenario, "crowd") == 0 || strcmp(scenario, "battle") == 0) {

@@ -673,7 +673,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
         !load_tribe_descriptions(error, sizeof(error)) ||
         !create_tribe_description_sheet(&g_tribe_descriptions,
                                         error, sizeof(error))) {
-        MessageBoxA(NULL, error, "Tone Rebellion remake - data error", MB_OK | MB_ICONERROR);
+        platform_message_box(NULL, error, "Tone Rebellion remake - data error", 1);
         return 1;
     }
     g_resume_available = resume_header_is_valid();
@@ -684,11 +684,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     g_menu.difficulty = 0;
     g_menu.selected_tribe = 0;
     g_menu.selected_map_island = -1;
-    {
-        LARGE_INTEGER seed;
-        QueryPerformanceCounter(&seed);
-        g_random_state = (uint32_t)seed.LowPart;
-    }
+    g_random_state = (uint32_t)platform_counter();
 
 #ifdef TONE_PLATFORM_SDL
     (void)window_class;
@@ -696,8 +692,8 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     (void)instance;
     window = sdl_create_window();
     if (window == NULL) {
-        MessageBoxA(NULL, SDL_GetError(), "Tone Rebellion remake - SDL",
-                    MB_OK | MB_ICONERROR);
+        platform_message_box(NULL, SDL_GetError(), "Tone Rebellion remake - SDL",
+                             1);
         return 1;
     }
 #else
@@ -708,8 +704,8 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     window_class.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     window_class.lpszClassName = "ToneRebellionRemakeMenu";
     if (!RegisterClassA(&window_class)) {
-        MessageBoxA(NULL, "Could not register the menu window class.",
-                    "Tone Rebellion remake", MB_OK | MB_ICONERROR);
+        platform_message_box(NULL, "Could not register the menu window class.",
+                             "Tone Rebellion remake", 1);
         return 1;
     }
     window = CreateWindowExA(0, window_class.lpszClassName,
@@ -717,8 +713,8 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
                              WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
                              1040, 820, NULL, NULL, instance, NULL);
     if (window == NULL) {
-        MessageBoxA(NULL, "Could not create the menu window.",
-                    "Tone Rebellion remake", MB_OK | MB_ICONERROR);
+        platform_message_box(NULL, "Could not create the menu window.",
+                             "Tone Rebellion remake", 1);
         return 1;
     }
 #endif

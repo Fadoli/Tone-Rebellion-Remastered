@@ -129,8 +129,8 @@ static int begin_new_game(HWND window)
     char error[256];
     g_sim_speed = 1U;   /* FUN_004121b7 case 9 resets DAT_004bf110 */
     if (!load_game_session_for_selected_world(error, sizeof(error))) {
-        MessageBoxA(window, error, "Tone Rebellion remake - game setup error",
-                    MB_OK | MB_ICONERROR);
+        platform_message_box(window, error, "Tone Rebellion remake - game setup error",
+                             1);
         return 0;
     }
     g_menu.setup_accepted = 1;
@@ -152,7 +152,7 @@ static void update_window_title(HWND window)
     else if (g_menu.screen == SCREEN_ISLAND)
         title = "Tone Rebellion - Island (arrows: scroll, Esc: map)";
     else if (g_menu.screen == SCREEN_LOAD_GAME) title = g_load_save_mode ? "Tone Rebellion - Save Game (Esc: back)" : "Tone Rebellion - Load Game (Esc: back)";
-    SetWindowTextA(window, title);
+    platform_set_title(window, title);
     if (g_menu.screen != SCREEN_ISLAND) {
         /* FUN_004489c0 requests ambi1 for the title. The remake keeps this
            menu bed through setup/map screens. Island-entry music is selected

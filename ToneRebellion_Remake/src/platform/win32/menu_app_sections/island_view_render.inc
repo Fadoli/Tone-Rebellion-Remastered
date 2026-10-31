@@ -2052,7 +2052,7 @@ static void draw_location_action_panel(RenderSurface *surface)
                 (uint8_t)selection_island(),
                 (uint16_t)g_selected_location);
             uint32_t frame = (uint32_t)control->shape_frame +
-                (active ? (uint32_t)((GetTickCount() / 100U) % 13U) : 0U);
+                (active ? (uint32_t)((platform_ticks_ms() / 100U) % 13U) : 0U);
             draw_sprite(surface, &g_upgrade_button_art, frame,
                         control->pane.left, control->pane.top);
             if (g_hovered_upgspread)

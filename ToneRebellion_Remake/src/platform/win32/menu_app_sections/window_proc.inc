@@ -204,25 +204,21 @@ static void run_ui_frame(HWND window, WPARAM wparam)
 
 /* WM_TIMER fires on the system tick (15.6 ms by default), so a 50 ms
    SetTimer really ran every 62.5 ms (16 frames/s). A 10 ms timer with
-   1 ms resolution now polls this QueryPerformanceCounter clock, which
-   releases one frame per elapsed 50 ms; a late timer runs the missed
-   frames (at most four, then the clock resynchronises). */
+   1 ms resolution now polls this high-resolution clock, which releases
+   one frame per elapsed 50 ms; a late timer runs the missed frames (at
+   most four, then the clock resynchronises). */
 static unsigned frame_clock_due(void)
 {
-    static LARGE_INTEGER frequency;
-    static LARGE_INTEGER next;
-    LARGE_INTEGER now;
-    LONGLONG period;
+    static uint64_t next;
+    uint64_t period = platform_counter_frequency() / 20U;
+    uint64_t now = platform_counter();
     unsigned due = 0;
-    if (frequency.QuadPart == 0) QueryPerformanceFrequency(&frequency);
-    period = frequency.QuadPart / 20;
-    QueryPerformanceCounter(&now);
-    if (next.QuadPart == 0) next.QuadPart = now.QuadPart;
-    while (now.QuadPart >= next.QuadPart && due < 4U) {
-        next.QuadPart += period;
+    if (next == 0) next = now;
+    while (now >= next && due < 4U) {
+        next += period;
         ++due;
     }
-    if (now.QuadPart >= next.QuadPart) next.QuadPart = now.QuadPart + period;
+    if (now >= next) next = now + period;
     return due;
 }
 
@@ -328,7 +324,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         if (g_lilmap_drag) {
             if ((wparam & MK_LBUTTON) == 0) {
                 g_lilmap_drag = 0;
-                ReleaseCapture();
+                platform_capture_mouse(NULL, 0);
             } else {
                 int logical_x = ((x - viewport.left) * LOGICAL_WIDTH) /
                     (viewport.right - viewport.left);
@@ -488,7 +484,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             if (island_lilmap_scroll_to(x, y, 0)) {
                 g_lilmap_drag = 1;
                 g_swallow_left_button_up = 1;
-                SetCapture(window);
+                platform_capture_mouse(window, 1);
                 InvalidateRect(window, NULL, FALSE);
                 return 0;
             }
@@ -523,7 +519,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         slide_panel_end_drag();
         if (g_lilmap_drag) {
             g_lilmap_drag = 0;
-            ReleaseCapture();
+            platform_capture_mouse(NULL, 0);
         }
         if (g_swallow_left_button_up) {
             g_swallow_left_button_up = 0;
@@ -805,7 +801,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                     &g_pad_catalog, (uint8_t)other,
                     (uint8_t)g_menu.selected_map_island,
                     (uint16_t)location_index, &site, 0x28, dbg_error, sizeof(dbg_error));
-                if (!placed) SetWindowTextA(window, dbg_error);
+                if (!placed) platform_set_title(window, dbg_error);
                 if (placed) {
                     island->locations[location_index].source_value_22 |=
                         (uint16_t)(1U << g_menu.selected_tribe);

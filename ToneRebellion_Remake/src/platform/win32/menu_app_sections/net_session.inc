@@ -196,7 +196,6 @@ static void net_drop_peer(unsigned slot)
 static int net_start_host(void)
 {
     struct sockaddr_in address;
-    LARGE_INTEGER counter;
     net_shutdown();
     if (!net_startup()) return 0;
     net_default_name();
@@ -215,10 +214,9 @@ static int net_start_host(void)
     }
     net_set_nonblocking(g_net_listen);
     /* Case 0x34 of FUN_00448e5a sends FUN_0041be72() (the low dword of
-       QueryPerformanceCounter) as the type-9 payload, and case 9 seeds the
+       QueryPerformanceCounter; here platform_counter) as the type-9 payload, and case 9 seeds the
        game RNG DAT_004a4b78 with it on every machine. */
-    QueryPerformanceCounter(&counter);
-    net_lobby_host_init(&g_net_lobby, g_net_name, (uint32_t)counter.LowPart);
+    net_lobby_host_init(&g_net_lobby, g_net_name, (uint32_t)platform_counter());
     net_lobby_set_world(&g_net_lobby, (uint8_t)g_menu.world_index,
                         (uint8_t)g_menu.difficulty);
     g_net_mode = NET_MODE_HOST;
@@ -289,7 +287,7 @@ static void net_apply_game_start(HWND window, const NetGameStart *start)
             for (slot = 1; slot < NET_LOBBY_MAX_PLAYERS; ++slot)
                 if (g_net_lobby.players[slot].connected) peers |= (uint8_t)(1U << slot);
         net_lockstep_init(&g_net_lockstep, g_net_mode == NET_MODE_HOST, peers);
-        tone_rng_seed(&g_net_local_rng, start->seed ^ (uint32_t)GetTickCount());
+        tone_rng_seed(&g_net_local_rng, start->seed ^ platform_ticks_ms());
         g_net_in_game = 1;
         net_set_status("Partie en reseau");
     }
@@ -308,7 +306,7 @@ static void net_host_handle_frame(unsigned slot, const NetFrame *frame)
         } else if (frame->type == NET_RECORD_PONG && frame->length == 4U) {
             uint32_t sent = (uint32_t)frame->payload[0] | ((uint32_t)frame->payload[1] << 8) |
                 ((uint32_t)frame->payload[2] << 16) | ((uint32_t)frame->payload[3] << 24);
-            uint32_t sample = (uint32_t)GetTickCount() - sent;
+            uint32_t sample = platform_ticks_ms() - sent;
             unsigned peer;
             uint32_t slowest = 0;
             /* Rise at once, fall slowly, so a jitter spike widens the delay
@@ -527,7 +525,7 @@ static int issue_command(GameCommandKind kind, size_t count, const int32_t *args
     int predicted;
     context.pads = &g_pad_catalog;
     if (!g_net_in_game) return game_command_apply(&g_game_session, &context, &command);
-    g_net_issue_ms = (uint32_t)GetTickCount();
+    g_net_issue_ms = platform_ticks_ms();
     g_net_issue_tick = g_net_lockstep.tick;
     g_net_predicted_session = g_game_session;
     predicted = game_command_apply(&g_net_predicted_session, &context, &command);
@@ -562,7 +560,7 @@ static void net_run_frame(HWND window)
     context.pads = &g_pad_catalog;
     if (g_net_mode == NET_MODE_HOST && ++g_net_ping_frames >= 20U) {
         uint8_t bytes[NET_FRAME_MAX_SIZE];
-        uint32_t now = (uint32_t)GetTickCount();
+        uint32_t now = platform_ticks_ms();
         const uint8_t stamp[4] = {(uint8_t)(now & 0xffU), (uint8_t)((now >> 8) & 0xffU),
                                   (uint8_t)((now >> 16) & 0xffU), (uint8_t)(now >> 24)};
         size_t length = net_frame_encode(bytes, sizeof(bytes), NET_RECORD_PING, 0, stamp, 4);
@@ -578,7 +576,7 @@ static void net_run_frame(HWND window)
         if (bundle != NULL)
             for (i = 0; i < bundle->command_count; ++i) {
                 (void)game_command_apply(&g_game_session, &context, &bundle->commands[i]);
-                g_net_apply_ms = (uint32_t)GetTickCount();
+                g_net_apply_ms = platform_ticks_ms();
                 g_net_apply_tick = g_net_lockstep.tick;
             }
         simulate_session_tick(g_game_session.simulation_tick);

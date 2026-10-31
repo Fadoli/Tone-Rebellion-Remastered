@@ -47,6 +47,12 @@
 
 #include <mmsystem.h>
 
+#ifdef TONE_PLATFORM_SDL
+#include "../sdl/sdl_platform.inc"
+#else
+#include "platform_win32.inc"
+#endif
+
 enum { LOGICAL_WIDTH = 640, LOGICAL_HEIGHT = 480, ISLAND_NAME_COUNT = 15,
        BUILDING_NAME_COUNT = 64, BUILDING_NAME_CAPACITY = 128,
        LEVIATHAN_NAME_COUNT = 17, SITE_TEXT_COUNT = 8,

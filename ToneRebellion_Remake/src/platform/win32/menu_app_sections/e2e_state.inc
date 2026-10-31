@@ -30,7 +30,7 @@ static void e2e_write_state(void)
             g_menu.selected_tribe);
     fprintf(file, "hall_player %d\n", selected_hall_player());
     fprintf(file, "anim_ticks %u\nclock_ms %lu\n", g_menu.animation_ticks,
-            (unsigned long)GetTickCount());
+            (unsigned long)platform_ticks_ms());
     fprintf(file, "net_mode %d\nnet_slot %d\nnet_players %u\nnet_world %d\n",
             g_net_mode, g_net_mode != NET_MODE_NONE ? (int)g_net_lobby.local_slot : -1,
             g_net_mode != NET_MODE_NONE ? net_lobby_player_count(&g_net_lobby) : 0U,

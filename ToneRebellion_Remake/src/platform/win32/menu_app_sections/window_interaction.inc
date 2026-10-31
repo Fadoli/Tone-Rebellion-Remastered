@@ -48,8 +48,8 @@ static void handle_click(HWND window, int x, int y)
                    g_resume_available) {
             char path[MAX_PATH];
             if (!resume_path(path, sizeof(path)) || !read_save_file(window, path))
-                MessageBoxA(window, "La partie sauvegardee n'a pas pu etre reprise.",
-                            "Tone Rebellion remake", MB_OK | MB_ICONERROR);
+                platform_message_box(window, "La partie sauvegardee n'a pas pu etre reprise.",
+                                     "Tone Rebellion remake", 1);
         }
     } else if (g_menu.screen == SCREEN_NEW_GAME && clicked_tribe >= 0) {
         /* NewGameWin's custom mouse handler resolves the animated tribe glyphs
@@ -810,8 +810,8 @@ static void handle_click(HWND window, int x, int y)
                     scan_load_slots();
                     leave_load_screen();
                 } else {
-                    MessageBoxA(window, "La sauvegarde n'a pas pu etre ecrite.",
-                                "Tone Rebellion remake", MB_OK | MB_ICONERROR);
+                    platform_message_box(window, "La sauvegarde n'a pas pu etre ecrite.",
+                                         "Tone Rebellion remake", 1);
                 }
             } else if (slot >= 0 && slot < 8 && g_load_slot_valid[slot] &&
                        g_load_slot_native[slot]) {
@@ -827,8 +827,8 @@ static void handle_click(HWND window, int x, int y)
                     (void)snprintf(message, sizeof(message),
                                    "Cette sauvegarde du jeu d'origine n'a pas pu etre chargee: %s.",
                                    error);
-                    MessageBoxA(window, message, "Tone Rebellion remake",
-                                MB_OK | MB_ICONERROR);
+                    platform_message_box(window, message, "Tone Rebellion remake",
+                                         1);
                 }
             } else if (slot >= 0 && slot < 8 && g_load_slot_valid[slot]) {
                 if (save_slot_path(slot, path, sizeof(path)) &&
@@ -836,8 +836,8 @@ static void handle_click(HWND window, int x, int y)
                     g_load_save_mode = 0;
                     g_load_from_game = 0;
                 } else {
-                    MessageBoxA(window, "Cette sauvegarde n'a pas pu etre chargee.",
-                                "Tone Rebellion remake", MB_OK | MB_ICONERROR);
+                    platform_message_box(window, "Cette sauvegarde n'a pas pu etre chargee.",
+                                         "Tone Rebellion remake", 1);
                 }
             } else {
                 leave_load_screen();

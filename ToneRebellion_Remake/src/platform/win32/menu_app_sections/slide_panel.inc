@@ -201,7 +201,7 @@ static void slide_panel_end_drag(void)
 {
     if (g_slide_drag == 0) return;
     g_slide_drag = 0;
-    ReleaseCapture();
+    platform_capture_mouse(NULL, 0);
     if (g_music_volume_pending) {
         g_music_volume_pending = 0;
         apply_music_volume();
@@ -241,7 +241,7 @@ static int slide_panel_press(HWND window, int x, int y)
             g_slide_drag = 2;
             g_sound_volume = value;
         }
-        if (g_slide_drag != 0) SetCapture(window);
+        if (g_slide_drag != 0) platform_capture_mouse(window, 1);
     }
     hit = slide_panel_hit(x, y);
     /* FUN_004578df only sends Save/Load (SetState 5/4) when DAT_004befe0 ==

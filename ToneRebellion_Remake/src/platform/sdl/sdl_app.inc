@@ -6,7 +6,7 @@
    every input path. Audio goes through SDL (sdl_audio.inc); files and
    sockets stay on Win32 for now (step 2 of TODO_WEB.md). */
 
-static SDL_Window *g_sdl_window;
+/* g_sdl_window is declared in sdl_platform.inc. */
 static SDL_Renderer *g_sdl_renderer;
 static SDL_Texture *g_sdl_texture;
 static uint32_t *g_sdl_pixels;
@@ -87,7 +87,7 @@ static LRESULT CALLBACK sdl_subclass_proc(HWND window, UINT message,
     default:
         break;
     }
-    return CallWindowProcA(g_sdl_window_proc, window, message, wparam, lparam);
+    return CallWindowProcW(g_sdl_window_proc, window, message, wparam, lparam);
 }
 
 /* Creates the hidden SDL window and returns its Win32 handle, which the
@@ -111,7 +111,9 @@ static HWND sdl_create_window(void)
                                           SDL_PROP_WINDOW_WIN32_HWND_POINTER,
                                           NULL);
     if (window == NULL) return NULL;
-    g_sdl_window_proc = (WNDPROC)SetWindowLongPtrA(window, GWLP_WNDPROC,
+    /* SDL's window is a Unicode window: an ANSI subclass would convert
+       WM_SETTEXT and cut SDL_SetWindowTitle's text in half. */
+    g_sdl_window_proc = (WNDPROC)SetWindowLongPtrW(window, GWLP_WNDPROC,
                                                    (LONG_PTR)sdl_subclass_proc);
     if (!sdl_ensure_back_buffer()) return NULL;
     return window;

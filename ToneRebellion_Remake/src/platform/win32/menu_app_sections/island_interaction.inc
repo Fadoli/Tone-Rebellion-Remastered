@@ -64,8 +64,8 @@ static int open_island_view(HWND window, int map_island_index)
     if (map_island_index < 0 || map_island_index >= world->island_count) return 0;
     if (!g_game_session_valid || g_game_session_world_index != g_menu.world_index) {
         if (!load_game_session_for_selected_world(error, sizeof(error))) {
-            MessageBoxA(window, error, "Tone Rebellion remake - game setup error",
-                        MB_OK | MB_ICONERROR);
+            platform_message_box(window, error, "Tone Rebellion remake - game setup error",
+                                 1);
             return 0;
         }
     }
@@ -76,8 +76,8 @@ static int open_island_view(HWND window, int map_island_index)
     }
     island_id = world->islands[map_island_index].shape_id;
     if (!load_island_surface(island_id, map_island_index, error, sizeof(error))) {
-        MessageBoxA(window, error, "Tone Rebellion remake - island data error",
-                    MB_OK | MB_ICONERROR);
+        platform_message_box(window, error, "Tone Rebellion remake - island data error",
+                             1);
         return 0;
     }
     g_menu.selected_map_island = map_island_index;

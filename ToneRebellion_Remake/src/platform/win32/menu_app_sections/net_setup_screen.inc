@@ -353,7 +353,7 @@ static void render_net_setup(RenderSurface *surface)
         net_setup_draw_box(surface, box, 1, focused ? RGB(160, 220, 255) : RGB(70, 110, 170),
                            RGB(4, 6, 24), RGB(4, 6, 24), 240);
         draw_bitmap_label(surface, value, box->left + 7, text_y, RGB(240, 246, 255));
-        if (focused && (GetTickCount() / 500U) % 2U == 0U) {
+        if (focused && (platform_ticks_ms() / 500U) % 2U == 0U) {
             int caret_x = box->left + 8 + (int)measure_plain_bitmap_text(value, strlen(value));
             fill_rect(surface, caret_x, box->top + 6, caret_x + 2, box->bottom - 6,
                       RGB(205, 238, 255));
