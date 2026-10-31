@@ -139,8 +139,61 @@ static uint32_t island_leviathan_body_frame(const GameFloaterStart *floater)
    cargo sprite itself is drawn unflipped (plain FUN_00404770/FUN_00410bd2
    calls, no scale argument), plus the per-item vertical offset (DAT_0049acbe,
    not yet extracted: 0 here). */
+/* FUN_0042704b with param_5 set and state 0x11 (+0x2c) at +0x34 >= 1: the
+   counter, capped at 0x78 and less 0x3c above 0x3c, lifts the floater by
+   t*t/20 and drops param_6 to 8 - t/8, so every layer goes through the
+   FUN_00410bd2 stipple; the facing flip is skipped and DAT_005dc668 cleared.
+   The departure rise (+0x34 1..0x3c), the 200/500-tick hold (t = 0x3c) and
+   the arrival descent (0x78..0x3d) all come from this single formula. */
+static int island_floater_bridge_lift(const GameFloaterStart *floater,
+                                      int *stipple_level)
+{
+    int t;
+    *stipple_level = 8;
+    if (floater->movement_state != 0x11 || (int16_t)floater->order_timer < 1)
+        return 0;
+    t = (int16_t)floater->order_timer;
+    if (t > 0x78) t = 0x78;
+    if (t > 0x3c) t -= 0x3c;
+    *stipple_level = 8 - t / 8;
+    return t * t / 20;
+}
+
+/* FUN_00410bd2 draws through DAT_0049b444's 4x4 reveal mask below level 8;
+   the region covers the (possibly scaled) blit rectangle. */
+static void draw_island_floater_layer(HDC dc, const SpriteSheet *art,
+                                      uint32_t frame_index, int x, int y,
+                                      uint32_t scale_16_16, int stipple_level)
+{
+    const SpriteFrame *frame;
+    HRGN region;
+    int left;
+    int top;
+    int width;
+    int height;
+    if (stipple_level >= 8) {
+        draw_sprite_scaled(dc, art, frame_index, x, y, scale_16_16);
+        return;
+    }
+    if (stipple_level < 1 || art == NULL || frame_index >= art->frame_count)
+        return;
+    frame = &art->frames[frame_index];
+    left = x + (int)(((int64_t)frame->x_offset * scale_16_16) >> 16);
+    top = y + (int)(((int64_t)frame->y_offset * scale_16_16) >> 16);
+    width = (int)(((uint64_t)(unsigned)frame->width * scale_16_16) >> 16);
+    height = (int)(((uint64_t)(unsigned)frame->height * scale_16_16) >> 16);
+    region = feature_reveal_region(g_island_surface_id, stipple_level,
+                                   width, height, left, top);
+    if (region == NULL || SaveDC(dc) == 0) return;
+    OffsetRgn(region, left, top);
+    (void)ExtSelectClipRgn(dc, region, RGN_AND);
+    draw_sprite_scaled(dc, art, frame_index, x, y, scale_16_16);
+    OffsetRgn(region, -left, -top);
+    RestoreDC(dc, -1);
+}
+
 static void draw_island_floater_cargo(HDC dc, const GameFloaterStart *floater,
-                                      int x, int y)
+                                      int x, int y, int stipple_level)
 {
     static const int8_t grasp_x[4] = {10, 10, 13, 11};
     static const int8_t grasp_y[4] = {12, 14, 14, 20};
@@ -159,17 +212,18 @@ static void draw_island_floater_cargo(HDC dc, const GameFloaterStart *floater,
         const SpriteSheet *cargo_art = carried_art[
             (unsigned int)floater->carried_resource_code - 1U];
         if (cargo_art->frame_count != 0)
-            draw_sprite_scaled(dc, cargo_art, 0, hand_x, hand_y, 0x00008000U);
+            draw_island_floater_layer(dc, cargo_art, 0, hand_x, hand_y,
+                                      0x00008000U, stipple_level);
     } else if (floater->carried_resource_code >= GAME_INVENTORY_ITEM_FIRST_ID &&
                floater->carried_resource_code <
                    GAME_INVENTORY_ITEM_FIRST_ID + GAME_INVENTORY_ITEM_COUNT &&
                (uint32_t)(floater->carried_resource_code -
                    GAME_INVENTORY_ITEM_FIRST_ID) <
                        g_inventory_item_art.frame_count) {
-        draw_sprite_scaled(dc, &g_inventory_item_art,
-                           (uint32_t)(floater->carried_resource_code -
-                               GAME_INVENTORY_ITEM_FIRST_ID),
-                           hand_x, hand_y, 0x00008000U);
+        draw_island_floater_layer(dc, &g_inventory_item_art,
+                                  (uint32_t)(floater->carried_resource_code -
+                                      GAME_INVENTORY_ITEM_FIRST_ID),
+                                  hand_x, hand_y, 0x00008000U, stipple_level);
     }
 }
 
@@ -907,20 +961,34 @@ static void render_island_view(HDC dc)
                 }
                 continue;
             }
-            leg_frame = island_floater_legs_frame(floater);
-            body_art = island_floater_body_art(floater);
-            leg_art = island_floater_legs_art(floater);
-            draw_island_floater_cargo(dc, floater, floater_x, floater_y);
-            body_frame_index = island_floater_body_sprite_frame(floater,
-                                                                body_art);
-            if (body_art->frame_count != 0)
-                draw_sprite(dc, body_art, body_frame_index,
-                            floater_x, floater_y);
-            if (leg_art->frame_count != 0)
-                draw_sprite(dc, leg_art, leg_frame, floater_x, floater_y);
-            draw_island_floater_overlays(dc, floater, body_art,
-                                         body_frame_index,
-                                         floater_x, floater_y);
+            {
+                /* Bridge crossings draw unflipped, lifted and stippled;
+                   the overlays keep the facing bounds (local_a4). */
+                GameFloaterStart drawn = *floater;
+                int stipple_level;
+                floater_y -= island_floater_bridge_lift(floater,
+                                                        &stipple_level);
+                if (stipple_level < 8) drawn.facing_left = 0;
+                leg_frame = island_floater_legs_frame(&drawn);
+                body_art = island_floater_body_art(&drawn);
+                leg_art = island_floater_legs_art(&drawn);
+                draw_island_floater_cargo(dc, &drawn, floater_x, floater_y,
+                                          stipple_level);
+                body_frame_index = island_floater_body_sprite_frame(&drawn,
+                                                                    body_art);
+                if (body_art->frame_count != 0)
+                    draw_island_floater_layer(dc, body_art, body_frame_index,
+                                              floater_x, floater_y, 0x10000U,
+                                              stipple_level);
+                if (leg_art->frame_count != 0)
+                    draw_island_floater_layer(dc, leg_art, leg_frame,
+                                              floater_x, floater_y, 0x10000U,
+                                              stipple_level);
+                body_art = island_floater_body_art(floater);
+                draw_island_floater_overlays(dc, floater, body_art,
+                                             body_frame_index,
+                                             floater_x, floater_y);
+            }
         }
     }
     if (runtime_island != NULL && g_game_session_valid) {
@@ -1391,13 +1459,41 @@ static void render_island_view(HDC dc)
                 /* FUN_0042704b draws the carried item first, behind the body
                    and legs, at the fltinf graspxy anchor, never as a separate
                    CARRY text row. */
-                draw_island_floater_cargo(dc, selected_floater, sprite_x,
-                                          sprite_y);
-                if (body_art->frame_count != 0)
-                    draw_sprite(dc, body_art, body_frame_index,
-                                sprite_x, sprite_y);
-                if (leg_art->frame_count != 0)
-                    draw_sprite(dc, leg_art, leg_frame, sprite_x, sprite_y);
+                /* FUN_0044338b passes a 0x4c-byte copy with param_5 = 1, so
+                   a crossing floater rises and fades inside the panel
+                   surface too, unflipped. */
+                {
+                    GameFloaterStart drawn = *selected_floater;
+                    int stipple_level;
+                    int lift = island_floater_bridge_lift(selected_floater,
+                                                          &stipple_level);
+                    const SpriteSheet *drawn_body = body_art;
+                    const SpriteSheet *drawn_legs = leg_art;
+                    if (stipple_level < 8) {
+                        drawn.facing_left = 0;
+                        drawn_body = island_floater_body_art(&drawn);
+                        drawn_legs = island_floater_legs_art(&drawn);
+                    }
+                    if (SaveDC(dc) != 0) {
+                        (void)IntersectClipRect(dc, info->pane.left,
+                                                info->pane.top,
+                                                info->pane.right,
+                                                info->pane.bottom);
+                        draw_island_floater_cargo(dc, &drawn, sprite_x,
+                                                  sprite_y - lift,
+                                                  stipple_level);
+                        if (drawn_body->frame_count != 0)
+                            draw_island_floater_layer(dc, drawn_body,
+                                body_frame_index, sprite_x, sprite_y - lift,
+                                0x10000U, stipple_level);
+                        if (drawn_legs->frame_count != 0)
+                            draw_island_floater_layer(dc, drawn_legs,
+                                leg_frame, sprite_x, sprite_y - lift,
+                                0x10000U, stipple_level);
+                        RestoreDC(dc, -1);
+                    }
+                    sprite_y -= lift;
+                }
                 /* FUN_0044338b enables the info flags around this sprite.
                    FUN_0042003c maps the startup *work row's realm to frames
                    22..25 and adjusts it from the retained current-location

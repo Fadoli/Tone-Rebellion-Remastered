@@ -54,6 +54,22 @@ per-floater transition `ev_6c3ec9c58f2e2ec6ef837d8737ba3dfece6d35c11a918338523e6
 destination-island lookup `ev_c50cc6e829d1545a0ff5b6cadf8d1248dabad2086db613e1f1ba72423d27b6fb`,
 and coordinate step `ev_810f7530a91d83a454c4d310d2142cafe948434cde2b0707fd5847693435b64f`.
 
+### Crossing animation (`FUN_0042704b`)
+
+The motion is drawn, not simulated. Observation (stored pseudocode,
+`ev_d21d92e7afdc377fecc4fce5fecca40c344273a5e036a4c507b40f99ab2e04b1`): when
+`param_5 != 0`, state `+0x2c == 0x11` and `+0x34 >= 1`, the draw takes
+`t = min(+0x34, 0x78)`, subtracts `0x3c` when `t > 0x3c`, lifts the sprite by
+`t*t/20` pixels and sets `param_6 = 8 - t/8`, so cargo, body and legs go
+through the `FUN_00410bd2` stipple instead of a normal blit; the `+0x1c & 2`
+facing flip is skipped and `DAT_005dc668` (selection brackets) cleared.
+Interpretation: the floater rises and dissolves over ticks 1..60 at the
+departure bridge (180 px, level 1 at the top), stays faded aloft during the
+200/500 hold, then descends and reappears on the arrival bridge from 120 down
+to 61. Every caller passes `param_5 = 1`, including `FUN_0044338b`
+(`IWLocInfo`, a 0x4c-byte copy of the floater), so the info-panel sprite
+animates too, clipped to its surface.
+
 ## Remake port
 
 The coordinate-order API now accepts a destination island different from the
@@ -67,7 +83,13 @@ island, sets the horizontal bounds around its reciprocal marker and
 recalculates that player's visible locations through `FUN_00462285`, matching
 the `FUN_004669bd` → `FUN_00466b09` path. The floater then appears at
 `(marker.x, marker.y - 30)`, waits until timer 60, and resumes its coordinate
-order on the destination island. The separate island event `0x0c` queued by
+order on the destination island. `island_floater_bridge_lift`
+(`island_view_render.inc`) applies the crossing animation from `order_timer`
+(the port's `+0x34`) to tribe floaters in the island view and the
+`IWLocInfo` sprite, reusing the `FUN_00410bd2` reveal masks; overlays keep
+the facing bounds and follow the lift. Leviathans (separate renderer) do not
+cross bridges in the port and are not animated. Not visually checked in a
+running crossing yet. The separate island event `0x0c` queued by
 `FUN_00466b09` through `FUN_004655b2` remains unmodeled. This port is
 grounded by REA Evidence
 `ev_c4c31ca182a9de59d1857dd8692b44bb5c634fa49bf26b159390ca12c1670270`
