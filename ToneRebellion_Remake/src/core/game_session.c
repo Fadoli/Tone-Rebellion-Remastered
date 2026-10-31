@@ -57,6 +57,16 @@ int game_session_initialize(const WorldDefinition *world,
 
     memset(&next, 0, sizeof(next));
     next.config = *config;
+    /* DAT_00619290[player][player]: original saves hold 1 (friend) for every
+       entry, self included, and FUN_00420991 only rejects friends through
+       this table, so a zero self entry made soldiers target their own tribe.
+       Interpretation: the new-game writer was not read; only the self entry
+       is seeded here, other tribes keep the remake's "enemy" default. */
+    {
+        unsigned int slot;
+        for (slot = 0; slot < GAME_START_PLAYER_COUNT; ++slot)
+            next.diplomacy_policy_mask[slot] = (uint8_t)(1U << slot);
+    }
     {
         unsigned int row;
         memcpy(next.attack_effect_defs, floater_catalog->effects,
