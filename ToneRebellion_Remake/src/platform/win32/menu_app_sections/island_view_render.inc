@@ -880,6 +880,7 @@ static void render_island_view(HDC dc)
             int is_leviathan_building_on_tone =
                 location->kind == ISLAND_LOCATION_TONE &&
                 runtime_item_id > 0 &&
+                runtime_item_id != ISLAND_TONE_POOL_ITEM_ALTERNATE &&
                 runtime_item_id < g_pad_catalog.item_count &&
                 g_pad_catalog.items[runtime_item_id].tribe == PAD_TRIBE_LEVIATHAN;
             int is_item_render_site = is_construction_site ||

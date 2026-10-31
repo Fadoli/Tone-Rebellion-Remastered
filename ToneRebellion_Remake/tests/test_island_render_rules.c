@@ -5,6 +5,11 @@
 
 int main(void)
 {
+    /* An infected pool (item 5, a Leviathan pad row) keeps the POOL art. */
+    assert(island_tone_pool_should_draw(1, ISLAND_TONE_POOL_ITEM_ALTERNATE, 1));
+    assert(island_tone_pool_should_draw(1, ISLAND_TONE_POOL_ITEM_DEFAULT, 0));
+    assert(!island_tone_pool_should_draw(1, 6, 1));
+    assert(!island_tone_pool_should_draw(0, ISLAND_TONE_POOL_ITEM_ALTERNATE, 1));
     assert(island_pad_size_group(ISLAND_LOCATION_PAD_SMALL) == 0);
     assert(island_pad_size_group(ISLAND_LOCATION_PAD_MEDIUM) == 1);
     assert(island_pad_size_group(ISLAND_LOCATION_PAD_LARGE) == 2);
@@ -33,7 +38,6 @@ int main(void)
     assert(island_tone_pool_render_counter(0, -1, 0, 0, 90) == 90);
     assert(island_tone_pool_should_draw(1, 0, 0));
     assert(island_tone_pool_should_draw(1, 5, 0));
-    assert(!island_tone_pool_should_draw(1, 5, 1));
     assert(!island_tone_pool_should_draw(1, 6, 0));
     assert(!island_tone_pool_should_draw(0, 0, 0));
     assert(island_pad_frame(0, 0, 0, 0) == 0);

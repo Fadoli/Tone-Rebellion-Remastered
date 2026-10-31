@@ -73,9 +73,14 @@ int island_tone_pool_should_draw(int is_tone_location,
                                  int32_t runtime_item_id,
                                  int covered_by_leviathan_building)
 {
+    /* FUN_0040bf98 draws class-1 items 0 and 5 with the "pool" shape index
+       DAT_004a4b70 (set by FUN_0046303b, ev_6a21f17c), so an infected pool
+       (Leviathan item 5) keeps the POOL art; only items 6.. replace it. */
     int uses_pool_shape = runtime_item_id == ISLAND_TONE_POOL_ITEM_DEFAULT ||
                           runtime_item_id == ISLAND_TONE_POOL_ITEM_ALTERNATE;
-    return is_tone_location && uses_pool_shape && !covered_by_leviathan_building;
+    return is_tone_location && uses_pool_shape &&
+        (runtime_item_id == ISLAND_TONE_POOL_ITEM_ALTERNATE ||
+         !covered_by_leviathan_building);
 }
 
 uint32_t island_pad_frame(uint32_t animation_ticks, uint16_t world_x,
