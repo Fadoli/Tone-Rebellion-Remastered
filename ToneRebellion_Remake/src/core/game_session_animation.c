@@ -1344,6 +1344,10 @@ static void tick_source_staff_cycle(GameSession *session,
         floater->movement_state = 0;
         floater->active_order_action = 0;
         floater->has_move_order = 0;
+        /* A freshly trained warrior leaves the school on the idle FA_Wander
+           default instead of standing still. */
+        floater->has_wander_order = 1;
+        floater->wander_timer = 0;
         source->charge_recent_floater = -1;
         release_source_staff_task(session, source, island_index,
                                   location_index);

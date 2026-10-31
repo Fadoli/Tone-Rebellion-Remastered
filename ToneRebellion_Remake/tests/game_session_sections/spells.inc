@@ -1460,6 +1460,7 @@ static void test_training_refreshes_the_new_subtype_combat_row(void)
     assert(worker->max_hit_points == 9); /* level 0: (0 + 2) * 9 / 2 */
     assert(worker->current_hit_points == worker->max_hit_points);
     assert(worker->max_attack_points == 4);
+    assert(worker->has_wander_order == 1 && worker->wander_timer == 0);
 }
 
 static void test_building_order_keeps_the_target_island(void)
