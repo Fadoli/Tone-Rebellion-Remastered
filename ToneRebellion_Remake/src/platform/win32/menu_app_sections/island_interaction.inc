@@ -506,22 +506,23 @@ static int update_location_action_hover(int x, int y)
     return 1;
 }
 
-/* FUN_0045302a lists command 4 (Obtain) for a selected PIT_Object (type 1,
-   +0x24 in 5..0x21) without an owner or range test; FUN_0042fa0f (0x39)
-   posts the type-0xd task for the selected location. The button position is
-   a remake layout choice (the native control->code table is not traced). */
+/* FUN_0042f755 builds the IWLocControl commands of the selected site (modes
+   0 and 3 show that pane); FUN_0045302a lists command 4 (Obtain) for a
+   PIT_Object (+0x10 == 1, +0x24 in 5..0x21) without an owner or range test
+   (ev_b40413cf, ev_13a87deb). FUN_0042fa0f (0x39) only posts the type-0xd
+   task while the site is on the viewed island. */
 static int obtain_button_visible(void)
 {
     if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
-        g_island_panel_mode != WINDOW_ISLAND_PANEL_GENERAL ||
-        g_selected_location < 0 ||
-        selection_island() < 0 ||
-        selection_island() >= g_game_session.island_count ||
+        !island_panel_location_control_visible(g_island_panel_mode) ||
+        view_selected_location() < 0 ||
+        g_menu.selected_map_island < 0 ||
+        g_menu.selected_map_island >= g_game_session.island_count ||
         g_menu.selected_tribe < 0 ||
         g_menu.selected_tribe >= GAME_START_PLAYER_COUNT) return 0;
-    return game_session_ground_object_item(&g_game_session,
-        (uint8_t)selection_island(),
-        (uint16_t)g_selected_location) != 0;
+    return game_session_location_offers_obtain(&g_game_session,
+        (uint8_t)g_menu.selected_map_island,
+        (uint16_t)view_selected_location());
 }
 
 static int obtain_button_rect(RECT *rect)

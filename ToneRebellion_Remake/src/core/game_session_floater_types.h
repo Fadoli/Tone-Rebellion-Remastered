@@ -168,6 +168,15 @@ typedef struct GameSession {
     /* Island simulation clock for source transitions keyed to the low byte
        of the global tick. */
     uint32_t simulation_tick;
+    /* World +0x2cc34 / +0x2cc38 (DAT_00618e4c / DAT_00618e50): the realm
+       "temporary power" cycles. FUN_004637fc starts them at 5000 / 4000 with
+       steps of +-1 drawn from rand(2); FUN_00466ce2 adds the steps once per
+       world tick and flips a step at 0 / 9999 and 0 / 7999. FUN_00420217
+       reads them in the hit chance, FUN_00438b05 draws them in IWRealm. */
+    int32_t realm_cycle_a;
+    int32_t realm_cycle_b;
+    int16_t realm_step_a;
+    int16_t realm_step_b;
     uint8_t island_count;
     GameStartSetup player_starts;
     GameStartToneDistribution tone_placements;

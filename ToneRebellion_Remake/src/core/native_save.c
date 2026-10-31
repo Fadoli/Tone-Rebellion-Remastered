@@ -800,6 +800,12 @@ int native_save_apply(const NativeSave *save, const FloaterCatalog *floaters,
     }
     apply_events(save, next);
     next->simulation_tick = u32_at(save->data + save->stream2_offset + 4U * 4U);
+    /* FUN_00467be5 scalars 6..9: +0x2cc34, +0x2cc38, then the two step
+       shorts +0x2cc3c / +0x2cc3e, each in its own scalar slot. */
+    next->realm_cycle_a = (int32_t)u32_at(save->data + save->stream2_offset + 6U * 4U);
+    next->realm_cycle_b = (int32_t)u32_at(save->data + save->stream2_offset + 7U * 4U);
+    next->realm_step_a = (int16_t)u32_at(save->data + save->stream2_offset + 8U * 4U);
+    next->realm_step_b = (int16_t)u32_at(save->data + save->stream2_offset + 9U * 4U);
     for (island = 0; island < next->island_count; ++island) {
         unsigned int site;
         for (site = 0; site < save->site_count[island]; ++site) {

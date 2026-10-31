@@ -95,6 +95,11 @@ int game_session_initialize(const WorldDefinition *world,
             floater_catalog, error, error_capacity)) return 0;
 
     tone_rng_seed(&rng, config->random_seed);
+    /* FUN_004637fc: (-(rand(2) != 0) & 2) - 1 for each step. */
+    next.realm_cycle_a = 5000;
+    next.realm_cycle_b = 4000;
+    next.realm_step_a = tone_rng_bounded(&rng, 2) != 0 ? 1 : -1;
+    next.realm_step_b = tone_rng_bounded(&rng, 2) != 0 ? 1 : -1;
     if (!game_start_distribute_tones(runtime_layouts, shape_ids,
                                      world->island_count, config->home_island_index,
                                      config->mode, &rng, &next.tone_placements,

@@ -81,9 +81,14 @@ static void handle_click(HWND window, int x, int y)
         }
     } else if (g_menu.screen == SCREEN_ISLAND) {
         if (obtain_button_at(x, y)) {
+            /* msg 0x65 case 4: FUN_0042fa0f(0x39) posts the task, then
+               FUN_0042f303(0) returns to the Hall default (ev_02b58ae7). */
             (void)ISSUE_COMMAND(GAME_COMMAND_QUEUE_OBTAIN_TASK, (uint8_t)g_menu.selected_tribe,
-                (uint8_t)selection_island(),
-                (uint16_t)g_selected_location);
+                (uint8_t)g_menu.selected_map_island,
+                (uint16_t)view_selected_location());
+            select_location_on_view(-1);
+            g_selected_floater = -1;
+            g_island_panel_mode = WINDOW_ISLAND_PANEL_GENERAL;
             InvalidateRect(window, NULL, FALSE);
             return;
         }

@@ -104,6 +104,9 @@ int game_session_order_floater_to_charge_site(GameSession *session,
                                               uint16_t location_index);
 /* Item id (5..33) of a loose PIT_Object at a class-0, unowned site, else 0.
    FUN_004502dc reads +0x24 only when the record's +0x10 equals 1. */
+int game_session_location_offers_obtain(const GameSession *session,
+                                        uint8_t island_index,
+                                        uint16_t location_index);
 int game_session_ground_object_item(const GameSession *session,
                                     uint8_t island_index,
                                     uint16_t location_index);

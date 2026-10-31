@@ -1370,6 +1370,13 @@ void game_session_tick_item_animations_with_floaters(
     unsigned int island_index;
     if (session == NULL || catalog == NULL) return;
     ++session->simulation_tick;
+    /* FUN_00466ce2 realm cycles (ev_4fe247fd). */
+    session->realm_cycle_a += session->realm_step_a;
+    session->realm_cycle_b += session->realm_step_b;
+    if (session->realm_cycle_a == 0 || session->realm_cycle_a == 9999)
+        session->realm_step_a = (int16_t)-session->realm_step_a;
+    if (session->realm_cycle_b == 0 || session->realm_cycle_b == 7999)
+        session->realm_step_b = (int16_t)-session->realm_step_b;
     tick_defense_projectiles(session);
     for (island_index = 0; island_index < session->island_count; ++island_index) {
         GameRuntimeIsland *island = &session->islands[island_index];

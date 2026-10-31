@@ -221,14 +221,17 @@ static int32_t floater_attack_power(const GameSession *session,
    score = attack + 7 - defense; the difficulty term is a double:
    difficulty 0: attack / 4 (floor 1), 1 and 2: attack / 2 (floor 2),
    3 and 4: attack * 2 / 3 (floor 3). Realm 1 ahead of the target adds it, 1
-   behind subtracts it, any other mismatch adds a signed half of it
-   (DAT_00618e4c / DAT_00618e50 are zero at load: (0 / limit - 0.5) * term,
-   negated when the attacker realm is above 1). attack_realm -1 means "same as
-   the target", which removes the realm term. */
-static int32_t native_hit_chance(uint8_t difficulty, int32_t attack_power,
+   behind subtracts it, the opposite realm adds (V / C - 0.5) * term with
+   V / C = DAT_00618e4c / 10000 for an odd attacker realm, else
+   DAT_00618e50 / 8000, negated when the attacker realm is above 1
+   (ev_d4bb6e22). attack_realm -1 means "same as the target", which removes
+   the realm term. */
+static int32_t native_hit_chance(const GameSession *session,
+                                 int32_t attack_power,
                                  int32_t attack_realm, int32_t defense_power,
                                  int32_t target_realm)
 {
+    uint8_t difficulty = session->config.difficulty;
     double term = (double)attack_power;
     double floor_value;
     double score = (double)(attack_power + 7 - defense_power);
@@ -251,7 +254,10 @@ static int32_t native_hit_chance(uint8_t difficulty, int32_t attack_power,
     } else if (((attack_realm + 3) & 3) == target_realm) {
         score -= term;
     } else if (attack_realm != target_realm) {
-        double correction = (0.0 / 10000.0 - 0.5) * term;
+        double correction = ((attack_realm & 1) != 0
+            ? (double)session->realm_cycle_a / 10000.0
+            : (double)session->realm_cycle_b / 8000.0) - 0.5;
+        correction *= term;
         if (attack_realm > 1) correction = -correction;
         score += correction;
     }
@@ -303,7 +309,7 @@ static int floater_attack_hits(GameSession *session,
     /* FUN_00420217 treats a subtype-9 target as sharing the attacker realm. */
     if (target->source_subtype == 9) target_realm = attack_realm;
     return tone_rng_bounded(&session->random_state, 100) <
-        native_hit_chance(session->config.difficulty, attack_power,
+        native_hit_chance(session, attack_power,
                           attack_realm, defense_power, target_realm);
 }
 
@@ -360,7 +366,7 @@ int32_t game_session_damage_floater_from_power(GameSession *session,
     defense_power = (target->source_subtype == 0 ||
                      target->source_subtype == 9)
         ? 0 : floater_attack_power(session, target);
-    chance = native_hit_chance(session->config.difficulty, attack_power, -1,
+    chance = native_hit_chance(session, attack_power, -1,
                                defense_power, target->attack_realm & 3);
     if (tone_rng_bounded(&session->random_state, 100) >= chance) return 0;
 

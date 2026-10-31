@@ -2276,6 +2276,23 @@ int game_session_ground_object_item(const GameSession *session,
     return (int)item_id;
 }
 
+/* FUN_0045302a command 4 (Obtain): a class-0 site holding PIT_Object
+   (+0x10 == 1) with an artifact id 5..0x21 at +0x24; no owner or range test
+   (ev_13a87deb, ECX = the site, asm ev_314f9827). */
+int game_session_location_offers_obtain(const GameSession *session,
+                                        uint8_t island_index,
+                                        uint16_t location_index)
+{
+    const GameRuntimeLocation *target;
+    if (session == NULL || island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count)
+        return 0;
+    target = &session->islands[island_index].locations[location_index];
+    return target->renderer_class == 0 &&
+        game_session_base_item_id(target) == 1 &&
+        target->record_value_24 > 4 && target->record_value_24 < 0x22;
+}
+
 int game_session_start_floater_ground_pickup(GameSession *session,
                                              unsigned int floater_index,
                                              uint8_t island_index,

@@ -1038,10 +1038,73 @@ static void render_island_view(HDC dc)
             "GOTOMAP", "PANIC", "TOGREALM", "TASKLIST"
         };
         size_t button_index;
-        if (realm_panel != NULL && g_island_realm_art.frame_count != 0) {
-            draw_sprite(dc, &g_island_realm_art,
-                        (uint32_t)realm_panel->shape_frame,
-                        realm_panel->pane.left, realm_panel->pane.top);
+        /* ISREALM frames 0..27 are the 32x32 realm markers and 28..41 the
+           6x6 slider dots; FUN_00438b05 replaces the WINTYPE 17 paint, so
+           SHAPEFRAME 0 is never blitted at the pane origin. */
+        /* FUN_00438b05 (IWRealm paint, ev_e22d777e / ev_75d19e75): marker i
+           shows realm k = tribe + i with frame 7 * (k & 3) + v, v the cycle
+           level of its parity (min(A / 1428, 6) odd, min(B / 1142, 6) even),
+           mirrored to 6 - v when (k & 2) == 0. The A slider (frame 41 - vA)
+           runs along the diamond edge whose k & 3 is 1 and the B slider
+           (34 - vB) along the one whose k & 3 is 0, D * A / 10000 or
+           D * B / 8000 pixels toward the opposite corner. */
+        if (realm_panel != NULL && g_game_session_valid &&
+            g_island_realm_art.frame_count != 0) {
+            static const int marker_x[4] = { 62, 109, 62, 15 };
+            static const int marker_y[4] = { 335, 382, 429, 382 };
+            static const int corner_x[4] = { 77, 105, 77, 51 };
+            static const int corner_y[4] = { 372, 397, 426, 397 };
+            int32_t cycle_a = g_game_session.realm_cycle_a;
+            int32_t cycle_b = g_game_session.realm_cycle_b;
+            int level_a = cycle_a / 1428 > 6 ? 6 : cycle_a / 1428;
+            int level_b = cycle_b / 1142 > 6 ? 6 : cycle_b / 1142;
+            int corner;
+            /* Two FUN_00406604 inclusive fills in palette index 0
+               (FUN_0042dd0f(0), DAT_0049e140[0] = 0) form the slider
+               cross: x 74..80 / y 367..431 and x 46..110 / y 394..400. */
+            fill_rect(dc, corner_x[0] - 3, corner_y[0] - 5,
+                      corner_x[0] + 3 + 1, corner_y[2] + 5 + 1,
+                      g_island_palette[0]);
+            fill_rect(dc, corner_x[3] - 5, corner_y[3] - 3,
+                      corner_x[1] + 5 + 1, corner_y[3] + 3 + 1,
+                      g_island_palette[0]);
+            for (corner = 0; corner < 4; ++corner) {
+                int k = g_menu.selected_tribe + corner;
+                int level = (k & 1) != 0 ? level_a : level_b;
+                uint32_t frame;
+                if ((k & 2) == 0) level = 6 - level;
+                frame = (uint32_t)(7 * (k & 3) + level);
+                if (frame < g_island_realm_art.frame_count)
+                    draw_sprite(dc, &g_island_realm_art, frame,
+                                marker_x[corner], marker_y[corner]);
+            }
+            for (corner = 0; corner < 4; ++corner) {
+                int k = (g_menu.selected_tribe + corner) & 3;
+                int opposite = (corner + 2) & 3;
+                int span = (corner_x[opposite] - corner_x[corner]) +
+                           (corner_y[opposite] - corner_y[corner]);
+                int offset;
+                int x = corner_x[corner];
+                int y = corner_y[corner];
+                uint32_t frame;
+                if (k == 1) {
+                    if (span < 0) span = -span;
+                    offset = (int)((double)span * cycle_a / 10000.0);
+                    frame = (uint32_t)(41 - level_a);
+                } else if (k == 0) {
+                    if (span < 0) span = -span;
+                    offset = (int)((double)span * cycle_b / 8000.0);
+                    frame = (uint32_t)(34 - level_b);
+                } else {
+                    continue;
+                }
+                if (corner_y[corner] == corner_y[opposite])
+                    x += corner_x[opposite] > x ? offset : -offset;
+                else
+                    y += corner_y[opposite] > y ? offset : -offset;
+                if (frame < g_island_realm_art.frame_count)
+                    draw_sprite(dc, &g_island_realm_art, frame, x, y);
+            }
         }
         for (button_index = 0;
              button_index < sizeof(button_names) / sizeof(button_names[0]);
