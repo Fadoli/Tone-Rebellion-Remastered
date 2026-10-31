@@ -233,10 +233,11 @@ static int net_setup_char(WPARAM code)
     return 1;
 }
 
-/* Rounded box drawn in the paint DIB, modelled on the TITSCRN buttons: a dark
+/* Rounded box drawn in the back buffer, modelled on the TITSCRN buttons: a dark
    outline, a light blue rim of `rim` pixels and a fill fading from `centre`
    to `edge`, blended over the background with `alpha` (0..256). */
-static void net_setup_draw_box(const RECT *rect, int rim, COLORREF border,
+static void net_setup_draw_box(RenderSurface *surface, const RECT *rect,
+                               int rim, COLORREF border,
                                COLORREF centre, COLORREF edge, int alpha)
 {
     const float radius = 5.0f;
@@ -244,12 +245,11 @@ static void net_setup_draw_box(const RECT *rect, int rim, COLORREF border,
     const float half_height = (float)(rect->bottom - rect->top) * 0.5f;
     int x;
     int y;
-    if (g_paint_buffer_pixels == NULL) return;
-    (void)GdiFlush();
+    if (surface->pixels == NULL) return;
     for (y = rect->top; y < rect->bottom; ++y) {
         if (y < 0 || y >= LOGICAL_HEIGHT) continue;
         for (x = rect->left; x < rect->right; ++x) {
-            DWORD *pixel;
+            uint32_t *pixel;
             float dx = (float)(x < (rect->left + rect->right) / 2 ? x - rect->left
                                                                   : rect->right - 1 - x);
             float dy = (float)(y < (rect->top + rect->bottom) / 2 ? y - rect->top
@@ -280,7 +280,7 @@ static void net_setup_draw_box(const RECT *rect, int rim, COLORREF border,
                             (int)(GetGValue(centre) + (GetGValue(edge) - GetGValue(centre)) * t),
                             (int)(GetBValue(centre) + (GetBValue(edge) - GetBValue(centre)) * t));
             }
-            pixel = &g_paint_buffer_pixels[(size_t)y * LOGICAL_WIDTH + (size_t)x];
+            pixel = &surface->pixels[(ptrdiff_t)y * surface->stride + x];
             *pixel = (((((*pixel >> 16) & 0xFFU) * (DWORD)keep >> 8) +
                        ((DWORD)GetRValue(color) * (DWORD)(256 - keep) >> 8)) << 16) |
                      (((((*pixel >> 8) & 0xFFU) * (DWORD)keep >> 8) +
@@ -293,55 +293,55 @@ static void net_setup_draw_box(const RECT *rect, int rim, COLORREF border,
 
 /* Two-pixel-wide BGOUTFNT caption with a one-pixel halo, like the heavy,
    glowing captions baked into the title buttons. */
-static void net_setup_draw_glow_text(HDC dc, const char *text, int x, int y,
+static void net_setup_draw_glow_text(RenderSurface *surface, const char *text, int x, int y,
                                      COLORREF ink, COLORREF glow)
 {
     static const POINT offsets[6] = {{-1, 0}, {2, 0}, {0, -1}, {1, -1}, {0, 1}, {1, 1}};
     int i;
     for (i = 0; i < 6; ++i)
-        draw_bitmap_label(dc, text, x + offsets[i].x, y + offsets[i].y, glow);
-    draw_bitmap_label(dc, text, x, y, ink);
-    draw_bitmap_label(dc, text, x + 1, y, ink);
+        draw_bitmap_label(surface, text, x + offsets[i].x, y + offsets[i].y, glow);
+    draw_bitmap_label(surface, text, x, y, ink);
+    draw_bitmap_label(surface, text, x + 1, y, ink);
 }
 
-static void net_setup_draw_centred_text(HDC dc, const RECT *rect, const char *text,
+static void net_setup_draw_centred_text(RenderSurface *surface, const RECT *rect, const char *text,
                                         COLORREF ink, COLORREF glow)
 {
     int width = (int)measure_plain_bitmap_text(text, strlen(text));
-    net_setup_draw_glow_text(dc, text, (rect->left + rect->right - width) / 2,
+    net_setup_draw_glow_text(surface, text, (rect->left + rect->right - width) / 2,
                              (rect->top + rect->bottom - (int)g_bitmap_font.height) / 2,
                              ink, glow);
 }
 
-static void net_setup_draw_button(HDC dc, const RECT *rect, const char *label, int hovered)
+static void net_setup_draw_button(RenderSurface *surface, const RECT *rect, const char *label, int hovered)
 {
-    net_setup_draw_box(rect, 2, hovered ? RGB(205, 238, 255) : RGB(118, 178, 222),
+    net_setup_draw_box(surface, rect, 2, hovered ? RGB(205, 238, 255) : RGB(118, 178, 222),
                        hovered ? RGB(92, 128, 214) : RGB(66, 92, 176),
                        hovered ? RGB(36, 44, 120) : RGB(24, 30, 92), 256);
-    net_setup_draw_centred_text(dc, rect, label,
+    net_setup_draw_centred_text(surface, rect, label,
                                 hovered ? RGB(255, 255, 255) : RGB(222, 238, 255),
                                 hovered ? RGB(70, 140, 230) : RGB(30, 60, 150));
 }
 
 /* Drawn over the title art by render_main_menu's caller. */
-static void render_net_setup_title_button(HDC dc)
+static void render_net_setup_title_button(RenderSurface *surface)
 {
-    net_setup_draw_button(dc, &g_net_setup_title_button, "MULTIJOUEUR",
+    net_setup_draw_button(surface, &g_net_setup_title_button, "MULTIJOUEUR",
                           g_net_setup_title_hover);
 }
 
-static void render_net_setup(HDC dc)
+static void render_net_setup(RenderSurface *surface)
 {
     static const char *const title = "PARTIE MULTIJOUEUR";
     static const RECT title_band = {120, 100, 520, 132};
     const COLORREF label_ink = RGB(150, 196, 236);
     int field;
     int button;
-    fill_rect(dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
-    draw_sprite(dc, &g_title_art, 0, 0, 0);
-    net_setup_draw_box(&g_net_setup_panel, 2, RGB(118, 178, 222), RGB(20, 26, 70),
+    fill_rect(surface, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
+    draw_sprite(surface, &g_title_art, 0, 0, 0);
+    net_setup_draw_box(surface, &g_net_setup_panel, 2, RGB(118, 178, 222), RGB(20, 26, 70),
                        RGB(6, 6, 26), 216);
-    net_setup_draw_centred_text(dc, &title_band, title, RGB(222, 238, 255),
+    net_setup_draw_centred_text(surface, &title_band, title, RGB(222, 238, 255),
                                 RGB(30, 60, 150));
     for (field = 0; field < NET_SETUP_FIELD_COUNT; ++field) {
         const RECT *box = &g_net_setup_fields[field];
@@ -349,21 +349,21 @@ static void render_net_setup(HDC dc)
         const int text_y = (box->top + box->bottom - (int)g_bitmap_font.height) / 2;
         size_t capacity;
         const char *value = net_setup_field_text(field, &capacity);
-        draw_bitmap_label(dc, g_net_setup_field_labels[field], 146, text_y, label_ink);
-        net_setup_draw_box(box, 1, focused ? RGB(160, 220, 255) : RGB(70, 110, 170),
+        draw_bitmap_label(surface, g_net_setup_field_labels[field], 146, text_y, label_ink);
+        net_setup_draw_box(surface, box, 1, focused ? RGB(160, 220, 255) : RGB(70, 110, 170),
                            RGB(4, 6, 24), RGB(4, 6, 24), 240);
-        draw_bitmap_label(dc, value, box->left + 7, text_y, RGB(240, 246, 255));
+        draw_bitmap_label(surface, value, box->left + 7, text_y, RGB(240, 246, 255));
         if (focused && (GetTickCount() / 500U) % 2U == 0U) {
             int caret_x = box->left + 8 + (int)measure_plain_bitmap_text(value, strlen(value));
-            fill_rect(dc, caret_x, box->top + 6, caret_x + 2, box->bottom - 6,
+            fill_rect(surface, caret_x, box->top + 6, caret_x + 2, box->bottom - 6,
                       RGB(205, 238, 255));
         }
     }
-    draw_small_label(dc, "Tab: champ suivant   Entree: rejoindre   Echap: retour",
+    draw_small_label(surface, "Tab: champ suivant   Entree: rejoindre   Echap: retour",
                      146, 268, RGB(110, 140, 190));
-    draw_small_label(dc, g_net_status, 146, 284, RGB(255, 220, 120));
+    draw_small_label(surface, g_net_status, 146, 284, RGB(255, 220, 120));
     for (button = 0; button < NET_SETUP_BUTTON_COUNT; ++button)
-        net_setup_draw_button(dc, &g_net_setup_buttons[button],
+        net_setup_draw_button(surface, &g_net_setup_buttons[button],
                               g_net_setup_button_labels[button],
                               button == g_net_setup_hover);
 }

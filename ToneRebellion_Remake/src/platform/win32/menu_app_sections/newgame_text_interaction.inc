@@ -59,24 +59,24 @@ static int update_newgame_text(int x, int y)
     return 1;
 }
 
-static void draw_hover_help(HDC dc)
+static void draw_hover_help(RenderSurface *surface)
 {
     if (g_menu.screen != SCREEN_MAIN_MENU || !g_mouse_inside || g_hovered_help < 0 ||
         (uint32_t)g_hovered_help >= g_menu_help.frame_count) return;
     /* Keep contextual help away from the title buttons and their baked-in
        captions. Anchoring it to the pointer covered the active control. */
-    draw_sprite(dc, &g_menu_help, (uint32_t)g_hovered_help,
+    draw_sprite(surface, &g_menu_help, (uint32_t)g_hovered_help,
                 12, 12);
 }
 
-static void draw_newgame_text(HDC dc)
+static void draw_newgame_text(RenderSurface *surface)
 {
     if (g_menu.screen != SCREEN_NEW_GAME || !g_mouse_inside ||
         g_hovered_newgame_text < 0 || g_hovered_newgame_text >= 8) return;
-    draw_sprite(dc, &g_newgame_captions, (uint32_t)g_hovered_newgame_text, 160, 430);
+    draw_sprite(surface, &g_newgame_captions, (uint32_t)g_hovered_newgame_text, 160, 430);
 }
 
-static void draw_tribe_descriptions(HDC dc)
+static void draw_tribe_descriptions(RenderSurface *surface)
 {
     int left_index;
     int right_index;
@@ -85,7 +85,7 @@ static void draw_tribe_descriptions(HDC dc)
     left_index = g_menu.selected_tribe * 2;
     right_index = left_index + 1;
     if ((uint32_t)right_index >= g_tribe_descriptions.frame_count) return;
-    draw_sprite(dc, &g_tribe_descriptions, (uint32_t)left_index, 0, 0);
-    draw_sprite(dc, &g_tribe_descriptions, (uint32_t)right_index, 0, 0);
+    draw_sprite(surface, &g_tribe_descriptions, (uint32_t)left_index, 0, 0);
+    draw_sprite(surface, &g_tribe_descriptions, (uint32_t)right_index, 0, 0);
 }
 

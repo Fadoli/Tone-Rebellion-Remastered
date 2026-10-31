@@ -41,56 +41,27 @@ static int update_world_map_hover(int x, int y)
     return 1;
 }
 
-static void draw_bitmap_label(HDC dc, const char *text, int x, int y, COLORREF color)
+/* Bitmap-font text written straight into the surface pixels; the surface
+   clip does not apply to text. */
+static void draw_font_label(RenderSurface *surface, const BitmapFont *font,
+                            const char *text, int x, int y, COLORREF color)
 {
-    if (dc == g_paint_buffer_dc && g_paint_buffer_pixels != NULL) {
-        uint32_t dib_pixel = ((uint32_t)GetRValue(color) << 16) |
-                             ((uint32_t)GetGValue(color) << 8) |
-                             (uint32_t)GetBValue(color);
-        /* Flush preceding GDI blits before changing the DIB memory directly. */
-        (void)GdiFlush();
-        (void)bitmap_font_render_pixels(&g_bitmap_font, text,
-            (uint32_t *)g_paint_buffer_pixels, LOGICAL_WIDTH, LOGICAL_HEIGHT,
-            LOGICAL_WIDTH, x, y, dib_pixel);
-        return;
-    }
-    const unsigned char *cursor = (const unsigned char *)text;
-    while (*cursor != '\0') {
-        uint32_t code = *cursor < g_bitmap_font.glyph_count ? *cursor : (uint32_t)'?';
-        uint32_t glyph_width;
-        const uint8_t *glyph_pixels;
-        if (bitmap_font_get_glyph(&g_bitmap_font, code, &glyph_width, &glyph_pixels)) {
-            uint32_t row;
-            uint32_t col;
-            for (row = 0; row < g_bitmap_font.height; ++row) {
-                for (col = 0; col < glyph_width; ++col) {
-                    if (glyph_pixels[(size_t)row * glyph_width + col] == 1u) {
-                        int px = x + (int)col;
-                        int py = y + (int)row;
-                        if (px >= 0 && px < LOGICAL_WIDTH && py >= 0 && py < LOGICAL_HEIGHT) {
-                            (void)SetPixelV(dc, px, py, color);
-                        }
-                    }
-                }
-            }
-            x += (int)glyph_width;
-        }
-        ++cursor;
-    }
+    if (text == NULL || surface->pixels == NULL || font->bytes == NULL) return;
+    (void)bitmap_font_render_pixels(font, text, surface->pixels,
+        (size_t)surface->width, (size_t)surface->height,
+        (size_t)surface->stride, x, y, colorref_pixel(color));
 }
 
-/* Caller has flushed GDI writes to the paint DIB already. */
+static void draw_bitmap_label(RenderSurface *surface, const char *text, int x,
+                              int y, COLORREF color)
+{
+    draw_font_label(surface, &g_bitmap_font, text, x, y, color);
+}
+
 static void draw_bitmap_label_pixels(const char *text, int x, int y,
                                      COLORREF color)
 {
-    uint32_t dib_pixel;
-    if (text == NULL || g_paint_buffer_pixels == NULL) return;
-    dib_pixel = ((uint32_t)GetRValue(color) << 16) |
-                ((uint32_t)GetGValue(color) << 8) |
-                (uint32_t)GetBValue(color);
-    (void)bitmap_font_render_pixels(&g_bitmap_font, text,
-        (uint32_t *)g_paint_buffer_pixels, LOGICAL_WIDTH, LOGICAL_HEIGHT,
-        LOGICAL_WIDTH, x, y, dib_pixel);
+    draw_font_label(&g_back_surface, &g_bitmap_font, text, x, y, color);
 }
 
 /* draw_bitmap_label advances by the full glyph width; measure_bitmap_text
@@ -110,7 +81,7 @@ static int32_t measure_plain_bitmap_text(const char *text, size_t length)
     return width;
 }
 
-static void draw_wrapped_bitmap_label_pitch(HDC dc, const char *text, int x,
+static void draw_wrapped_bitmap_label_pitch(RenderSurface *surface, const char *text, int x,
                                             int y, int max_width, int max_lines,
                                             int line_height, COLORREF color)
 {
@@ -153,7 +124,7 @@ static void draw_wrapped_bitmap_label_pitch(HDC dc, const char *text, int x,
         if (length >= sizeof(buffer)) length = sizeof(buffer) - 1;
         memcpy(buffer, line_start, length);
         buffer[length] = '\0';
-        draw_bitmap_label(dc, buffer, x, y + line * line_height, color);
+        draw_bitmap_label(surface, buffer, x, y + line * line_height, color);
         ++line;
         cursor = scan;
         while (*cursor == ' ' || *cursor == '\t') ++cursor;
@@ -164,10 +135,10 @@ static void draw_wrapped_bitmap_label_pitch(HDC dc, const char *text, int x,
     }
 }
 
-static void draw_wrapped_bitmap_label(HDC dc, const char *text, int x, int y,
+static void draw_wrapped_bitmap_label(RenderSurface *surface, const char *text, int x, int y,
                                       int max_width, int max_lines, COLORREF color)
 {
-    draw_wrapped_bitmap_label_pitch(dc, text, x, y, max_width, max_lines,
+    draw_wrapped_bitmap_label_pitch(surface, text, x, y, max_width, max_lines,
                                     (int)g_bitmap_font.height + 2, color);
 }
 
@@ -188,20 +159,10 @@ static int32_t measure_small_text(const char *text, size_t length)
     return width;
 }
 
-static void draw_small_label(HDC dc, const char *text, int x, int y,
+static void draw_small_label(RenderSurface *surface, const char *text, int x, int y,
                              COLORREF color)
 {
-    uint32_t dib_pixel;
-    if (text == NULL || dc != g_paint_buffer_dc || g_paint_buffer_pixels == NULL ||
-        g_small_font.bytes == NULL) return;
-    dib_pixel = ((uint32_t)GetRValue(color) << 16) |
-                ((uint32_t)GetGValue(color) << 8) |
-                (uint32_t)GetBValue(color);
-    /* Flush preceding GDI blits before changing the DIB memory directly. */
-    (void)GdiFlush();
-    (void)bitmap_font_render_pixels(&g_small_font, text,
-        (uint32_t *)g_paint_buffer_pixels, LOGICAL_WIDTH, LOGICAL_HEIGHT,
-        LOGICAL_WIDTH, x, y, dib_pixel);
+    draw_font_label(surface, &g_small_font, text, x, y, color);
 }
 
 /* The hand-picked default panel text colours of the Hall, task, inventory,
@@ -231,39 +192,21 @@ static int32_t measure_big_text(const char *text, size_t length)
     return width;
 }
 
-static void draw_big_label(HDC dc, const char *text, int x, int y,
+static void draw_big_label(RenderSurface *surface, const char *text, int x, int y,
                            COLORREF color)
 {
-    uint32_t dib_pixel;
-    if (text == NULL || dc != g_paint_buffer_dc || g_paint_buffer_pixels == NULL ||
-        g_big_font.bytes == NULL) return;
-    dib_pixel = ((uint32_t)GetRValue(color) << 16) |
-                ((uint32_t)GetGValue(color) << 8) |
-                (uint32_t)GetBValue(color);
-    (void)GdiFlush();
-    (void)bitmap_font_render_pixels(&g_big_font, text,
-        (uint32_t *)g_paint_buffer_pixels, LOGICAL_WIDTH, LOGICAL_HEIGHT,
-        LOGICAL_WIDTH, x, y, dib_pixel);
+    draw_font_label(surface, &g_big_font, text, x, y, color);
 }
 
-/* Caller has flushed GDI writes to the paint DIB already. */
 static void draw_small_label_pixels(const char *text, int x, int y,
                                     COLORREF color)
 {
-    uint32_t dib_pixel;
-    if (text == NULL || g_paint_buffer_pixels == NULL ||
-        g_small_font.bytes == NULL) return;
-    dib_pixel = ((uint32_t)GetRValue(color) << 16) |
-                ((uint32_t)GetGValue(color) << 8) |
-                (uint32_t)GetBValue(color);
-    (void)bitmap_font_render_pixels(&g_small_font, text,
-        (uint32_t *)g_paint_buffer_pixels, LOGICAL_WIDTH, LOGICAL_HEIGHT,
-        LOGICAL_WIDTH, x, y, dib_pixel);
+    draw_font_label(&g_back_surface, &g_small_font, text, x, y, color);
 }
 
 /* Greedy word wrap with FUN_00428baa's rule: break at the last space whose
    line fits `max_width`; a line is drawn with its top at y + line * pitch. */
-static void draw_wrapped_small_label(HDC dc, const char *text, int x, int y,
+static void draw_wrapped_small_label(RenderSurface *surface, const char *text, int x, int y,
                                      int max_width, int max_lines,
                                      int line_pitch, COLORREF color)
 {
@@ -306,7 +249,7 @@ static void draw_wrapped_small_label(HDC dc, const char *text, int x, int y,
         if (length >= sizeof(buffer)) length = sizeof(buffer) - 1;
         memcpy(buffer, line_start, length);
         buffer[length] = '\0';
-        draw_small_label(dc, buffer, x, y + line * line_pitch, color);
+        draw_small_label(surface, buffer, x, y + line * line_pitch, color);
         ++line;
         cursor = scan;
         while (*cursor == ' ' || *cursor == '\t') ++cursor;

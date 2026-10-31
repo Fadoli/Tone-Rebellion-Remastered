@@ -289,25 +289,25 @@ static int slide_panel_press(HWND window, int x, int y)
 /* Paint 0x457f15: y offset d = pos - 99; frame 0 background, frame 7 when
    paused, music/sound off icons (frames 8/9) or slider thumbs (frame 10 at
    x = 456 + volume), and the hovered rectangle's frame (index + 1). */
-static void render_slide_panel(HDC dc)
+static void render_slide_panel(RenderSurface *surface)
 {
     int d;
     int hover = -1;
     if (g_slide_phase == 0 || !ensure_slide_art()) return;
     d = g_slide_pos - SLIDE_OPEN_HEIGHT;
-    draw_sprite(dc, &g_slide_art, 0, 0, d);
-    if (g_paused) draw_sprite(dc, &g_slide_art, 7, 292, d + 6);
+    draw_sprite(surface, &g_slide_art, 0, 0, d);
+    if (g_paused) draw_sprite(surface, &g_slide_art, 7, 292, d + 6);
     if (!g_music_enabled)
-        draw_sprite(dc, &g_slide_art, 8, 414, d + 7);
+        draw_sprite(surface, &g_slide_art, 8, 414, d + 7);
     else
-        draw_sprite(dc, &g_slide_art, 10, 456 + g_music_volume, d + 13);
+        draw_sprite(surface, &g_slide_art, 10, 456 + g_music_volume, d + 13);
     if (!g_sound_enabled)
-        draw_sprite(dc, &g_slide_art, 9, 415, d + 63);
+        draw_sprite(surface, &g_slide_art, 9, 415, d + 63);
     else
-        draw_sprite(dc, &g_slide_art, 10, 456 + g_sound_volume, d + 59);
+        draw_sprite(surface, &g_slide_art, 10, 456 + g_sound_volume, d + 59);
     if (g_slide_phase == 2 && g_mouse_inside)
         hover = slide_panel_hit(g_mouse_x, g_mouse_y);
     if (hover >= 0)
-        draw_sprite(dc, &g_slide_art, (uint32_t)hover + 1U,
+        draw_sprite(surface, &g_slide_art, (uint32_t)hover + 1U,
                     k_slide_rects[hover].left, k_slide_rects[hover].top + d);
 }

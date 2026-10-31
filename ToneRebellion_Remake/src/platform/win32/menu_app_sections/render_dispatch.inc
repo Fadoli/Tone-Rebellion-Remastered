@@ -1,10 +1,10 @@
-static void render_world_map(HDC dc)
+static void render_world_map(RenderSurface *surface)
 {
     const WorldDefinition *world;
     size_t island_index;
 
-    fill_rect(dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
-    draw_sprite(dc, &g_map_background, 0, 0, 0);
+    fill_rect(surface, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
+    draw_sprite(surface, &g_map_background, 0, 0, 0);
     if (g_menu.world_index < 0 || g_menu.world_index >= g_menu.world_map.world_count) return;
     world = &g_menu.world_map.worlds[g_menu.world_index];
     /* WorldWindow display type 1 (FUN_00471b74) renders explicit bridge pairs
@@ -21,9 +21,9 @@ static void render_world_map(HDC dc)
            window scale this+0x70 (0xc000 = 75 % by default: FUN_00470259). The
            hit rectangles stay unscaled (FUN_00405e11 bounds). */
         if (island_index < 4U)
-            draw_sprite(dc, &g_small_islands, frame, x, y);
+            draw_sprite(surface, &g_small_islands, frame, x, y);
         else
-            draw_sprite_scaled(dc, &g_small_islands, frame, x, y, 0xc000U);
+            draw_sprite_scaled(surface, &g_small_islands, frame, x, y, 0xc000U);
     }
     /* FUN_00471e66 draws records in order: every island record precedes the
        bridge records (FUN_004718eb), so the bridge sparks end up on top. */
@@ -94,8 +94,8 @@ static void render_world_map(HDC dc)
                         (int)(random_value % (unsigned)(width + 1));
                     int y_jitter = (width + 1) / 2 -
                         (int)(((random_value >> 8) % (unsigned)(width + 1)));
-                    SetPixelV(dc, center_x + x_jitter, center_y + y_jitter,
-                              g_map_palette[color]);
+                    render_surface_set_pixel(surface, center_x + x_jitter,
+                        center_y + y_jitter, colorref_pixel(g_map_palette[color]));
                 }
             }
         }
@@ -110,7 +110,7 @@ static void render_world_map(HDC dc)
             int name_index = world->islands[island_index].shape_id;
             if (name_index >= 0 && name_index < ISLAND_NAME_COUNT) {
                 /* FUN_004711e2 centers the current island name at y=0x3c. */
-                draw_sprite(dc, &g_island_names_art, (uint32_t)name_index, 0, 48);
+                draw_sprite(surface, &g_island_names_art, (uint32_t)name_index, 0, 48);
             }
         }
     }
@@ -122,19 +122,19 @@ static void render_world_map(HDC dc)
    summary (SURPFLOW / POPSTR / WORKSTR) on the right. The ENDGAME level frame,
    the resource icons and the preview draw are not ported (their layout and
    palette are not established). */
-static void render_load_game(HDC dc)
+static void render_load_game(RenderSurface *surface)
 {
     int slot;
     ensure_load_save_art();
-    fill_rect(dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
-    draw_sprite(dc, &g_load_save_art, 0, 0, 0);
+    fill_rect(surface, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
+    draw_sprite(surface, &g_load_save_art, 0, 0, 0);
     for (slot = 0; slot < 8; ++slot) {
         int column = slot / 4;
         int row = slot % 4;
         int x = 13 + 313 * column;
         int y = 36 + 111 * row;
         char text[96];
-        draw_sprite(dc, &g_load_save_art, (uint32_t)(1 + slot), x, y);
+        draw_sprite(surface, &g_load_save_art, (uint32_t)(1 + slot), x, y);
         if (!g_load_slot_valid[slot] || g_small_font.bytes == NULL) continue;
         {
             /* ENDGAME frame clamp(header +0x78, 0..4) at (-6,-6): the level
@@ -143,21 +143,21 @@ static void render_load_game(HDC dc)
                 (g_load_slot_header[slot][0x79] << 8));
             if (level > 4U) level = 4U;
             if (g_load_endgame_art.frame_count > level)
-                draw_sprite(dc, &g_load_endgame_art, level, x - 6, y - 6);
+                draw_sprite(surface, &g_load_endgame_art, level, x - 6, y - 6);
         }
         if (g_load_slot_date[slot][0] != '\0')
-            draw_small_label(dc, g_load_slot_date[slot], x + 2, y + 2,
+            draw_small_label(surface, g_load_slot_date[slot], x + 2, y + 2,
                              native_text_color(g_load_save_palette, 6));
         (void)snprintf(text, sizeof(text), "%s %d", g_hall_surplus_label,
             (int)(g_load_slot_header[slot][0x68] |
                   (g_load_slot_header[slot][0x69] << 8) |
                   (g_load_slot_header[slot][0x6a] << 16) |
                   ((unsigned)g_load_slot_header[slot][0x6b] << 24)));
-        draw_small_label(dc, text, x + 0x69, y + 0x0e, native_text_color(g_load_save_palette, 6));
+        draw_small_label(surface, text, x + 0x69, y + 0x0e, native_text_color(g_load_save_palette, 6));
         (void)snprintf(text, sizeof(text), "%s %d", g_hall_population_label,
             (int)(g_load_slot_header[slot][0x6c] |
                   (g_load_slot_header[slot][0x6d] << 8)));
-        draw_small_label(dc, text, x + 0xe8, y + 0x28, native_text_color(g_load_save_palette, 6));
+        draw_small_label(surface, text, x + 0xe8, y + 0x28, native_text_color(g_load_save_palette, 6));
         {
             /* "%s %d (%d%%)": workers over population, truncated (the native
                value is an FPU quotient converted by __ftol). */
@@ -168,7 +168,7 @@ static void render_load_game(HDC dc)
             int percentage = population > 0 ? workers * 100 / population : 0;
             (void)snprintf(text, sizeof(text), "%s %d (%d%%)", g_hall_work_label,
                            workers, percentage);
-            draw_small_label(dc, text, x + 0xe8, y + 0x32,
+            draw_small_label(surface, text, x + 0xe8, y + 0x32,
                              native_text_color(g_load_save_palette, 6));
         }
         {
@@ -187,16 +187,16 @@ static void render_load_game(HDC dc)
                    (flag 0x010), which only applies at scale 1.0, clipped to
                    the cell like the native rectangle. */
                 GameRuntimeLocation preview;
-                int saved_clip = SaveDC(dc);
+                int saved_clip = render_surface_save(surface);
                 memset(&preview, 0, sizeof(preview));
                 preview.record_value_10 = (int32_t)item;
                 preview.owner_id = (int32_t)owner;
                 preview.source_flags = 0x400U;
                 preview.animation_rate = 1;
-                (void)IntersectClipRect(dc, x, y, x + 300, y + 99);
-                (void)draw_runtime_item_scaled(dc, &preview, x + 210, y + 90,
+                render_surface_intersect_clip(surface, x, y, x + 300, y + 99);
+                (void)draw_runtime_item_scaled(surface, &preview, x + 210, y + 90,
                                                0x10000U);
-                (void)RestoreDC(dc, saved_clip);
+                (void)render_surface_restore(surface, saved_clip);
             }
         }
         {
@@ -207,10 +207,10 @@ static void render_load_game(HDC dc)
                 (g_load_slot_header[slot][0x1d] << 8));
             if (tribe < 4U && g_load_floater_body[tribe].frame_count > 0U) {
                 int sprite_y = y + (tribe == 3U ? 14 : 17);
-                draw_sprite(dc, &g_load_floater_body[tribe], 0, x + 250,
+                draw_sprite(surface, &g_load_floater_body[tribe], 0, x + 250,
                             sprite_y);
                 if (g_load_floater_legs[tribe].frame_count > 0U)
-                    draw_sprite(dc, &g_load_floater_legs[tribe], 0, x + 250,
+                    draw_sprite(surface, &g_load_floater_legs[tribe], 0, x + 250,
                                 sprite_y);
             }
         }
@@ -228,11 +228,11 @@ static void render_load_game(HDC dc)
                     (g_load_slot_header[slot][field[tone] + 1] << 8));
                 if (g_load_tone_art[tone].frame_count >
                     (uint32_t)icon_frame[tone])
-                    draw_sprite(dc, &g_load_tone_art[tone],
+                    draw_sprite(surface, &g_load_tone_art[tone],
                                 (uint32_t)icon_frame[tone], x + 141,
                                 y + icon_y[tone]);
                 (void)snprintf(text, sizeof(text), "%d", value);
-                draw_small_label(dc, text, x + 153, y + text_y[tone],
+                draw_small_label(surface, text, x + 153, y + text_y[tone],
                                  native_text_color(g_load_save_palette, 6));
             }
         }
@@ -240,13 +240,13 @@ static void render_load_game(HDC dc)
     /* LSTITLE at (317,0): frame clamp(tribe, 0..7), +4 in Load mode. */
     if (g_load_title_art.frame_count > 7U) {
         uint32_t tribe = g_menu.selected_tribe < 3 ? (uint32_t)g_menu.selected_tribe : 3U;
-        draw_sprite(dc, &g_load_title_art, (g_load_save_mode ? 0U : 4U) + tribe, 317, 0);
+        draw_sprite(surface, &g_load_title_art, (g_load_save_mode ? 0U : 4U) + tribe, 317, 0);
     }
 }
 /* Composes the current screen into the 640x480 back buffer. */
-static void render_back_buffer(HDC back)
+static void render_back_buffer(RenderSurface *back)
 {
-    soft_clip_reset();
+    render_surface_reset_clip(back);
     if (g_menu.screen == SCREEN_MAIN_MENU) {
         render_main_menu(back);
         render_net_setup_title_button(back);
@@ -269,7 +269,61 @@ static void render_back_buffer(HDC back)
     }
     if (g_menu.screen == SCREEN_WORLD_MAP || g_menu.screen == SCREEN_ISLAND)
         render_slide_panel(back);
-    (void)GdiFlush();
+}
+
+/* Win32 presentation: the back buffer's pixels are a top-down 32-bit DIB
+   section, selected into a memory DC that StretchBlt reads. Rendering only
+   sees g_back_surface. */
+static int ensure_paint_buffer(HDC reference_dc)
+{
+    BITMAPINFO info;
+    void *bits = NULL;
+    HDC dc;
+    HBITMAP bitmap;
+    HGDIOBJ original_bitmap;
+    if (g_paint_buffer_dc != NULL && g_paint_buffer_bitmap != NULL &&
+        g_back_surface.pixels != NULL) return 1;
+
+    ZeroMemory(&info, sizeof(info));
+    info.bmiHeader.biSize = sizeof(info.bmiHeader);
+    info.bmiHeader.biWidth = LOGICAL_WIDTH;
+    info.bmiHeader.biHeight = -LOGICAL_HEIGHT;
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+    dc = CreateCompatibleDC(reference_dc);
+    if (dc == NULL) return 0;
+    bitmap = CreateDIBSection(reference_dc, &info, DIB_RGB_COLORS,
+                              &bits, NULL, 0);
+    if (bitmap == NULL || bits == NULL) {
+        if (bitmap != NULL) DeleteObject(bitmap);
+        DeleteDC(dc);
+        return 0;
+    }
+    original_bitmap = SelectObject(dc, bitmap);
+    if (original_bitmap == NULL || original_bitmap == HGDI_ERROR) {
+        DeleteObject(bitmap);
+        DeleteDC(dc);
+        return 0;
+    }
+    g_paint_buffer_dc = dc;
+    g_paint_buffer_bitmap = bitmap;
+    g_paint_buffer_original_bitmap = original_bitmap;
+    render_surface_init(&g_back_surface, (uint32_t *)bits, LOGICAL_WIDTH,
+                        LOGICAL_HEIGHT, LOGICAL_WIDTH);
+    return 1;
+}
+
+static void destroy_paint_buffer(void)
+{
+    if (g_paint_buffer_dc != NULL && g_paint_buffer_original_bitmap != NULL)
+        (void)SelectObject(g_paint_buffer_dc, g_paint_buffer_original_bitmap);
+    if (g_paint_buffer_bitmap != NULL) DeleteObject(g_paint_buffer_bitmap);
+    if (g_paint_buffer_dc != NULL) DeleteDC(g_paint_buffer_dc);
+    render_surface_init(&g_back_surface, NULL, 0, 0, 0);
+    g_paint_buffer_original_bitmap = NULL;
+    g_paint_buffer_bitmap = NULL;
+    g_paint_buffer_dc = NULL;
 }
 
 /* Scales the back buffer into the client area and clears the letterbox. */
@@ -313,7 +367,7 @@ static void paint_window(HWND window)
     RECT client;
     GetClientRect(window, &client);
     if (ensure_paint_buffer(screen)) {
-        render_back_buffer(g_paint_buffer_dc);
+        render_back_buffer(&g_back_surface);
         present_back_buffer(screen, &client);
     }
     EndPaint(window, &paint);

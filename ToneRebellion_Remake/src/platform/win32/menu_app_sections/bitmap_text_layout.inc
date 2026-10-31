@@ -1,15 +1,11 @@
-static void fill_rect(HDC dc, int left, int top, int right, int bottom, COLORREF color)
+static void fill_rect(RenderSurface *surface, int left, int top, int right, int bottom, COLORREF color)
 {
-    RECT rect = {left, top, right, bottom};
-    HBRUSH brush;
-    if (soft_fill_rect(dc, left, top, right, bottom, color)) return;
-    brush = CreateSolidBrush(color);
-    FillRect(dc, &rect, brush);
-    DeleteObject(brush);
+    render_surface_fill_rect(surface, left, top, right, bottom,
+                             colorref_pixel(color));
 }
 
-static void draw_bitmap_text_at(DWORD *pixels, int surface_width, int surface_height,
-                                const char *text, int x, int y, DWORD ink)
+static void draw_bitmap_text_at(uint32_t *pixels, int surface_width, int surface_height,
+                                const char *text, int x, int y, uint32_t ink)
 {
     const unsigned char *cursor = (const unsigned char *)text;
     while (*cursor != 0) {
@@ -83,9 +79,9 @@ static int32_t measure_curved_bitmap_text(void *context, const char *text,
     return width;
 }
 
-static void draw_curved_bitmap_text_at(DWORD *pixels, int surface_width,
+static void draw_curved_bitmap_text_at(uint32_t *pixels, int surface_width,
                                        int surface_height, const char *text,
-                                       int x, int y, DWORD ink)
+                                       int x, int y, uint32_t ink)
 {
     const unsigned char *cursor = (const unsigned char *)text;
     while (*cursor != 0) {
@@ -119,9 +115,9 @@ static void draw_curved_bitmap_text_at(DWORD *pixels, int surface_width,
     }
 }
 
-static void draw_justified_bitmap_line(DWORD *pixels, int surface_width,
+static void draw_justified_bitmap_line(uint32_t *pixels, int surface_width,
                                        int surface_height, const char *text,
-                                       const CurvedTextLine *line, DWORD ink)
+                                       const CurvedTextLine *line, uint32_t ink)
 {
     char word[1024];
     size_t cursor = line->offset;

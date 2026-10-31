@@ -161,18 +161,19 @@ static int island_floater_bridge_lift(const GameFloaterStart *floater,
 
 /* FUN_00410bd2 draws through DAT_0049b444's 4x4 reveal mask below level 8;
    the region covers the (possibly scaled) blit rectangle. */
-static void draw_island_floater_layer(HDC dc, const SpriteSheet *art,
+static void draw_island_floater_layer(RenderSurface *surface, const SpriteSheet *art,
                                       uint32_t frame_index, int x, int y,
                                       uint32_t scale_16_16, int stipple_level)
 {
     const SpriteFrame *frame;
-    HRGN region;
+    const uint8_t *mask;
+    int saved;
     int left;
     int top;
     int width;
     int height;
     if (stipple_level >= 8) {
-        draw_sprite_scaled(dc, art, frame_index, x, y, scale_16_16);
+        draw_sprite_scaled(surface, art, frame_index, x, y, scale_16_16);
         return;
     }
     if (stipple_level < 1 || art == NULL || frame_index >= art->frame_count)
@@ -182,20 +183,21 @@ static void draw_island_floater_layer(HDC dc, const SpriteSheet *art,
     top = y + (int)(((int64_t)frame->y_offset * scale_16_16) >> 16);
     width = (int)(((uint64_t)(unsigned)frame->width * scale_16_16) >> 16);
     height = (int)(((uint64_t)(unsigned)frame->height * scale_16_16) >> 16);
-    region = feature_reveal_region(g_island_surface_id, stipple_level,
-                                   width, height, left, top);
-    if (region == NULL || SaveDC(dc) == 0) return;
-    OffsetRgn(region, left, top);
-    (void)ExtSelectClipRgn(dc, region, RGN_AND);
-    draw_sprite_scaled(dc, art, frame_index, x, y, scale_16_16);
-    OffsetRgn(region, -left, -top);
-    RestoreDC(dc, -1);
+    mask = feature_reveal_mask(g_island_surface_id, stipple_level,
+                               width, height, left, top);
+    if (mask == NULL) return;
+    saved = render_surface_save(surface);
+    if (saved == 0) return;
+    if (render_surface_intersect_mask(surface, mask, left, top, width, height,
+                                      width))
+        draw_sprite_scaled(surface, art, frame_index, x, y, scale_16_16);
+    render_surface_restore(surface, saved);
 }
 
 /* FUN_0042704b (ev_4bbcbdab) draws the cargo full size through FUN_00404770:
    bildtone/tonecrys/magctone frame 0, or TRIGGERS (alltrigs.shp) frame
    code - 5, at the hand point plus FUN_0040ad94's height for artifacts. */
-static void draw_island_floater_cargo(HDC dc, const GameFloaterStart *floater,
+static void draw_island_floater_cargo(RenderSurface *surface, const GameFloaterStart *floater,
                                       int x, int y, int stipple_level)
 {
     static const int8_t grasp_x[4] = {10, 10, 13, 11};
@@ -215,7 +217,7 @@ static void draw_island_floater_cargo(HDC dc, const GameFloaterStart *floater,
         const SpriteSheet *cargo_art = carried_art[
             (unsigned int)floater->carried_resource_code - 1U];
         if (cargo_art->frame_count != 0)
-            draw_island_floater_layer(dc, cargo_art, 0, hand_x, hand_y,
+            draw_island_floater_layer(surface, cargo_art, 0, hand_x, hand_y,
                                       0x00010000U, stipple_level);
     } else if (floater->carried_resource_code >= GAME_INVENTORY_ITEM_FIRST_ID &&
                floater->carried_resource_code <
@@ -223,7 +225,7 @@ static void draw_island_floater_cargo(HDC dc, const GameFloaterStart *floater,
                (uint32_t)(floater->carried_resource_code -
                    GAME_INVENTORY_ITEM_FIRST_ID) <
                        g_inventory_item_art.frame_count) {
-        draw_island_floater_layer(dc, &g_inventory_item_art,
+        draw_island_floater_layer(surface, &g_inventory_item_art,
                                   (uint32_t)(floater->carried_resource_code -
                                       GAME_INVENTORY_ITEM_FIRST_ID),
                                   hand_x, hand_y +
@@ -269,7 +271,7 @@ static int16_t island_floater_health_stat(const GameFloaterStart *floater)
    combat-stat badge (FUN_00420f28), which the source does not restrict to
    workers: leviathans with a body shape get it too (type 4 is only excluded
    from the third, strength, badge). Anchor is the body frame's hit box. */
-static void draw_island_floater_overlays(HDC dc, const GameFloaterStart *floater,
+static void draw_island_floater_overlays(RenderSurface *surface, const GameFloaterStart *floater,
                                          const SpriteSheet *body_art,
                                          uint32_t body_frame_index,
                                          int x, int y)
@@ -294,7 +296,7 @@ static void draw_island_floater_overlays(HDC dc, const GameFloaterStart *floater
             floater->type_index, 0, 0, floater->facing_left,
             body_left, body_top, body_right, &frame, &badge_x, &badge_y) &&
         frame < g_floater_info_art.frame_count) {
-        draw_sprite(dc, &g_floater_info_art, frame, badge_x, badge_y);
+        draw_sprite(surface, &g_floater_info_art, frame, badge_x, badge_y);
     }
     /* Initial workers are created with +0x1c cleared by
        FUN_00466fe4/FUN_0041e4e4, so their world badge is eligible. */
@@ -306,7 +308,7 @@ static void draw_island_floater_overlays(HDC dc, const GameFloaterStart *floater
             floater->facing_left, body_left, body_top, body_right,
             &frame, &badge_x, &badge_y) &&
         frame < g_floater_info_art.frame_count) {
-        draw_sprite(dc, &g_floater_info_art, frame, badge_x, badge_y);
+        draw_sprite(surface, &g_floater_info_art, frame, badge_x, badge_y);
     }
     /* Charge gauge beside the health one, friendly units only. */
     if (island_worker_state_overlay_enabled(g_floater_overlay_flags, 1) &&
@@ -321,11 +323,11 @@ static void draw_island_floater_overlays(HDC dc, const GameFloaterStart *floater
             floater->facing_left, body_left, body_top, body_right,
             &frame, &badge_x, &badge_y) &&
         frame < g_floater_info_art.frame_count) {
-        draw_sprite(dc, &g_floater_info_art, frame, badge_x, badge_y);
+        draw_sprite(surface, &g_floater_info_art, frame, badge_x, badge_y);
     }
 }
 
-static void draw_island_leviathan_floater(HDC dc,
+static void draw_island_leviathan_floater(RenderSurface *surface,
                                           const GameFloaterStart *floater,
                                           int x, int y)
 {
@@ -345,28 +347,28 @@ static void draw_island_leviathan_floater(HDC dc,
         body_art = floater->facing_left
             ? &g_leviathan_body_art_flipped : &g_leviathan_body_art;
         if (body_art->frame_count >= 16U) {
-            draw_sprite(dc, body_art, island_leviathan_body_frame(floater),
+            draw_sprite(surface, body_art, island_leviathan_body_frame(floater),
                         x, y);
         }
     }
-    draw_sprite(dc, leg_art, leg_frame, x, y);
+    draw_sprite(surface, leg_art, leg_frame, x, y);
 }
 
-static void draw_leviathan_sprite_revealed(HDC dc, const SpriteSheet *art,
+static void draw_leviathan_sprite_revealed(RenderSurface *surface, const SpriteSheet *art,
                                            uint32_t frame, int x, int y,
                                            int mask_progress)
 {
     if (art == NULL || frame >= art->frame_count) return;
-    if (mask_progress >= 8) draw_sprite(dc, art, frame, x, y);
+    if (mask_progress >= 8) draw_sprite(surface, art, frame, x, y);
     else if (mask_progress > 0)
-        draw_feature_reveal(dc, art, g_island_surface_id, frame,
+        draw_feature_reveal(surface, art, g_island_surface_id, frame,
                             x, y, mask_progress);
 }
 
 /* FUN_0040bf98's item-6, -8 and -9 branches call FUN_00428191 on the floater
    linked at raw +0x2e, drawing its body/legs at the PROD output point. */
 static int draw_island_leviathan_spawn_effect(
-    HDC dc, const GameRuntimeLocation *location,
+    RenderSurface *surface, const GameRuntimeLocation *location,
     const BuildingRenderItem *item, int x, int y, int full_reveal)
 {
     int32_t spawned_index;
@@ -411,10 +413,10 @@ static int draw_island_leviathan_spawn_effect(
         const SpriteSheet *body_art = floater->facing_left
             ? &g_leviathan_body_art_flipped : &g_leviathan_body_art;
         uint32_t body_frame = island_leviathan_body_frame(floater);
-        draw_leviathan_sprite_revealed(dc, body_art, body_frame,
+        draw_leviathan_sprite_revealed(surface, body_art, body_frame,
                                        output.x, output.y, mask_progress);
     }
-    draw_leviathan_sprite_revealed(dc, leg_art, leg_frame,
+    draw_leviathan_sprite_revealed(surface, leg_art, leg_frame,
                                    output.x, output.y, mask_progress);
     return 1;
 }
@@ -425,7 +427,7 @@ static int draw_island_leviathan_spawn_effect(
    table. Below +0x42 == 17 FUN_004109a6 only recolors the ground under the
    silhouette (level +0x42 / 2); afterwards FUN_00404c5a blits the sprite
    itself through the table, level (100 - +0x42) / 2, both clamped to 0..7. */
-static void draw_island_worker_birth(HDC dc,
+static void draw_island_worker_birth(RenderSurface *surface,
                                      const GameRuntimeLocation *location,
                                      int x, int y)
 {
@@ -455,12 +457,12 @@ static void draw_island_worker_birth(HDC dc,
     for (shape = 0; shape < 2U; ++shape) {
         if (shapes[shape]->frame_count == 0) continue;
         if (progress < 0x11) {
-            recolor_under_sprite(dc, shapes[shape], 0, x, y - 0x28,
+            recolor_under_sprite(surface, shapes[shape], 0, x, y - 0x28,
                                  ISLAND_HAZE_WHITE_BANK, level);
         } else {
             g_sprite_haze_selector = ISLAND_HAZE_WHITE_BANK;
             g_sprite_haze_level = level;
-            draw_sprite_scaled(dc, shapes[shape], 0, x, y - 0x28, 0x10000U);
+            draw_sprite_scaled(surface, shapes[shape], 0, x, y - 0x28, 0x10000U);
             g_sprite_haze_level = -1;
         }
     }
@@ -527,7 +529,7 @@ static int building_slot_floater_at(const WindowTemplate *info,
     return -1;
 }
 
-static void draw_building_slot_floaters(HDC dc, const WindowTemplate *info,
+static void draw_building_slot_floaters(RenderSurface *surface, const WindowTemplate *info,
                                         const GameRuntimeLocation *location)
 {
     int16_t slots[6];
@@ -562,12 +564,12 @@ static void draw_building_slot_floaters(HDC dc, const WindowTemplate *info,
             g_sprite_haze_level = 1;
         }
         if (body_art->frame_count != 0)
-            draw_sprite_scaled(dc, body_art, body_frame, x, y, 0x10000U);
+            draw_sprite_scaled(surface, body_art, body_frame, x, y, 0x10000U);
         if (leg_art->frame_count != 0)
-            draw_sprite_scaled(dc, leg_art, island_floater_legs_frame(&mirrored),
+            draw_sprite_scaled(surface, leg_art, island_floater_legs_frame(&mirrored),
                                x, y, 0x10000U);
         g_sprite_haze_level = -1;
-        draw_island_floater_overlays(dc, &mirrored, body_art, body_frame, x, y);
+        draw_island_floater_overlays(surface, &mirrored, body_art, body_frame, x, y);
     }
 }
 
@@ -586,28 +588,21 @@ static void draw_building_slot_floaters(HDC dc, const WindowTemplate *info,
    Palette slots: g_lilmap_slot_colors (lilmap_slot_color).
    No explored/fog test: the painter never reads the per-player visibility
    spans (FUN_00462285), so unexplored columns are drawn like the rest. */
-static void lilmap_fill(HDC dc, int left, int top, int width, int height,
+static void lilmap_fill(RenderSurface *surface, int left, int top, int width, int height,
                         COLORREF color)
 {
-    RECT box;
-    HBRUSH brush;
-    if (soft_fill_rect(dc, left, top, left + width, top + height, color))
-        return;
-    box.left = left; box.top = top;
-    box.right = left + width; box.bottom = top + height;
-    brush = CreateSolidBrush(color);
-    FillRect(dc, &box, brush);
-    DeleteObject(brush);
+    render_surface_fill_rect(surface, left, top, left + width, top + height,
+                             colorref_pixel(color));
 }
 
-static void draw_island_lilmap_dots(HDC dc, const WindowTemplate *mini_map,
+static void draw_island_lilmap_dots(RenderSurface *surface, const WindowTemplate *mini_map,
                                     const GameRuntimeIsland *island)
 {
-    int saved = SaveDC(dc);
+    int saved = render_surface_save(surface);
     unsigned int n;
     int viewer = g_menu.selected_tribe;
-    (void)IntersectClipRect(dc, mini_map->pane.left, mini_map->pane.top,
-                            mini_map->pane.right + 1, mini_map->pane.bottom + 1);
+    render_surface_intersect_clip(surface, mini_map->pane.left, mini_map->pane.top,
+                                  mini_map->pane.right + 1, mini_map->pane.bottom + 1);
     if (island != NULL) {
         for (n = 0; n < island->location_count; ++n) {
             const GameRuntimeLocation *loc = &island->locations[n];
@@ -624,7 +619,7 @@ static void draw_island_lilmap_dots(HDC dc, const WindowTemplate *mini_map,
                 if ((loc->source_flags & 1U) != 0) slot = 5;
             }
             if (slot < 0) continue;
-            lilmap_fill(dc, cx - 1, cy - 1, 3, 3, g_lilmap_slot_colors[slot]);
+            lilmap_fill(surface, cx - 1, cy - 1, 3, 3, g_lilmap_slot_colors[slot]);
         }
     }
     if (g_game_session_valid) {
@@ -652,7 +647,7 @@ static void draw_island_lilmap_dots(HDC dc, const WindowTemplate *mini_map,
             for (pixel = 0; pixel < 4; ++pixel) {
                 int lit = fl->type_index == 4 ? (pixel == 0 || pixel == 3)
                                               : pixel == fl->type_index;
-                lilmap_fill(dc, px + (pixel & 1), py + (pixel >> 1), 1, 1,
+                lilmap_fill(surface, px + (pixel & 1), py + (pixel >> 1), 1, 1,
                             g_lilmap_slot_colors[lit ? slot : 0]);
             }
         }
@@ -687,18 +682,18 @@ static void draw_island_lilmap_dots(HDC dc, const WindowTemplate *mini_map,
                 /* Default path ([0x4c2bac] == 0, set only by a float.cfg
                    "temphole" line): FillRect8 with palette index
                    [0x4c2b08] == 0 ("holecolor" in float.cfg overrides). */
-                lilmap_fill(dc, bar_left[bar], mini_map->pane.top,
+                lilmap_fill(surface, bar_left[bar], mini_map->pane.top,
                             bar_right[bar] - bar_left[bar], pane_height,
                             g_island_palette[0]);
             }
         }
         line_x = mini_map->pane.left + g_island_scroll_x / 10;
-        lilmap_fill(dc, line_x, mini_map->pane.top, 1, pane_height,
+        lilmap_fill(surface, line_x, mini_map->pane.top, 1, pane_height,
                     g_lilmap_slot_colors[1]);
-        lilmap_fill(dc, line_x + 63, mini_map->pane.top, 1, pane_height,
+        lilmap_fill(surface, line_x + 63, mini_map->pane.top, 1, pane_height,
                     g_lilmap_slot_colors[1]);
     }
-    if (saved != 0) RestoreDC(dc, saved);
+    if (saved != 0) render_surface_restore(surface, saved);
 }
 
 /* FUN_0042f8f7 hides IWTextInfo while IWFltInfo (same 456,328 pane) shows the
@@ -714,7 +709,7 @@ static int island_floater_info_shown(void)
             &g_game_session.floaters[g_selected_floater]);
 }
 
-static void render_island_view(HDC dc)
+static void render_island_view(RenderSurface *surface)
 {
     const int image_top = 0;
     const int status_top = 320;
@@ -770,19 +765,19 @@ static void render_island_view(HDC dc)
         g_menu.selected_map_island < WORLD_MAP_MAX_ISLANDS) {
         g_island_scroll_by_island[g_menu.selected_map_island] = g_island_scroll_x;
     }
-    fill_rect(dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
+    fill_rect(surface, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
     if (g_island_height_data == NULL ||
         g_island_height_length != ISLAND_HAZE_FILE_BYTES) {
-        draw_sprite(dc, &g_island_template_art, 0, 0, status_top);
+        draw_sprite(surface, &g_island_template_art, 0, 0, status_top);
         return;
     }
-    draw_sprite_region(dc, &g_island_surface_art, 0, g_island_scroll_x, 0,
+    draw_sprite_region(surface, &g_island_surface_art, 0, g_island_scroll_x, 0,
                        LOGICAL_WIDTH, 320, 0, image_top);
 
     /* windows.txt defines ISLEVIEW as the 640x320 upper pane. Clip sprites to
        that view so tall SHP frames cannot overwrite the ISLETEMP controls. */
-    saved_dc = SaveDC(dc);
-    (void)IntersectClipRect(dc, 0, 0, LOGICAL_WIDTH, status_top);
+    saved_dc = render_surface_save(surface);
+    render_surface_intersect_clip(surface, 0, 0, LOGICAL_WIDTH, status_top);
     for (i = 0; i < g_island_surface_data.location_count; ++i) {
         uint16_t location_index = g_island_draw_order[i];
         const IslandLocation *location = &g_island_surface_data.locations[location_index];
@@ -795,7 +790,7 @@ static void render_island_view(HDC dc)
         int runtime_class = location->renderer_class;
         if (location->renderer_class == 3 &&
             (location->renderer_variant == 4 || location->renderer_variant == 0x16)) {
-            draw_island_feature(dc, g_island_surface_id, location,
+            draw_island_feature(surface, g_island_surface_id, location,
                                 runtime_location, -g_island_scroll_x,
                                 image_top);
             continue;
@@ -823,9 +818,9 @@ static void render_island_view(HDC dc)
            bldinf.txt defines BR-TRG01's static BASE as frame 1; the COB's
            corresponding SHP stores that frame at index 0. */
         if (runtime_class == 2 && runtime_location != NULL &&
-            draw_runtime_item(dc, runtime_location, x, y)) continue;
+            draw_runtime_item(surface, runtime_location, x, y)) continue;
         if (runtime_class == 2 && g_bridge_trigger_art.frame_count == 23) {
-            draw_sprite(dc, &g_bridge_trigger_art, 0, x, y);
+            draw_sprite(surface, &g_bridge_trigger_art, 0, x, y);
             continue;
         }
         {
@@ -852,9 +847,9 @@ static void render_island_view(HDC dc)
                 render_counter);
             /* FUN_0040bf98 draws POOL's BASE segment, then composites CHUG on
                top. bldinf.txt stores BASE 1 1, hence frame zero in decoded SHP. */
-            draw_sprite(dc, &g_tone_field_art, ISLAND_TONE_POOL_BASE_FRAME, x, y);
-            draw_sprite(dc, &g_tone_field_art, frame, x, y);
-            draw_island_worker_birth(dc, runtime_location, x, y);
+            draw_sprite(surface, &g_tone_field_art, ISLAND_TONE_POOL_BASE_FRAME, x, y);
+            draw_sprite(surface, &g_tone_field_art, frame, x, y);
+            draw_island_worker_birth(surface, runtime_location, x, y);
         }
         }
         /* FUN_0040bf98 draws an installed runtime item at this record. Such an
@@ -882,9 +877,9 @@ static void render_island_view(HDC dc)
             int occupied = is_item_render_site && runtime_location != NULL &&
                 runtime_location->record_value_10 > 0 && !resource_pile;
             int has_runtime_item = is_item_render_site && !resource_pile
-                ? draw_runtime_item(dc, runtime_location, x, y) : 0;
+                ? draw_runtime_item(surface, runtime_location, x, y) : 0;
             if (occupied && !has_runtime_item)
-                (void)draw_ground_item_icon(dc, runtime_location, x, y);
+                (void)draw_ground_item_icon(surface, runtime_location, x, y);
             if (!has_runtime_item && !occupied &&
                 island_site_should_draw_pad(pad_group, occupied) &&
                 g_pad_art.frame_count == 27) {
@@ -892,7 +887,7 @@ static void render_island_view(HDC dc)
                                                   location->x,
                                                   (unsigned)pad_group,
                                                   location->renderer_subtype);
-                draw_sprite(dc, &g_pad_art, frame, x, y);
+                draw_sprite(surface, &g_pad_art, frame, x, y);
             }
             /* FUN_0040ae4d draws the PADS ring, then the pad's resource pile:
                FUN_004502dc gives +0x24 when +0x10 == 1, and code 1 selects
@@ -912,7 +907,7 @@ static void render_island_view(HDC dc)
                 if (frame > 0x31U) frame = 0x31U;
                 if (frame >= g_bildtone_art.frame_count)
                     frame = g_bildtone_art.frame_count - 1U;
-                draw_sprite(dc, &g_bildtone_art, frame, x, y);
+                draw_sprite(surface, &g_bildtone_art, frame, x, y);
             }
         }
         }
@@ -942,13 +937,13 @@ static void render_island_view(HDC dc)
             if (floater_x < -64 || floater_x >= LOGICAL_WIDTH + 64) continue;
             floater_y = image_top + (int)floater->y;
             if (floater->type_index == 4) {
-                draw_island_leviathan_floater(dc, floater, floater_x, floater_y);
+                draw_island_leviathan_floater(surface, floater, floater_x, floater_y);
                 /* Overlays need the body shape (local_c != 0): subtype 9
                    has legs only and gets none. */
                 if (floater->source_subtype >= 10U &&
                     floater->source_subtype <= 17U) {
                     draw_island_floater_overlays(
-                        dc, floater,
+                        surface, floater,
                         floater->facing_left ? &g_leviathan_body_art_flipped
                                              : &g_leviathan_body_art,
                         island_leviathan_body_frame(floater),
@@ -967,20 +962,20 @@ static void render_island_view(HDC dc)
                 leg_frame = island_floater_legs_frame(&drawn);
                 body_art = island_floater_body_art(&drawn);
                 leg_art = island_floater_legs_art(&drawn);
-                draw_island_floater_cargo(dc, &drawn, floater_x, floater_y,
+                draw_island_floater_cargo(surface, &drawn, floater_x, floater_y,
                                           stipple_level);
                 body_frame_index = island_floater_body_sprite_frame(&drawn,
                                                                     body_art);
                 if (body_art->frame_count != 0)
-                    draw_island_floater_layer(dc, body_art, body_frame_index,
+                    draw_island_floater_layer(surface, body_art, body_frame_index,
                                               floater_x, floater_y, 0x10000U,
                                               stipple_level);
                 if (leg_art->frame_count != 0)
-                    draw_island_floater_layer(dc, leg_art, leg_frame,
+                    draw_island_floater_layer(surface, leg_art, leg_frame,
                                               floater_x, floater_y, 0x10000U,
                                               stipple_level);
                 body_art = island_floater_body_art(floater);
-                draw_island_floater_overlays(dc, floater, body_art,
+                draw_island_floater_overlays(surface, floater, body_art,
                                              body_frame_index,
                                              floater_x, floater_y);
             }
@@ -1015,7 +1010,7 @@ static void render_island_view(HDC dc)
                 frame = (projectile->animation_tick / 2U) % effect_art->frame_count;
             }
             if (frame >= effect_art->frame_count) continue;
-            draw_sprite(dc, effect_art, frame, x, y);
+            draw_sprite(surface, effect_art, frame, x, y);
         }
         /* fltinf atteff effects (FUN_00415fc6 path A): ONESHOT, BULLET and
            CAST+CHAIN instances; world anchor is an interpretation. */
@@ -1050,7 +1045,7 @@ static void render_island_view(HDC dc)
                     int bolt_x = segments[segment].x - g_island_scroll_x;
                     if (segments[segment].frame >= bolt_art->frame_count ||
                         bolt_x < -64 || bolt_x >= LOGICAL_WIDTH + 64) continue;
-                    draw_sprite(dc, bolt_art, segments[segment].frame, bolt_x,
+                    draw_sprite(surface, bolt_art, segments[segment].frame, bolt_x,
                                 image_top + segments[segment].y);
                 }
                 continue;
@@ -1073,7 +1068,7 @@ static void render_island_view(HDC dc)
             if (effect_frame >= effect_art->frame_count) continue;
             x = (int)world_x - g_island_scroll_x;
             if (x < -64 || x >= LOGICAL_WIDTH + 64) continue;
-            draw_sprite(dc, effect_art, effect_frame, x, image_top + (int)world_y);
+            draw_sprite(surface, effect_art, effect_frame, x, image_top + (int)world_y);
         }
         /* Floater attack hit: the realm IMPACT instance FUN_0041e569 starts
            when damage lands (frames per effects.txt). The target anchor is an
@@ -1095,7 +1090,7 @@ static void render_island_view(HDC dc)
             if (impact_frame >= impact_art->frame_count) continue;
             x = (int)world_x - g_island_scroll_x;
             if (x < -64 || x >= LOGICAL_WIDTH + 64) continue;
-            draw_sprite(dc, impact_art, impact_frame, x, image_top + (int)world_y);
+            draw_sprite(surface, impact_art, impact_frame, x, image_top + (int)world_y);
         }
         /* FA_Cast visuals (FUN_0041660b names, FUN_00415063 frame stepping).
            Anchor on the effect position is an interpretation; the original
@@ -1119,14 +1114,14 @@ static void render_island_view(HDC dc)
             y = image_top +
                 (int)g_game_session.cast_effects[projectile_index].effect_y;
             if (x < -64 || x >= LOGICAL_WIDTH + 64) continue;
-            draw_sprite(dc, cast_art, cast_frame, x, y);
+            draw_sprite(surface, cast_art, cast_frame, x, y);
         }
     }
-    if (saved_dc != 0) RestoreDC(dc, saved_dc);
+    if (saved_dc != 0) render_surface_restore(surface, saved_dc);
 
     /* ISLETMP is the original 640x160 bottom template at y=320, matching the
        ISLETMP pane in windows.txt. It uses the active island palette. */
-    draw_sprite(dc, &g_island_template_art, 0, 0, status_top);
+    draw_sprite(surface, &g_island_template_art, 0, 0, status_top);
 
     /* windows.txt declares the always-present island controls separately from
        ISLETEMP. FUN_0042fa0f shows GOTOMAP/PANIC/TOGREALM/TASKLIST at entry to
@@ -1163,10 +1158,10 @@ static void render_island_view(HDC dc)
             /* Two FUN_00406604 inclusive fills in palette index 0
                (FUN_0042dd0f(0), DAT_0049e140[0] = 0) form the slider
                cross: x 74..80 / y 367..431 and x 46..110 / y 394..400. */
-            fill_rect(dc, corner_x[0] - 3, corner_y[0] - 5,
+            fill_rect(surface, corner_x[0] - 3, corner_y[0] - 5,
                       corner_x[0] + 3 + 1, corner_y[2] + 5 + 1,
                       g_island_palette[0]);
-            fill_rect(dc, corner_x[3] - 5, corner_y[3] - 3,
+            fill_rect(surface, corner_x[3] - 5, corner_y[3] - 3,
                       corner_x[1] + 5 + 1, corner_y[3] + 3 + 1,
                       g_island_palette[0]);
             for (corner = 0; corner < 4; ++corner) {
@@ -1176,7 +1171,7 @@ static void render_island_view(HDC dc)
                 if ((k & 2) == 0) level = 6 - level;
                 frame = (uint32_t)(7 * (k & 3) + level);
                 if (frame < g_island_realm_art.frame_count)
-                    draw_sprite(dc, &g_island_realm_art, frame,
+                    draw_sprite(surface, &g_island_realm_art, frame,
                                 marker_x[corner], marker_y[corner]);
             }
             for (corner = 0; corner < 4; ++corner) {
@@ -1204,7 +1199,7 @@ static void render_island_view(HDC dc)
                 else
                     y += corner_y[opposite] > y ? offset : -offset;
                 if (frame < g_island_realm_art.frame_count)
-                    draw_sprite(dc, &g_island_realm_art, frame, x, y);
+                    draw_sprite(surface, &g_island_realm_art, frame, x, y);
             }
         }
         for (button_index = 0;
@@ -1223,13 +1218,13 @@ static void render_island_view(HDC dc)
                      &g_game_session, (uint8_t)g_menu.selected_tribe,
                      (uint8_t)g_menu.selected_map_island)));
             if (frame >= 0 && (uint32_t)frame < g_island_main_buttons.frame_count) {
-                draw_sprite(dc, &g_island_main_buttons, (uint32_t)frame,
+                draw_sprite(surface, &g_island_main_buttons, (uint32_t)frame,
                             button->pane.left, button->pane.top);
             }
         }
     }
 
-    draw_hall_panel(dc, hall_player);
+    draw_hall_panel(surface, hall_player);
 
     /* windows.txt places IWLilMap at (192,328)-(447,359), and shapes.txt
        binds it to the 16-frame LILMAP sheet. The SHP frame is indexed by the
@@ -1239,14 +1234,14 @@ static void render_island_view(HDC dc)
         const WindowTemplate *mini_map = window_catalog_find(
             &g_window_catalog, "IWLilMap", 3);
         if (mini_map != NULL) {
-            draw_sprite(dc, &g_island_lilmap_art,
+            draw_sprite(surface, &g_island_lilmap_art,
                         (uint32_t)g_island_surface_id,
                         mini_map->pane.left, mini_map->pane.top);
-            draw_island_lilmap_dots(dc, mini_map, runtime_island);
+            draw_island_lilmap_dots(surface, mini_map, runtime_island);
         }
     }
 
-    draw_iw_construct(dc);
+    draw_iw_construct(surface);
     if (selected_ground_item >= 0 &&
         island_panel_location_info_visible(g_island_panel_mode)) {
         const WindowTemplate *info = window_catalog_find(
@@ -1254,19 +1249,19 @@ static void render_island_view(HDC dc)
         if (info != NULL && g_temp_hole_art.frame_count > 1) {
             RECT pane = {info->pane.left, info->pane.top,
                          info->pane.right + 1, info->pane.bottom + 1};
-            int saved_info_dc = SaveDC(dc);
+            int saved_info_dc = render_surface_save(surface);
             unsigned int item_frame = (unsigned int)(selected_ground_item -
                 GAME_INVENTORY_ITEM_FIRST_ID);
-            (void)IntersectClipRect(dc, pane.left, pane.top,
-                                    pane.right, pane.bottom);
-            draw_sprite(dc, &g_temp_hole_art, 1,
+            render_surface_intersect_clip(surface, pane.left, pane.top,
+                                          pane.right, pane.bottom);
+            draw_sprite(surface, &g_temp_hole_art, 1,
                         info->pane.left, info->pane.top);
             /* FUN_00440567 sends P+4==0, P+0x10 in {0,1} sites to FUN_00441aae:
                no text and no buttons, only the TRIGGERS (alltrigs.shp) frame
                +0x24-5 centred in the pane by FUN_004119ba. FUN_0044338b is the
                unit detail renderer and is not used here. */
             if (item_frame < g_inventory_item_art.frame_count &&
-                g_inventory_item_art.frames[item_frame].bitmap != NULL) {
+                g_inventory_item_art.frames[item_frame].pixels != NULL) {
                 const SpriteFrame *icon = &g_inventory_item_art.frames[item_frame];
                 int icon_x = info->pane.left +
                     ((info->pane.right - info->pane.left + 1) -
@@ -1274,10 +1269,10 @@ static void render_island_view(HDC dc)
                 int icon_y = info->pane.top +
                     ((info->pane.bottom - info->pane.top + 1) -
                      (int)icon->height) / 2 - icon->y_offset;
-                draw_sprite(dc, &g_inventory_item_art, item_frame,
+                draw_sprite(surface, &g_inventory_item_art, item_frame,
                             icon_x, icon_y);
             }
-            if (saved_info_dc != 0) RestoreDC(dc, saved_info_dc);
+            if (saved_info_dc != 0) render_surface_restore(surface, saved_info_dc);
         }
     }
     /* FUN_0042f8f7 (floater select) keeps the source building in
@@ -1290,10 +1285,10 @@ static void render_island_view(HDC dc)
         if (info != NULL && g_temp_hole_art.frame_count > 2) {
             RECT pane = {info->pane.left, info->pane.top,
                          info->pane.right + 1, info->pane.bottom + 1};
-            int saved_info_dc = SaveDC(dc);
-            (void)IntersectClipRect(dc, pane.left, pane.top,
-                                    pane.right, pane.bottom);
-            draw_sprite(dc, &g_temp_hole_art, (uint32_t)info->shape_frame,
+            int saved_info_dc = render_surface_save(surface);
+            render_surface_intersect_clip(surface, pane.left, pane.top,
+                                          pane.right, pane.bottom);
+            draw_sprite(surface, &g_temp_hole_art, (uint32_t)info->shape_frame,
                         info->pane.left, info->pane.top);
 
             /* FUN_0044338b (Iwloc.cpp) draws the selected object's details in
@@ -1335,7 +1330,7 @@ static void render_island_view(HDC dc)
                         int w = measure_bitmap_text(NULL,
                             g_building_names[name_index],
                             strlen(g_building_names[name_index]));
-                        draw_bitmap_label(dc, g_building_names[name_index],
+                        draw_bitmap_label(surface, g_building_names[name_index],
                             info->pane.left +
                                 ((info->pane.right - info->pane.left + 1) - w) / 2,
                             info->pane.top + 3, RGB(230, 238, 255));
@@ -1343,7 +1338,7 @@ static void render_island_view(HDC dc)
                 }
                 (void)snprintf(row, sizeof(row), "%s %u", g_unit_label_text[2],
                                level + 1U);
-                draw_bitmap_label(dc, row, info->pane.left + 5, row_y,
+                draw_bitmap_label(surface, row, info->pane.left + 5, row_y,
                                   RGB(230, 238, 255));
                 row_y += 10;
                 if (level < 2 && selected_floater->source_subtype < 6) {
@@ -1359,7 +1354,7 @@ static void render_island_view(HDC dc)
                     (void)snprintf(row, sizeof(row), "EXP %u",
                         (unsigned int)selected_floater->source_progress_08);
                 }
-                draw_bitmap_label(dc, row, info->pane.left + 5, row_y,
+                draw_bitmap_label(surface, row, info->pane.left + 5, row_y,
                                   RGB(230, 238, 255));
                 row_y += 10;
                 if (game_session_floater_charge_values(selected_floater,
@@ -1367,7 +1362,7 @@ static void render_island_view(HDC dc)
                     (void)snprintf(row, sizeof(row), "%s %d/%d",
                         g_unit_label_text[5], (int)current_charge,
                         (int)maximum_charge);
-                    draw_bitmap_label(dc, row, info->pane.left + 5, row_y,
+                    draw_bitmap_label(surface, row, info->pane.left + 5, row_y,
                                       RGB(230, 238, 255));
                 }
                 row_y += 10;
@@ -1375,13 +1370,13 @@ static void render_island_view(HDC dc)
                     g_unit_label_text[3],
                     (unsigned int)selected_floater->current_hit_points,
                     (unsigned int)selected_floater->max_hit_points);
-                draw_bitmap_label(dc, row, info->pane.left + 5, row_y,
+                draw_bitmap_label(surface, row, info->pane.left + 5, row_y,
                                   RGB(230, 238, 255));
                 row_y += 10;
                 (void)snprintf(row, sizeof(row), "%s %u",
                     g_unit_label_text[4],
                     (unsigned int)selected_floater->attack_strength);
-                draw_bitmap_label(dc, row, info->pane.left + 5, row_y,
+                draw_bitmap_label(surface, row, info->pane.left + 5, row_y,
                                   RGB(230, 238, 255));
             } else {
             {
@@ -1396,7 +1391,7 @@ static void render_island_view(HDC dc)
                                       ? 0 : 1]);
                 label_width = measure_bitmap_text(NULL, worker_label,
                                                    strlen(worker_label));
-                draw_bitmap_label(dc, worker_label,
+                draw_bitmap_label(surface, worker_label,
                     info->pane.left +
                         ((info->pane.right - info->pane.left + 1) - label_width) / 2,
                     info->pane.top + 3, RGB(230, 238, 255));
@@ -1414,10 +1409,10 @@ static void render_island_view(HDC dc)
                 (void)snprintf(strength_label, sizeof(strength_label),
                     "%s %u", g_unit_label_text[4],
                     (unsigned int)selected_floater->attack_strength);
-                draw_bitmap_label(dc, hit_points_label,
+                draw_bitmap_label(surface, hit_points_label,
                                   info->pane.left + 5, info->pane.top + 23,
                                   RGB(230, 238, 255));
-                draw_bitmap_label(dc, strength_label,
+                draw_bitmap_label(surface, strength_label,
                                   info->pane.left + 5, info->pane.top + 33,
                                   RGB(230, 238, 255));
                 /* FUN_0044338b gates CHARGE through FUN_004207f2, which
@@ -1427,7 +1422,7 @@ static void render_island_view(HDC dc)
                     (void)snprintf(charge_label, sizeof(charge_label),
                         "%s %d/%d", g_unit_label_text[5], (int)current_charge,
                         (int)maximum_charge);
-                    draw_bitmap_label(dc, charge_label,
+                    draw_bitmap_label(surface, charge_label,
                                       info->pane.left + 5,
                                       info->pane.top + 43,
                                       RGB(230, 238, 255));
@@ -1469,23 +1464,23 @@ static void render_island_view(HDC dc)
                         drawn_body = island_floater_body_art(&drawn);
                         drawn_legs = island_floater_legs_art(&drawn);
                     }
-                    if (SaveDC(dc) != 0) {
-                        (void)IntersectClipRect(dc, info->pane.left,
-                                                info->pane.top,
-                                                info->pane.right,
-                                                info->pane.bottom);
-                        draw_island_floater_cargo(dc, &drawn, sprite_x,
+                    if (render_surface_save(surface) != 0) {
+                        render_surface_intersect_clip(surface, info->pane.left,
+                                                      info->pane.top,
+                                                      info->pane.right,
+                                                      info->pane.bottom);
+                        draw_island_floater_cargo(surface, &drawn, sprite_x,
                                                   sprite_y - lift,
                                                   stipple_level);
                         if (drawn_body->frame_count != 0)
-                            draw_island_floater_layer(dc, drawn_body,
+                            draw_island_floater_layer(surface, drawn_body,
                                 body_frame_index, sprite_x, sprite_y - lift,
                                 0x10000U, stipple_level);
                         if (drawn_legs->frame_count != 0)
-                            draw_island_floater_layer(dc, drawn_legs,
+                            draw_island_floater_layer(surface, drawn_legs,
                                 leg_frame, sprite_x, sprite_y - lift,
                                 0x10000U, stipple_level);
-                        RestoreDC(dc, -1);
+                        render_surface_restore(surface, -1);
                     }
                     sprite_y -= lift;
                 }
@@ -1516,7 +1511,7 @@ static void render_island_view(HDC dc)
                             body_left, body_top, body_right,
                             &realm_frame, &badge_x, &badge_y) &&
                         realm_frame < g_floater_info_art.frame_count) {
-                        draw_sprite(dc, &g_floater_info_art, realm_frame,
+                        draw_sprite(surface, &g_floater_info_art, realm_frame,
                                     badge_x, badge_y);
                     }
                 }
@@ -1540,12 +1535,12 @@ static void render_island_view(HDC dc)
                             body_left, body_top, body_right,
                             &stat_frame, &badge_x, &badge_y) &&
                         stat_frame < g_floater_info_art.frame_count) {
-                        draw_sprite(dc, &g_floater_info_art, stat_frame,
+                        draw_sprite(surface, &g_floater_info_art, stat_frame,
                                     badge_x, badge_y);
                     }
                 }
             }
-            if (saved_info_dc != 0) RestoreDC(dc, saved_info_dc);
+            if (saved_info_dc != 0) render_surface_restore(surface, saved_info_dc);
         }
     } else if (selected_floater != NULL && selected_floater->owner_slot == 4U &&
                game_session_floater_is_active(selected_floater) &&
@@ -1557,15 +1552,15 @@ static void render_island_view(HDC dc)
         if (info != NULL && g_temp_hole_art.frame_count > 2) {
             RECT pane = {info->pane.left, info->pane.top,
                          info->pane.right + 1, info->pane.bottom + 1};
-            int saved_info_dc = SaveDC(dc);
+            int saved_info_dc = render_surface_save(surface);
             unsigned int level = selected_floater->attack_level_flags & 0x0fU;
             char name_label[24];
             char row_label[32];
             int label_width;
             int row_y;
-            (void)IntersectClipRect(dc, pane.left, pane.top,
-                                    pane.right, pane.bottom);
-            draw_sprite(dc, &g_temp_hole_art, (uint32_t)info->shape_frame,
+            render_surface_intersect_clip(surface, pane.left, pane.top,
+                                          pane.right, pane.bottom);
+            draw_sprite(surface, &g_temp_hole_art, (uint32_t)info->shape_frame,
                         info->pane.left, info->pane.top);
 
             /* FUN_0044338b, category-4 (Leviathan) unit branch (Evidence
@@ -1579,14 +1574,14 @@ static void render_island_view(HDC dc)
                                            level));
             label_width = measure_bitmap_text(NULL, name_label,
                                               strlen(name_label));
-            draw_bitmap_label(dc, name_label,
+            draw_bitmap_label(surface, name_label,
                 info->pane.left +
                     ((info->pane.right - info->pane.left + 1) - label_width) / 2,
                 info->pane.top + 3, RGB(230, 238, 255));
             row_y = info->pane.top + 23;
             (void)snprintf(row_label, sizeof(row_label), "%s %u", g_unit_label_text[2],
                            level + 1U);
-            draw_bitmap_label(dc, row_label, info->pane.left + 5, row_y,
+            draw_bitmap_label(surface, row_label, info->pane.left + 5, row_y,
                               RGB(230, 238, 255));
             row_y += 10;
             (void)snprintf(row_label, sizeof(row_label), "%s %d/%d",
@@ -1594,18 +1589,18 @@ static void render_island_view(HDC dc)
                 selected_floater->current_hit_points < 0
                     ? 0 : (int)selected_floater->current_hit_points,
                 (int)selected_floater->max_hit_points);
-            draw_bitmap_label(dc, row_label, info->pane.left + 5, row_y,
+            draw_bitmap_label(surface, row_label, info->pane.left + 5, row_y,
                               RGB(230, 238, 255));
             row_y += 10;
             (void)snprintf(row_label, sizeof(row_label), "%s %u",
                 g_unit_label_text[4],
                 (unsigned int)selected_floater->attack_strength);
-            draw_bitmap_label(dc, row_label, info->pane.left + 5, row_y,
+            draw_bitmap_label(surface, row_label, info->pane.left + 5, row_y,
                               RGB(230, 238, 255));
-            draw_island_leviathan_floater(dc, selected_floater,
+            draw_island_leviathan_floater(surface, selected_floater,
                 info->pane.right - 50,
                 info->pane.top + (info->pane.bottom - info->pane.top) / 2 + 5);
-            if (saved_info_dc != 0) RestoreDC(dc, saved_info_dc);
+            if (saved_info_dc != 0) render_surface_restore(surface, saved_info_dc);
         }
     }
     if (!(selected_ground_item >= 0 &&
@@ -1628,10 +1623,10 @@ static void render_island_view(HDC dc)
             if (info != NULL && g_temp_hole_art.frame_count > 1) {
                 RECT pane = {info->pane.left, info->pane.top,
                              info->pane.right + 1, info->pane.bottom + 1};
-                int saved_info_dc = SaveDC(dc);
-                (void)IntersectClipRect(dc, pane.left, pane.top,
-                                        pane.right, pane.bottom);
-                draw_sprite(dc, &g_temp_hole_art, 1,
+                int saved_info_dc = render_surface_save(surface);
+                render_surface_intersect_clip(surface, pane.left, pane.top,
+                                              pane.right, pane.bottom);
+                draw_sprite(surface, &g_temp_hole_art, 1,
                             info->pane.left, info->pane.top);
                 /* The source paints the selected building in IWLocInfo via
                    FUN_0042704b. Reuse the same data-driven BASE/CHUG/etc.
@@ -1648,14 +1643,14 @@ static void render_island_view(HDC dc)
                             selected_location->source_capacity_4a);
                         /* FUN_0044338b passes full scale (0x10000) and a
                            pane-relative width/height anchor to FUN_0042704b. */
-                        (void)draw_runtime_item_scaled(dc, selected_location,
+                        (void)draw_runtime_item_scaled(surface, selected_location,
                             sprite_x, sprite_y, 0x10000U);
                     }
                 }
-                draw_building_info_extras(dc, info, selected_location,
+                draw_building_info_extras(surface, info, selected_location,
                     info_island_index, (uint16_t)info_location);
-                draw_building_slot_floaters(dc, info, selected_location);
-                if (saved_info_dc != 0) RestoreDC(dc, saved_info_dc);
+                draw_building_slot_floaters(surface, info, selected_location);
+                if (saved_info_dc != 0) render_surface_restore(surface, saved_info_dc);
             }
         }
     }
@@ -1688,9 +1683,9 @@ static void render_island_view(HDC dc)
         if (info != NULL && caption != NULL && caption[0] != 0) {
             int width = measure_bitmap_text(NULL, caption, strlen(caption));
             if (g_temp_hole_art.frame_count > 1)
-                draw_sprite(dc, &g_temp_hole_art, 1,
+                draw_sprite(surface, &g_temp_hole_art, 1,
                             info->pane.left, info->pane.top);
-            draw_bitmap_label(dc, caption,
+            draw_bitmap_label(surface, caption,
                 info->pane.left +
                     ((info->pane.right - info->pane.left) - width) / 2,
                 info->pane.top +
@@ -1701,7 +1696,7 @@ static void render_island_view(HDC dc)
     /* IWLocInfo's selected-building painter clears and redraws this pane, so
        render the Hall's economy view after it. */
     if (island_panel_location_info_visible(g_island_panel_mode)) {
-        draw_hall_stock_summary(dc, hall_player, runtime_island);
+        draw_hall_stock_summary(surface, hall_player, runtime_island);
     }
 
     /* The Hall summary's worker is not a real unit: FUN_00440567
@@ -1721,7 +1716,7 @@ static void render_island_view(HDC dc)
                 const SpriteSheet *leg_art = &g_initial_floater_legs[player];
                 RECT pane = {info->pane.left, info->pane.top,
                              info->pane.right + 1, info->pane.bottom + 1};
-                int saved_worker_dc = SaveDC(dc);
+                int saved_worker_dc = render_surface_save(surface);
                 int x = info->pane.left + 200;
                 int y = info->pane.top + 0x11 +
                     island_worker_hover_bob(g_menu.animation_ticks, 0);
@@ -1729,17 +1724,17 @@ static void render_island_view(HDC dc)
                 uint32_t leg_frame = island_worker_legs_frame(
                     (uint8_t)player, 0, g_menu.animation_ticks);
                 if (ui_art_tribe() == 3) y -= 3;
-                (void)IntersectClipRect(dc, pane.left, pane.top,
-                                        pane.right, pane.bottom);
+                render_surface_intersect_clip(surface, pane.left, pane.top,
+                                              pane.right, pane.bottom);
                 if (body_art->frame_count != 0 &&
                     island_floater_body_frame((uint8_t)player, 0, 0,
                                               &body_frame) &&
                     body_frame < body_art->frame_count)
-                    draw_sprite(dc, body_art, body_frame, x, y);
+                    draw_sprite(surface, body_art, body_frame, x, y);
                 if (leg_art->frame_count != 0 &&
                     leg_frame < leg_art->frame_count)
-                    draw_sprite(dc, leg_art, leg_frame, x, y);
-                if (saved_worker_dc != 0) RestoreDC(dc, saved_worker_dc);
+                    draw_sprite(surface, leg_art, leg_frame, x, y);
+                if (saved_worker_dc != 0) render_surface_restore(surface, saved_worker_dc);
             }
         }
     }
@@ -1763,7 +1758,7 @@ static void render_island_view(HDC dc)
                 (g_game_session.economy[hall_player].stock_mode[resource] +
                  1U) % 3U;
             if (frame < g_hall_stock_art.frame_count) {
-                draw_sprite(dc, &g_hall_stock_art, frame,
+                draw_sprite(surface, &g_hall_stock_art, frame,
                             button->pane.left, button->pane.top);
             }
             /* The highlight is a transparent overlay; keep the active stock
@@ -1771,14 +1766,14 @@ static void render_island_view(HDC dc)
             if ((int)resource == g_hovered_hall_stock &&
                 button->has_hilite_frame && button->hilite_frame >= 0 &&
                 (uint32_t)button->hilite_frame < g_hall_stock_art.frame_count) {
-                draw_sprite(dc, &g_hall_stock_art,
+                draw_sprite(surface, &g_hall_stock_art,
                             (uint32_t)button->hilite_frame,
                             button->pane.left, button->pane.top);
             }
         }
     }
-    draw_clipboard_strip(dc);
-    draw_location_action_panel(dc);
+    draw_clipboard_strip(surface);
+    draw_location_action_panel(surface);
 
     /* IWLocControl's backdrop overlaps the Hall command buttons. Draw the
        THALL button frames last so the selected Hall's five commands remain
@@ -1801,17 +1796,17 @@ static void render_island_view(HDC dc)
                 window_catalog_hall_panel_mode(button->name) ==
                     g_hovered_hall_command);
             if (frame >= 0 && (uint32_t)frame < g_hall_command_art.frame_count) {
-                draw_sprite(dc, &g_hall_command_art, (uint32_t)frame,
+                draw_sprite(surface, &g_hall_command_art, (uint32_t)frame,
                             button->pane.left, button->pane.top);
             }
         }
     }
-    draw_island_message(dc);
+    draw_island_message(surface);
 }
 
 /* CLIPSEL1-3 / CLIPBD1-3 are not among the 16 windows FUN_0042f303 hides, so
    the shortcut strip shows in every panel mode and whatever is selected. */
-static void draw_clipboard_strip(HDC dc)
+static void draw_clipboard_strip(RenderSurface *surface)
 {
     if (g_game_session_valid && g_menu.selected_tribe >= 0 &&
         g_menu.selected_tribe < GAME_START_PLAYER_COUNT &&
@@ -1839,12 +1834,12 @@ static void draw_clipboard_strip(HDC dc)
                 uint32_t frame = (uint32_t)tab->shape_frame +
                     (g_game_session.clip_group == index ? 2U : 0U);
                 if (frame < g_clip_art.frame_count)
-                    draw_sprite(dc, &g_clip_art, frame, tab->pane.left, tab->pane.top);
+                    draw_sprite(surface, &g_clip_art, frame, tab->pane.left, tab->pane.top);
             }
             if (slot == NULL) continue;
             if (slot->shape_frame >= 0 &&
                 (uint32_t)slot->shape_frame < g_temp_hole_art.frame_count)
-                draw_sprite(dc, &g_temp_hole_art, (uint32_t)slot->shape_frame,
+                draw_sprite(surface, &g_temp_hole_art, (uint32_t)slot->shape_frame,
                             slot->pane.left, slot->pane.top);
             dots = game_session_clip_slot(&g_game_session,
                 (uint8_t)g_menu.selected_tribe, index, &clip_island, &clip_location);
@@ -1858,11 +1853,11 @@ static void draw_clipboard_strip(HDC dc)
                 uint32_t frame = (uint32_t)(building->owner_id < 0 ? 0
                     : building->owner_id > 3 ? 3 : building->owner_id);
                 unsigned int dot;
-                (void)draw_runtime_item_scaled(dc, building,
+                (void)draw_runtime_item_scaled(surface, building,
                     slot->pane.left + 12, slot->pane.top + 30, 0x6000U);
                 for (dot = 0; dot + 1U < dots && dot < 10U; ++dot) {
                     if (frame < g_bildicon_art.frame_count)
-                        draw_sprite(dc, &g_bildicon_art, frame,
+                        draw_sprite(surface, &g_bildicon_art, frame,
                             slot->pane.left + 1 + (int)(dot % 5U) * 5,
                             slot->pane.top + 1 + (int)(dot / 5U) * 5);
                 }
@@ -1871,7 +1866,7 @@ static void draw_clipboard_strip(HDC dc)
     }
 }
 
-static void draw_location_action_panel(HDC dc)
+static void draw_location_action_panel(RenderSurface *surface)
 {
     const GameRuntimeIsland *island;
     const WindowTemplate *panel;
@@ -1896,7 +1891,7 @@ static void draw_location_action_panel(HDC dc)
     panel = window_catalog_find(&g_window_catalog, "IWLocControl", 3);
     if (panel != NULL && panel->shape_frame >= 0 &&
         (uint32_t)panel->shape_frame < g_temp_hole_art.frame_count) {
-        draw_sprite(dc, &g_temp_hole_art, (uint32_t)panel->shape_frame,
+        draw_sprite(surface, &g_temp_hole_art, (uint32_t)panel->shape_frame,
                     panel->pane.left, panel->pane.top);
     }
 
@@ -1912,11 +1907,11 @@ static void draw_location_action_panel(HDC dc)
         text_panel = window_catalog_find(&g_window_catalog, "IWTextInfo", 3);
         if (text_panel != NULL && text_panel->shape_frame >= 0 &&
             (uint32_t)text_panel->shape_frame < g_temp_hole_art.frame_count) {
-            draw_sprite(dc, &g_temp_hole_art,
+            draw_sprite(surface, &g_temp_hole_art,
                         (uint32_t)text_panel->shape_frame,
                         text_panel->pane.left, text_panel->pane.top);
             /* Same FUN_00439673 SMFONT wrap as the Hall info text. */
-            draw_iw_text_info_text(dc, text_panel,
+            draw_iw_text_info_text(surface, text_panel,
                 g_building_descriptions[selected_location->record_value_10]);
         }
     } else if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL &&
@@ -1936,10 +1931,10 @@ static void draw_location_action_panel(HDC dc)
             int pane_height = text_panel->pane.bottom - text_panel->pane.top;
             int name_width = measure_bitmap_text(NULL, level_name,
                                                  strlen(level_name));
-            draw_sprite(dc, &g_temp_hole_art,
+            draw_sprite(surface, &g_temp_hole_art,
                         (uint32_t)text_panel->shape_frame,
                         text_panel->pane.left, text_panel->pane.top);
-            draw_bitmap_label(dc, level_name,
+            draw_bitmap_label(surface, level_name,
                 text_panel->pane.left + (pane_width - name_width) / 2,
                 text_panel->pane.top + pane_height / 2 - 10,
                 RGB(230, 238, 255));
@@ -1950,10 +1945,10 @@ static void draw_location_action_panel(HDC dc)
         text_panel = window_catalog_find(&g_window_catalog, "IWTextInfo", 3);
         if (text_panel != NULL && text_panel->shape_frame >= 0 &&
             (uint32_t)text_panel->shape_frame < g_temp_hole_art.frame_count) {
-            draw_sprite(dc, &g_temp_hole_art,
+            draw_sprite(surface, &g_temp_hole_art,
                         (uint32_t)text_panel->shape_frame,
                         text_panel->pane.left, text_panel->pane.top);
-            draw_iw_text_info_text(dc, text_panel,
+            draw_iw_text_info_text(surface, text_panel,
                 island_site_info_text(selected_location,
                                       g_menu.selected_tribe));
         }
@@ -1976,15 +1971,15 @@ static void draw_location_action_panel(HDC dc)
             (void)window_catalog_onoff_state_control(onoff_button,
                 (island->locations[g_selected_location].source_flags &
                  0x400U) != 0, &onoff_state);
-            draw_control_with_hover_overlay(dc, &onoff_state,
+            draw_control_with_hover_overlay(surface, &onoff_state,
                 &g_building_command_art, g_hovered_onoff_control);
         }
         if (selected_upgrade_button_visible()) {
-            draw_control_with_hover_overlay(dc, upgrade_button,
+            draw_control_with_hover_overlay(surface, upgrade_button,
                 &g_upgrade_button_art, g_hovered_upgrade_control);
         }
         if (selected_repair_button_visible()) {
-            draw_control_with_hover_overlay(dc, repair_button,
+            draw_control_with_hover_overlay(surface, repair_button,
                 &g_repair_button_art, g_hovered_repair_control);
         }
     }
@@ -1992,14 +1987,14 @@ static void draw_location_action_panel(HDC dc)
        (THBUTT frame 5, drawn with the other location controls); only the
        placement hint remains here while a building is held. */
     if (panel != NULL && g_game_session.location_move_active) {
-        draw_bitmap_label(dc, "Click a free site to place",
+        draw_bitmap_label(surface, "Click a free site to place",
             panel->pane.left + 8, panel->pane.top + 5, RGB(230, 238, 255));
     }
     if (obtain_button_visible()) {
         const WindowTemplate *obtain_control = window_catalog_find(
             &g_window_catalog, "BC_Obtain", 3);
         if (obtain_control != NULL) {
-            draw_control_with_hover_overlay(dc, obtain_control,
+            draw_control_with_hover_overlay(surface, obtain_control,
                 &g_building_command_art, g_hovered_location_grab);
         }
     }
@@ -2023,21 +2018,21 @@ static void draw_location_action_panel(HDC dc)
                 (control->has_pane_extras ? control->pane_extras[0] : 0);
             const int draw_y = control->pane.top +
                 (control->has_pane_extras ? control->pane_extras[1] : 0);
-            const int saved_dc = SaveDC(dc);
-            (void)IntersectClipRect(dc, control->pane.left, control->pane.top,
-                                    control->pane.right, control->pane.bottom);
+            const int saved_dc = render_surface_save(surface);
+            render_surface_intersect_clip(surface, control->pane.left, control->pane.top,
+                                          control->pane.right, control->pane.bottom);
             frame = (uint32_t)control->shape_frame +
                 (uint32_t)game_session_training_stock_state(&g_game_session,
                     (uint8_t)selection_island(),
                     (uint16_t)g_selected_location, (int)index);
             if (frame < g_hall_stock_art.frame_count)
-                draw_sprite(dc, &g_hall_stock_art, frame, draw_x, draw_y);
+                draw_sprite(surface, &g_hall_stock_art, frame, draw_x, draw_y);
             if (g_hovered_training_stock == (int)index + 1 &&
                 control->has_hilite_frame && control->hilite_frame >= 0 &&
                 (uint32_t)control->hilite_frame < g_hall_stock_art.frame_count)
-                draw_sprite(dc, &g_hall_stock_art,
+                draw_sprite(surface, &g_hall_stock_art,
                             (uint32_t)control->hilite_frame, draw_x, draw_y);
-            if (saved_dc != 0) RestoreDC(dc, saved_dc);
+            if (saved_dc != 0) render_surface_restore(surface, saved_dc);
         }
     }
     if (g_game_session_valid && g_menu.selected_tribe >= 0 &&
@@ -2058,10 +2053,10 @@ static void draw_location_action_panel(HDC dc)
                 (uint16_t)g_selected_location);
             uint32_t frame = (uint32_t)control->shape_frame +
                 (active ? (uint32_t)((GetTickCount() / 100U) % 13U) : 0U);
-            draw_sprite(dc, &g_upgrade_button_art, frame,
+            draw_sprite(surface, &g_upgrade_button_art, frame,
                         control->pane.left, control->pane.top);
             if (g_hovered_upgspread)
-                draw_sprite(dc, &g_upgrade_button_art, 13,
+                draw_sprite(surface, &g_upgrade_button_art, 13,
                             control->pane.left, control->pane.top);
         }
     }
@@ -2083,7 +2078,7 @@ static void draw_location_action_panel(HDC dc)
             if (kind < 0 || spell_button == NULL) continue;
             spell_state = *spell_button;
             spell_state.shape_frame = kind * 2;
-            draw_control_with_hover_overlay(dc, &spell_state,
+            draw_control_with_hover_overlay(surface, &spell_state,
                 &g_spell_button_art,
                 g_hovered_spell_kind == kind ||
                 g_armed_spell_action == (int)(0x15U + spell_index));
@@ -2096,7 +2091,7 @@ static void draw_location_action_panel(HDC dc)
                 &g_window_catalog, k_building_order_buttons[index], 3);
             int genre = (int)(6U + index);
             if (control != NULL)
-                draw_control_with_hover_overlay(dc, control, &g_trainb_art,
+                draw_control_with_hover_overlay(surface, control, &g_trainb_art,
                     g_hovered_defend_area == genre ||
                     g_defend_area_armed == genre);
         }
@@ -2109,14 +2104,14 @@ static void draw_location_action_panel(HDC dc)
     if (button != NULL && button->shape_frame >= 0 &&
         (uint32_t)button->shape_frame < g_hall_stock_art.frame_count) {
         /* windows.txt binds both move controls to THBUTT frame 5. */
-        draw_sprite(dc, &g_hall_stock_art, (uint32_t)button->shape_frame,
+        draw_sprite(surface, &g_hall_stock_art, (uint32_t)button->shape_frame,
                     button->pane.left, button->pane.top);
     }
     if (g_hovered_location_action != action) return;
     text_panel = window_catalog_find(&g_window_catalog, "IWTextInfo", 3);
     if (text_panel == NULL || text_panel->shape_frame < 0 ||
         (uint32_t)text_panel->shape_frame >= g_temp_hole_art.frame_count) return;
-    draw_sprite(dc, &g_temp_hole_art, (uint32_t)text_panel->shape_frame,
+    draw_sprite(surface, &g_temp_hole_art, (uint32_t)text_panel->shape_frame,
                 text_panel->pane.left, text_panel->pane.top);
     if (g_move_button_text[0] != '\0') {
         size_t text_length = strlen(g_move_button_text);
@@ -2124,7 +2119,7 @@ static void draw_location_action_panel(HDC dc)
         int text_height = (int)g_small_font.height;
         int pane_width = text_panel->pane.right - text_panel->pane.left;
         int pane_height = text_panel->pane.bottom - text_panel->pane.top;
-        draw_bitmap_label(dc, g_move_button_text,
+        draw_bitmap_label(surface, g_move_button_text,
             text_panel->pane.left + (pane_width - text_width) / 2,
             text_panel->pane.top + (pane_height - text_height) / 2,
             native_text_color(g_island_palette, 6));

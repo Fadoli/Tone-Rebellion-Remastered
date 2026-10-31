@@ -102,7 +102,7 @@ static void queue_leviathan_bond_notice(int32_t bond)
     }
 }
 
-static void draw_island_message(HDC dc)
+static void draw_island_message(RenderSurface *surface)
 {
     IslandMessage *head;
     const unsigned char *cursor;
@@ -125,11 +125,7 @@ static void draw_island_message(HDC dc)
         level = (head->duration - head->elapsed) / 2;
     if (level < 0) level = 0;
     if (level > 7) level = 7;
-    if (dc != g_paint_buffer_dc || g_paint_buffer_pixels == NULL) {
-        draw_bitmap_label(dc, head->text, x, y, RGB(255, 255, 255));
-        return;
-    }
-    (void)GdiFlush();
+    if (surface->pixels == NULL) return;
     for (cursor = (const unsigned char *)head->text; *cursor != '\0'; ++cursor) {
         uint32_t code = *cursor < g_bitmap_font.glyph_count ? *cursor : (uint32_t)'?';
         uint32_t glyph_width;
@@ -144,9 +140,9 @@ static void draw_island_message(HDC dc)
             for (col = 0; col < glyph_width; ++col) {
                 uint8_t value = glyph_pixels[(size_t)row * glyph_width + col];
                 int px = x + (int)col;
-                DWORD *pixel;
+                uint32_t *pixel;
                 if (value == 0xffu || px < 0 || px >= LOGICAL_WIDTH) continue;
-                pixel = &g_paint_buffer_pixels[(size_t)py * LOGICAL_WIDTH + (size_t)px];
+                pixel = &surface->pixels[(ptrdiff_t)py * surface->stride + px];
                 *pixel = hazed_island_pixel(*pixel, value == 0u ? 0 : head->selector,
                                             level);
             }

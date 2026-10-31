@@ -192,14 +192,14 @@ static int logo_splash_finished(void)
 
 /* FUN_00410765: out = palette * scale >> 8 on the 6-bit values, with scale
    rising 0..256 for the fade-in and falling for the fade-out. */
-static void render_logo(HDC dc)
+static void render_logo(RenderSurface *surface)
 {
     unsigned scale;
     DWORD lut[256];
     unsigned index;
     size_t pixel;
-    fill_rect(dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
-    if (g_logo_pixels == NULL || g_paint_buffer_pixels == NULL) return;
+    fill_rect(surface, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
+    if (g_logo_pixels == NULL || surface->pixels == NULL) return;
     if (g_logo_tick < LOGO_FADE_IN_TICKS)
         scale = g_logo_tick * 256U / LOGO_FADE_IN_TICKS;
     else if (g_logo_tick < LOGO_FADE_IN_TICKS + LOGO_HOLD_TICKS)
@@ -215,7 +215,6 @@ static void render_logo(HDC dc)
         unsigned blue = (g_logo_palette[index * 3U + 2U] * scale >> 8) * 255U / 63U;
         lut[index] = (DWORD)(red << 16 | green << 8 | blue);
     }
-    (void)GdiFlush();
     for (pixel = 0; pixel < (size_t)LOGO_WIDTH * LOGO_HEIGHT; ++pixel)
-        ((DWORD *)g_paint_buffer_pixels)[pixel] = lut[g_logo_pixels[pixel]];
+        surface->pixels[pixel] = lut[g_logo_pixels[pixel]];
 }

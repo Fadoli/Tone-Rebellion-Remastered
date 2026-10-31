@@ -30,6 +30,7 @@
 #include "tone_rng.h"
 #include "net_lobby.h"
 #include "net_lockstep.h"
+#include "render_surface.h"
 
 #include <math.h>
 #include <limits.h>
@@ -52,8 +53,10 @@ enum { HELP_MAIN_NEWGAME, HELP_MAIN_RESUME, HELP_MAIN_LOAD, HELP_MAIN_EXIT,
        HELP_NEW_TRIBE1, HELP_NEW_TRIBE2, HELP_NEW_TRIBE3, HELP_NEW_DIFFICULTY,
        HELP_NEW_BEGIN, HELP_ENTRY_COUNT };
 
+/* pixels: width x height premultiplied 0xAARRGGBB pixels, top-down rows of
+   `width` pixels (RenderSurface layout), owned by the frame. */
 typedef struct SpriteFrame {
-    HBITMAP bitmap;
+    uint32_t *pixels;
     int width;
     int height;
     int x_offset;
@@ -62,12 +65,6 @@ typedef struct SpriteFrame {
     int hit_top;
     int hit_right;
     int hit_bottom;
-    /* Lazily cached DIB bits of `bitmap` for the software blitter: valid
-       while pixels_bitmap == bitmap. Row stride in pixels; pixels points at
-       the top row. */
-    HBITMAP pixels_bitmap;
-    const DWORD *pixels;
-    int pixel_stride;
 } SpriteFrame;
 
 typedef struct SpriteSheetShare SpriteSheetShare;
@@ -356,12 +353,19 @@ static int g_hovered_help = -1;
 static int g_hovered_newgame_text = -1;
 static int g_hovered_island = -1;
 static int g_mouse_inside;
-/* Reused DIB; direct pixel writes occur only while rendering a frame. */
-static DWORD *g_paint_buffer_pixels;
+/* The 640x480 back buffer every screen is composed into. Its pixels live in
+   a DIB section (render_dispatch.inc) that only present_back_buffer reads. */
+static RenderSurface g_back_surface;
 static HDC g_paint_buffer_dc;
 static HBITMAP g_paint_buffer_bitmap;
 static HGDIOBJ g_paint_buffer_original_bitmap;
-static HDC g_sprite_source_dc;
+
+/* RenderSurface pixel (0x00RRGGBB, alpha 0 like GDI fills) of a colour. */
+static uint32_t colorref_pixel(COLORREF color)
+{
+    return ((uint32_t)GetRValue(color) << 16) |
+           ((uint32_t)GetGValue(color) << 8) | (uint32_t)GetBValue(color);
+}
 
 /* FUN_004595cc: volume 0..100 -> attenuation in 1/100 dB,
    ftol(1000 * log2(v / 100)) clamped to [-10000, 0]; 0 is silence. */
@@ -447,79 +451,6 @@ static BOOL play_effect_sound(LPCSTR sound, HMODULE module, DWORD flags)
     return PlaySoundA((LPCSTR)ring[slot], module, flags);
 }
 #define PlaySoundA(sound, module, flags) play_effect_sound((sound), (module), (flags))
-
-/* Software clip of the back buffer, mirrored from its DC so sprites can be
-   copied straight into g_paint_buffer_pixels. A region clip (feature reveal
-   stipples) marks it complex; drawing then goes through GDI. The stack is
-   indexed by the SaveDC level, as RestoreDC takes it. */
-typedef struct SoftClip {
-    RECT box;
-    int complex;
-} SoftClip;
-enum { SOFT_CLIP_STACK = 64 };
-static SoftClip g_soft_clip = {{0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT}, 0};
-static SoftClip g_soft_clip_stack[SOFT_CLIP_STACK];
-static int g_soft_clip_depth;
-
-static void soft_clip_reset(void)
-{
-    g_soft_clip.box.left = 0;
-    g_soft_clip.box.top = 0;
-    g_soft_clip.box.right = LOGICAL_WIDTH;
-    g_soft_clip.box.bottom = LOGICAL_HEIGHT;
-    g_soft_clip.complex = 0;
-    g_soft_clip_depth = 0;
-}
-
-static int soft_save_dc(HDC dc)
-{
-    int level = SaveDC(dc);
-    if (dc == g_paint_buffer_dc && level > 0) {
-        if (level < SOFT_CLIP_STACK) g_soft_clip_stack[level] = g_soft_clip;
-        else g_soft_clip.complex = 1;
-        g_soft_clip_depth = level;
-    }
-    return level;
-}
-
-static BOOL soft_restore_dc(HDC dc, int level)
-{
-    BOOL restored = RestoreDC(dc, level);
-    if (dc == g_paint_buffer_dc && restored) {
-        int target = level < 0 ? g_soft_clip_depth + level + 1 : level;
-        if (target >= 1 && target < SOFT_CLIP_STACK &&
-            target <= g_soft_clip_depth) {
-            g_soft_clip = g_soft_clip_stack[target];
-            g_soft_clip_depth = target - 1;
-        } else {
-            g_soft_clip.complex = 1;
-        }
-    }
-    return restored;
-}
-
-static int soft_intersect_clip_rect(HDC dc, int left, int top, int right,
-                                    int bottom)
-{
-    int result = IntersectClipRect(dc, left, top, right, bottom);
-    if (dc == g_paint_buffer_dc) {
-        if (left > g_soft_clip.box.left) g_soft_clip.box.left = left;
-        if (top > g_soft_clip.box.top) g_soft_clip.box.top = top;
-        if (right < g_soft_clip.box.right) g_soft_clip.box.right = right;
-        if (bottom < g_soft_clip.box.bottom) g_soft_clip.box.bottom = bottom;
-    }
-    return result;
-}
-
-static int soft_ext_select_clip_rgn(HDC dc, HRGN region, int mode)
-{
-    if (dc == g_paint_buffer_dc) g_soft_clip.complex = 1;
-    return ExtSelectClipRgn(dc, region, mode);
-}
-#define SaveDC(dc) soft_save_dc(dc)
-#define RestoreDC(dc, level) soft_restore_dc((dc), (level))
-#define IntersectClipRect(dc, l, t, r, b) soft_intersect_clip_rect((dc), (l), (t), (r), (b))
-#define ExtSelectClipRgn(dc, region, mode) soft_ext_select_clip_rgn((dc), (region), (mode))
 
 /* Ordered source fragments share private Win32 state in this one
    translation unit; the split is organizational and keeps internal linkage. */

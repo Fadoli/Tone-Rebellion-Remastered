@@ -1,4 +1,4 @@
-static void draw_hall_panel(HDC dc, int hall_player)
+static void draw_hall_panel(RenderSurface *surface, int hall_player)
 {
     const WindowTemplate *panel = NULL;
     const char *empty_message = NULL;
@@ -31,7 +31,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
                     &g_window_catalog, task_window_names[task_index], 3);
                 if (task_panel != NULL && task_panel->shape_frame >= 0 &&
                     g_temp_hole_art.frame_count > (uint32_t)task_panel->shape_frame) {
-                    draw_sprite(dc, &g_temp_hole_art,
+                    draw_sprite(surface, &g_temp_hole_art,
                                 (uint32_t)task_panel->shape_frame,
                                 task_panel->pane.left, task_panel->pane.top);
                 }
@@ -44,7 +44,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
                     &g_window_catalog, effect_window_names[task_index], 3);
                 if (effect_panel != NULL && effect_panel->shape_frame >= 0 &&
                     g_temp_hole_art.frame_count > (uint32_t)effect_panel->shape_frame) {
-                    draw_sprite(dc, &g_temp_hole_art,
+                    draw_sprite(surface, &g_temp_hole_art,
                                 (uint32_t)effect_panel->shape_frame,
                                 effect_panel->pane.left, effect_panel->pane.top);
                 }
@@ -63,7 +63,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
                 if (frame < 0 || g_task_scroll_art.frame_count <= (uint32_t)frame)
                     continue;
                 /* FUN_0042fa0f routes each pair to its distinct list panel. */
-                draw_sprite(dc, &g_task_scroll_art, (uint32_t)frame,
+                draw_sprite(surface, &g_task_scroll_art, (uint32_t)frame,
                             control->pane.left, control->pane.top);
             }
         }
@@ -219,14 +219,14 @@ static void draw_hall_panel(HDC dc, int hall_player)
                     if (label == NULL || label[0] == '\0') continue;
                     if (task_slots[(size_t)offset + visible_index] ==
                         g_selected_task_slot) {
-                        draw_task_row_highlight(dc, task_list_panel,
+                        draw_task_row_highlight(surface, task_list_panel,
                             (unsigned int)visible_rows,
                             (unsigned int)visible_index);
                     }
                     if (row.task_icon_frame >= 0 &&
                         g_task_icon_art.frame_count >
                             (uint32_t)row.task_icon_frame) {
-                        draw_sprite(dc, &g_task_icon_art,
+                        draw_sprite(surface, &g_task_icon_art,
                             (uint32_t)row.task_icon_frame,
                             task_list_panel->pane.left + position.icon_x,
                             task_list_panel->pane.top + position.y);
@@ -271,7 +271,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
                     if (row.secondary_task_icon_frame >= 0 &&
                         g_task_icon_art.frame_count >
                             (uint32_t)row.secondary_task_icon_frame) {
-                        draw_sprite(dc, &g_task_icon_art,
+                        draw_sprite(surface, &g_task_icon_art,
                             (uint32_t)row.secondary_task_icon_frame,
                             task_list_panel->pane.left + position.secondary_icon_x,
                             task_list_panel->pane.top + position.y);
@@ -279,12 +279,12 @@ static void draw_hall_panel(HDC dc, int hall_player)
                     if (row.resource_icon_type >= 0 &&
                         row.resource_icon_type < GAME_RESOURCE_TYPE_COUNT &&
                         resource_art[(unsigned int)row.resource_icon_type]->frame_count > 0) {
-                        draw_sprite(dc,
+                        draw_sprite(surface,
                             resource_art[(unsigned int)row.resource_icon_type], 0,
                             task_list_panel->pane.left + position.resource_icon_x,
                             task_list_panel->pane.top + position.y + 7);
                         if (stock_resource >= 0)
-                            draw_task_stock_gauge(dc, task_list_panel, hall_player,
+                            draw_task_stock_gauge(surface, task_list_panel, hall_player,
                                 (unsigned int)row.resource_icon_type, position.y);
                     }
                     if (upgrade_site != NULL) {
@@ -292,7 +292,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
                            (Build Tone stock), denominator 20, __ftol chop. */
                         unsigned int upgrade_fill = 66U;
                         if (g_bildtone_art.frame_count > 0) {
-                            draw_sprite(dc, &g_bildtone_art, 0,
+                            draw_sprite(surface, &g_bildtone_art, 0,
                                 task_list_panel->pane.left +
                                     position.resource_icon_x,
                                 task_list_panel->pane.top + position.y + 7);
@@ -306,7 +306,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
                             upgrade_fill = (66U *
                                 (unsigned int)upgrade_site->resource_stock[0]) /
                                 20U;
-                        draw_task_gauge(dc, task_list_panel, position.y,
+                        draw_task_gauge(surface, task_list_panel, position.y,
                                         upgrade_fill);
                     } else if (supply_site != NULL) {
                         unsigned int supply_fill;
@@ -316,22 +316,19 @@ static void draw_hall_panel(HDC dc, int hall_player)
                             island_panel_info_task_gauge_fill(
                                 (int16_t)supply_site->resource_stock[supply_resource],
                                 (int16_t)capacity, 0x46U - 4U, &supply_fill))
-                            draw_task_gauge(dc, task_list_panel, position.y,
+                            draw_task_gauge(surface, task_list_panel, position.y,
                                             supply_fill);
                     } else if (event->action_type == 0x12) {
-                        draw_task_repair_gauge(dc, task_list_panel, event,
+                        draw_task_repair_gauge(surface, task_list_panel, event,
                                                position.y);
                     } else if (event->action_type == 5) {
-                        draw_task_construction_gauge(dc, task_list_panel, event,
+                        draw_task_construction_gauge(surface, task_list_panel, event,
                                                      position.y);
                     }
                 }
             }
             if (row_label_count != 0) {
                 size_t label_index;
-                /* Row icons and gauges are GDI blits. Flush once, then write
-                   all task labels directly so each row doesn't stall GDI. */
-                (void)GdiFlush();
                 for (label_index = 0; label_index < row_label_count;
                      ++label_index) {
                     draw_small_label_pixels(row_labels[label_index].text,
@@ -347,7 +344,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
                     int label_y;
                     if (island_panel_info_empty_task_label_position(task_info_panel,
                             label_width, &label_x, &label_y)) {
-                        draw_bitmap_label(dc, g_empty_task_text, label_x, label_y,
+                        draw_bitmap_label(surface, g_empty_task_text, label_x, label_y,
                                           RGB(185, 205, 220));
                     }
                 } else {
@@ -355,7 +352,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
                         island_panel_info_task_priority_key(selected_event->priority);
                     const char *priority_text = task_label_text(priority_key);
                     if (priority_text != NULL && priority_text[0] != '\0') {
-                        draw_bitmap_label(dc, priority_text,
+                        draw_bitmap_label(surface, priority_text,
                             task_info_panel->pane.left + 10,
                             task_info_panel->pane.top + 0x2b,
                             RGB(185, 205, 220));
@@ -377,7 +374,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
                                 "Entretien insuffisant %ld/%d",
                                 (long)maintenance_budget,
                                 (int)building->maintenance_tone_cost);
-                            draw_bitmap_label(dc, warning,
+                            draw_bitmap_label(surface, warning,
                                 task_info_panel->pane.left + 10,
                                 task_info_panel->pane.top + 0x42,
                                 RGB(245, 190, 96));
@@ -406,7 +403,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
                                     task_info_panel, selected_event->action_type,
                                     target_location->owner_id,
                                     &preview_x, &preview_y)) {
-                                (void)draw_runtime_item_scaled(dc, target_location,
+                                (void)draw_runtime_item_scaled(surface, target_location,
                                     preview_x, preview_y, 0x8000U);
                             }
                         }
@@ -430,7 +427,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
                                     int info_width =
                                         task_info_panel->pane.right -
                                         task_info_panel->pane.left;
-                                    draw_bitmap_label(dc,
+                                    draw_bitmap_label(surface,
                                         g_task_building_const_text,
                                         task_info_panel->pane.left +
                                             (info_width - label_width) / 2,
@@ -442,7 +439,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
                                     /* Leave room for the right-side building
                                        preview; long localized names otherwise
                                        draw underneath the sprite. */
-                                    draw_wrapped_bitmap_label(dc,
+                                    draw_wrapped_bitmap_label(surface,
                                         g_building_names[name_index],
                                         task_info_panel->pane.left + 10,
                                         task_info_panel->pane.top + 0x1e,
@@ -452,7 +449,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
                                 if (item_id < g_pad_catalog.item_count &&
                                     item_id < PAD_CATALOG_MAX_ITEMS &&
                                     g_building_art[item_id].frame_count != 0) {
-                                    (void)draw_building_preview(dc, item_id,
+                                    (void)draw_building_preview(surface, item_id,
                                         (uint8_t)hall_player,
                                         task_info_panel->pane.left + info_width - 0x1e,
                                         task_info_panel->pane.top + info_height - 10,
@@ -474,14 +471,14 @@ static void draw_hall_panel(HDC dc, int hall_player)
                                         title_text, strlen(title_text));
                                     int info_width = task_info_panel->pane.right -
                                                      task_info_panel->pane.left;
-                                    draw_bitmap_label(dc, title_text,
+                                    draw_bitmap_label(surface, title_text,
                                         task_info_panel->pane.left +
                                             (info_width - title_width) / 2,
                                         task_info_panel->pane.top + 5,
                                         RGB(185, 205, 220));
                                 }
                                 if (category_text != NULL && category_text[0] != '\0') {
-                                    draw_bitmap_label(dc, category_text,
+                                    draw_bitmap_label(surface, category_text,
                                         task_info_panel->pane.left + 10,
                                         task_info_panel->pane.top + 0x1e,
                                         RGB(185, 205, 220));
@@ -504,7 +501,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
                                                 icon->hit_top, icon->hit_right,
                                                 icon->hit_bottom, 10,
                                                 &icon_x, &icon_y)) {
-                                            draw_sprite(dc, sheet, 4,
+                                            draw_sprite(surface, sheet, 4,
                                                         icon_x, icon_y);
                                         }
                                     }
@@ -530,7 +527,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
                                             /* FUN_004469d6 draws TRIGGERS at
                                                item_id - 5; local shapes.txt
                                                maps that sheet to alltrigs.shp. */
-                                            draw_sprite(dc, &g_inventory_item_art,
+                                            draw_sprite(surface, &g_inventory_item_art,
                                                 (uint32_t)artifact_frame,
                                                 icon_x, icon_y);
                                         }
@@ -565,7 +562,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
                         option, option == hovered_option);
                     if (frame >= 0 &&
                         g_task_priority_art.frame_count > (uint32_t)frame) {
-                        draw_sprite(dc, &g_task_priority_art, (uint32_t)frame,
+                        draw_sprite(surface, &g_task_priority_art, (uint32_t)frame,
                                     option->pane.left, option->pane.top);
                     }
                 }
@@ -589,7 +586,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
     }
     if (panel == NULL || panel->shape_frame < 0 ||
         g_temp_hole_art.frame_count <= (uint32_t)panel->shape_frame) return;
-    draw_sprite(dc, &g_temp_hole_art, (uint32_t)panel->shape_frame,
+    draw_sprite(surface, &g_temp_hole_art, (uint32_t)panel->shape_frame,
                 panel->pane.left, panel->pane.top);
     if (panel_state == WINDOW_ISLAND_PANEL_TRADE) {
         const SpriteSheet *const resource_sheets[GAME_RESOURCE_TYPE_COUNT] = {
@@ -613,7 +610,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
                              panel->pane.top + 22,
                              panel->pane.left + 68 + (int)shade_index * 38,
                              panel->pane.top + 102};
-                recolor_under_sprite_clipped(dc, &g_temp_hole_art,
+                recolor_under_sprite_clipped(surface, &g_temp_hole_art,
                     (uint32_t)panel->shape_frame, panel->pane.left,
                     panel->pane.top, 1, 0, &head);
             }
@@ -623,7 +620,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
                             panel->pane.top + 37 + (int)shade_index * 24,
                             panel->pane.left + 190,
                             panel->pane.top + 51 + (int)shade_index * 24};
-                recolor_under_sprite_clipped(dc, &g_temp_hole_art,
+                recolor_under_sprite_clipped(surface, &g_temp_hole_art,
                     (uint32_t)panel->shape_frame, panel->pane.left,
                     panel->pane.top, 1, 0, &row);
             }
@@ -633,14 +630,14 @@ static void draw_hall_panel(HDC dc, int hall_player)
                class c, or c + 1 once c reaches the local player. */
             unsigned int tribe = target >= (unsigned int)hall_player
                 ? target + 1U : target;
-            draw_diplomacy_initial_worker_icon(dc, NULL, tribe,
+            draw_diplomacy_initial_worker_icon(surface, NULL, tribe,
                 panel->pane.left + 55 + (int)target * 38,
                 panel->pane.top + 12);
         }
         for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
             if (resource_sheets[resource]->frame_count > 4U) {
                 /* FUN_0043edac draws frame 4 of each named Tone sheet. */
-                draw_sprite(dc, resource_sheets[resource], 4,
+                draw_sprite(surface, resource_sheets[resource], 4,
                             panel->pane.left + 30,
                             panel->pane.top + 52 + (int)resource * 24);
             }
@@ -660,7 +657,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
                 width = measure_bitmap_text(NULL, amount_text, strlen(amount_text));
                 x = panel->pane.left + (int)target * 38 + 40 + (28 - width) / 2;
                 y = panel->pane.top + (int)resource * 24 + 44;
-                draw_bitmap_label(dc, amount_text, x, y, RGB(220, 232, 244));
+                draw_bitmap_label(surface, amount_text, x, y, RGB(220, 232, 244));
             }
         }
     }
@@ -695,10 +692,10 @@ static void draw_hall_panel(HDC dc, int hall_player)
             int y = panel->pane.top +
                 (panel->pane.bottom - panel->pane.top) / 2 - 6;
             if (use_big)
-                draw_big_label(dc, g_empty_inventory_text, x, y,
+                draw_big_label(surface, g_empty_inventory_text, x, y,
                                native_text_color(g_island_palette, 6));
             else
-                draw_small_label(dc, g_empty_inventory_text, x, y,
+                draw_small_label(surface, g_empty_inventory_text, x, y,
                                  native_text_color(g_island_palette, 6));
         } else {
             /* FUN_0043d6a3 uses the stored page index directly. If the item
@@ -736,26 +733,20 @@ static void draw_hall_panel(HDC dc, int hall_player)
                     page[slot].item_id == (uint8_t)g_hovered_inventory_item) {
                     int palette_index = page[slot].item_id ==
                         (uint8_t)g_selected_inventory_item ? 4 : 1;
-                    HPEN outline = CreatePen(PS_SOLID, 1,
-                                              g_island_palette[palette_index]);
-                    if (outline != NULL) {
-                        HGDIOBJ previous = SelectObject(dc, outline);
-                        HGDIOBJ previous_brush = SelectObject(dc, GetStockObject(NULL_BRUSH));
-                        Rectangle(dc, cell_left + 1, cell_top + 1,
-                                  cell_left + column_width - 1,
-                                  cell_top + row_height - 1);
-                        SelectObject(dc, previous_brush);
-                        SelectObject(dc, previous);
-                        DeleteObject(outline);
-                    }
+                    /* One-pixel outline, no fill (GDI Rectangle with a
+                       solid pen and the null brush). */
+                    render_surface_frame_rect(surface, cell_left + 1,
+                        cell_top + 1, cell_left + column_width - 1,
+                        cell_top + row_height - 1,
+                        colorref_pixel(g_island_palette[palette_index]));
                 }
-                draw_sprite(dc, &g_inventory_item_art, frame_index, x, y);
+                draw_sprite(surface, &g_inventory_item_art, frame_index, x, y);
                 if (page[slot].count > 1) {
                     char count_text[12];
                     /* The count format at 0x4a020c is "(%d)". */
                     (void)snprintf(count_text, sizeof(count_text), "(%u)",
                                    (unsigned int)page[slot].count);
-                    draw_bitmap_label(dc, count_text,
+                    draw_bitmap_label(surface, count_text,
                         x + 7, y - 21, RGB(235, 235, 220));
                 }
             }
@@ -763,7 +754,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
         if (entry_count > GAME_INVENTORY_PAGE_SIZE && cycle != NULL) {
             int frame = window_catalog_control_frame(cycle, cycle == hover_cycle);
             if (frame >= 0 && g_build_cycle_art.frame_count > (uint32_t)frame) {
-                draw_sprite(dc, &g_build_cycle_art, (uint32_t)frame,
+                draw_sprite(surface, &g_build_cycle_art, (uint32_t)frame,
                             cycle->pane.left, cycle->pane.top);
             }
         }
@@ -780,22 +771,22 @@ static void draw_hall_panel(HDC dc, int hall_player)
             int anchor_y = panel->pane.top + pane_height;
             /* FUN_0043dee3 draws the stone (frame 0) at the same (width,
                height) anchor as the glyph frames; offsets are negative. */
-            draw_sprite(dc, &g_glyph_inventory_art, 0, anchor_x, anchor_y);
+            draw_sprite(surface, &g_glyph_inventory_art, 0, anchor_x, anchor_y);
             for (glyph_index = 0; glyph_index < GAME_GLYPH_COUNT; ++glyph_index) {
                 uint32_t frame = game_glyph_inventory_frame(
                     glyph_mask, (int)glyph_index, g_hovered_glyph);
                 if (frame != UINT32_MAX) {
-                    draw_sprite(dc, &g_glyph_inventory_art, frame,
+                    draw_sprite(surface, &g_glyph_inventory_art, frame,
                                 anchor_x, anchor_y);
                 }
             }
         } else if (g_temp_hole_art.frame_count > 1U) {
-            draw_sprite(dc, &g_temp_hole_art, 1,
+            draw_sprite(surface, &g_temp_hole_art, 1,
                         panel->pane.left, panel->pane.top);
         }
     }
     if (panel_state == WINDOW_ISLAND_PANEL_DIPLOMACY) {
-        draw_diplomacy_panel(dc, panel, hall_player);
+        draw_diplomacy_panel(surface, panel, hall_player);
     }
     if (empty_message != NULL && empty_message[0] != '\0') {
         int width = measure_bitmap_text(NULL, empty_message, strlen(empty_message));
@@ -804,7 +795,7 @@ static void draw_hall_panel(HDC dc, int hall_player)
         int y = panel->pane.top +
             ((panel->pane.bottom - panel->pane.top) -
              (int)g_small_font.height) / 2 - 6;
-        draw_bitmap_label(dc, empty_message, x, y, RGB(185, 205, 220));
+        draw_bitmap_label(surface, empty_message, x, y, RGB(185, 205, 220));
     }
     if (panel_state == WINDOW_ISLAND_PANEL_TRADE) {
         static const char *const trade_names[] = {"TradeZERO", "TradeDOIT"};
@@ -823,17 +814,17 @@ static void draw_hall_panel(HDC dc, int hall_player)
             hovered = hover_control == button;
             frame = window_catalog_control_frame(button, hovered);
             if (frame >= 0 && (uint32_t)frame < g_trade_button_art.frame_count) {
-                draw_sprite(dc, &g_trade_button_art, (uint32_t)frame,
+                draw_sprite(surface, &g_trade_button_art, (uint32_t)frame,
                             button->pane.left, button->pane.top);
             }
             /* The hovered button's caption (TRZERO / TRDOIT) is drawn at
                (156, 50) of IWTrade by FUN_0043edac. */
             if (hovered && g_trade_caption_text[index][0] != '\0') {
-                draw_bitmap_label(dc, g_trade_caption_text[index],
+                draw_bitmap_label(surface, g_trade_caption_text[index],
                                   panel->pane.left + 156, panel->pane.top + 50,
                                   RGB(185, 205, 220));
             }
         }
     }
-    draw_hall_info_panel(dc, panel_state);
+    draw_hall_info_panel(surface, panel_state);
 }

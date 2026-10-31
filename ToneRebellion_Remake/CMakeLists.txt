@@ -67,6 +67,19 @@ else()
     target_compile_options(tone_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+# Software rendering onto a plain pixel buffer; no platform headers.
+add_library(tone_render STATIC
+    src/render/render_surface.c
+)
+target_include_directories(tone_render PUBLIC src/render)
+target_compile_features(tone_render PUBLIC c_std_11)
+
+if(MSVC)
+    target_compile_options(tone_render PRIVATE /W4)
+else()
+    target_compile_options(tone_render PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 add_executable(remake_inspect_worlds src/tools/inspect_worlds.c)
 target_link_libraries(remake_inspect_worlds PRIVATE tone_core)
 target_compile_features(remake_inspect_worlds PRIVATE c_std_11)
@@ -260,7 +273,7 @@ endif()
 
 if(WIN32)
     add_executable(remake_menu WIN32 src/platform/win32/menu_app.c)
-    target_link_libraries(remake_menu PRIVATE tone_core user32 gdi32 msimg32 winmm ws2_32)
+    target_link_libraries(remake_menu PRIVATE tone_core tone_render user32 gdi32 winmm ws2_32)
     target_compile_features(remake_menu PRIVATE c_std_11)
     if(NOT MSVC)
         target_link_libraries(remake_menu PRIVATE m)

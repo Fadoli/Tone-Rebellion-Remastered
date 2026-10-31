@@ -138,17 +138,17 @@ static unsigned end_game_tribe_color(unsigned player)
     return player == 1U ? 0xdaU : player == 2U ? 100U : player == 3U ? 0xa7U : 0xcfU;
 }
 
-static void end_game_text(HDC dc, const char *text, int x, int y, unsigned color)
+static void end_game_text(RenderSurface *surface, const char *text, int x, int y, unsigned color)
 {
     if (g_small_font.bytes == NULL || text[0] == '\0') return;
-    draw_small_label(dc, text, x, y, g_end_game_palette[color & 0xffU]);
+    draw_small_label(surface, text, x, y, g_end_game_palette[color & 0xffU]);
 }
 
-static void end_game_text_centered(HDC dc, const char *text, int center,
+static void end_game_text_centered(RenderSurface *surface, const char *text, int center,
                                    int y, unsigned color)
 {
     if (g_small_font.bytes == NULL) return;
-    end_game_text(dc, text, center - measure_small_text(text, strlen(text)) / 2,
+    end_game_text(surface, text, center - measure_small_text(text, strlen(text)) / 2,
                   y, color);
 }
 
@@ -165,7 +165,7 @@ static void end_game_tribe_noun(char *out, size_t capacity, unsigned player,
    in the binary, so L = 0 and the first emblem frame is min(0 + 5, 7). Not
    ported: the 410x175 figure helper (FUN_00428191, asset unknown) and the
    player-name line (DAT_004beff0 table, writers unknown). */
-static void render_end_game_player_card(HDC dc, int tick)
+static void render_end_game_player_card(RenderSurface *surface, int tick)
 {
     unsigned player = g_menu.selected_tribe < 4U ? g_menu.selected_tribe : 3U;
     unsigned glyph;
@@ -178,64 +178,64 @@ static void render_end_game_player_card(HDC dc, int tick)
         !game_session_end_game_score(&g_game_session, (uint8_t)player, &score))
         return;
     if (tick > 250 && g_end_game_art.frame_count > 5U)
-        draw_sprite(dc, &g_end_game_art, 5, 31, 20);
+        draw_sprite(surface, &g_end_game_art, 5, 31, 20);
     if (tick > 300 && g_end_game_art.frame_count > 0U)
-        draw_sprite(dc, &g_end_game_art, 0, 483, 19);
+        draw_sprite(surface, &g_end_game_art, 0, 483, 19);
     if (tick > 350 && g_end_game_art.frame_count > 35U + player) {
-        draw_sprite(dc, &g_end_game_art, 35U + player, 22, 187);
+        draw_sprite(surface, &g_end_game_art, 35U + player, 22, 187);
         for (glyph = 0; glyph < 14U; ++glyph) {
             if ((mask & (1U << glyph)) == 0) continue;
             if (g_end_game_art.frame_count > glyph + 19U)
-                draw_sprite(dc, &g_end_game_art, glyph + 19U, 22, 187);
+                draw_sprite(surface, &g_end_game_art, glyph + 19U, 22, 187);
         }
     }
     if (tick > 400 && g_end_game_art.frame_count > 8U)
-        draw_sprite(dc, &g_end_game_art, 8, 439, 188);
+        draw_sprite(surface, &g_end_game_art, 8, 439, 188);
     if (tick > 500 && g_end_game_art.frame_count > 9U + score.grade)
-        draw_sprite(dc, &g_end_game_art, 9U + score.grade, 239, 141);
+        draw_sprite(surface, &g_end_game_art, 9U + score.grade, 239, 141);
     if (tick > 500 && g_initial_floater_bodies[player].frame_count > 0U) {
         /* FUN_00428191 -> FUN_0042704b draws the tribe's floater sprite at
            (410,175), scale 1.0; legs frame 0 and the body's first frame
            are an approximation (fltdraw shape table not established). */
-        draw_sprite(dc, &g_initial_floater_bodies[player], 0, 410, 175);
+        draw_sprite(surface, &g_initial_floater_bodies[player], 0, 410, 175);
         if (g_initial_floater_legs[player].frame_count > 0U)
-            draw_sprite(dc, &g_initial_floater_legs[player], 0, 410, 175);
+            draw_sprite(surface, &g_initial_floater_legs[player], 0, 410, 175);
     }
     if (tick > 250) {
         (void)snprintf(text, sizeof(text), "%d %s:",
                        (int)score.visited_islands - 1,
                        g_end_game_text[EGT_IVISIT]);
-        end_game_text_centered(dc, text, 102, 131, 0x9bU);
+        end_game_text_centered(surface, text, 102, 131, 0x9bU);
         (void)snprintf(text, sizeof(text), "%d %s", (int)score.points_visited,
                        g_end_game_text[EGT_POINTS]);
-        end_game_text_centered(dc, text, 102, 141, 0xddU);
+        end_game_text_centered(surface, text, 102, 141, 0xddU);
     }
     if (tick > 300) {
         (void)snprintf(text, sizeof(text), "%s:", g_end_game_text[EGT_LSTREN1]);
-        end_game_text_centered(dc, text, 535, 131, 0xa0U);
+        end_game_text_centered(surface, text, 535, 131, 0xa0U);
         (void)snprintf(text, sizeof(text), "%d %s", (int)score.points_level,
                        g_end_game_text[EGT_POINTS]);
-        end_game_text_centered(dc, text, 535, 141, 0xddU);
+        end_game_text_centered(surface, text, 535, 141, 0xddU);
     }
     if (tick > 350) {
         (void)snprintf(text, sizeof(text), "%u %s:", (unsigned)score.glyphs,
                        g_end_game_text[EGT_GLYPHS]);
-        end_game_text_centered(dc, text, 102, 266, 0x9cU);
+        end_game_text_centered(surface, text, 102, 266, 0x9cU);
         (void)snprintf(text, sizeof(text), "%d %s", (int)score.points_glyphs,
                        g_end_game_text[EGT_POINTS]);
-        end_game_text_centered(dc, text, 102, 276, 0xddU);
+        end_game_text_centered(surface, text, 102, 276, 0xddU);
     }
     if (tick > 400) {
         static const int kill_x[4] = {458, 506, 551, 593};
         unsigned pair;
         (void)snprintf(text, sizeof(text), "%u %s", (unsigned)score.shadow_total,
                        g_end_game_text[EGT_SHADSTR]);
-        end_game_text(dc, text, 454, 167, 0xa0U);
+        end_game_text(surface, text, 454, 167, 0xa0U);
         (void)snprintf(text, sizeof(text), "%s:", g_end_game_text[EGT_POINTS]);
-        end_game_text(dc, text, 454, 177, 0xddU);
+        end_game_text(surface, text, 454, 177, 0xddU);
         for (pair = 0; pair < 4U; ++pair) {
             (void)snprintf(text, sizeof(text), "%d", (int)score.points_kills[pair]);
-            end_game_text(dc, text, kill_x[pair], 236, 0xddU);
+            end_game_text(surface, text, kill_x[pair], 236, 0xddU);
         }
     }
     if (tick > 425) {
@@ -244,35 +244,35 @@ static void render_end_game_player_card(HDC dc, int tick)
                            ? "%u %s %s:" : "%u %s %s",
                        (unsigned)score.tribe_floaters, noun,
                        g_end_game_text[EGT_FLOTTRIB]);
-        end_game_text(dc, text, 454, 258, color);
+        end_game_text(surface, text, 454, 258, color);
         (void)snprintf(text, sizeof(text), "%d %s:", (int)score.points_tribe,
                        g_end_game_text[EGT_POINTS]);
-        end_game_text(dc, text, 458, 268, 0xddU);
+        end_game_text(surface, text, 458, 268, 0xddU);
     }
     if (tick > 450) {
         end_game_tribe_noun(noun, sizeof(noun), player, score.losses != 1U);
         (void)snprintf(text, sizeof(text), score.losses == 1U
                            ? "%u %s %s:" : "%u %s %s", (unsigned)score.losses,
                        noun, g_end_game_text[EGT_FLOTLOSS]);
-        end_game_text(dc, text, 454, 283, color);
+        end_game_text(surface, text, 454, 283, color);
         (void)snprintf(text, sizeof(text), "%d %s", -(int)score.points_losses,
                        g_end_game_text[EGT_POINTS]);
-        end_game_text(dc, text, 458, 293, 0xddU);
+        end_game_text(surface, text, 458, 293, 0xddU);
     }
     if (tick > 500) {
         end_game_tribe_noun(noun, sizeof(noun), player, 1);
         (void)snprintf(text, sizeof(text), "%s %s", g_end_game_text[EGT_TROFTHE], noun);
-        end_game_text_centered(dc, text, 320, 172, color);
+        end_game_text_centered(surface, text, 320, 172, color);
         (void)snprintf(text, sizeof(text), "%d %s: %s", (int)score.total,
                        g_end_game_text[EGT_POINTS],
                        g_end_game_text[EGT_RANK0 + score.grade]);
-        end_game_text_centered(dc, text, 320, 288, 0xddU);
+        end_game_text_centered(surface, text, 320, 288, 0xddU);
     }
 }
 
 /* FUN_0041a8df (ENDGNONP0..2): no tick gate; card k shows the k-th player other
    than the viewer. Not ported: the player-name line and the figure helper. */
-static void render_end_game_other_cards(HDC dc)
+static void render_end_game_other_cards(RenderSurface *surface)
 {
     static const int card_x[3] = {15, 223, 432};
     unsigned viewer = g_menu.selected_tribe < 4U ? g_menu.selected_tribe : 3U;
@@ -292,46 +292,46 @@ static void render_end_game_other_cards(HDC dc)
             !game_session_end_game_score(&g_game_session, (uint8_t)player, &score))
             continue;
         color = end_game_tribe_color(player);
-        saved = SaveDC(dc);
-        (void)IntersectClipRect(dc, card_x[card], 326, card_x[card] + 190, 462);
+        saved = render_surface_save(surface);
+        render_surface_intersect_clip(surface, card_x[card], 326, card_x[card] + 190, 462);
         if (g_end_game_art.frame_count > 9U + score.grade)
-            draw_sprite(dc, &g_end_game_art, 9U + score.grade, card_x[card] - 16, 326 - 19);
-        (void)RestoreDC(dc, saved);
+            draw_sprite(surface, &g_end_game_art, 9U + score.grade, card_x[card] - 16, 326 - 19);
+        (void)render_surface_restore(surface, saved);
         end_game_tribe_noun(noun, sizeof(noun), player, 1);
-        end_game_text(dc, noun, card_x[card] + 10, 326 + 2, color);
+        end_game_text(surface, noun, card_x[card] + 10, 326 + 2, color);
         (void)snprintf(text, sizeof(text), "%d %s: %s", (int)score.total,
                        g_end_game_text[EGT_POINTS],
                        g_end_game_text[EGT_RANK0 + score.grade]);
-        end_game_text(dc, text, card_x[card] + 10, 326 + 12, 0xddU);
+        end_game_text(surface, text, card_x[card] + 10, 326 + 12, 0xddU);
         (void)snprintf(text, sizeof(text), "%u %s", (unsigned)score.glyphs,
                        g_end_game_text[EGT_GLYPHS]);
-        end_game_text(dc, text, card_x[card] + 10, 326 + 122, 0x9cU);
+        end_game_text(surface, text, card_x[card] + 10, 326 + 122, 0x9cU);
         (void)snprintf(text, sizeof(text), "%u %s", (unsigned)score.shadow_card_total,
                        g_end_game_text[EGT_SHADSTR]);
-        end_game_text(dc, text, card_x[card] + 70, 326 + 122, 0xa0U);
+        end_game_text(surface, text, card_x[card] + 70, 326 + 122, 0xa0U);
         (void)snprintf(text, sizeof(text), "%u", (unsigned)score.tribe_floaters);
-        end_game_text(dc, text, card_x[card] + 140, 326 + 52, color);
+        end_game_text(surface, text, card_x[card] + 140, 326 + 52, color);
         end_game_tribe_noun(noun, sizeof(noun), player, score.tribe_floaters != 1U);
-        end_game_text(dc, noun, card_x[card] + 140, 326 + 62, color);
-        end_game_text(dc, g_end_game_text[EGT_FLOTTRIB], card_x[card] + 140, 326 + 72, color);
+        end_game_text(surface, noun, card_x[card] + 140, 326 + 62, color);
+        end_game_text(surface, g_end_game_text[EGT_FLOTTRIB], card_x[card] + 140, 326 + 72, color);
         (void)snprintf(text, sizeof(text), "%u", (unsigned)score.losses);
-        end_game_text(dc, text, card_x[card] + 140, 326 + 85, color);
+        end_game_text(surface, text, card_x[card] + 140, 326 + 85, color);
         end_game_tribe_noun(noun, sizeof(noun), player, score.losses != 1U);
-        end_game_text(dc, noun, card_x[card] + 140, 326 + 95, color);
-        end_game_text(dc, g_end_game_text[EGT_FLOTLOSS], card_x[card] + 140, 326 + 105, color);
+        end_game_text(surface, noun, card_x[card] + 140, 326 + 95, color);
+        end_game_text(surface, g_end_game_text[EGT_FLOTLOSS], card_x[card] + 140, 326 + 105, color);
     }
 }
 
-static void render_end_game(HDC dc)
+static void render_end_game(RenderSurface *surface)
 {
     unsigned index;
     int tick = (int)g_end_game_tick;
-    fill_rect(dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
-    draw_sprite(dc, &g_end_game_template_art, 0, 0, 0);
-    render_end_game_player_card(dc, tick);
+    fill_rect(surface, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
+    draw_sprite(surface, &g_end_game_template_art, 0, 0, 0);
+    render_end_game_player_card(surface, tick);
     /* FUN_0041a8df draws only when DAT_004befe0 (multiplayer session) is set;
        the port is solo-only, so the three ENDGNONP cards stay hidden. */
-    if (END_GAME_MULTIPLAYER_SESSION) render_end_game_other_cards(dc);
+    if (END_GAME_MULTIPLAYER_SESSION) render_end_game_other_cards(surface);
     if (tick <= END_GAME_SCROLL_START || tick >= END_GAME_SCROLL_END ||
         g_big_font.bytes == NULL) return;
     /* ENDGTEXT line i sits at local y = 150 - (tick - 5) + 16 i, centred in
@@ -344,7 +344,7 @@ static void render_end_game(HDC dc)
         int width;
         if (line[0] == '\0' || y < 0 || y > END_GAME_PANE_HEIGHT - 11) continue;
         width = measure_big_text(line, strlen(line));
-        draw_big_label(dc, line,
+        draw_big_label(surface, line,
                        END_GAME_PANE_LEFT + (END_GAME_PANE_WIDTH - width) / 2,
                        END_GAME_PANE_TOP + y, native_text_color(g_end_game_palette, 6));
     }

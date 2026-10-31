@@ -1,4 +1,4 @@
-static void draw_iw_construct(HDC dc)
+static void draw_iw_construct(RenderSurface *surface)
 {
     const WindowTemplate *window;
     const WindowTemplate *info_window;
@@ -14,7 +14,7 @@ static void draw_iw_construct(HDC dc)
 
     /* The pane extents, backdrop frames, and optional cycle button come from
        windows.txt; the original draw loop lays out four columns per page. */
-    draw_sprite(dc, &g_temp_hole_art, (uint32_t)window->shape_frame,
+    draw_sprite(surface, &g_temp_hole_art, (uint32_t)window->shape_frame,
                 window->pane.left, window->pane.top);
     for (column = 0; column < IW_CONSTRUCT_ITEMS_PER_PAGE; ++column) {
         size_t item_index = (size_t)g_iw_construct.page *
@@ -36,9 +36,9 @@ static void draw_iw_construct(HDC dc)
                 window->pane.bottom - 10
             };
             /* FUN_0042dd0f(1) = DAT_0049e140[1]: palette index 1. */
-            HBRUSH brush = CreateSolidBrush(g_island_palette[1]);
-            FrameRect(dc, &highlight, brush);
-            DeleteObject(brush);
+            render_surface_frame_rect(surface, highlight.left, highlight.top,
+                                      highlight.right, highlight.bottom,
+                                      colorref_pixel(g_island_palette[1]));
         }
         {
             uint16_t item_id = (uint16_t)(g_iw_construct_items[item_index] +
@@ -47,7 +47,7 @@ static void draw_iw_construct(HDC dc)
                 g_building_art[item_id].frame_count != 0 &&
                 item_id < g_pad_catalog.item_count) {
                 const PadCatalogItem *item = &g_pad_catalog.items[item_id];
-                (void)draw_building_preview(dc, item_id,
+                (void)draw_building_preview(surface, item_id,
                     (uint8_t)g_game_session.config.selected_tribe,
                     center_x, window->pane.top +
                     (window->pane.bottom - window->pane.top) - 0x23, 0x8000U);
@@ -55,7 +55,7 @@ static void draw_iw_construct(HDC dc)
                     int cost_frame = item->building_tone_cost - 1;
                     if (cost_frame > 0x31) cost_frame = 0x31;
                     if ((uint32_t)cost_frame < g_bildtone_art.frame_count) {
-                        draw_sprite_scaled(dc, &g_bildtone_art, (uint32_t)cost_frame,
+                        draw_sprite_scaled(surface, &g_bildtone_art, (uint32_t)cost_frame,
                             center_x, window->pane.top +
                             (window->pane.bottom - window->pane.top) - 0x0f, 0x8000U);
                     }
@@ -64,11 +64,11 @@ static void draw_iw_construct(HDC dc)
         }
     }
     if (g_iw_construct.cycle_button_visible && cycle_window != NULL) {
-        draw_sprite(dc, &g_build_cycle_art, (uint32_t)cycle_window->shape_frame,
+        draw_sprite(surface, &g_build_cycle_art, (uint32_t)cycle_window->shape_frame,
                     cycle_window->pane.left, cycle_window->pane.top);
     }
 
-    draw_sprite(dc, &g_temp_hole_art, (uint32_t)info_window->shape_frame,
+    draw_sprite(surface, &g_temp_hole_art, (uint32_t)info_window->shape_frame,
                 info_window->pane.left, info_window->pane.top);
     info_item = g_iw_construct_info.item_id < 0 ? NULL : pad_catalog_find(
         &g_pad_catalog, (uint16_t)(g_iw_construct_info.item_id +
@@ -77,7 +77,7 @@ static void draw_iw_construct(HDC dc)
         uint16_t item_id = info_item->item_id;
         if (item_id < PAD_CATALOG_MAX_ITEMS &&
             g_building_art[item_id].frame_count != 0) {
-            (void)draw_building_preview(dc, item_id,
+            (void)draw_building_preview(surface, item_id,
                 (uint8_t)g_game_session.config.selected_tribe,
                 info_window->pane.left +
                     (info_window->pane.right - info_window->pane.left) - 0x37,
@@ -87,7 +87,7 @@ static void draw_iw_construct(HDC dc)
             int cost_frame = info_item->building_tone_cost - 1;
             if (cost_frame > 0x31) cost_frame = 0x31;
             if ((uint32_t)cost_frame < g_bildtone_art.frame_count) {
-                draw_sprite(dc, &g_bildtone_art, (uint32_t)cost_frame,
+                draw_sprite(surface, &g_bildtone_art, (uint32_t)cost_frame,
                             info_window->pane.left + 0x2d,
                             info_window->pane.top + 0x4b);
             }
@@ -98,7 +98,7 @@ static void draw_iw_construct(HDC dc)
                 char cost_text[16];
                 (void)snprintf(cost_text, sizeof(cost_text), "%d",
                                (int)info_item->building_tone_cost);
-                draw_bitmap_label(dc, cost_text,
+                draw_bitmap_label(surface, cost_text,
                                   info_window->pane.left + 0x25,
                                   info_window->pane.top + 0x2d,
                                   RGB(185, 205, 220));
@@ -114,7 +114,7 @@ static void draw_iw_construct(HDC dc)
             /* SMFONT (height 8), palette index 6: first top = 0x58 + 9. */
             int line_height = (int)g_small_font.height + 1;
             int max_lines = line_height > 0 ? text_height / line_height : 0;
-            draw_wrapped_small_label(dc, g_building_descriptions[item_id],
+            draw_wrapped_small_label(surface, g_building_descriptions[item_id],
                 info_window->pane.left + 6,
                 info_window->pane.top + 0x58 + line_height,
                 text_width, max_lines, line_height, native_text_color(g_island_palette, 6));
@@ -129,11 +129,11 @@ static int island_pad_group(const IslandLocation *location)
     return island_pad_size_group(location->kind);
 }
 
-static void draw_feature_reveal(HDC dc, const SpriteSheet *art,
+static void draw_feature_reveal(RenderSurface *surface, const SpriteSheet *art,
                                 int island_id, uint32_t frame_index,
                                 int x, int y, int progress);
 static int draw_island_leviathan_spawn_effect(
-    HDC dc, const GameRuntimeLocation *location,
+    RenderSurface *surface, const GameRuntimeLocation *location,
     const BuildingRenderItem *item, int x, int y, int full_reveal);
 
 /* FUN_00411478 (site flag 0x200): dithered shimmer over a rectangle around the
@@ -142,12 +142,22 @@ static int draw_island_leviathan_spawn_effect(
    (FUN_004108fa/FUN_0042dd0f). The native palette is filled at runtime, so
    the island palette stands in for it. Writes keep the native order, including
    the copy of the just-written neighbour pixel. */
-static void draw_site_shimmer(HDC dc, int left, int top, int right, int bottom,
+/* SetPixel(to, GetPixel(from)): a clipped-out source reads CLR_INVALID,
+   which SetPixel stores as black. */
+static void copy_shimmer_pixel(RenderSurface *surface, int from_x, int from_y,
+                               int to_x, int to_y)
+{
+    uint32_t pixel;
+    if (!render_surface_get_pixel(surface, from_x, from_y, &pixel)) pixel = 0;
+    render_surface_set_pixel(surface, to_x, to_y, pixel & 0x00ffffffU);
+}
+
+static void draw_site_shimmer(RenderSurface *surface, int left, int top, int right, int bottom,
                               uint32_t seed)
 {
     static const uint8_t first[7] = {0, 1, 1, 2, 1, 1, 0};
     static const uint8_t second[7] = {4, 4, 0, 1, 0, 4, 4};
-    COLORREF colors[3];
+    uint32_t colors[3];
     uint32_t state = 0xdefeca35U;
     uint8_t index;
     int x;
@@ -157,12 +167,12 @@ static void draw_site_shimmer(HDC dc, int left, int top, int right, int bottom,
 
     for (c = 0; c < 2; ++c) {
         int level = gray[c] * 255 / 63;
-        colors[c] = RGB(level, level, level);
+        colors[c] = colorref_pixel(RGB(level, level, level));
         if (island_palette_lookup_nearest(&g_island_palette_lookup,
                 (uint32_t)RGB(level, level, level) & UINT32_C(0x00ffffff),
-                &index)) colors[c] = g_island_palette[index];
+                &index)) colors[c] = colorref_pixel(g_island_palette[index]);
     }
-    colors[2] = g_island_palette[1];
+    colors[2] = colorref_pixel(g_island_palette[1]);
     for (y = top; y <= bottom; y += 2) {
         for (x = left; x <= right; x += 2) {
             uint32_t u = (state + seed + (uint32_t)(x - left) +
@@ -170,12 +180,12 @@ static void draw_site_shimmer(HDC dc, int left, int top, int right, int bottom,
             state >>= 1;
             if (state < 0x40U) state += 0xdefeca35U;
             if (u >= 7U) continue;
-            (void)SetPixel(dc, x, y, colors[first[u]]);
+            render_surface_set_pixel(surface, x, y, colors[first[u]]);
             if (second[u] != 4U) {
-                (void)SetPixel(dc, x + 1, y, colors[second[u]]);
-                (void)SetPixel(dc, x, y + 1, GetPixel(dc, x + 1, y));
-                (void)SetPixel(dc, x - 1, y, GetPixel(dc, x, y + 1));
-                (void)SetPixel(dc, x, y - 1, GetPixel(dc, x - 1, y));
+                render_surface_set_pixel(surface, x + 1, y, colors[second[u]]);
+                copy_shimmer_pixel(surface, x + 1, y, x, y + 1);
+                copy_shimmer_pixel(surface, x, y + 1, x - 1, y);
+                copy_shimmer_pixel(surface, x - 1, y, x, y - 1);
             }
         }
     }
@@ -207,18 +217,18 @@ static int item_stipple_level(const GameRuntimeLocation *location)
     }
 }
 
-static void draw_item_layer(HDC dc, const SpriteSheet *sheet, uint32_t frame,
+static void draw_item_layer(RenderSurface *surface, const SpriteSheet *sheet, uint32_t frame,
                             int x, int y, uint32_t scale_16_16)
 {
     if (g_item_stipple_level >= 8 || scale_16_16 != 0x10000U) {
-        draw_sprite_scaled(dc, sheet, frame, x, y, scale_16_16);
+        draw_sprite_scaled(surface, sheet, frame, x, y, scale_16_16);
         return;
     }
-    draw_feature_reveal(dc, sheet, g_island_surface_id, frame, x, y,
+    draw_feature_reveal(surface, sheet, g_island_surface_id, frame, x, y,
                         g_item_stipple_level);
 }
 
-static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_location,
+static int draw_runtime_item_scaled(RenderSurface *surface, const GameRuntimeLocation *runtime_location,
                                     int x, int y, uint32_t scale_16_16)
 {
     int32_t raw_id;
@@ -265,8 +275,8 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
                 if (runtime_location->renderer_class == 1) {
                     g_sprite_haze_selector = pose_selector;
                     g_sprite_haze_level = pose_level;
-                    draw_sprite_scaled(dc, &g_tone_field_art, 0, x, y, 0x10000U);
-                    draw_sprite_scaled(dc, &g_tone_field_art, 0x25, x, y,
+                    draw_sprite_scaled(surface, &g_tone_field_art, 0, x, y, 0x10000U);
+                    draw_sprite_scaled(surface, &g_tone_field_art, 0x25, x, y,
                                        0x10000U);
                 } else {
                     uint32_t pad_frame;
@@ -278,7 +288,7 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
                         pad_frame = pose_pad != NULL && pose_pad->size >= 0
                             ? (uint32_t)pose_pad->size : 0U;
                     }
-                    recolor_under_sprite(dc, &g_solidpad_art, pad_frame, x, y,
+                    recolor_under_sprite(surface, &g_solidpad_art, pad_frame, x, y,
                                          pose_selector, pose_level);
                 }
                 y += remaining < 8 ? (remaining * remaining) / 8
@@ -306,7 +316,7 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
                                                      runtime_location->source_capacity_4a,
                                                      runtime_location->source_flags);
         if (frame < sheet->frame_count) {
-            draw_item_layer(dc, sheet, frame, x, y, scale_16_16);
+            draw_item_layer(surface, sheet, frame, x, y, scale_16_16);
             drew = 1;
             /* FUN_0040bf98: with upgrade bit 0x20 the solid, unhazed BASE
                pass also fades the next level's frame in at +0x48 / 3. */
@@ -315,7 +325,7 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
                 g_item_stipple_level >= 8 &&
                 frame < (uint32_t)item->base.last_frame - 1U &&
                 frame + 1U < sheet->frame_count) {
-                draw_feature_reveal(dc, sheet, g_island_surface_id, frame + 1U,
+                draw_feature_reveal(surface, sheet, g_island_surface_id, frame + 1U,
                                     x, y, runtime_location->source_value_48 / 3);
             }
         }
@@ -336,7 +346,7 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
             chug_ticks = 0U;
         frame = building_render_chug_frame(item, chug_ticks);
         if (frame < sheet->frame_count) {
-            draw_item_layer(dc, sheet, frame, x, y, scale_16_16);
+            draw_item_layer(surface, sheet, frame, x, y, scale_16_16);
             drew = 1;
             /* Keep rendering later layers: GLYP is drawn after CHUG by
                FUN_0040bf98 and may be the visible top layer. */
@@ -345,7 +355,7 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
     if (item->glyph.present) {
         frame = building_render_glyph_frame(item, runtime_location->glyph_progress);
         if (frame < sheet->frame_count) {
-            draw_item_layer(dc, sheet, frame, x, y, scale_16_16);
+            draw_item_layer(surface, sheet, frame, x, y, scale_16_16);
             drew = 1;
         }
     }
@@ -358,7 +368,7 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
     if (item->inci.present) {
         frame = building_render_inci_frame(item, runtime_location->inci_progress);
         if (frame < sheet->frame_count) {
-            draw_item_layer(dc, sheet, frame, x, y, scale_16_16);
+            draw_item_layer(surface, sheet, frame, x, y, scale_16_16);
             drew = 1;
         }
     }
@@ -373,7 +383,7 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
             (runtime_location->source_flags & 0x007U) == 0U)
             frame = UINT32_MAX;
         if (frame < sheet->frame_count) {
-            draw_item_layer(dc, sheet, frame, x, y, scale_16_16);
+            draw_item_layer(surface, sheet, frame, x, y, scale_16_16);
             drew = 1;
         }
     }
@@ -383,7 +393,7 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
         frame = building_render_prod_frame(item, runtime_location->production_progress,
                                            runtime_location->source_flags);
         if (frame < sheet->frame_count) {
-            draw_item_layer(dc, sheet, frame, prod_position.x, prod_position.y,
+            draw_item_layer(surface, sheet, frame, prod_position.x, prod_position.y,
                                scale_16_16);
             drew = 1;
         }
@@ -405,7 +415,7 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
                 BuildingRenderPoint effect_position =
                     building_render_prod_threshold_position(item, x, y);
                 g_sprite_haze_level = -1;
-                draw_item_layer(dc, resource_art, 0, effect_position.x,
+                draw_item_layer(surface, resource_art, 0, effect_position.x,
                                 effect_position.y, scale_16_16);
                 g_sprite_haze_level = haze_level;
                 drew = 1;
@@ -418,11 +428,11 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
             runtime_location->record_value_10 == 6 &&
             (runtime_location->source_flags & 0x002U) != 0) {
             if (draw_island_leviathan_spawn_effect(
-                    dc, runtime_location, item, x, y, 1))
+                    surface, runtime_location, item, x, y, 1))
                 drew = 1;
             if (frame > 0x17U && frame < 0x27U &&
                 frame + 0x13U < sheet->frame_count) {
-                draw_sprite(dc, sheet, frame + 0x13U, x, y);
+                draw_sprite(surface, sheet, frame + 0x13U, x, y);
                 drew = 1;
             }
         }
@@ -432,7 +442,7 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
             runtime_location->record_value_10 == 9 &&
             (runtime_location->source_flags & 0x002U) != 0 &&
             draw_island_leviathan_spawn_effect(
-                dc, runtime_location, item, x, y, 1)) {
+                surface, runtime_location, item, x, y, 1)) {
             drew = 1;
         }
         if (scale_16_16 == 0x10000U && runtime_location->renderer_class == 1 &&
@@ -448,10 +458,10 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
                     mask_progress = 16U - mask_progress;
                 if (mask_progress > 0U && mask_progress < 16U) {
                     if (mask_progress >= 8U) {
-                        draw_sprite(dc, &g_leviathan_reveal_art, 0, x + 1,
+                        draw_sprite(surface, &g_leviathan_reveal_art, 0, x + 1,
                                     y - 0x5a);
                     } else {
-                        draw_feature_reveal(dc, &g_leviathan_reveal_art,
+                        draw_feature_reveal(surface, &g_leviathan_reveal_art,
                             g_island_surface_id, 0, x + 1, y - 0x5a,
                             (int)mask_progress);
                     }
@@ -462,21 +472,21 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
         if (scale_16_16 == 0x10000U && runtime_location->renderer_class == 1 &&
             runtime_location->record_value_10 == 8 &&
             (runtime_location->source_flags & 0x002U) != 0 &&
-            draw_island_leviathan_spawn_effect(dc, runtime_location, item, x, y, 0)) {
+            draw_island_leviathan_spawn_effect(surface, runtime_location, item, x, y, 0)) {
             drew = 1;
         }
     }
     if (item->occu.present && (runtime_location->source_flags & 8U) != 0) {
         frame = (uint32_t)item->occu.first_frame - 1U;
         if (frame < sheet->frame_count) {
-            draw_item_layer(dc, sheet, frame, x, y, scale_16_16);
+            draw_item_layer(surface, sheet, frame, x, y, scale_16_16);
             drew = 1;
         }
     }
     if (item->barg.present) {
         frame = building_render_barg_frame(item, runtime_location->barg_progress);
         if (frame < sheet->frame_count) {
-            draw_item_layer(dc, sheet, frame, x, y, scale_16_16);
+            draw_item_layer(surface, sheet, frame, x, y, scale_16_16);
             drew = 1;
         }
     }
@@ -495,7 +505,7 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
         int bit;
         for (bit = 0; bit < 4; ++bit) {
             if ((runtime_location->source_flags & (0x800U << bit)) != 0U) {
-                draw_sprite(dc, &g_building_number_art, (uint32_t)(bit + 4),
+                draw_sprite(surface, &g_building_number_art, (uint32_t)(bit + 4),
                             x - 12 + 8 * bit, y - 0x43);
                 drew = 1;
             }
@@ -512,7 +522,7 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
             (uint32_t)(runtime_location->record_value_24 - 5);
         if (level > 6) level = 12 - level;
         if (blink_frame < g_inventory_item_art.frame_count) {
-            draw_feature_reveal(dc, &g_inventory_item_art, g_island_surface_id,
+            draw_feature_reveal(surface, &g_inventory_item_art, g_island_surface_id,
                                 blink_frame, x, y, level);
             drew = 1;
         }
@@ -521,9 +531,9 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
         scale_16_16 == 0x10000U) {
         uint32_t seed = g_game_session.simulation_tick >> 1;
         if (runtime_location->renderer_class == 1)
-            draw_site_shimmer(dc, x - 50, y - 20, x + 50, y + 20, seed);
+            draw_site_shimmer(surface, x - 50, y - 20, x + 50, y + 20, seed);
         else
-            draw_site_shimmer(dc, x - 20, y - 50, x + 20, y, seed);
+            draw_site_shimmer(surface, x - 20, y - 50, x + 20, y, seed);
         drew = 1;
     }
     /* FUN_0040bf98 draws CRUMBLE after the item's data layers on the full-size
@@ -537,17 +547,17 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
         frame = building_render_crumble_frame(runtime_location->renderer_class,
             item_size, runtime_location->source_value_48);
         if (frame < g_crumble_art.frame_count) {
-            draw_sprite(dc, &g_crumble_art, frame, x, destruction_origin_y);
+            draw_sprite(surface, &g_crumble_art, frame, x, destruction_origin_y);
             drew = 1;
         }
     }
     return drew;
 }
 
-static int draw_runtime_item(HDC dc, const GameRuntimeLocation *runtime_location,
+static int draw_runtime_item(RenderSurface *surface, const GameRuntimeLocation *runtime_location,
                              int x, int y)
 {
-    return draw_runtime_item_scaled(dc, runtime_location, x, y, 0x10000U);
+    return draw_runtime_item_scaled(surface, runtime_location, x, y, 0x10000U);
 }
 
 /* Resolve the map sprite independently from the pad catalog shape. PIT_Object
@@ -575,27 +585,27 @@ static int ground_item_icon_frame(const GameRuntimeLocation *runtime_location,
     }
     if (resolved_frame >= g_inventory_item_art.frame_count) return 0;
     frame = &g_inventory_item_art.frames[resolved_frame];
-    if (frame->bitmap == NULL) return 0;
+    if (frame->pixels == NULL) return 0;
     *frame_index = resolved_frame;
     return 1;
 }
 
 /* Use the inventory sprite only when an item has no drawable building SHP.
    Drawing it over the building creates a second, mismatched image. */
-static int draw_ground_item_icon(HDC dc,
+static int draw_ground_item_icon(RenderSurface *surface,
                                  const GameRuntimeLocation *runtime_location,
                                  int x, int y)
 {
     uint32_t frame_index;
     if (!ground_item_icon_frame(runtime_location, &frame_index)) return 0;
-    draw_sprite(dc, &g_inventory_item_art, frame_index, x, y);
+    draw_sprite(surface, &g_inventory_item_art, frame_index, x, y);
     return 1;
 }
 
 /* FUN_0040d3e1 builds a temporary default item and calls FUN_0040bf98 with
    animation disabled and the requested scale. This shows every declared
    static/idle layer, rather than drawing the asset's frame zero in isolation. */
-static int draw_building_preview(HDC dc, uint16_t item_id, uint8_t player_slot,
+static int draw_building_preview(RenderSurface *surface, uint16_t item_id, uint8_t player_slot,
                                  int x, int y, uint32_t scale_16_16)
 {
     GameRuntimeLocation preview;
@@ -607,7 +617,7 @@ static int draw_building_preview(HDC dc, uint16_t item_id, uint8_t player_slot,
        and downward shift hid the full-size IWConstructInfo building. */
     preview.source_flags = 0U;
     preview.animation_rate = 1;
-    return draw_runtime_item_scaled(dc, &preview, x, y, scale_16_16);
+    return draw_runtime_item_scaled(surface, &preview, x, y, scale_16_16);
 }
 
 static int feature_reveal_pixel(uint8_t pattern, int x, int origin_x)
@@ -625,12 +635,12 @@ static int feature_reveal_pixel(uint8_t pattern, int x, int origin_x)
 }
 
 /* FUN_00410bd2 applies DAT_0049b444's 4x4 reveal mask for progress 1..7.
-   Cache local-coordinate clip regions by island, stage, and horizontal
-   phase; the feature art does not change during a session, so scrolling only
-   selects one of four prebuilt GDI regions. */
-static HRGN feature_reveal_region(int island_id, int progress,
-                                  int width, int height,
-                                  int origin_x, int origin_y)
+   Cache local-coordinate clip masks (one byte per pixel, nonzero = drawn) by
+   island, stage, and horizontal phase; the feature art does not change
+   during a session, so scrolling only selects one of four prebuilt masks. */
+static const uint8_t *feature_reveal_mask(int island_id, int progress,
+                                          int width, int height,
+                                          int origin_x, int origin_y)
 {
     static const uint8_t masks[8][4] = {
         {0x00, 0x00, 0x00, 0x00},
@@ -642,144 +652,75 @@ static HRGN feature_reveal_region(int island_id, int progress,
         {0x04, 0x12, 0x04, 0x12},
         {0x04, 0x13, 0x04, 0x33}
     };
-    static HRGN regions[15][7][4];
+    static uint8_t *cached_masks[15][7][4];
     static int cached_width[15][7][4];
     static int cached_height[15][7][4];
     static int cached_origin_phase[15][7][4];
-    RGNDATA *region_data;
-    RGNDATAHEADER *header;
-    RECT *rects;
-    HRGN region;
-    size_t rect_count = 0;
-    size_t rect_bytes;
-    size_t data_bytes;
-    int mask_stage;
+    uint8_t *mask;
     int stage_index;
     int x_phase_index;
     int y;
-    int min_x = width;
-    int min_y = height;
-    int max_x = 0;
-    int max_y = 0;
-    int origin_x_phase = origin_x & 3;
     int origin_phase = origin_y & 3;
 
     if (island_id < 0 || island_id >= 15 || progress < 1 || progress > 7 ||
         width <= 0 || height <= 0) return NULL;
     stage_index = progress - 1;
-    x_phase_index = origin_x_phase;
-    region = regions[island_id][stage_index][x_phase_index];
-    if (region != NULL &&
+    x_phase_index = origin_x & 3;
+    mask = cached_masks[island_id][stage_index][x_phase_index];
+    if (mask != NULL &&
         cached_width[island_id][stage_index][x_phase_index] == width &&
         cached_height[island_id][stage_index][x_phase_index] == height &&
         cached_origin_phase[island_id][stage_index][x_phase_index] == origin_phase)
-        return region;
+        return mask;
 
-    mask_stage = progress;
+    mask = (uint8_t *)malloc((size_t)width * (size_t)height);
+    if (mask == NULL) return NULL;
     for (y = 0; y < height; ++y) {
-        uint8_t pattern = masks[mask_stage][(origin_y + y) & 3];
-        int x = 0;
-        while (x < width) {
-            int begin;
-            if (!feature_reveal_pixel(pattern, x, origin_x)) {
-                ++x;
-                continue;
-            }
-            begin = x++;
-            while (x < width && feature_reveal_pixel(pattern, x, origin_x)) ++x;
-            ++rect_count;
-            if (begin < min_x) min_x = begin;
-            if (y < min_y) min_y = y;
-            if (x > max_x) max_x = x;
-            if (y + 1 > max_y) max_y = y + 1;
-        }
+        uint8_t pattern = masks[progress][(origin_y + y) & 3];
+        int x;
+        for (x = 0; x < width; ++x)
+            mask[(size_t)y * (size_t)width + (size_t)x] =
+                (uint8_t)feature_reveal_pixel(pattern, x, origin_x);
     }
-    if (rect_count == 0) {
-        region = CreateRectRgn(0, 0, 0, 0);
-        if (region == NULL) return NULL;
-        goto cache_region;
-    }
-    if (rect_count > (SIZE_MAX - sizeof(RGNDATAHEADER)) / sizeof(RECT))
-        return NULL;
-    rect_bytes = rect_count * sizeof(RECT);
-    data_bytes = sizeof(RGNDATAHEADER) + rect_bytes;
-    if (rect_count > UINT32_MAX || rect_bytes > UINT32_MAX ||
-        data_bytes > UINT32_MAX) return NULL;
-    region_data = (RGNDATA *)malloc(data_bytes);
-    if (region_data == NULL) return NULL;
-    header = (RGNDATAHEADER *)region_data;
-    header->dwSize = sizeof(RGNDATAHEADER);
-    header->iType = RDH_RECTANGLES;
-    header->nCount = (DWORD)rect_count;
-    header->nRgnSize = (DWORD)rect_bytes;
-    header->rcBound.left = min_x;
-    header->rcBound.top = min_y;
-    header->rcBound.right = max_x;
-    header->rcBound.bottom = max_y;
-    rects = (RECT *)region_data->Buffer;
-    rect_count = 0;
-    for (y = 0; y < height; ++y) {
-        uint8_t pattern = masks[mask_stage][(origin_y + y) & 3];
-        int x = 0;
-        while (x < width) {
-            int begin;
-            if (!feature_reveal_pixel(pattern, x, origin_x)) {
-                ++x;
-                continue;
-            }
-            begin = x++;
-            while (x < width && feature_reveal_pixel(pattern, x, origin_x)) ++x;
-            rects[rect_count].left = begin;
-            rects[rect_count].top = y;
-            rects[rect_count].right = x;
-            rects[rect_count].bottom = y + 1;
-            ++rect_count;
-        }
-    }
-    region = ExtCreateRegion(NULL, (DWORD)data_bytes, region_data);
-    free(region_data);
-    if (region == NULL) return NULL;
-
-cache_region:
-    if (regions[island_id][stage_index][x_phase_index] != NULL)
-        DeleteObject(regions[island_id][stage_index][x_phase_index]);
-    regions[island_id][stage_index][x_phase_index] = region;
+    free(cached_masks[island_id][stage_index][x_phase_index]);
+    cached_masks[island_id][stage_index][x_phase_index] = mask;
     cached_width[island_id][stage_index][x_phase_index] = width;
     cached_height[island_id][stage_index][x_phase_index] = height;
     cached_origin_phase[island_id][stage_index][x_phase_index] = origin_phase;
-    return region;
+    return mask;
 }
 
-static void draw_feature_reveal(HDC dc, const SpriteSheet *art,
+static void draw_feature_reveal(RenderSurface *surface, const SpriteSheet *art,
                                 int island_id, uint32_t frame_index,
                                 int x, int y, int progress)
 {
     const SpriteFrame *frame;
-    HRGN region;
+    const uint8_t *mask;
     int destination_x;
     int destination_y;
+    int saved;
     if (art == NULL || frame_index >= art->frame_count || progress < 1 ||
         progress > 7) return;
     frame = &art->frames[frame_index];
-    if (frame->bitmap == NULL) return;
+    if (frame->pixels == NULL) return;
     destination_x = x + frame->x_offset;
     destination_y = y + frame->y_offset;
-    region = feature_reveal_region(island_id, progress, frame->width,
-                                   frame->height, destination_x,
-                                   destination_y);
-    if (region == NULL) return;
-    if (SaveDC(dc) == 0) return;
-    OffsetRgn(region, destination_x, destination_y);
-    (void)ExtSelectClipRgn(dc, region, RGN_AND);
-    draw_sprite(dc, art, frame_index, x, y);
-    OffsetRgn(region, -destination_x, -destination_y);
-    RestoreDC(dc, -1);
+    mask = feature_reveal_mask(island_id, progress, frame->width,
+                               frame->height, destination_x, destination_y);
+    if (mask == NULL) return;
+    saved = render_surface_save(surface);
+    if (saved == 0) return;
+    if (render_surface_intersect_mask(surface, mask, destination_x,
+                                      destination_y, frame->width,
+                                      frame->height, frame->width))
+        draw_sprite(surface, art, frame_index, x, y);
+    render_surface_restore(surface, saved);
 }
 
 /* FUN_0040b345 draws feature layers at fixed world coordinates from the
    island-window origin. Pair bits come from the live object's +0x4a mask;
    retain the layout special value for the pre-session/static presentation. */
-static void draw_island_feature(HDC dc, int island_id, const IslandLocation *site,
+static void draw_island_feature(RenderSurface *surface, int island_id, const IslandLocation *site,
                                 const GameRuntimeLocation *runtime_site,
                                 int world_origin_x, int world_origin_y)
 {
@@ -792,13 +733,13 @@ static void draw_island_feature(HDC dc, int island_id, const IslandLocation *sit
 
 #define FEATURE_FRAME(frame, dx, dy) \
     do { if ((uint32_t)(frame) < art->frame_count) \
-        draw_sprite(dc, art, (uint32_t)(frame), world_origin_x + (dx), \
+        draw_sprite(surface, art, (uint32_t)(frame), world_origin_x + (dx), \
                     world_origin_y + (dy)); } while (0)
 #define FEATURE_ACTIVE(frame, dx, dy) \
     do { \
         int reveal = (int)(runtime_site->charge_source_value_30 / 4U); \
         if (reveal >= 8) FEATURE_FRAME(frame, dx, dy); \
-        else if (reveal > 0) draw_feature_reveal(dc, art, island_id, \
+        else if (reveal > 0) draw_feature_reveal(surface, art, island_id, \
             (uint32_t)(frame), world_origin_x + (dx), world_origin_y + (dy), \
             reveal); \
     } while (0)
@@ -896,7 +837,7 @@ static void draw_island_feature(HDC dc, int island_id, const IslandLocation *sit
    icon, is an interpretation of the pseudocode; the owner-parity test is
    observed but unexplained. */
 
-static void draw_hall_feature_icons(HDC dc, const WindowTemplate *info,
+static void draw_hall_feature_icons(RenderSurface *surface, const WindowTemplate *info,
                                     int32_t item, int32_t owner)
 {
     static const unsigned int bits_2c[3] = {0U, 1U, 3U};
@@ -916,31 +857,31 @@ static void draw_hall_feature_icons(HDC dc, const WindowTemplate *info,
     if (bits != NULL) {
         for (k = 0; k < 3U; ++k) {
             if ((mask >> bits[k]) & 1U) {
-                draw_sprite(dc, &g_activation_icon_art, bits[k],
+                draw_sprite(surface, &g_activation_icon_art, bits[k],
                             info->pane.left + x, info->pane.top + 1);
                 x += 10;
             }
         }
         if (((owner & 1) != 0) == (item == 0x2c) && (mask & 4U) != 0) {
-            draw_sprite(dc, &g_activation_icon_art, 2U,
+            draw_sprite(surface, &g_activation_icon_art, 2U,
                         info->pane.left + x, info->pane.top + 1);
         }
         if ((mask & 0x1000U) != 0) {
-            draw_sprite(dc, &g_activation_icon_art, 12U,
+            draw_sprite(surface, &g_activation_icon_art, 12U,
                         info->pane.left + 16, info->pane.top + 21);
         }
     } else if (item == 0x2f) {
         if ((mask & 0x100U) != 0) {
-            draw_sprite(dc, &g_activation_icon_art, 8U,
+            draw_sprite(surface, &g_activation_icon_art, 8U,
                         info->pane.left + 43, info->pane.top + 21);
         }
     } else if (item == 0x2a) {
         if ((mask & 0x2000U) != 0) {
-            draw_sprite(dc, &g_activation_icon_art, 13U,
+            draw_sprite(surface, &g_activation_icon_art, 13U,
                         info->pane.left + 63, info->pane.top + 14);
         }
         if ((mask & 0x10U) != 0) {
-            draw_sprite(dc, &g_activation_icon_art, 4U,
+            draw_sprite(surface, &g_activation_icon_art, 4U,
                         info->pane.left + 173, info->pane.top + 16);
         }
     }
@@ -952,7 +893,7 @@ static void draw_hall_feature_icons(HDC dc, const WindowTemplate *info,
    index 0. cap = FUN_0045cd27 = 50 + 25 * L. ECX is FUN_00450385's staff
    block (asm 0x440881/0x4409e6), whose +0/+2 name the building itself
    (FUN_0045c325), so L is the building's own +0x4a (source_capacity_4a). */
-static void draw_building_stock_gauge(HDC dc, const WindowTemplate *info,
+static void draw_building_stock_gauge(RenderSurface *surface, const WindowTemplate *info,
                                       int x, uint16_t stock, int16_t level)
 {
     const int interior_height = 55 - 4;
@@ -964,11 +905,11 @@ static void draw_building_stock_gauge(HDC dc, const WindowTemplate *info,
     if (g_task_icon_art.frame_count <= 8U || capacity <= 0) return;
     filled = (int32_t)stock >= capacity ? interior_height :
         (int)((int64_t)interior_height * stock / capacity);
-    draw_sprite(dc, &g_task_icon_art, 8U, gauge_x, gauge_y);
+    draw_sprite(surface, &g_task_icon_art, 8U, gauge_x, gauge_y);
     if (filled < interior_height) {
         /* FUN_00406604 fills an inclusive rect: the 7x56 sprite interior is
-           x2..x4 by y2..y53, so the exclusive GDI rect needs +1 on both. */
-        fill_rect(dc, gauge_x + 2, gauge_y + 2, gauge_x + 4 + 1,
+           x2..x4 by y2..y53, so the exclusive fill rect needs +1 on both. */
+        fill_rect(surface, gauge_x + 2, gauge_y + 2, gauge_x + 4 + 1,
                   gauge_y + 2 + (interior_height - filled) + 1,
                   g_island_palette[0]);
     }
@@ -977,7 +918,7 @@ static void draw_building_stock_gauge(HDC dc, const WindowTemplate *info,
 /* FUN_0041179e (calls 0x440d96/0x440eac): 3x55 vertical segment, filled from
    the bottom by ftol(55 * ratio), outlined in palette index 1 with the
    interior (1 px inset) in `colour`. Nothing is drawn for a zero-length fill. */
-static void draw_spell_cost_bar(HDC dc, int left, int top, int cost,
+static void draw_spell_cost_bar(RenderSurface *surface, int left, int top, int cost,
                                 int32_t capacity, int colour)
 {
     const int height = 55;
@@ -987,9 +928,9 @@ static void draw_spell_cost_bar(HDC dc, int left, int top, int cost,
     filled = cost >= capacity ? height : (int)((int64_t)height * cost / capacity);
     if (filled <= 0) return;
     bar_top = top + height - filled;
-    fill_rect(dc, left, bar_top, left + 3, top + height, g_island_palette[1]);
+    fill_rect(surface, left, bar_top, left + 3, top + height, g_island_palette[1]);
     if (filled > 2) {
-        fill_rect(dc, left + 1, bar_top + 1, left + 2, top + height - 1,
+        fill_rect(surface, left + 1, bar_top + 1, left + 2, top + height - 1,
                   g_island_palette[colour]);
     }
 }
@@ -1000,7 +941,7 @@ static void draw_spell_cost_bar(HDC dc, int left, int top, int cost,
    is set) against +0x2c; both over 50 + 25 * L. Colour 2 when the cost exceeds
    the stock, otherwise 4. The pointer-hover trigger for s is interpreted
    from message 0x350d's spell-button context. */
-static void draw_spell_cost_bars(HDC dc, const WindowTemplate *info,
+static void draw_spell_cost_bars(RenderSurface *surface, const WindowTemplate *info,
                                  const GameRuntimeLocation *location)
 {
     uint16_t magic_cost;
@@ -1016,10 +957,10 @@ static void draw_spell_cost_bars(HDC dc, const WindowTemplate *info,
     if (owner >= 0 && owner < GAME_START_PLAYER_COUNT &&
         (g_game_session.economy[owner].special_feature_island_mask & 0x100U))
         magic = magic * 2 / 3;
-    draw_spell_cost_bar(dc, info->pane.left + 15, info->pane.top + 20,
+    draw_spell_cost_bar(surface, info->pane.left + 15, info->pane.top + 20,
         crystal_cost, capacity,
         (int)crystal_cost > (int)location->resource_stock[1] ? 2 : 4);
-    draw_spell_cost_bar(dc, info->pane.left + 42, info->pane.top + 20,
+    draw_spell_cost_bar(surface, info->pane.left + 42, info->pane.top + 20,
         magic, capacity,
         magic > (int)location->resource_stock[2] ? 2 : 4);
 }
@@ -1030,7 +971,7 @@ static void draw_spell_cost_bars(HDC dc, const WindowTemplate *info,
    is 4. The +0x18 test comes after the gauge; only the non-summary variant
    (P+0x18 != -1) adds tonecrys frame 4 at (11,17) and, for item 0x2f,
    magctone frame 4 at (38,17), each with its taskicon stock bar. */
-static void draw_building_info_extras(HDC dc, const WindowTemplate *info,
+static void draw_building_info_extras(RenderSurface *surface, const WindowTemplate *info,
                                       const GameRuntimeLocation *location,
                                       uint8_t island_index,
                                       uint16_t location_index)
@@ -1051,9 +992,9 @@ static void draw_building_info_extras(HDC dc, const WindowTemplate *info,
         int filled = current <= 0 ? 0 :
             (int)((long)inner_width * current / maximum);
         if (filled > inner_width) filled = inner_width;
-        draw_sprite(dc, &g_building_gauge_art, 0U, gauge_x, gauge_y);
+        draw_sprite(surface, &g_building_gauge_art, 0U, gauge_x, gauge_y);
         if (filled < inner_width) {
-            fill_rect(dc, gauge_x + 2 + filled, gauge_y + 2,
+            fill_rect(surface, gauge_x + 2 + filled, gauge_y + 2,
                       gauge_x + 2 + inner_width, gauge_y + 6,
                       g_island_palette[0]);
         }
@@ -1070,28 +1011,28 @@ static void draw_building_info_extras(HDC dc, const WindowTemplate *info,
         if (icon_frame < 4) icon_frame = 4;
         if (icon_frame > 7) icon_frame = 7;
         for (dot = 0; dot < dots; ++dot) {
-            draw_sprite(dc, &g_building_number_art, (uint32_t)icon_frame,
+            draw_sprite(surface, &g_building_number_art, (uint32_t)icon_frame,
                         info->pane.left + base - 40 + 8 * (dot % 5),
                         info->pane.top + 5 + 8 * (dot / 5));
         }
     }
     if (g_tone_crys_art.frame_count > 4U) {
-        draw_sprite(dc, &g_tone_crys_art, 4U,
+        draw_sprite(surface, &g_tone_crys_art, 4U,
                     info->pane.left + 11, info->pane.top + 17);
     }
-    draw_building_stock_gauge(dc, info, 8, location->resource_stock[1],
+    draw_building_stock_gauge(surface, info, 8, location->resource_stock[1],
                               location->source_capacity_4a);
     if (item == 0x2f && g_magctone_art.frame_count > 4U) {
-        draw_sprite(dc, &g_magctone_art, 4U,
+        draw_sprite(surface, &g_magctone_art, 4U,
                     info->pane.left + 38, info->pane.top + 17);
-        draw_building_stock_gauge(dc, info, 35, location->resource_stock[2],
+        draw_building_stock_gauge(surface, info, 35, location->resource_stock[2],
                                   location->source_capacity_4a);
-        draw_spell_cost_bars(dc, info, location);
+        draw_spell_cost_bars(surface, info, location);
     }
-    draw_hall_feature_icons(dc, info, item, location->owner_id);
+    draw_hall_feature_icons(surface, info, item, location->owner_id);
 }
 
-static void draw_hall_stock_summary(HDC dc, int hall_player,
+static void draw_hall_stock_summary(RenderSurface *surface, int hall_player,
                                     const GameRuntimeIsland *island)
 {
     static const SpriteSheet *const resource_sheets[GAME_RESOURCE_TYPE_COUNT] = {
@@ -1122,8 +1063,8 @@ static void draw_hall_stock_summary(HDC dc, int hall_player,
     pane.top = info->pane.top;
     pane.right = info->pane.right + 1;
     pane.bottom = info->pane.bottom + 1;
-    saved_dc = SaveDC(dc);
-    (void)IntersectClipRect(dc, pane.left, pane.top, pane.right, pane.bottom);
+    saved_dc = render_surface_save(surface);
+    render_surface_intersect_clip(surface, pane.left, pane.top, pane.right, pane.bottom);
     /* The selected-location painter has already drawn IWLocInfo's background
        and the Hall's layered building sprite. Repainting the pane here erased
        that sprite; only update the economy content on top of it. */
@@ -1132,18 +1073,18 @@ static void draw_hall_stock_summary(HDC dc, int hall_player,
         char amount[8];
         if (!island_panel_info_hall_resource_row(resource, &row)) continue;
         if (resource_sheets[resource]->frame_count > row.icon_frame) {
-            draw_sprite(dc, resource_sheets[resource], row.icon_frame,
+            draw_sprite(surface, resource_sheets[resource], row.icon_frame,
                         info->pane.left + row.icon_x,
                         info->pane.top + row.icon_y);
         }
         (void)snprintf(amount, sizeof(amount), "%d",
             (int)(int16_t)hall->resource_stock[resource]);
-        draw_bitmap_label(dc, amount,
+        draw_bitmap_label(surface, amount,
                           info->pane.left + row.amount_x,
                           info->pane.top + row.amount_y,
                           RGB(230, 238, 255));
     }
-    draw_hall_feature_icons(dc, info, location_base_item_id(hall),
+    draw_hall_feature_icons(surface, info, location_base_item_id(hall),
                             hall->owner_id);
     /* FUN_00440567 draws ACTICON frame i for each island i whose bit is set in
        DAT_00619242 + owner*0x14a0 (the remake's special_feature_island_mask),
@@ -1158,7 +1099,7 @@ static void draw_hall_stock_summary(HDC dc, int hall_player,
             g_game_session.economy[hall_player].special_feature_island_mask;
         for (i = 0; i < (unsigned int)g_game_session.island_count; ++i) {
             if ((feature_mask >> (i & 31U)) & 1U) {
-                draw_sprite(dc, &g_activation_icon_art, i,
+                draw_sprite(surface, &g_activation_icon_art, i,
                             info->pane.left + (int)icon_x,
                             info->pane.top + (int)icon_y);
             }
@@ -1180,7 +1121,7 @@ static void draw_hall_stock_summary(HDC dc, int hall_player,
                 (uint8_t)hall_player, &count, &total, &percentage)) {
             (void)snprintf(population, sizeof(population), "%s %u",
                            g_hall_population_label, total);
-            draw_bitmap_label(dc, population,
+            draw_bitmap_label(surface, population,
                               info->pane.left + 0xb6,
                               info->pane.top + 0x29,
                               RGB(230, 238, 255));
@@ -1189,7 +1130,7 @@ static void draw_hall_stock_summary(HDC dc, int hall_player,
             (void)snprintf(work_summary, sizeof(work_summary),
                            "%s %u (%u%%)",
                            g_hall_work_label, count, percentage);
-            draw_bitmap_label(dc, work_summary,
+            draw_bitmap_label(surface, work_summary,
                               info->pane.left + 0xb6,
                               info->pane.top + 0x33,
                               RGB(230, 238, 255));
@@ -1197,10 +1138,10 @@ static void draw_hall_stock_summary(HDC dc, int hall_player,
         (void)snprintf(tone_surplus, sizeof(tone_surplus),
             "%s %ld", g_hall_surplus_label,
             (long)g_game_session.economy[hall_player].source_maintenance_budget);
-        draw_bitmap_label(dc, tone_surplus,
+        draw_bitmap_label(surface, tone_surplus,
                           info->pane.left + 5,
                           info->pane.top + 4,
                           RGB(230, 238, 255));
     }
-    RestoreDC(dc, saved_dc);
+    render_surface_restore(surface, saved_dc);
 }

@@ -9,7 +9,10 @@
    (wait for the 50 ms frame clock like the game), --bench-out FILE
    (default bench_report.txt next to the executable), --bench-profile,
    --bench-dump FILE (the last composed frame as a 640x480 BMP),
-   --bench-screen title|newgame|map, --bench-client WxH. */
+   --bench-screen title|newgame|map|load, --bench-client WxH,
+   --bench-panel N (island panel mode, WINDOW_ISLAND_PANEL_*),
+   --bench-construct (IWConstruct open on the first buildable site, first
+   column hovered): fixed UI states for --bench-dump comparisons. */
 
 enum { BENCH_PHASE_IDLE, BENCH_PHASE_SIM, BENCH_PHASE_RENDER,
        BENCH_PHASE_PRESENT, BENCH_PHASE_COUNT };
@@ -317,11 +320,10 @@ static void bench_dump_back_buffer(const char *path)
     BITMAPINFOHEADER info;
     DWORD bytes = LOGICAL_WIDTH * LOGICAL_HEIGHT * 4U;
     FILE *file = fopen(path, "wb");
-    if (file == NULL || g_paint_buffer_pixels == NULL) {
+    if (file == NULL || g_back_surface.pixels == NULL) {
         if (file != NULL) fclose(file);
         return;
     }
-    (void)GdiFlush();
     ZeroMemory(&file_header, sizeof(file_header));
     ZeroMemory(&info, sizeof(info));
     file_header.bfType = 0x4d42;
@@ -335,7 +337,7 @@ static void bench_dump_back_buffer(const char *path)
     info.biCompression = BI_RGB;
     fwrite(&file_header, sizeof(file_header), 1, file);
     fwrite(&info, sizeof(info), 1, file);
-    fwrite(g_paint_buffer_pixels, bytes, 1, file);
+    fwrite(g_back_surface.pixels, bytes, 1, file);
     fclose(file);
 }
 
@@ -430,8 +432,22 @@ static int bench_run(HWND window, const char *command_line)
                 g_menu.screen = SCREEN_NEW_GAME;
             else if (strcmp(screen_name, "map") == 0)
                 g_menu.screen = SCREEN_WORLD_MAP;
+            else if (strcmp(screen_name, "load") == 0)
+                g_menu.screen = SCREEN_LOAD_GAME;
         }
         bench_screen = g_menu.screen;
+    }
+    if (strstr(command_line, "--bench-panel") != NULL)
+        g_island_panel_mode = (int)bench_option(command_line, "--bench-panel",
+                                                WINDOW_ISLAND_PANEL_GENERAL);
+    if (strstr(command_line, "--bench-construct") != NULL) {
+        uint16_t location;
+        for (location = 0; location < g_island_surface_data.location_count;
+             ++location)
+            if (open_iw_construct((int)location)) {
+                g_iw_construct.hovered_column = 0;
+                break;
+            }
     }
     for (frame = 0; frame < g_game_session.floater_count; ++frame)
         if (game_session_floater_is_active(&g_game_session.floaters[frame]))
@@ -502,7 +518,7 @@ static int bench_run(HWND window, const char *command_line)
         run_ui_frame(window, 1);
         t1 = bench_now();
         g_bench_phase = BENCH_PHASE_RENDER;
-        render_back_buffer(g_paint_buffer_dc);
+        render_back_buffer(&g_back_surface);
         t2 = bench_now();
         g_bench_phase = BENCH_PHASE_PRESENT;
         present_back_buffer(screen, &client);

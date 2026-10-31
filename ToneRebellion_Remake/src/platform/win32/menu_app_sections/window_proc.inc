@@ -927,7 +927,6 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
     case WM_DESTROY:
         net_shutdown();
         write_resume_file();
-        destroy_sprite_source_dc();
         destroy_paint_buffer();
         stop_background_tune();
         PostQuitMessage(0);

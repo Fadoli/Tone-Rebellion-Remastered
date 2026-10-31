@@ -642,10 +642,6 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     char error[256];
     unsigned int cursor_index;
     (void)previous_instance;
-    /* Run every GDI call at once instead of batching it, so the software
-       blitter (soft_blit_frame) can write the back buffer between GDI
-       calls without a GdiFlush system call per sprite. */
-    (void)GdiSetBatchLimit(1);
     game_directory_resolve(command_line);
 
     /* Read the original PE cursor resources without executing FLOAT.EXE.

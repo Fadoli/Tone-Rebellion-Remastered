@@ -5,7 +5,7 @@
 ## Constat (2026-10-31, comptage par grep)
 
 - `src/core` (~25 k lignes) n'inclut aucun en-tête Windows; un seul `fopen`. Compilable par Emscripten sans changement attendu (non essayé).
-- `src/platform/win32` (~15 k lignes) concentre la dépendance : `HDC` traversant ~15 fichiers de rendu (86 usages), primitives GDI limitées (`CreateDIBSection`, `AlphaBlend`, `StretchBlt`, `SetPixel`/`GetPixel`, `FillRect`, `Ellipse`, `LineTo`, `Rectangle`), pas de police GDI (polices bitmap du jeu).
+- `src/platform/win32` (~15 k lignes) concentre la dépendance. Le rendu n'en fait plus partie (étape 1) : il dessine dans un `RenderSurface` (`src/render`), et GDI ne sert qu'à présenter le tampon (`present_back_buffer`).
 - Boucle : un seul `GetMessageA`, cadence `SetTimer` 33 ms, pas de thread ni `Sleep` : compatible `emscripten_set_main_loop`.
 - Audio : mixeur `waveOut*` + `PlaySoundA` (effets), MCI `tone_music` (musiques `THING2\*.WAV`).
 - Réseau : TCP Winsock (`net_session.inc`); sockets bruts interdits en navigateur.
@@ -18,7 +18,7 @@
 
 ## Étapes
 
-1. [ ] **Surface portable, encore sous Win32.** Remplacer `HDC`/DIB par un type `RenderSurface` (pixels, largeur, hauteur, pas) dans un module sans en-tête Windows; réécrire les primitives listées ci-dessus (mélange alpha, étirement, rectangle, ellipse, ligne). Win32 ne fait plus que présenter le tampon. Valider par captures `island_e2e.ps1` avant/après (pixel à pixel si possible).
+1. [x] **Surface portable, encore sous Win32.** `src/render/render_surface.{h,c}` (bibliothèque `tone_render`, sans en-tête Windows) : pixels 0xAARRGGBB, pile de découpe (rectangle + masque par pixel à la place des régions GDI), remplissage, cadre, pixel, blit prémultiplié avec mise à l'échelle au plus proche et transformation (brume). Les `SpriteFrame` portent des tableaux de pixels; les fonctions de rendu prennent un `RenderSurface *`. Seuls `ensure_paint_buffer`/`present_back_buffer` (`render_dispatch.inc`) touchent GDI. Parité : 38 captures `--bench-dump` identiques octet pour octet à la build précédente, et un banc hors dépôt GDI contre `RenderSurface` (découpe, masque, `AlphaBlend` à l'échelle, `FillRect`, `FrameRect`, `Rectangle`, `SetPixel`/`GetPixel`) sans écart sur 20 000 tirages ([mesures](bench/gameplay_hotspots.md#rendersurface-2026-10-31)).
 2. [ ] **Interfaces plateforme.** Isoler entrée (souris, clavier, molette), horloge (`GetTickCount`), audio (effets + flux musique), fichiers (dossiers de sauvegarde, `FindFirstFileA`, `CreateDirectoryA`), boîtes d'erreur (`MessageBoxA` ×10) derrière de petites interfaces C; implémentation Win32 inchangée en comportement.
 3. [ ] **Adaptateur SDL3 bureau.** Fenêtre, présentation du tampon, événements, `SDL_AudioStream` pour le mixeur et les musiques WAV. Parité avec Win32 avant la cible Web.
 4. [ ] **Cible Emscripten.** Préréglage CMake (`emcmake`), boucle `emscripten_set_main_loop`, page HTML minimale, `-sALLOW_MEMORY_GROWTH`. Mesurer taille `.wasm` et temps de chargement.

@@ -20,10 +20,12 @@ Scenarios (`--bench-scenario`), the "fake environment":
   (180 floaters).
 
 `--bench-paced` waits for the game's 50 ms frame clock instead of running
-flat out. `--bench-screen title|newgame|map` measures another screen over
+flat out. `--bench-screen title|newgame|map|load` measures another screen over
 the same session; `--bench-client WxH` sets the window client size;
 `--bench-dump FILE` writes the last composed frame as a
-640x480 BMP (used to compare renderers pixel for pixel). `--bench-profile` adds a sampling profiler: a thread suspends the
+640x480 BMP (used to compare renderers pixel for pixel); `--bench-panel N`
+(island panel mode) and `--bench-construct` (IWConstruct open, first column
+hovered) fix more UI for those dumps. `--bench-profile` adds a sampling profiler: a thread suspends the
 main thread about every 2 ms and stores its EBP-chain call stack. Use a build
 with frame pointers and less inlining, then resolve the samples:
 
@@ -96,3 +98,35 @@ frame still spends about 17 ms in `waveOutOpen` (first sound effect).
 
 Not done: dropping the full-screen `fill_rect` needs checking that the
 background and template frames have no transparent pixels.
+
+## RenderSurface (2026-10-31)
+
+Step 1 of [TODO_WEB.md](../TODO_WEB.md): every renderer draws into a
+`RenderSurface` (`src/render/render_surface.c`); sprite frames are plain
+pixel arrays and the region clips of the stipple reveals are per-pixel
+masks. GDI only presents the back buffer.
+
+Parity: 38 `--bench-dump` frames (idle, crowd, battle at warmup 40, 300 and
+1500; panels 1..7; IWConstruct; title, new game, map, load) are byte
+identical to the previous build. Those states never reach the mask clip or
+the site shimmer, so a scratch harness (not kept) also compared
+`RenderSurface` with GDI on a 32-bit DIB: 20 000 random cases of clip
+rectangle plus optional `ExtSelectClipRgn` mask with `AlphaBlend` (plain and
+nearest-prescaled), `FillRect`, `FrameRect`, `Rectangle` (pen, null brush),
+`SetPixel` and `SetPixel(GetPixel)` gave no difference.
+Notes from it: GDI fills and pixels store alpha 0; `GetPixel` outside the
+clip returns `CLR_INVALID`, which `SetPixel` writes as black.
+
+Same machine, 1024x781 client, 2000 frames, mean ms:
+
+| scenario | frame before | frame after | render before | render after |
+|---|---|---|---|---|
+| idle | 0.73 | 0.63 | 0.53 | 0.42 |
+| crowd | 0.79 | 0.68 | 0.60 | 0.48 |
+| battle | 0.89 | 0.77 | 0.70 | 0.57 |
+
+Tried and dropped: a first version with one blend loop (mask and transform
+tested per pixel) and a 16 KB column table on the stack rendered battle in
+0.77 ms, slower than before. The kept blit copies unscaled spans without a
+table, splits the plain loop from the masked/transformed one, and keeps the
+table at 2 KB (no stack probe).

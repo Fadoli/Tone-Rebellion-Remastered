@@ -127,9 +127,7 @@ static int create_help_sheet(SpriteSheet *sheet, char *error, size_t error_capac
         size_t cursor = 0;
         int line_count = 0;
         int height;
-        BITMAPINFO info;
-        void *bitmap_bits = NULL;
-        HBITMAP bitmap;
+        uint32_t *pixels;
         int line;
         while (cursor < text_length && line_count < 16) {
             size_t start;
@@ -166,41 +164,31 @@ static int create_help_sheet(SpriteSheet *sheet, char *error, size_t error_capac
         }
         if (line_count == 0) continue;
         height = 12 + line_count * ((int)g_bitmap_font.height + 2);
-        ZeroMemory(&info, sizeof(info));
-        info.bmiHeader.biSize = sizeof(info.bmiHeader);
-        info.bmiHeader.biWidth = 320;
-        info.bmiHeader.biHeight = -height;
-        info.bmiHeader.biPlanes = 1;
-        info.bmiHeader.biBitCount = 32;
-        info.bmiHeader.biCompression = BI_RGB;
-        bitmap = CreateDIBSection(NULL, &info, DIB_RGB_COLORS, &bitmap_bits, NULL, 0);
-        if (bitmap == NULL || bitmap_bits == NULL) {
-            if (bitmap != NULL) DeleteObject(bitmap);
-            (void)snprintf(error, error_capacity, "could not create contextual help bitmap");
+        pixels = sprite_pixels_alloc(320, height);
+        if (pixels == NULL) {
+            (void)snprintf(error, error_capacity, "could not allocate contextual help pixels");
             return 0;
         }
-        memset(bitmap_bits, 0, (size_t)320 * (size_t)height * 4);
         {
-            DWORD *surface = (DWORD *)bitmap_bits;
             int x;
             int y;
-            const DWORD background = 0xe80b1320u;
-            const DWORD border = 0xffe8d79au;
+            const uint32_t background = 0xe80b1320u;
+            const uint32_t border = 0xffe8d79au;
             for (y = 0; y < height; ++y) {
                 for (x = 0; x < 320; ++x) {
                     if (x < 2 || x >= 318 || y < 2 || y >= height - 2)
-                        surface[(size_t)y * 320 + x] = border;
+                        pixels[(size_t)y * 320 + x] = border;
                     else
-                        surface[(size_t)y * 320 + x] = background;
+                        pixels[(size_t)y * 320 + x] = background;
                 }
             }
             for (line = 0; line < line_count; ++line) {
-                draw_bitmap_text_at(surface, 320, height, lines[line], 8,
+                draw_bitmap_text_at(pixels, 320, height, lines[line], 8,
                                     6 + line * ((int)g_bitmap_font.height + 2),
                                     0xffe5e7eau);
             }
         }
-        sheet->frames[entry].bitmap = bitmap;
+        sheet->frames[entry].pixels = pixels;
         sheet->frames[entry].width = 320;
         sheet->frames[entry].height = height;
     }

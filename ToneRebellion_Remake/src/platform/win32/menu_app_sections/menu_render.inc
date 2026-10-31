@@ -107,7 +107,7 @@ static int template_caption_index(const WindowTemplate *window)
     return -1;
 }
 
-static void draw_configured_buttons(HDC dc, int state, const char *shape_id,
+static void draw_configured_buttons(RenderSurface *surface, int state, const char *shape_id,
                                     SpriteSheet *sheet)
 {
     size_t i;
@@ -135,26 +135,26 @@ static void draw_configured_buttons(HDC dc, int state, const char *shape_id,
                 g_hovered_newgame_text) != window->shape_frame;
             frame = window_catalog_control_frame(window, hovered);
         }
-        draw_sprite(dc, sheet, (uint32_t)frame, window->pane.left, window->pane.top);
+        draw_sprite(surface, sheet, (uint32_t)frame, window->pane.left, window->pane.top);
     }
 }
 
-static void render_main_menu(HDC dc)
+static void render_main_menu(RenderSurface *surface)
 {
-    fill_rect(dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
-    draw_configured_buttons(dc, 0, "TITSCRN", &g_title_art);
-    draw_hover_help(dc);
+    fill_rect(surface, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
+    draw_configured_buttons(surface, 0, "TITSCRN", &g_title_art);
+    draw_hover_help(surface);
 }
 
-static void render_new_game(HDC dc)
+static void render_new_game(RenderSurface *surface)
 {
     static const POINT tribe_centers[4] = {{170, 240}, {320, 90}, {470, 240}, {320, 390}};
     static const int orbit_radii[3] = {150, 170, 130};
     int tribe;
     int ring;
     int angle_step;
-    fill_rect(dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
-    draw_sprite(dc, &g_new_background, 0, 0, 0);
+    fill_rect(surface, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
+    draw_sprite(surface, &g_new_background, 0, 0, 0);
     for (ring = 0; ring < 3; ++ring) {
         const int radius = orbit_radii[ring];
         COLORREF color = g_newgame_palette[0];
@@ -165,12 +165,9 @@ static void render_new_game(HDC dc)
             const int xs[4] = {315 + dx, 315 - dx, 315 - dx, 315 + dx};
             const int ys[4] = {236 + dy, 236 + dy, 236 - dy, 236 - dy};
             int quadrant;
-            for (quadrant = 0; quadrant < 4; ++quadrant) {
-                RECT dot = {xs[quadrant], ys[quadrant], xs[quadrant] + 10, ys[quadrant] + 8};
-                HBRUSH brush = CreateSolidBrush(color);
-                FillRect(dc, &dot, brush);
-                DeleteObject(brush);
-            }
+            for (quadrant = 0; quadrant < 4; ++quadrant)
+                fill_rect(surface, xs[quadrant], ys[quadrant],
+                          xs[quadrant] + 10, ys[quadrant] + 8, color);
             /* The original emits ten randomized pixels for each quadrant,
                using FUN_00474b90's LCG. Its palette byte is 0xb6..0xc6. */
             if (ring <= g_menu.world_index) {
@@ -185,7 +182,8 @@ static void render_new_game(HDC dc)
                         unsigned x_jitter = game_random() % 7u;
                         sx = (side == 0 || side == 3 ? 325 + dx : 325 - dx) - (int)x_jitter;
                         sy = (side < 2 ? 244 + dy : 244 - dy) - (int)y_jitter;
-                        SetPixelV(dc, sx, sy, g_newgame_palette[color]);
+                        render_surface_set_pixel(surface, sx, sy,
+                            colorref_pixel(g_newgame_palette[color]));
                     }
                 }
             }
@@ -193,11 +191,11 @@ static void render_new_game(HDC dc)
     }
     /* NEWGAMWND contributes the 640x73 frame-0 footer at y=407; do not draw
        it twice or let its unmapped hover index select frame 1. */
-    draw_configured_buttons(dc, 1, "NEWBUTT", &g_new_buttons);
-    draw_sprite(dc, &g_realm_art, (uint32_t)g_menu.selected_tribe, 60, 40);
-    draw_sprite(dc, &g_realm_art,
+    draw_configured_buttons(surface, 1, "NEWBUTT", &g_new_buttons);
+    draw_sprite(surface, &g_realm_art, (uint32_t)g_menu.selected_tribe, 60, 40);
+    draw_sprite(surface, &g_realm_art,
                 (uint32_t)((g_menu.selected_tribe + 1) % 4), 140, 40);
-    draw_sprite(dc, &g_difficulty_art, (uint32_t)g_menu.difficulty, 320, 240);
+    draw_sprite(surface, &g_difficulty_art, (uint32_t)g_menu.difficulty, 320, 240);
     {
         uint32_t tribe_frame = (uint32_t)(g_menu.selected_tribe * 17);
         uint32_t animation_frame = tribe_frame + ((g_menu.animation_ticks / 2u) % 16u) + 1u;
@@ -208,17 +206,17 @@ static void render_new_game(HDC dc)
         /* FUN_0044ec5d draws the tribe's base frame and a cycling overlay
            frame at the same point; drawing only the overlay loses half of
            the original floater artwork. */
-        draw_sprite(dc, &g_big_floaters, tribe_frame, 530, floater_y);
-        draw_sprite(dc, &g_big_floaters, animation_frame, 530, floater_y);
+        draw_sprite(surface, &g_big_floaters, tribe_frame, 530, floater_y);
+        draw_sprite(surface, &g_big_floaters, animation_frame, 530, floater_y);
     }
     for (tribe = 0; tribe < 4; ++tribe) {
-        draw_sprite(dc, &g_glyphs,
+        draw_sprite(surface, &g_glyphs,
                     (uint32_t)(tribe * 20 + (g_menu.animation_ticks / 3u) % 20u),
                     tribe_centers[tribe].x, tribe_centers[tribe].y);
     }
-    draw_tribe_descriptions(dc);
-    draw_hover_help(dc);
-    draw_newgame_text(dc);
+    draw_tribe_descriptions(surface);
+    draw_hover_help(surface);
+    draw_newgame_text(surface);
 }
 
 static void world_island_position(const WorldIsland *island, int *x, int *y)

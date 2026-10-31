@@ -1,7 +1,7 @@
-static void draw_iw_text_info_text(HDC dc, const WindowTemplate *panel,
+static void draw_iw_text_info_text(RenderSurface *surface, const WindowTemplate *panel,
                                    const char *text);
 
-static void draw_hall_info_panel(HDC dc, int panel_state)
+static void draw_hall_info_panel(RenderSurface *surface, int panel_state)
 {
     const WindowTemplate *panel;
     const char *text = NULL;
@@ -68,12 +68,12 @@ static void draw_hall_info_panel(HDC dc, int panel_state)
     panel = window_catalog_find(&g_window_catalog, "IWTextInfo", 3);
     if (panel == NULL || panel->shape_frame < 0 ||
         (uint32_t)panel->shape_frame >= g_temp_hole_art.frame_count) return;
-    draw_sprite(dc, &g_temp_hole_art, (uint32_t)panel->shape_frame,
+    draw_sprite(surface, &g_temp_hole_art, (uint32_t)panel->shape_frame,
                 panel->pane.left, panel->pane.top);
-    draw_iw_text_info_text(dc, panel, text);
+    draw_iw_text_info_text(surface, panel, text);
 }
 
-static void draw_iw_text_info_text(HDC dc, const WindowTemplate *panel,
+static void draw_iw_text_info_text(RenderSurface *surface, const WindowTemplate *panel,
                                    const char *text)
 {
     int pane_width;
@@ -92,13 +92,13 @@ static void draw_iw_text_info_text(HDC dc, const WindowTemplate *panel,
        palette index 6 (FUN_0042da69), so h = 8 and the pitch is 9. */
     line_height = (int)g_small_font.height + 1;
     max_lines = (LOGICAL_HEIGHT - panel->pane.top) / line_height;
-    draw_wrapped_small_label(dc, text, panel->pane.left + 6,
+    draw_wrapped_small_label(surface, text, panel->pane.left + 6,
                              panel->pane.top + 6 + line_height,
                              pane_width - 8, max_lines, line_height,
                              native_text_color(g_island_palette, 6));
 }
 
-static void draw_diplomacy_initial_worker_icon(HDC dc,
+static void draw_diplomacy_initial_worker_icon(RenderSurface *surface,
                                                const GameFloaterStart *floater,
                                                unsigned int fallback_tribe,
                                                int x, int y)
@@ -129,11 +129,11 @@ static void draw_diplomacy_initial_worker_icon(HDC dc,
     /* FUN_0042704b uses frame zero for the observed initial worker pose.
        Its later per-object animation and status-dependent frames are not
        represented by the four-worker startup model. */
-    draw_sprite(dc, body_art, 0, x, y);
-    draw_sprite(dc, leg_art, 0, x, y);
+    draw_sprite(surface, body_art, 0, x, y);
+    draw_sprite(surface, leg_art, 0, x, y);
 }
 
-static void draw_diplomacy_panel(HDC dc, const WindowTemplate *panel,
+static void draw_diplomacy_panel(RenderSurface *surface, const WindowTemplate *panel,
                                  int player_slot)
 {
     static const int32_t emblem_x[GAME_TRADE_TARGET_COUNT] = {264, 301, 325};
@@ -163,7 +163,7 @@ static void draw_diplomacy_panel(HDC dc, const WindowTemplate *panel,
         int32_t icon_y;
         if (game_diplomacy_player_icon_position(0, panel->pane.left,
                 pane_width, pane_height, &icon_x, &icon_y)) {
-            draw_diplomacy_initial_worker_icon(dc, player_floaters[player_slot],
+            draw_diplomacy_initial_worker_icon(surface, player_floaters[player_slot],
                 (unsigned int)player_slot,
                 panel->pane.left + (int)icon_x,
                 panel->pane.top + (int)icon_y);
@@ -196,20 +196,20 @@ static void draw_diplomacy_panel(HDC dc, const WindowTemplate *panel,
             (g_game_session.message_recipient_mask[player_slot] &
              (uint8_t)(1U << target_player)) != 0)
             emblem_frame += 1U + (g_menu.animation_ticks / 3U) % 5U;
-        draw_sprite(dc, &g_diplomacy_art, emblem_frame,
+        draw_sprite(surface, &g_diplomacy_art, emblem_frame,
                     (int)emblem_left, (int)emblem_top);
         emblem_frame = column * 7U;
         if (g_diplomacy_hover_valid &&
             g_diplomacy_hover.action == GAME_DIPLOMACY_POLICY &&
             g_diplomacy_hover.displayed_column == column) {
-            draw_sprite(dc, &g_diplomacy_art, emblem_frame + 6U,
+            draw_sprite(surface, &g_diplomacy_art, emblem_frame + 6U,
                         (int)emblem_left, (int)emblem_top);
         }
 
         if (g_diplomacy_hover_valid &&
             g_diplomacy_hover.action == GAME_DIPLOMACY_RECIPIENT &&
             g_diplomacy_hover.displayed_column == column) {
-            draw_sprite(dc, &g_diplomacy_art, 23,
+            draw_sprite(surface, &g_diplomacy_art, 23,
                         (int)control_left, action_y);
         }
         {
@@ -219,7 +219,7 @@ static void draw_diplomacy_panel(HDC dc, const WindowTemplate *panel,
                     panel->pane.left, pane_width, pane_height,
                     &icon_x, &icon_y)) {
                 /* FUN_0043e5aa draws each player icon before its policy state. */
-                draw_diplomacy_initial_worker_icon(dc, player_floaters[target_player],
+                draw_diplomacy_initial_worker_icon(surface, player_floaters[target_player],
                     (unsigned int)target_player,
                     panel->pane.left + (int)icon_x,
                     panel->pane.top + (int)icon_y);
@@ -231,7 +231,7 @@ static void draw_diplomacy_panel(HDC dc, const WindowTemplate *panel,
         /* FUN_0043e5aa draws recipient highlight frame 23 before the
            policy-state frame 21/22. The source's separate player-banner
            helper (FUN_00428191, flag 8) is not yet mapped to remake art. */
-        draw_sprite(dc, &g_diplomacy_art, action_frame,
+        draw_sprite(surface, &g_diplomacy_art, action_frame,
                     (int)control_left, action_y);
     }
     if (g_diplomacy_hover_valid) {
@@ -241,7 +241,7 @@ static void draw_diplomacy_panel(HDC dc, const WindowTemplate *panel,
             ? g_diplomacy_recipient_text : g_diplomacy_policy_text;
         int x = panel->pane.left + pane_width / 2 + 15;
         /* Drawn with SMFONT in palette index 6 (FUN_0043e5aa, ev_8f64bfc2). */
-        draw_small_label(dc, caption, x, panel->pane.top + 7,
+        draw_small_label(surface, caption, x, panel->pane.top + 7,
                          native_text_color(g_island_palette, 6));
     }
 }
@@ -289,12 +289,11 @@ static int hall_resource_task_index(int hall_player, int slot)
     return -1;
 }
 
-static void draw_task_row_highlight(HDC dc, const WindowTemplate *panel,
+static void draw_task_row_highlight(RenderSurface *surface, const WindowTemplate *panel,
                                     unsigned int visible_rows,
                                     unsigned int visible_index)
 {
     const SpriteFrame *mask_frame;
-    DIBSECTION mask_dib;
     int row_top;
     int row_height;
     int left;
@@ -306,34 +305,24 @@ static void draw_task_row_highlight(HDC dc, const WindowTemplate *panel,
                                                    visible_index,
                                                    &row_top, &row_height)) return;
     mask_frame = &g_temp_hole_art.frames[(uint32_t)panel->shape_frame];
-    ZeroMemory(&mask_dib, sizeof(mask_dib));
-    if (mask_frame->bitmap == NULL ||
-        GetObjectA(mask_frame->bitmap, sizeof(mask_dib), &mask_dib) <
-            (int)sizeof(mask_dib) || mask_dib.dsBm.bmBits == NULL ||
-        mask_dib.dsBm.bmBitsPixel != 32 ||
-        mask_dib.dsBm.bmWidthBytes < mask_frame->width * 4) return;
-    if (g_paint_buffer_pixels == NULL) return;
+    if (mask_frame->pixels == NULL || surface->pixels == NULL) return;
     left = panel->pane.left;
     right = panel->pane.right;
     if (right <= left) return;
-    /* Finish GDI drawing into the DIB before reading its bits directly. */
-    (void)GdiFlush();
     for (y = row_top + panel->pane.top; y < row_top + panel->pane.top + row_height; ++y) {
         int mask_y = y - panel->pane.top - mask_frame->y_offset;
         const uint32_t *mask_row;
         int x;
         if (mask_y < 0 || mask_y >= mask_frame->height) continue;
-        mask_row = (const uint32_t *)((const unsigned char *)mask_dib.dsBm.bmBits +
-            (size_t)mask_y * (size_t)mask_dib.dsBm.bmWidthBytes);
+        mask_row = mask_frame->pixels + (size_t)mask_y * (size_t)mask_frame->width;
         for (x = left; x < right; ++x) {
             int mask_x = x - panel->pane.left - mask_frame->x_offset;
-            DWORD background_pixel;
+            uint32_t background_pixel;
             COLORREF background;
             uint8_t source_index;
             if (mask_x < 0 || mask_x >= mask_frame->width) continue;
             if ((mask_row[mask_x] >> 24) == 0U) continue;
-            background_pixel = g_paint_buffer_pixels[(size_t)y * LOGICAL_WIDTH +
-                                                       (size_t)x];
+            background_pixel = surface->pixels[(ptrdiff_t)y * surface->stride + x];
             background = RGB((background_pixel >> 16) & 0xffU,
                              (background_pixel >> 8) & 0xffU,
                              background_pixel & 0xffU);
@@ -342,13 +331,13 @@ static void draw_task_row_highlight(HDC dc, const WindowTemplate *panel,
             if (!island_palette_lookup_nearest(&g_island_palette_lookup,
                     (uint32_t)background & UINT32_C(0x00ffffff),
                     &source_index)) continue;
-            g_paint_buffer_pixels[(size_t)y * LOGICAL_WIDTH + (size_t)x] =
+            surface->pixels[(ptrdiff_t)y * surface->stride + x] =
                 g_task_highlight_pixels[source_index];
         }
     }
 }
 
-static void draw_task_gauge(HDC dc, const WindowTemplate *panel, int row_y,
+static void draw_task_gauge(RenderSurface *surface, const WindowTemplate *panel, int row_y,
                             unsigned int progress_width)
 {
     const unsigned int interior_width = 0x46U - 4U;
@@ -361,17 +350,17 @@ static void draw_task_gauge(HDC dc, const WindowTemplate *panel, int row_y,
     gauge_y = panel->pane.top + row_y;
     /* FUN_004118df draws frame 9, then masks the unfilled remainder to the
        right of the filled portion. */
-    draw_sprite(dc, &g_task_icon_art, 9U, gauge_x, gauge_y);
+    draw_sprite(surface, &g_task_icon_art, 9U, gauge_x, gauge_y);
     if (progress_width < interior_width) {
-        /* FUN_00406604 fills an inclusive rect, so the exclusive GDI rect
+        /* FUN_00406604 fills an inclusive rect, so the exclusive fill rect
            extends one pixel right and down. */
-        fill_rect(dc, gauge_x + 2 + (int)progress_width, gauge_y + 2,
+        fill_rect(surface, gauge_x + 2 + (int)progress_width, gauge_y + 2,
                   gauge_x + 2 + (int)interior_width + 1, gauge_y + 5 + 1,
                   g_island_palette[0]);
     }
 }
 
-static void draw_task_stock_gauge(HDC dc, const WindowTemplate *panel,
+static void draw_task_stock_gauge(RenderSurface *surface, const WindowTemplate *panel,
                                   int hall_player, unsigned int resource,
                                   int row_y)
 {
@@ -393,10 +382,10 @@ static void draw_task_stock_gauge(HDC dc, const WindowTemplate *panel,
     if (!island_panel_info_stock_gauge_fill(hall->resource_stock[resource],
             hall->source_capacity_4a, 0x46U - 4U,
             &fill_width)) return;
-    draw_task_gauge(dc, panel, row_y, fill_width);
+    draw_task_gauge(surface, panel, row_y, fill_width);
 }
 
-static void draw_task_repair_gauge(HDC dc, const WindowTemplate *panel,
+static void draw_task_repair_gauge(RenderSurface *surface, const WindowTemplate *panel,
                                    const GamePendingEvent *event, int row_y)
 {
     int16_t current;
@@ -409,10 +398,10 @@ static void draw_task_repair_gauge(HDC dc, const WindowTemplate *panel,
         !island_panel_info_task_gauge_fill(current, maximum, 0x46U - 4U,
                                            &fill_width))
         return;
-    draw_task_gauge(dc, panel, row_y, fill_width);
+    draw_task_gauge(surface, panel, row_y, fill_width);
 }
 
-static void draw_task_construction_gauge(HDC dc, const WindowTemplate *panel,
+static void draw_task_construction_gauge(RenderSurface *surface, const WindowTemplate *panel,
                                          const GamePendingEvent *event,
                                          int row_y)
 {
@@ -426,5 +415,5 @@ static void draw_task_construction_gauge(HDC dc, const WindowTemplate *panel,
         !island_panel_info_task_gauge_fill(current, maximum, 0x46U - 4U,
                                            &fill_width))
         return;
-    draw_task_gauge(dc, panel, row_y, fill_width);
+    draw_task_gauge(surface, panel, row_y, fill_width);
 }

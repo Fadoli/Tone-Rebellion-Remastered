@@ -378,9 +378,7 @@ static int create_tribe_description_sheet(SpriteSheet *sheet,
         const char *text = g_tribe_text[entry / 2][entry % 2];
         CurvedTextLine lines[MAX_LINES];
         size_t line_count = 0;
-        BITMAPINFO info;
-        void *bitmap_bits = NULL;
-        HBITMAP bitmap;
+        uint32_t *pixels;
         size_t line;
         if (!curved_text_layout(text,
                                 entry % 2 == 0 ? CURVED_TEXT_LEFT : CURVED_TEXT_RIGHT,
@@ -392,24 +390,15 @@ static int create_tribe_description_sheet(SpriteSheet *sheet,
                            "could not lay out curved tribe description %d", entry);
             return 0;
         }
-        ZeroMemory(&info, sizeof(info));
-        info.bmiHeader.biSize = sizeof(info.bmiHeader);
-        info.bmiHeader.biWidth = TEXT_WIDTH;
-        info.bmiHeader.biHeight = -TEXT_HEIGHT;
-        info.bmiHeader.biPlanes = 1;
-        info.bmiHeader.biBitCount = 32;
-        info.bmiHeader.biCompression = BI_RGB;
-        bitmap = CreateDIBSection(NULL, &info, DIB_RGB_COLORS, &bitmap_bits, NULL, 0);
-        if (bitmap == NULL || bitmap_bits == NULL) {
-            if (bitmap != NULL) DeleteObject(bitmap);
-            (void)snprintf(error, error_capacity, "could not create tribe description bitmap");
+        pixels = sprite_pixels_alloc(TEXT_WIDTH, TEXT_HEIGHT);
+        if (pixels == NULL) {
+            (void)snprintf(error, error_capacity, "could not allocate tribe description pixels");
             return 0;
         }
-        memset(bitmap_bits, 0, (size_t)TEXT_WIDTH * TEXT_HEIGHT * sizeof(DWORD));
         for (line = 0; line < line_count; ++line)
-            draw_justified_bitmap_line((DWORD *)bitmap_bits, TEXT_WIDTH,
+            draw_justified_bitmap_line(pixels, TEXT_WIDTH,
                                        TEXT_HEIGHT, text, &lines[line], ink);
-        sheet->frames[entry].bitmap = bitmap;
+        sheet->frames[entry].pixels = pixels;
         sheet->frames[entry].width = TEXT_WIDTH;
         sheet->frames[entry].height = TEXT_HEIGHT;
     }
@@ -427,9 +416,7 @@ static int create_newgame_caption_sheet(SpriteSheet *sheet,
     }
     sheet->frame_count = 8;
     for (entry = 0; entry < 8; ++entry) {
-        BITMAPINFO info;
-        void *bitmap_bits = NULL;
-        HBITMAP bitmap;
+        uint32_t *pixels;
         int text_width = 0;
         int x = 0;
         const unsigned char *cursor = (const unsigned char *)g_newgame_text[entry];
@@ -442,25 +429,16 @@ static int create_newgame_caption_sheet(SpriteSheet *sheet,
             }
             ++cursor;
         }
-        ZeroMemory(&info, sizeof(info));
-        info.bmiHeader.biSize = sizeof(info.bmiHeader);
-        info.bmiHeader.biWidth = 320;
-        info.bmiHeader.biHeight = -(LONG)g_bitmap_font.height;
-        info.bmiHeader.biPlanes = 1;
-        info.bmiHeader.biBitCount = 32;
-        info.bmiHeader.biCompression = BI_RGB;
-        bitmap = CreateDIBSection(NULL, &info, DIB_RGB_COLORS, &bitmap_bits, NULL, 0);
-        if (bitmap == NULL || bitmap_bits == NULL) {
-            if (bitmap != NULL) DeleteObject(bitmap);
-            (void)snprintf(error, error_capacity, "could not create New Game caption bitmap");
+        pixels = sprite_pixels_alloc(320, (int)g_bitmap_font.height);
+        if (pixels == NULL) {
+            (void)snprintf(error, error_capacity, "could not allocate New Game caption pixels");
             return 0;
         }
-        memset(bitmap_bits, 0, (size_t)320 * g_bitmap_font.height * sizeof(DWORD));
         x = (320 - text_width) / 2;
         if (x < 0) x = 0;
-        draw_bitmap_text_at((DWORD *)bitmap_bits, 320, (int)g_bitmap_font.height,
+        draw_bitmap_text_at(pixels, 320, (int)g_bitmap_font.height,
                             g_newgame_text[entry], x, 0, 0xffffe88au);
-        sheet->frames[entry].bitmap = bitmap;
+        sheet->frames[entry].pixels = pixels;
         sheet->frames[entry].width = 320;
         sheet->frames[entry].height = (int)g_bitmap_font.height;
     }
@@ -479,9 +457,7 @@ static int create_island_name_sheet(SpriteSheet *sheet,
     }
     sheet->frame_count = ISLAND_NAME_COUNT;
     for (entry = 0; entry < ISLAND_NAME_COUNT; ++entry) {
-        BITMAPINFO info;
-        void *bitmap_bits = NULL;
-        HBITMAP bitmap;
+        uint32_t *pixels;
         int text_width = 0;
         int x;
         const unsigned char *cursor = (const unsigned char *)g_island_names[entry];
@@ -494,25 +470,16 @@ static int create_island_name_sheet(SpriteSheet *sheet,
             }
             ++cursor;
         }
-        ZeroMemory(&info, sizeof(info));
-        info.bmiHeader.biSize = sizeof(info.bmiHeader);
-        info.bmiHeader.biWidth = TEXT_WIDTH;
-        info.bmiHeader.biHeight = -(LONG)g_bitmap_font.height;
-        info.bmiHeader.biPlanes = 1;
-        info.bmiHeader.biBitCount = 32;
-        info.bmiHeader.biCompression = BI_RGB;
-        bitmap = CreateDIBSection(NULL, &info, DIB_RGB_COLORS, &bitmap_bits, NULL, 0);
-        if (bitmap == NULL || bitmap_bits == NULL) {
-            if (bitmap != NULL) DeleteObject(bitmap);
-            (void)snprintf(error, error_capacity, "could not create island-name bitmap");
+        pixels = sprite_pixels_alloc(TEXT_WIDTH, (int)g_bitmap_font.height);
+        if (pixels == NULL) {
+            (void)snprintf(error, error_capacity, "could not allocate island-name pixels");
             return 0;
         }
-        memset(bitmap_bits, 0, (size_t)TEXT_WIDTH * g_bitmap_font.height * sizeof(DWORD));
         x = (TEXT_WIDTH - text_width) / 2;
         if (x < 0) x = 0;
-        draw_bitmap_text_at((DWORD *)bitmap_bits, TEXT_WIDTH, (int)g_bitmap_font.height,
+        draw_bitmap_text_at(pixels, TEXT_WIDTH, (int)g_bitmap_font.height,
                             g_island_names[entry], x, 0, 0xffe8e8d8u);
-        sheet->frames[entry].bitmap = bitmap;
+        sheet->frames[entry].pixels = pixels;
         sheet->frames[entry].width = TEXT_WIDTH;
         sheet->frames[entry].height = (int)g_bitmap_font.height;
     }

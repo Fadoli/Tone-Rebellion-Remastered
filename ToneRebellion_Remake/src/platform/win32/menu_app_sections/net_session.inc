@@ -629,14 +629,14 @@ static void net_leave_lobby(void)
 /* FUN_0044ec5d lists the session players (DAT_004beff0) on the New Game
    screen when DAT_004befe0 != 0; its geometry is not ported, so the remake
    draws a plain two-column list in the free band above the top tribe glyph. */
-static void render_net_lobby(HDC dc)
+static void render_net_lobby(RenderSurface *surface)
 {
     char line[96];
     unsigned slot;
     COLORREF color = RGB(235, 235, 220);
     if (g_net_mode == NET_MODE_NONE && g_net_status[0] == '\0') return;
     if (g_net_mode != NET_MODE_NONE) {
-        draw_small_label(dc, g_net_mode == NET_MODE_HOST ? "Partie reseau (hote)"
+        draw_small_label(surface, g_net_mode == NET_MODE_HOST ? "Partie reseau (hote)"
                                                           : "Partie reseau (invite)",
                          200, 2, color);
         for (slot = 0; slot < NET_LOBBY_MAX_PLAYERS; ++slot) {
@@ -650,9 +650,9 @@ static void render_net_lobby(HDC dc)
                 (void)snprintf(line, sizeof(line), "%c%u %s",
                                slot == g_net_lobby.local_slot ? '>' : ' ', slot + 1U,
                                player->name);
-            draw_small_label(dc, line, 200 + (int)(slot % 2U) * 130,
+            draw_small_label(surface, line, 200 + (int)(slot % 2U) * 130,
                              14 + (int)(slot / 2U) * 12, color);
         }
     }
-    draw_small_label(dc, g_net_status, 200, 40, RGB(255, 220, 120));
+    draw_small_label(surface, g_net_status, 200, 40, RGB(255, 220, 120));
 }

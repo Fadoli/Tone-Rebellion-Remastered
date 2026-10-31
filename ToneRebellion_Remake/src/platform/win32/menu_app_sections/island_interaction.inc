@@ -455,7 +455,7 @@ static int island_spell_target_click(int clicked_floater, int x, int y)
     return 0;
 }
 
-static void draw_control_with_hover_overlay(HDC dc,
+static void draw_control_with_hover_overlay(RenderSurface *surface,
         const WindowTemplate *control, const SpriteSheet *art, int hovered)
 {
     int32_t frames[2];
@@ -466,7 +466,7 @@ static void draw_control_with_hover_overlay(HDC dc,
     for (frame_index = 0; frame_index < frame_count; ++frame_index) {
         if (frames[frame_index] >= 0 &&
             (uint32_t)frames[frame_index] < art->frame_count) {
-            draw_sprite(dc, art, (uint32_t)frames[frame_index],
+            draw_sprite(surface, art, (uint32_t)frames[frame_index],
                         control->pane.left, control->pane.top);
         }
     }
