@@ -949,7 +949,9 @@ static void island_right_click(int clicked_floater, int x, int y)
         } else if (clicked_location >= 0) {
             const GameRuntimeLocation *site =
                 &g_game_session.islands[viewed].locations[clicked_location];
-            int enemy = site->owner_id == 4 ||
+            /* Raw +0x14 is the native owner: a Spore claim writes 4 there
+               before the record's item changes (FUN_0041e569). */
+            int enemy = site->owner_id == 4 || site->source_value_14 == 4 ||
                 (site->owner_id >= 0 &&
                  site->owner_id < GAME_START_PLAYER_COUNT &&
                  site->owner_id != (int32_t)player &&

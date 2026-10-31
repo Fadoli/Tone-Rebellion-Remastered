@@ -491,7 +491,8 @@ int main(void)
     test_leviathan_spread_waits_while_marker_rate_is_zero();
     test_neutral_pool_is_contaminated_then_matures();
     test_player_owned_pool_is_not_contaminated();
-    test_class0_neutral_pad_needs_affordable_leviathan_cost();
+    test_class0_neutral_pad_needs_fitting_leviathan_size();
+    test_spore_claimed_noshape_pad_grows_without_render_rows();
     test_leviathan_spread_only_converts_its_own_island();
     test_leviathan_spawner_births_units_on_its_island_over_time();
     test_leviathan_defense_hurts_only_workers_in_reach_on_its_island();

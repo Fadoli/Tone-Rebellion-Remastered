@@ -220,15 +220,17 @@ static int tick_neutral_item5_replacement(GameSession *session,
         state->source_value_14 != 4) return 0;
 
     /* FUN_00450a71 cases 0/1 call FUN_00452859(5, 4). Its validator accepts
-       item 5 unconditionally on class 1; class 0 also requires its Build Tone
-       cost to fit the site's raw +0x0c value (FUN_00452656). */
+       item 5 unconditionally on class 1; on class 0 FUN_00452656 compares the
+       PAD row's first value (pad.txt column 1, size) with raw +0x0c, which
+       FUN_00461b3b loads as the pad size 0/1/2 (0 for non-pad records). */
     item = pad_catalog_find(pad_catalog, 5);
     if (item == NULL) return 0;
     if (state->renderer_class == 1) {
         allowed = 1;
     } else if (state->renderer_class == 0) {
-        allowed = item->building_tone_cost <=
-            (int16_t)state->producer_cadence;
+        int site_size = state->construction_site_size == UINT8_MAX
+            ? 0 : (int)state->construction_site_size;
+        allowed = item->size <= site_size;
     } else {
         allowed = 0;
     }
@@ -1580,8 +1582,12 @@ void game_session_tick_item_animations_with_floaters(
                  building_render_find(catalog, 5) == NULL) &&
                 tick_item5_spawn(session, pad_catalog, state, island_index))
                 goto tick_location_done;
+            /* FUN_00450a71's entry gate skips class-0 items 0/1 only while
+               +0x14 is -1 (and 0x200 is clear); a Spore-claimed pad
+               (+0x14 = 4) still reaches cases 0/1 below. */
             if (state->record_value_10 < 0 ||
-                (state->record_value_10 == 0 && state->renderer_class != 1) ||
+                (state->record_value_10 == 0 && state->renderer_class != 1 &&
+                 state->source_value_14 != 4) ||
                 state->record_value_10 >= catalog->item_count)
                 goto tick_location_done;
             item = building_render_find(catalog, (uint16_t)state->record_value_10);
@@ -1601,6 +1607,13 @@ void game_session_tick_item_animations_with_floaters(
                 }
             }
             if (item == NULL) {
+                /* Items 0/1 are noshape: bldinf.txt has no row for them, yet
+                   FUN_00450a71's item switch still runs case 0/1, so an
+                   owner-4 claim becomes item 5 without a render descriptor. */
+                if ((state->record_value_10 == 0 || state->record_value_10 == 1) &&
+                    tick_neutral_item5_replacement(session, pad_catalog, state,
+                        (uint8_t)island_index))
+                    goto tick_location_done;
                 if (is_leviathan_defense(state))
                     tick_leviathan_defense(session, pad_catalog, island,
                                            state, NULL, location_index);

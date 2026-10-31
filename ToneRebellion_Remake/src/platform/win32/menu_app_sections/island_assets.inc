@@ -332,6 +332,34 @@ static int load_island_surface(int island_id, int map_island_index,
             }
         }
     }
+    /* Leviathan sites change item while the island is open (Spore claim ->
+       V-INFECT -> supply/defense building, FUN_00450a71 cases 0/1/5), so the
+       records present at load do not cover them. Preload every Leviathan
+       PAD item's sheet so a newly grown building is drawn immediately. */
+    for (item_id = 0; item_id < g_pad_catalog.item_count &&
+         item_id < PAD_CATALOG_MAX_ITEMS; ++item_id) {
+        const BuildingRenderItem *definition;
+        char item_shape[BUILDING_RENDER_SHAPE_CAPACITY];
+        char item_member[48];
+        char item_error[128];
+        char *character;
+        if (g_pad_catalog.items[item_id].tribe != PAD_TRIBE_LEVIATHAN ||
+            building_candidates[item_id].frames != NULL) continue;
+        definition = building_render_find(&g_building_render_catalog,
+                                           (uint16_t)item_id);
+        if (definition == NULL || definition->shape_id[0] == '\0' ||
+            strcmp(definition->shape_id, "noshape") == 0) continue;
+        (void)snprintf(item_shape, sizeof(item_shape), "%s", definition->shape_id);
+        for (character = item_shape; *character != '\0'; ++character) {
+            if (*character >= 'A' && *character <= 'Z')
+                *character = (char)(*character - 'A' + 'a');
+        }
+        (void)snprintf(item_member, sizeof(item_member), "data\\%s.shp", item_shape);
+        if (!load_sprite_sheet(&archive, item_member, palette,
+                               &building_candidates[item_id], item_error,
+                               sizeof(item_error)))
+            free_sprite_sheet(&building_candidates[item_id]);
+    }
     /* FUN_0042704b (fltdraw.cpp) draws tribe-specific body and legs sheets.
        shapeinf.txt specifies base-worker body frame 0 and hover frames 0..15. */
     for (hall_index = 0; hall_index < 4; ++hall_index) {

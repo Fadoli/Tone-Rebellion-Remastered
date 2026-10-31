@@ -534,22 +534,57 @@ static void test_player_owned_pool_is_not_contaminated(void)
     assert(pool->record_value_10 == 0 && pool->owner_id == 0);
 }
 
-static void test_class0_neutral_pad_needs_affordable_leviathan_cost(void)
+static void test_class0_neutral_pad_needs_fitting_leviathan_size(void)
 {
     GameSession session = {0};
     PadCatalog pads;
     GameRuntimeLocation *pad = &session.islands[0].locations[0];
 
     make_leviathan_pads(&pads);
-    pads.items[5].building_tone_cost = 40;
+    pads.items[5].size = 2;
+    pads.items[5].building_tone_cost = 40; /* not compared by FUN_00452656 */
     session.island_count = 1;
     session.islands[0].location_count = 1;
-    make_leviathan_marker(pad, 0, 1); /* class-0 item 0 is skipped by the tick; 1 is the empty pad */
-    pad->producer_cadence = 39; /* cost > raw +0x0c: FUN_00452656 refuses */
+    make_leviathan_marker(pad, 0, 0);
+    pad->construction_site_size = 1; /* PAD row size > raw +0x0c: refused */
     assert(ticks_until_marker_changes(&session, &pads, pad, 50) == 0);
-    pad->producer_cadence = 40;
+    pad->construction_site_size = 2;
     assert(ticks_until_marker_changes(&session, &pads, pad, 50) == 1);
     assert(pad->record_value_10 == 5 && pad->owner_id == 4);
+}
+
+static void test_spore_claimed_noshape_pad_grows_without_render_rows(void)
+{
+    /* bldinf.txt has no rows for noshape items 0/1, yet FUN_00450a71 still
+       runs case 0/1 for an owner-4 record: the claimed pad becomes V-INFECT
+       (item 5) and then a Leviathan building after the difficulty delay. */
+    unsigned int item;
+    for (item = 0; item <= 1; ++item) {
+        GameSession session = {0};
+        PadCatalog pads;
+        BuildingRenderCatalog buildings;
+        GameRuntimeLocation *pad = &session.islands[0].locations[0];
+        unsigned int tick;
+
+        make_leviathan_pads(&pads);
+        make_leviathan_buildings(&buildings);
+        buildings.items[0].present = 0;
+        buildings.items[1].present = 0;
+        session.island_count = 1;
+        session.islands[0].location_count = 1;
+        make_leviathan_marker(pad, 0, (int32_t)item);
+        pad->owner_id = -1; /* the Spore writes only raw +0x14 */
+        pad->source_flags = 0;
+        game_session_tick_item_animations_with_floaters(
+            &session, &buildings, NULL, &pads);
+        assert(pad->record_value_10 == 5);
+        assert(pad->owner_id == 4 && pad->source_value_14 == 4);
+        for (tick = 0; tick < 0x4b0 && pad->record_value_10 == 5; ++tick)
+            game_session_tick_item_animations_with_floaters(
+                &session, &buildings, NULL, &pads);
+        assert(pad->record_value_10 >= 10 && pad->record_value_10 <= 21);
+        assert(pad->owner_id == 4);
+    }
 }
 
 static void test_leviathan_spread_only_converts_its_own_island(void)
