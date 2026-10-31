@@ -339,55 +339,116 @@ static int selected_upgrade_button_visible(void)
     return base_item_id >= 0x2c && base_item_id <= 0x30;
 }
 
-static int selected_cast_action_at(int x, int y)
-{
-    static const char *const spell_names[8] = {
-        "BC_Spell1", "BC_Spell2", "BC_Spell3", "BC_Spell4",
-        "BC_Spell5", "BC_Spell6", "BC_Spell7", "BC_Spell8"
-    };
-    const GameRuntimeIsland *island;
-    const GameRuntimeLocation *location;
-    const WindowTemplate *button;
-    unsigned int index;
+static const char *const k_spell_button_names[8] = {
+    "BC_Spell1", "BC_Spell2", "BC_Spell3", "BC_Spell4",
+    "BC_Spell5", "BC_Spell6", "BC_Spell7", "BC_Spell8"
+};
 
+/* The selected (+0x16c) owned item 0x2f/0x30 site with a staff record whose
+   BC_Spell buttons FUN_0045d5ba lists, on any island, else NULL. Like the
+   order buttons these show in the building panel (FUN_0042f755 mode 3) as
+   well as in the general one. */
+static const GameRuntimeLocation *selected_spell_hall(void)
+{
+    const GameRuntimeLocation *location;
+    int island_index = selection_island();
     if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
-        g_island_panel_mode != WINDOW_ISLAND_PANEL_GENERAL ||
+        !island_panel_location_info_visible(g_island_panel_mode) ||
         g_menu.selected_tribe < 0 ||
         g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
-        g_menu.selected_map_island < 0 ||
-        g_menu.selected_map_island >= g_game_session.island_count ||
-        view_selected_location() < 0) return -1;
-    island = &g_game_session.islands[g_menu.selected_map_island];
-    if ((unsigned int)view_selected_location() >= island->location_count) return -1;
-    location = &island->locations[view_selected_location()];
+        island_index < 0 || island_index >= g_game_session.island_count ||
+        g_selected_location < 0 ||
+        g_selected_location >= g_game_session.islands[island_index].location_count)
+        return NULL;
+    location = &g_game_session.islands[island_index].locations[g_selected_location];
     if (location->renderer_class != 0 ||
         location->owner_id != g_menu.selected_tribe ||
         location->source_location_slot_18 < 0 ||
         (location_base_item_id(location) != 0x2f &&
-         location_base_item_id(location) != 0x30)) return -1;
+         location_base_item_id(location) != 0x30)) return NULL;
+    return location;
+}
 
+static int selected_cast_action_at(int x, int y)
+{
+    const GameRuntimeLocation *location = selected_spell_hall();
+    const WindowTemplate *button;
+    unsigned int index;
+
+    if (location == NULL) return -1;
     button = window_catalog_hit_test_names(&g_window_catalog, 3, x, y,
-        spell_names, sizeof(spell_names) / sizeof(spell_names[0]));
+        k_spell_button_names, 8);
     if (button == NULL) return -1;
     for (index = 0; index < 8; ++index) {
-        if (strcmp(button->name, spell_names[index]) == 0) {
+        if (strcmp(button->name, k_spell_button_names[index]) == 0) {
+            /* FUN_0045d5ba lists all eight BC_Spell buttons for 0x2f/0x30;
+               the dispatcher covers kinds 0..0x15. */
             int kind = game_session_cast_kind_for_action(
                 (uint8_t)location->source_value_14,
                 (uint8_t)(0x15U + index));
-            if (kind == 0x0a &&
-                (g_selected_floater < 0 ||
-                 (unsigned int)g_selected_floater >= g_game_session.floater_count ||
-                 !game_session_floater_is_active(
-                     &g_game_session.floaters[(unsigned int)g_selected_floater]) ||
-                 g_game_session.floaters[(unsigned int)g_selected_floater]
-                     .owner_slot != 4U)) return -1;
-            return kind == 4 || kind == 7 || kind == 8 || kind == 9 ||
-                   kind == 0x0a || kind == 0x0b ||
-                   kind == 0x14 || kind == 0x16
-                ? (int)(0x15U + index) : -1;
+            return kind >= 0 && kind <= 0x15 ? (int)(0x15U + index) : -1;
         }
     }
     return -1;
+}
+
+/* FUN_0042fa0f msg 0x65 sub 0x15..0x1c: DAT_004a2898[kind] == 0 sends the
+   cast at once with the building as target; otherwise FUN_0043530b arms a
+   site (1) or floater (2) pick. Pressing the armed button again disarms it
+   (port convenience, like the order buttons). */
+static void press_cast_action(int action)
+{
+    int kind = game_session_cast_kind_for_action(
+        (uint8_t)g_game_session.islands[selection_island()]
+            .locations[g_selected_location].source_value_14,
+        (uint8_t)action);
+    int pick = game_session_cast_kind_target_pick(kind);
+    g_defend_area_armed = 0;
+    if (pick == 0) {
+        g_armed_spell_action = 0;
+        (void)ISSUE_COMMAND(GAME_COMMAND_QUEUE_CAST_ACTION,
+            (uint8_t)g_menu.selected_tribe, (uint8_t)selection_island(),
+            (uint16_t)g_selected_location, (uint8_t)action, -1,
+            (uint8_t)selection_island(), -1);
+    } else if (pick > 0) {
+        g_armed_spell_action = g_armed_spell_action == action ? 0 : action;
+        g_armed_spell_pick = pick;
+    }
+    update_interaction_cursor();
+}
+
+/* FUN_00435826 in a spell mode: a site click under pick 1 sends msg 0x40
+   (clicked island/site), a floater click under pick 2 msg 0x41 (viewed
+   island, floater); both clear the mode. Any other click clears it and is
+   handled as a plain selection (local_8 path). Returns 1 when consumed. */
+static int island_spell_target_click(int clicked_floater, int x, int y)
+{
+    int action = g_armed_spell_action;
+    int building_island = selection_island();
+    int clicked_location;
+    if (action == 0) return 0;
+    g_armed_spell_action = 0;
+    update_interaction_cursor();
+    if (building_island < 0 || building_island >= g_game_session.island_count ||
+        g_selected_location < 0 ||
+        g_selected_location >= g_game_session.islands[building_island].location_count)
+        return 0;
+    clicked_location = clicked_floater >= 0 ? -1 : island_location_at(x, y);
+    if (g_armed_spell_pick == 1 && clicked_location >= 0) {
+        (void)ISSUE_COMMAND(GAME_COMMAND_QUEUE_CAST_ACTION,
+            (uint8_t)g_menu.selected_tribe, (uint8_t)building_island,
+            (uint16_t)g_selected_location, (uint8_t)action, -1,
+            (uint8_t)g_menu.selected_map_island, clicked_location);
+        return 1;
+    }
+    if (g_armed_spell_pick == 2 && clicked_floater >= 0) {
+        (void)ISSUE_COMMAND(GAME_COMMAND_QUEUE_CAST_ACTION,
+            (uint8_t)g_menu.selected_tribe, (uint8_t)building_island,
+            (uint16_t)g_selected_location, (uint8_t)action, clicked_floater,
+            (uint8_t)building_island, -1);
+        return 1;
+    }
+    return 0;
 }
 
 static void draw_control_with_hover_overlay(HDC dc,
@@ -411,34 +472,16 @@ static void draw_control_with_hover_overlay(HDC dc,
    player's item 0x2f/0x30 building, without the click-path kind filter. */
 static int hovered_spell_button_kind(int x, int y)
 {
-    static const char *const spell_names[8] = {
-        "BC_Spell1", "BC_Spell2", "BC_Spell3", "BC_Spell4",
-        "BC_Spell5", "BC_Spell6", "BC_Spell7", "BC_Spell8"
-    };
-    const GameRuntimeIsland *island;
-    const GameRuntimeLocation *location;
+    const GameRuntimeLocation *location = selected_spell_hall();
     const WindowTemplate *button;
     unsigned int index;
 
-    if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
-        g_island_panel_mode != WINDOW_ISLAND_PANEL_GENERAL ||
-        g_menu.selected_tribe < 0 ||
-        g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
-        g_menu.selected_map_island < 0 ||
-        g_menu.selected_map_island >= g_game_session.island_count ||
-        view_selected_location() < 0) return -1;
-    island = &g_game_session.islands[g_menu.selected_map_island];
-    if ((unsigned int)view_selected_location() >= island->location_count) return -1;
-    location = &island->locations[view_selected_location()];
-    if (location->renderer_class != 0 ||
-        location->owner_id != g_menu.selected_tribe ||
-        location->source_location_slot_18 < 0 ||
-        location_base_item_id(location) != 0x2f) return -1;
+    if (location == NULL) return -1;
     button = window_catalog_hit_test_names(&g_window_catalog, 3, x, y,
-        spell_names, sizeof(spell_names) / sizeof(spell_names[0]));
+        k_spell_button_names, 8);
     if (button == NULL) return -1;
     for (index = 0; index < 8; ++index) {
-        if (strcmp(button->name, spell_names[index]) == 0) {
+        if (strcmp(button->name, k_spell_button_names[index]) == 0) {
             return game_session_cast_kind_for_action(
                 (uint8_t)location->source_value_14,
                 (uint8_t)(0x15U + index));
@@ -898,8 +941,12 @@ static void island_right_click(int clicked_floater, int x, int y)
     uint8_t player = (uint8_t)g_menu.selected_tribe;
     uint8_t viewed = (uint8_t)g_menu.selected_map_island;
     int building_island = selection_island();
-    int clicked_location = clicked_floater >= 0 ? -1 : island_location_at(x, y);
-    int ordering = g_selected_location >= 0 && building_island >= 0 &&
+    int clicked_location;
+    int ordering;
+
+    if (island_spell_target_click(clicked_floater, x, y)) return;
+    clicked_location = clicked_floater >= 0 ? -1 : island_location_at(x, y);
+    ordering = g_selected_location >= 0 && building_island >= 0 &&
         building_island < g_game_session.island_count &&
         game_session_building_takes_orders(&g_game_session, player,
             (uint8_t)building_island, (uint16_t)g_selected_location);

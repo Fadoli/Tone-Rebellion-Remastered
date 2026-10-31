@@ -99,6 +99,10 @@ static void update_interaction_cursor(void)
             slot = 0x0b;
         } else if (g_defend_area_armed >= 6 && g_defend_area_armed <= 9) {
             slot = k_order_slots[g_defend_area_armed - 6];
+        } else if (g_armed_spell_action != 0) {
+            /* FUN_0043530b spell modes: +0x17e = 0xb for a site pick, 7 for
+               a floater pick. */
+            slot = g_armed_spell_pick == 2 ? 7 : 0x0b;
         } else if (g_game_session_valid &&
                    g_game_session.location_move_active) {
             slot = 9;

@@ -172,6 +172,14 @@ static void handle_click(HWND window, int x, int y)
             }
         }
         {
+            int cast_action = selected_cast_action_at(x, y);
+            if (cast_action >= 0) {
+                press_cast_action(cast_action);
+                InvalidateRect(window, NULL, FALSE);
+                return;
+            }
+        }
+        {
             int order_genre = building_order_button_at(x, y);
             if (order_genre == 10) {
                 /* FUN_0045dcf4: genre 9 at the building's own packed tile. */
@@ -189,7 +197,18 @@ static void handle_click(HWND window, int x, int y)
             if (order_genre != 0) {
                 g_defend_area_armed =
                     g_defend_area_armed == order_genre ? 0 : order_genre;
+                g_armed_spell_action = 0;
                 update_interaction_cursor();
+                InvalidateRect(window, NULL, FALSE);
+                return;
+            }
+        }
+        if (g_armed_spell_action != 0 && x >= 0 && x < LOGICAL_WIDTH &&
+            y >= 0 && y < 320) {
+            int clicked_floater = game_session_floater_at(&g_game_session,
+                (uint8_t)g_menu.selected_map_island,
+                (uint16_t)(x + g_island_scroll_x), (uint16_t)y);
+            if (island_spell_target_click(clicked_floater, x, y)) {
                 InvalidateRect(window, NULL, FALSE);
                 return;
             }
@@ -369,15 +388,6 @@ static void handle_click(HWND window, int x, int y)
             g_selected_location >= 0 &&
             g_selected_location < g_game_session.islands[
                 selection_island()].location_count) {
-            int cast_action = selected_cast_action_at(x, y);
-            if (cast_action >= 0) {
-                (void)ISSUE_COMMAND(GAME_COMMAND_QUEUE_CAST_ACTION, (uint8_t)g_menu.selected_tribe,
-                    (uint8_t)selection_island(),
-                    (uint16_t)g_selected_location, (uint8_t)cast_action,
-                    (int16_t)g_selected_floater);
-                InvalidateRect(window, NULL, FALSE);
-                return;
-            }
             static const char *const onoff_names[] = {"BC_OnOff"};
             const WindowTemplate *onoff_control =
                 selected_onoff_button_visible()

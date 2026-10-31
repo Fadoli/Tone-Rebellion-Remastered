@@ -148,13 +148,17 @@ typedef struct GameGlyphActionRequest {
     uint8_t glyph_index;
 } GameGlyphActionRequest;
 
-/* FUN_0042fa0f category-1 actions 0x15..0x1c carry the player and repeat
-   the selected site's island/location for FUN_0045da80. */
+/* FUN_0042fa0f category-1 actions 0x15..0x1c: packet words +6/+8 hold the
+   selected caster building, +0xa/+0xc the target. An untargeted kind
+   repeats the building there; msg 0x40 stores the clicked site, msg 0x41
+   the viewed island and the clicked floater. */
 typedef struct GameCastActionRequest {
     uint8_t player_slot;
     uint8_t action_subtype;
     uint8_t island_index;
     uint16_t location_index;
+    uint8_t target_island;
+    int16_t target_location;
     int16_t target_floater_index;
 } GameCastActionRequest;
 

@@ -543,6 +543,31 @@ int game_session_queue_cast_action_target(GameSession *session,
                                           uint8_t action_subtype,
                                           int16_t target_floater_index)
 {
+    return game_session_queue_cast_action_at(session, player_slot,
+        island_index, location_index, action_subtype, island_index, -1,
+        target_floater_index);
+}
+
+int game_session_cast_kind_target_pick(int kind)
+{
+    /* DAT_004a2898, 23 bytes read from FLOAT.EXE. */
+    static const uint8_t target_picks[23] = {
+        1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 2, 1,
+        1, 1, 0, 1, 1, 0, 1, 1, 0, 0, 1
+    };
+    if (kind < 0 || kind >= 23) return -1;
+    return target_picks[kind];
+}
+
+int game_session_queue_cast_action_at(GameSession *session,
+                                      uint8_t player_slot,
+                                      uint8_t island_index,
+                                      uint16_t location_index,
+                                      uint8_t action_subtype,
+                                      uint8_t target_island,
+                                      int16_t target_location,
+                                      int16_t target_floater_index)
+{
     GameCastActionRequest *request;
     if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
         island_index >= session->island_count ||
@@ -563,6 +588,12 @@ int game_session_queue_cast_action_target(GameSession *session,
     request->action_subtype = action_subtype;
     request->island_index = island_index;
     request->location_index = location_index;
+    if (target_location < 0) {
+        target_island = island_index;
+        target_location = (int16_t)location_index;
+    }
+    request->target_island = target_island;
+    request->target_location = target_location;
     request->target_floater_index = target_floater_index;
     return 1;
 }
@@ -654,10 +685,11 @@ unsigned int game_session_dispatch_cast_actions(GameSession *session)
         caster->active_order_action = 0x13;
         caster->movement_state = 0x13;
         caster->cast_spell_kind = kind;
-        /* FUN_0042fa0f repeats the selected site's island/location in
-           packet words +0x0e/+0x10 for FUN_0045da80. */
-        caster->order_target_island = request.island_index;
-        caster->order_target_location = (int16_t)request.location_index;
+        /* Packet target words: the building itself for an immediate kind,
+           the picked site for a msg 0x40 cast. FUN_0042361d indexes that
+           site on the caster's island (+0x0e), as the movement tick does. */
+        caster->order_target_island = request.target_island;
+        caster->order_target_location = request.target_location;
         caster->order_target_floater = kind == 0x0a
             ? request.target_floater_index : -1;
         caster->order_progress = UINT8_MAX;

@@ -63,8 +63,9 @@ int game_command_apply(GameSession *session, const GameCommandContext *context,
                                                   &expected);
     }
     case GAME_COMMAND_QUEUE_CAST_ACTION:
-        return game_session_queue_cast_action_target(session, (uint8_t)a[0], (uint8_t)a[1],
-            (uint16_t)a[2], (uint8_t)a[3], (int16_t)a[4]);
+        return game_session_queue_cast_action_at(session, (uint8_t)a[0], (uint8_t)a[1],
+            (uint16_t)a[2], (uint8_t)a[3], (uint8_t)a[5], (int16_t)a[6],
+            (int16_t)a[4]);
     case GAME_COMMAND_QUEUE_ONOFF_ACTION:
         return game_session_queue_onoff_action(session, (uint8_t)a[0], (uint8_t)a[1],
                                                (uint16_t)a[2]);

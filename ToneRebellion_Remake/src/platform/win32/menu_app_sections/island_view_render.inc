@@ -1861,10 +1861,6 @@ static void draw_location_action_panel(HDC dc)
 
     action = selected_location_action();
     if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL) {
-        static const char *const spell_names[8] = {
-            "BC_Spell1", "BC_Spell2", "BC_Spell3", "BC_Spell4",
-            "BC_Spell5", "BC_Spell6", "BC_Spell7", "BC_Spell8"
-        };
         const WindowTemplate *onoff_button = window_catalog_find(
             &g_window_catalog, "BC_OnOff", 3);
         const WindowTemplate *upgrade_button = window_catalog_find(
@@ -1890,29 +1886,6 @@ static void draw_location_action_panel(HDC dc)
         if (selected_repair_button_visible()) {
             draw_control_with_hover_overlay(dc, repair_button,
                 &g_repair_button_art, g_hovered_repair_control);
-        }
-        if (island->locations[g_selected_location].renderer_class == 0 &&
-            island->locations[g_selected_location].owner_id ==
-                g_menu.selected_tribe &&
-            island->locations[g_selected_location].source_location_slot_18 >= 0 &&
-            (location_base_item_id(&island->locations[g_selected_location]) == 0x2f ||
-             location_base_item_id(&island->locations[g_selected_location]) == 0x30)) {
-            unsigned int spell_index;
-            for (spell_index = 0; spell_index < 8; ++spell_index) {
-                int kind = game_session_cast_kind_for_action(
-                    (uint8_t)island->locations[g_selected_location].source_value_14,
-                    (uint8_t)(0x15U + spell_index));
-                const WindowTemplate *spell_button;
-                uint32_t frame;
-                if (kind != 8 && kind != 0x14 && kind != 0x16) continue;
-                spell_button = window_catalog_find(&g_window_catalog,
-                    spell_names[spell_index], 3);
-                frame = (uint32_t)kind * 2U;
-                if (spell_button != NULL && frame < g_building_command_art.frame_count) {
-                    draw_sprite(dc, &g_building_command_art, frame,
-                                spell_button->pane.left, spell_button->pane.top);
-                }
-            }
         }
     }
     /* The grab/place flow starts from the native IWMove / IWHallMove control
@@ -1982,6 +1955,30 @@ static void draw_location_action_panel(HDC dc)
             if (g_hovered_upgspread)
                 draw_sprite(dc, &g_upgrade_button_art, 13,
                             control->pane.left, control->pane.top);
+        }
+    }
+    {
+        /* FUN_0042f755 sends each BC_Spell button message 0xc with frame
+           FUN_00450070(site, 0x15 + n) * 2 on its own SPELLBUT shape; the
+           hover overlay is the next frame. The armed spell keeps its overlay
+           while its target is picked. */
+        const GameRuntimeLocation *spell_hall = selected_spell_hall();
+        unsigned int spell_index;
+        for (spell_index = 0; spell_hall != NULL && spell_index < 8U;
+             ++spell_index) {
+            int kind = game_session_cast_kind_for_action(
+                (uint8_t)spell_hall->source_value_14,
+                (uint8_t)(0x15U + spell_index));
+            const WindowTemplate *spell_button = window_catalog_find(
+                &g_window_catalog, k_spell_button_names[spell_index], 3);
+            WindowTemplate spell_state;
+            if (kind < 0 || spell_button == NULL) continue;
+            spell_state = *spell_button;
+            spell_state.shape_frame = kind * 2;
+            draw_control_with_hover_overlay(dc, &spell_state,
+                &g_spell_button_art,
+                g_hovered_spell_kind == kind ||
+                g_armed_spell_action == (int)(0x15U + spell_index));
         }
     }
     if (defend_area_button_visible() && ensure_trainb_art()) {

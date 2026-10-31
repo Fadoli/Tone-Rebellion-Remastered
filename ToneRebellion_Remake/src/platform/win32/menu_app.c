@@ -123,6 +123,8 @@ static SpriteSheet g_hall_stock_art;
 static SpriteSheet g_repair_button_art;
 static SpriteSheet g_upgrade_button_art;
 static SpriteSheet g_building_command_art;
+/* data\spellbut.shp (shapes.txt SPELLBUT), the BC_Spell1..8 art. */
+static SpriteSheet g_spell_button_art;
 static SpriteSheet g_inventory_item_art;
 static SpriteSheet g_diplomacy_art;
 static SpriteSheet g_leviathan_projectile_art[4];
@@ -270,6 +272,11 @@ static int g_hovered_training_stock;
 /* BC_DefendArea armed: the next island click sets the building's area order
    (FUN_0043530b mode 19). */
 static int g_defend_area_armed;
+/* BC_SpellN armed (FUN_0043530b mode 0x15..0x1c): the action subtype whose
+   target the next island click picks, 0 when none; the pick kind is
+   game_session_cast_kind_target_pick (1 site, 2 floater). */
+static int g_armed_spell_action;
+static int g_armed_spell_pick;
 static SpriteSheet g_trainb_art;
 static int g_hovered_hall_stock = -1;
 static int g_hovered_island_button = -1;

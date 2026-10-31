@@ -720,8 +720,9 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             if (enter_end_game_screen()) InvalidateRect(window, NULL, FALSE);
             return 0;
         }
-        if (wparam == VK_ESCAPE && g_defend_area_armed) {
+        if (wparam == VK_ESCAPE && (g_defend_area_armed || g_armed_spell_action)) {
             g_defend_area_armed = 0;
+            g_armed_spell_action = 0;
             update_interaction_cursor();
             InvalidateRect(window, NULL, FALSE);
             return 0;

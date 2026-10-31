@@ -85,3 +85,18 @@ and action labels `ev_ca6209d841056d1b69884f43a204d17713c19c2756570da82baaec7706
 
 
 Orders without a local consumer branch and facing/render details are in [the focused edge-case note](MOVEMENT_ORDER_EDGE_CASES.md).
+
+### Spell buttons and target pick
+
+Observation: `FUN_0045d5ba` lists all eight `BC_Spell` buttons (0x15..0x1c)
+for items 0x2f/0x30 (`ev_03503d5f`); `FUN_0042f755` sets each button's
+SPELLBUT frame to `FUN_00450070(site, 0x15 + n) * 2` (`ev_d476b7f9`;
+`spellbut.shp` has 44 frames = 22 kinds × 2). On press, `FUN_0042fa0f` reads
+`DAT_004a2898[kind]` (bytes from FLOAT.EXE: `1,1,0,1,1,1,1,1,1,1,2,1,1,1,0,1,1,0,1,1,0,0,1`):
+0 sends the cast with the building as target, otherwise `FUN_0043530b` arms a
+site (1, cursor 0xb) or floater (2, cursor 7) pick. `FUN_00435826` then sends
+msg 0x40 (clicked site) or 0x41 (floater) and clears the mode; any other click
+clears it and selects normally (`ev_9fac3ab3`, `ev_0d862ab7`). Port: the cast
+request carries the target site (`game_session_queue_cast_action_at`), the
+UI draws SPELLBUT and arms `g_armed_spell_action`. Interpretation: pressing the
+armed button again disarms it, and Escape cancels.

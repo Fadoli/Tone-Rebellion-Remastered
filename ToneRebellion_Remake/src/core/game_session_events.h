@@ -129,6 +129,19 @@ int game_session_queue_cast_action_target(GameSession *session,
                                           uint16_t location_index,
                                           uint8_t action_subtype,
                                           int16_t target_floater_index);
+/* Same with an explicit target site (msg 0x40 armed pick); a negative
+   target_location keeps the caster building as the target. */
+int game_session_queue_cast_action_at(GameSession *session,
+                                      uint8_t player_slot,
+                                      uint8_t island_index,
+                                      uint16_t location_index,
+                                      uint8_t action_subtype,
+                                      uint8_t target_island,
+                                      int16_t target_location,
+                                      int16_t target_floater_index);
+/* DAT_004a2898[kind] read by FUN_0042fa0f / FUN_0043530b: 0 sends the cast
+   at once, 1 arms a site pick (msg 0x40), 2 a floater pick (msg 0x41). */
+int game_session_cast_kind_target_pick(int kind);
 int game_session_cast_kind_for_action(uint8_t owner, uint8_t action_subtype);
 /* effects.txt SOUND of the effect FUN_0041660b spawns for FA_Cast `kind`:
    0..3 are the owner-indexed PSPELL/SSPELL/MSPELL/LSPELL defaults, then

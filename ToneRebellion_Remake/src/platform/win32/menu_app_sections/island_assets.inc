@@ -33,6 +33,7 @@ static int load_island_surface(int island_id, int map_island_index,
     SpriteSheet repair_button_candidate = {0};
     SpriteSheet upgrade_button_candidate = {0};
     SpriteSheet building_command_candidate = {0};
+    SpriteSheet spell_button_candidate = {0};
     SpriteSheet inventory_item_candidate = {0};
     SpriteSheet diplomacy_candidate = {0};
     SpriteSheet defense_projectile_candidates[4] = {{0}};
@@ -197,6 +198,8 @@ static int load_island_surface(int island_id, int map_island_index,
                            &upgrade_button_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\trainbut.shp", palette,
                            &building_command_candidate, error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\spellbut.shp", palette,
+                           &spell_button_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\alltrigs.shp", palette,
                            &inventory_item_candidate, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\diploma.shp", palette,
@@ -429,6 +432,7 @@ static int load_island_surface(int island_id, int map_island_index,
         repair_button_candidate.frame_count <= 11 ||
         upgrade_button_candidate.frame_count <= 13 ||
         building_command_candidate.frame_count <= 21 ||
+        spell_button_candidate.frame_count < 2 ||
         hall_command_candidate.frame_count < 10 ||
         floater_info_candidate.frame_count < 26 ||
         glyph_inventory_candidate.frame_count < 1U + GAME_GLYPH_COUNT * 2U ||
@@ -501,6 +505,7 @@ static int load_island_surface(int island_id, int map_island_index,
     free_sprite_sheet(&g_repair_button_art);
     free_sprite_sheet(&g_upgrade_button_art);
     free_sprite_sheet(&g_building_command_art);
+    free_sprite_sheet(&g_spell_button_art);
     free_sprite_sheet(&g_inventory_item_art);
     free_sprite_sheet(&g_diplomacy_art);
     for (hall_index = 0; hall_index < 4; ++hall_index) {
@@ -674,6 +679,8 @@ static int load_island_surface(int island_id, int map_island_index,
     memset(&upgrade_button_candidate, 0, sizeof(upgrade_button_candidate));
     g_building_command_art = building_command_candidate;
     memset(&building_command_candidate, 0, sizeof(building_command_candidate));
+    g_spell_button_art = spell_button_candidate;
+    memset(&spell_button_candidate, 0, sizeof(spell_button_candidate));
     g_inventory_item_art = inventory_item_candidate;
     memset(&inventory_item_candidate, 0, sizeof(inventory_item_candidate));
     g_diplomacy_art = diplomacy_candidate;
@@ -735,6 +742,7 @@ done:
     free_sprite_sheet(&repair_button_candidate);
     free_sprite_sheet(&upgrade_button_candidate);
     free_sprite_sheet(&building_command_candidate);
+    free_sprite_sheet(&spell_button_candidate);
     free_sprite_sheet(&inventory_item_candidate);
     free_sprite_sheet(&diplomacy_candidate);
     for (hall_index = 0; hall_index < 4; ++hall_index)
