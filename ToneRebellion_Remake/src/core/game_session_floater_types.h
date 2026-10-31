@@ -240,7 +240,7 @@ typedef struct GameSession {
         int16_t def;
         uint8_t level;
         uint16_t frame;      /* 0-based absolute frame in the def's shape */
-        uint16_t ticks;      /* odd updates lived (BULLET timeout) */
+        uint16_t ticks;      /* updates lived (BULLET timeout, bolt reveal) */
         uint16_t x, y;
         int16_t target_floater; /* -1: fixed destination */
         uint16_t target_x, target_y;

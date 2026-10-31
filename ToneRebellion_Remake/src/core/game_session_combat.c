@@ -1747,7 +1747,11 @@ static void finish_attack_visual(GameSession *session,
         visual->x);
 }
 
-static void tick_attack_visuals(GameSession *session)
+/* FUN_00415f6d steps every effect instance through FUN_00416ff8 on each sim
+   tick; only the frame advance (FUN_00415063/FUN_0041521a) waits for an odd
+   DAT_00618e44. Movement (FUN_0041511b), the s9 timeout counter and the
+   lightning reveal (FUN_004152bd) run every tick. */
+static void tick_attack_visuals(GameSession *session, int odd_tick)
 {
     unsigned int slot;
     for (slot = 0; slot < GAME_SESSION_MAX_CAST_EFFECTS; ++slot) {
@@ -1756,6 +1760,7 @@ static void tick_attack_visuals(GameSession *session)
         unsigned int last;
         if (!visual->active) continue;
         if (visual->impact_phase) {
+            if (!odd_tick) continue;
             ++visual->frame;
             if (visual->impact_frames_left > 0) --visual->impact_frames_left;
             if (visual->impact_frames_left == 0) visual->active = 0;
@@ -1769,7 +1774,7 @@ static void tick_attack_visuals(GameSession *session)
         last = (unsigned int)def->level_start[visual->level] +
                def->level_frames[visual->level] - 1U;
         /* FUN_00415063/FUN_0041521a advance one frame per odd update. */
-        ++visual->frame;
+        if (odd_tick) ++visual->frame;
         if (def->type == FLOATER_EFFECT_LIGHTNING) {
             /* FUN_004152bd: reveal counter s3 grows and s6 is redrawn each
                update; FUN_00416ecf ends the bolt once s3 > 19. The bolt
@@ -1957,8 +1962,9 @@ void game_session_tick_combat_effects(GameSession *session,
 {
     unsigned int i;
 
-    if (session == NULL || (source_tick & 1U) == 0) return;
-    tick_attack_visuals(session);
+    if (session == NULL) return;
+    tick_attack_visuals(session, (source_tick & 1U) != 0);
+    if ((source_tick & 1U) == 0) return;
     for (i = 0; i < session->floater_count; ++i) {
         GameFloaterStart *floater = &session->floaters[i];
         if (floater->attack_effect_waits_visual) {
