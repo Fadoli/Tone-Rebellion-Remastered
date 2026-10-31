@@ -201,8 +201,9 @@ static int tick_item5_spawn(GameSession *session,
     game_session_recalculate_leviathan_island(session, (uint8_t)island_index);
     /* The native case reaches FUN_00452859(item_id, 4), which emits the same
        build-world event as player placement after the replacement succeeds. */
-    (void)game_session_queue_audio_event_at(
-        session, GAME_SESSION_AUDIO_BUILD, 4, (uint8_t)island_index);
+    if (game_session_queue_audio_event_at(
+            session, GAME_SESSION_AUDIO_BUILD, 4, (uint8_t)island_index))
+        game_session_set_last_audio_x(session, state->x);
     return 1;
 }
 
@@ -272,8 +273,9 @@ static int tick_neutral_item5_replacement(GameSession *session,
     game_session_recalculate_leviathan_island(session, island_index);
     /* FUN_00450a71 cases 0/1 call FUN_00452859(5, 4), so neutral POOL
        replacement also emits the native Leviathan-build event. */
-    (void)game_session_queue_audio_event_at(
-        session, GAME_SESSION_AUDIO_BUILD, 4, (uint8_t)island_index);
+    if (game_session_queue_audio_event_at(
+            session, GAME_SESSION_AUDIO_BUILD, 4, (uint8_t)island_index))
+        game_session_set_last_audio_x(session, state->x);
     return 1;
 }
 
@@ -572,8 +574,9 @@ static int spawn_leviathan_floater(GameSession *session,
     /* FUN_00462a87 recalculates the source island immediately after creating
        a type-4 floater; this updates its remaining population budget/rates. */
     game_session_recalculate_leviathan_island(session, floater->island_index);
-    (void)game_session_queue_audio_event_at(
-        session, GAME_SESSION_AUDIO_FLOATER_BIRTH, 4, floater->island_index);
+    if (game_session_queue_audio_event_at(
+            session, GAME_SESSION_AUDIO_FLOATER_BIRTH, 4, floater->island_index))
+        game_session_set_last_audio_x(session, floater->x);
     return (int)index;
 }
 
@@ -687,6 +690,9 @@ static void begin_defense_impact(GameSession *session,
         return;
     level = (unsigned int)damage / 2U;
     if (level >= 4U) level = 3U;
+    (void)game_session_queue_effect_sound(session,
+        game_session_impact_def_index(session, realm),
+        projectile->island_index, x);
     projectile->impact_phase = 1;
     projectile->effect_sheet_index = realm;
     projectile->animation_tick = 0;
@@ -961,6 +967,15 @@ static void tick_leviathan_defense(GameSession *session,
                     projectile->movement_speed = 5;
                     projectile->x = state->x;
                     projectile->y = state->y;
+                    {
+                        static const char *const bullet_defs[4] = {
+                            "VSHT1B", "VSHROD", "VSPIRL", "VSHT2B"
+                        };
+                        (void)game_session_queue_effect_sound(session,
+                            game_session_effect_def_index(session,
+                                bullet_defs[sheet & 3U]),
+                            island_index, state->x);
+                    }
                 } else {
                     (void)game_session_damage_floater_from_power(session,
                         target_index, attack_power);

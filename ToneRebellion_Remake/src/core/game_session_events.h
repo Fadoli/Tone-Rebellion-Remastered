@@ -216,6 +216,13 @@ void game_session_recalculate_leviathan_island(GameSession *session,
 void game_session_tick_leviathan_ai(GameSession *session);
 /* Queue/pop source event IDs 2 (build), 3 (bridge), and the modeled floater
    birth event for the platform audio adapter. */
+int game_session_queue_effect_sound(GameSession *session, int def_index,
+                                    uint8_t island, int32_t x);
+int game_session_effect_def_index(const GameSession *session,
+                                  const char *name);
+int game_session_impact_def_index(const GameSession *session,
+                                  unsigned int realm);
+void game_session_set_last_audio_x(GameSession *session, int32_t x);
 int game_session_queue_audio_event(GameSession *session, uint8_t kind,
                                    int16_t owner_id);
 /* Same as above, tagged with the effect instance's island (+0x08). */

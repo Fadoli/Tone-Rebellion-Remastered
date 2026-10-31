@@ -306,6 +306,12 @@ int floater_catalog_load_effect_defs(const unsigned char *bytes, size_t length,
                 return 0;
             }
             memcpy(current->shape, value, strlen(value) + 1);
+        } else if (strcmp(key, "SOUND") == 0) {
+            if (strlen(value) >= FLOATER_EFFECT_NAME_CAPACITY) {
+                set_error(error, error_capacity, "sound name too long", line_number);
+                return 0;
+            }
+            memcpy(current->sound, value, strlen(value) + 1);
         } else if (strcmp(key, "SPEED") == 0) {
             current->speed = (int16_t)atoi(value);
         } else if (strcmp(key, "CHAIN") == 0) {

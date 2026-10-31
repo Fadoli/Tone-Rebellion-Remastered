@@ -133,3 +133,35 @@ static void test_audio_effect_sounds(void)
     test_audio_events_play_only_on_the_displayed_island();
     test_audio_queue_is_fifo_and_bounded();
 }
+
+static void test_effect_instances_queue_their_sound_with_position(void)
+{
+    /* FUN_004181a6: an effect instance plays its effects.txt SOUND on its
+       first tick, gated by island; FUN_0045b24d needs its x. */
+    static GameSession session;
+    GameSessionAudioEvent event;
+
+    memset(&session, 0, sizeof(session));
+    memcpy(session.attack_effect_defs[3].name, "JOIN6", 6);
+    session.attack_effect_defs[3].type = FLOATER_EFFECT_ONESHOT;
+    session.attack_effect_defs[3].level_count = 1;
+    memcpy(session.attack_effect_defs[5].name, "PHYIMP", 7);
+    memcpy(session.attack_effect_defs[5].sound, "PREALM", 7);
+    assert(game_session_effect_def_index(&session, "join6") == 3);
+    assert(game_session_impact_def_index(&session, 0) == 5);
+    assert(game_session_impact_def_index(&session, 1) == -1);
+
+    /* JOIN6 has no SOUND: the visual starts, nothing is queued. */
+    assert(game_session_spawn_effect_visual(&session, 3, 2, 400, 200));
+    assert(session.attack_visuals[0].active);
+    assert(!game_session_pop_audio_event(&session, &event));
+
+    assert(game_session_queue_effect_sound(&session, 5, 2, 640));
+    assert(game_session_pop_audio_event(&session, &event));
+    assert(event.kind == GAME_SESSION_AUDIO_EFFECT);
+    assert(event.sound == 5);
+    assert(event.island == 2);
+    assert(event.x == 640);
+    assert(game_session_audio_event_is_audible(&event, 1, 2));
+    assert(!game_session_audio_event_is_audible(&event, 1, 1));
+}

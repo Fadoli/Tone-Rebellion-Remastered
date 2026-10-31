@@ -168,6 +168,13 @@ static unsigned char *g_bridge_sound;
 /* PSPELL, SSPELL, MSPELL, LSPELL, FLTARMOR, FASTPROD, SACRIF, KILLBEAS,
    DESTSUPP, ASCEND (GameCastSoundId order). */
 static unsigned char *g_cast_sounds[10];
+/* effects.txt SOUND of every effect def (attack, bullet, impact, tower
+   shot), resolved through sound.txt's "effect <id> <file>" lines. */
+static unsigned char *g_effect_sounds[FLOATER_EFFECT_MAX];
+enum { SOUND_TABLE_MAX = 160 };
+static char g_sound_ids[SOUND_TABLE_MAX][16];
+static char g_sound_files[SOUND_TABLE_MAX][32];
+static unsigned int g_sound_count;
 static char g_music_directory[MAX_PATH];
 static char g_current_tune[16];
 static int g_music_device_open;
@@ -427,6 +434,8 @@ static BOOL play_effect_sound(LPCSTR sound, HMODULE module, DWORD flags)
 #include "menu_app_sections/game_paths.inc"
 
 #include "menu_app_sections/sprite_primitives.inc"
+
+#include "menu_app_sections/sfx_mixer.inc"
 
 /* Building selection (native island window +0x16c): FUN_0042f8f7 and the
    clipboard click store a location of any island without changing the

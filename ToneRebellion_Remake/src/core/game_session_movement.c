@@ -915,6 +915,12 @@ static int game_session_tick_merge_completion(GameSession *session,
     if (floater->movement_state != 0x15) return 0;
 
     if (floater->order_timer < 50U) ++floater->order_timer;
+    /* FUN_0041e569 state 0x15 (switch case 0x14), counter 1: a player
+       floater raises world event 5, the JOIN6 effect (FUN_00416a9a). */
+    if (floater->order_timer == 1U && floater->owner_slot != 4U)
+        (void)game_session_spawn_effect_visual(session,
+            game_session_effect_def_index(session, "JOIN6"),
+            floater->island_index, floater->x, floater->y);
     if (floater->order_timer == 25U) {
         if (floater->owner_slot == 4U) {
             /* FUN_0041e569 removes the neutral merged floater at tick 25. */
@@ -1123,9 +1129,10 @@ static int game_session_create_recruited_worker(GameSession *session,
     location->production_progress = 0;
     location->source_value_42 = 0;
     game_session_refresh_player_maintenance_budgets(session);
-    (void)game_session_queue_audio_event_at(
-        session, GAME_SESSION_AUDIO_FLOATER_BIRTH, player_slot,
-        floater->island_index);
+    if (game_session_queue_audio_event_at(
+            session, GAME_SESSION_AUDIO_FLOATER_BIRTH, player_slot,
+            floater->island_index))
+        game_session_set_last_audio_x(session, floater->x);
     return 1;
 }
 

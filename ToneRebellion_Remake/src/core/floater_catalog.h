@@ -21,6 +21,9 @@ enum {
 typedef struct FloaterEffectDef {
     char name[FLOATER_EFFECT_NAME_CAPACITY];
     char shape[FLOATER_EFFECT_NAME_CAPACITY];
+    /* SOUND id (sound.txt), played on the instance's first tick by
+       FUN_004181a6; empty when the def has none. */
+    char sound[FLOATER_EFFECT_NAME_CAPACITY];
     uint8_t type;
     uint8_t level_count;
     uint8_t level_start[FLOATER_IMPACT_LEVEL_COUNT];

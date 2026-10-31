@@ -174,6 +174,38 @@ static int load_building_render_catalog(char *error, size_t error_capacity)
     floater_member = cob_archive_find(&archive, "floater.txt");
     floater_animation_member = cob_archive_find(&archive, "fltinf.txt");
     effects_member = cob_archive_find(&archive, "effects.txt");
+    {
+        /* sound.txt: "effect <id> <data\file.wav>" in sound index order. */
+        const CobMember *sound_member = cob_archive_find(&archive, "sound.txt");
+        unsigned char *sound_bytes = sound_member != NULL
+            ? (unsigned char *)malloc(sound_member->length + 1U) : NULL;
+        g_sound_count = 0;
+        if (sound_bytes != NULL &&
+            cob_archive_read_member(&archive, sound_member, sound_bytes,
+                                    sound_member->length, error, error_capacity)) {
+            size_t position = 0;
+            sound_bytes[sound_member->length] = 0;
+            while (position < sound_member->length &&
+                   g_sound_count < SOUND_TABLE_MAX) {
+                char line[128];
+                char kind[16];
+                size_t length = 0;
+                while (position < sound_member->length &&
+                       sound_bytes[position] != '\n' && length + 1 < sizeof(line))
+                    line[length++] = (char)sound_bytes[position++];
+                while (position < sound_member->length &&
+                       sound_bytes[position] != '\n') ++position;
+                ++position;
+                line[length] = 0;
+                if (sscanf(line, "%15s %15s %31s", kind,
+                           g_sound_ids[g_sound_count],
+                           g_sound_files[g_sound_count]) == 3 &&
+                    strcmp(kind, "effect") == 0) ++g_sound_count;
+            }
+        }
+        free(sound_bytes);
+        if (error != NULL && error_capacity != 0) error[0] = '\0';
+    }
     animation_member = cob_archive_find(&archive, "bldinf.txt");
     description_member = cob_archive_find(&archive, "bldtxt.txt");
     name_member = cob_archive_find(&archive, "bldname.txt");
@@ -456,6 +488,32 @@ static int load_menu_art(char *error, size_t error_capacity)
                 }
             }
         }
+        {
+            unsigned int def_index;
+            for (def_index = 0; def_index < g_floater_catalog.effect_count;
+                 ++def_index) {
+                const char *id = g_floater_catalog.effects[def_index].sound;
+                const CobMember *member = NULL;
+                unsigned int entry;
+                if (id[0] == '\0') continue;
+                for (entry = 0; entry < g_sound_count; ++entry) {
+                    if (_stricmp(g_sound_ids[entry], id) == 0) {
+                        member = cob_archive_find(&archive, g_sound_files[entry]);
+                        break;
+                    }
+                }
+                if (member == NULL || member->length < 44) continue;
+                g_effect_sounds[def_index] = (unsigned char *)malloc(member->length);
+                if (g_effect_sounds[def_index] != NULL &&
+                    !cob_archive_read_member(&archive, member,
+                        g_effect_sounds[def_index], member->length,
+                        error, error_capacity)) {
+                    free(g_effect_sounds[def_index]);
+                    g_effect_sounds[def_index] = NULL;
+                }
+            }
+            if (error != NULL && error_capacity != 0) error[0] = '\0';
+        }
     }
     {
         const CobMember *font = cob_archive_find(&archive, "data\\bgoutfnt.fnt");
@@ -564,6 +622,10 @@ done:
             for (cast_index = 0; cast_index < 10U; ++cast_index) {
                 free(g_cast_sounds[cast_index]);
                 g_cast_sounds[cast_index] = NULL;
+            }
+            for (cast_index = 0; cast_index < FLOATER_EFFECT_MAX; ++cast_index) {
+                free(g_effect_sounds[cast_index]);
+                g_effect_sounds[cast_index] = NULL;
             }
         }
     }
@@ -800,10 +862,13 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     free(g_fltdeath_sound);
     free(g_levdeath_sound);
     free(g_bridge_sound);
+    sfx_close();
     {
         unsigned int cast_index;
         for (cast_index = 0; cast_index < 10U; ++cast_index)
             free(g_cast_sounds[cast_index]);
+        for (cast_index = 0; cast_index < FLOATER_EFFECT_MAX; ++cast_index)
+            free(g_effect_sounds[cast_index]);
     }
     free(g_island_height_data);
     return (int)message.wParam;

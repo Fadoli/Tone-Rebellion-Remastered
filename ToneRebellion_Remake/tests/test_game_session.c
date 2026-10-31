@@ -553,6 +553,7 @@ int main(void)
     test_building_order_keeps_the_target_island();
     test_soldiers_fight_through_building_orders();
     test_wounded_soldier_heals_in_its_building();
+    test_effect_instances_queue_their_sound_with_position();
     (void)puts("game session unit tests passed");
     return 0;
 }

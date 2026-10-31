@@ -43,7 +43,10 @@ typedef enum GameSessionAudioEventKind {
     GAME_SESSION_AUDIO_BRIDGE = 3,
     GAME_SESSION_AUDIO_FLOATER_BIRTH = 4,
     /* FA_Cast effect sound: `sound` is a GameCastSoundId (effects.txt SOUND). */
-    GAME_SESSION_AUDIO_CAST = 5
+    GAME_SESSION_AUDIO_CAST = 5,
+    /* Any other effect instance's SOUND: `sound` is the effects.txt def
+       index (attack, bullet, lightning, impact, tower shot). */
+    GAME_SESSION_AUDIO_EFFECT = 6
 } GameSessionAudioEventKind;
 
 typedef struct GameSessionAudioEvent {
@@ -53,6 +56,9 @@ typedef struct GameSessionAudioEvent {
     /* FUN_00416a9a stores the floater's island (+0x0e) in the effect
        instance; UINT8_MAX means the event is not island-gated. */
     uint8_t island;
+    /* Island x of the instance for FUN_0045b24d's distance volume and pan;
+       -1 plays at the centre. */
+    int16_t x;
 } GameSessionAudioEvent;
 
 typedef enum GameSessionWorldEventKind {

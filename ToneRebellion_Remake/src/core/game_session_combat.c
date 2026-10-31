@@ -18,9 +18,10 @@ static void record_floater_death(GameSession *session,
     if (session == NULL || floater == NULL) return;
     /* FUN_00416a9a selects levdeath for raw type 4, fltdeath otherwise, and
        tags the instance with the floater's island. */
-    (void)game_session_queue_audio_event_at(session,
-        GAME_SESSION_AUDIO_FLOATER_DEATH, (int16_t)floater->type_index,
-        floater->island_index);
+    if (game_session_queue_audio_event_at(session,
+            GAME_SESSION_AUDIO_FLOATER_DEATH, (int16_t)floater->type_index,
+            floater->island_index))
+        game_session_set_last_audio_x(session, floater->x);
     if (floater->type_index < GAME_START_PLAYER_COUNT) {
         ++session->economy[floater->type_index].floater_losses;
     }
@@ -1634,6 +1635,44 @@ int game_session_spawn_attack_visual(GameSession *session,
         visual->pending_hit = attacker_index >= 0 ? 1U : 0U;
         if (def->type == FLOATER_EFFECT_LIGHTNING)
             init_lightning_visual(session, visual);
+        /* FUN_004181a6: the attack effect SOUND on its first tick. */
+        (void)game_session_queue_effect_sound(session, def_index,
+            attacker->island_index, visual->x);
+        return 1;
+    }
+    return 0;
+}
+
+/* A world-event effect instance (FUN_00416a9a) at a fixed point: no hit,
+   no impact; it plays its SOUND on its first tick and ends with its frames. */
+int game_session_spawn_effect_visual(GameSession *session, int def_index,
+                                     uint8_t island_index, uint16_t x,
+                                     uint16_t y)
+{
+    const FloaterEffectDef *def;
+    unsigned int slot;
+    if (session == NULL || def_index < 0 || def_index >= FLOATER_EFFECT_MAX)
+        return 0;
+    def = &session->attack_effect_defs[def_index];
+    if (def->type != FLOATER_EFFECT_ONESHOT || def->level_count == 0) return 0;
+    for (slot = 0; slot < GAME_SESSION_MAX_CAST_EFFECTS; ++slot) {
+        struct GameAttackVisual *visual = &session->attack_visuals[slot];
+        if (visual->active) continue;
+        memset(visual, 0, sizeof(*visual));
+        visual->active = 1;
+        visual->def = (int16_t)def_index;
+        visual->frame = def->level_start[0];
+        visual->x = x;
+        visual->y = y;
+        visual->island_index = island_index;
+        visual->target_x = x;
+        visual->target_y = y;
+        visual->impact_realm = -1;
+        visual->attacker = -1;
+        visual->target_floater = -1;
+        visual->target_location = -1;
+        (void)game_session_queue_effect_sound(session, def_index,
+                                              island_index, x);
         return 1;
     }
     return 0;
@@ -1677,6 +1716,10 @@ static void finish_attack_visual(GameSession *session,
     visual->frame = session->effect_impact_frame_starts[realm][level];
     visual->impact_frames_left = session->effect_impact_frame_counts[realm][level];
     visual->def = -1;
+    /* The IMPACT instance plays its realm SOUND on its first tick. */
+    (void)game_session_queue_effect_sound(session,
+        game_session_impact_def_index(session, realm), visual->island_index,
+        visual->x);
 }
 
 static void tick_attack_visuals(GameSession *session)
@@ -1764,6 +1807,9 @@ static void tick_attack_visuals(GameSession *session)
                     visual->level = attack_visual_level(next, visual->level);
                     visual->frame = next->level_start[visual->level];
                     visual->ticks = 0;
+                    /* The CHAIN def is a new instance with its own SOUND. */
+                    (void)game_session_queue_effect_sound(session, visual->def,
+                        visual->island_index, visual->x);
                     if (next->type == FLOATER_EFFECT_LIGHTNING)
                         init_lightning_visual(session, visual);
                     continue;
@@ -1875,6 +1921,10 @@ void game_session_start_attack_effect(GameSession *session,
     /* FUN_00415063 tests completion only after stepping past the last frame. */
     attacker->attack_effect_odd_updates_remaining = (uint8_t)(frame_count + 1U);
     ++session->active_attack_effect_count;
+    (void)game_session_queue_effect_sound(session,
+        game_session_impact_def_index(session,
+            (unsigned int)attacker->attack_realm & 3U),
+        attacker->island_index, target_x);
 }
 
 void game_session_tick_combat_effects(GameSession *session,

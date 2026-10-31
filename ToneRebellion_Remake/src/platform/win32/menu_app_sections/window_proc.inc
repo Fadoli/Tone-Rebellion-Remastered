@@ -35,15 +35,12 @@ static void simulate_session_tick(uint32_t source_tick)
                 g_menu.animation_ticks + 90U;
         }
     }
-    /* Drain the whole queue each frame (a backlog played one
-       event per frame lands long after the death); PlaySound
-       keeps a single voice, so only the first audible event of
-       the frame plays. */
-    int audio_played = 0;
+    /* Drain the whole queue each frame; every audible instance plays on
+       its own mixer voice with FUN_0045b24d's distance volume and pan. */
     while (game_session_pop_audio_event(&g_game_session, &audio_event)) {
         const unsigned char *sound = NULL;
-        if (audio_played ||
-            !game_session_audio_event_is_audible(&audio_event,
+        int restart = 0;
+        if (!game_session_audio_event_is_audible(&audio_event,
                 g_menu.screen == SCREEN_ISLAND,
                 g_menu.selected_map_island)) continue;
         if (audio_event.kind == GAME_SESSION_AUDIO_BUILD) {
@@ -52,6 +49,7 @@ static void simulate_session_tick(uint32_t source_tick)
         } else if (audio_event.kind == GAME_SESSION_AUDIO_FLOATER_DEATH) {
             sound = audio_event.owner_id == 4
                 ? g_levdeath_sound : g_fltdeath_sound;
+            restart = 1; /* FUN_0045afb9 restarts levdeath/fltdeath */
         } else if (audio_event.kind == GAME_SESSION_AUDIO_BRIDGE) {
             sound = g_bridge_sound;
         } else if (audio_event.kind == GAME_SESSION_AUDIO_FLOATER_BIRTH) {
@@ -60,13 +58,13 @@ static void simulate_session_tick(uint32_t source_tick)
         } else if (audio_event.kind == GAME_SESSION_AUDIO_CAST &&
                    audio_event.sound < 10U) {
             sound = g_cast_sounds[audio_event.sound];
+        } else if (audio_event.kind == GAME_SESSION_AUDIO_EFFECT &&
+                   audio_event.sound < FLOATER_EFFECT_MAX) {
+            sound = g_effect_sounds[audio_event.sound];
         }
-        if (sound != NULL) {
-            (void)PlaySoundA((LPCSTR)sound, NULL,
-                SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
-            audio_played = 1;
-        }
+        if (sound != NULL) sfx_play_at(sound, audio_event.x, restart);
     }
+    sfx_pump();
 }
 
 /* One 50 ms UI frame (frame_limit 20): timers, animations and the

@@ -37,6 +37,9 @@ int game_session_spawn_attack_visual(GameSession *session,
                                      int attacker_index, uint8_t state,
                                      uint16_t target_x, uint16_t target_y,
                                      int32_t damage);
+int game_session_spawn_effect_visual(GameSession *session, int def_index,
+                                     uint8_t island_index, uint16_t x,
+                                     uint16_t y);
 /* Strike-time or arrival-time hit of FUN_004200d2 / FUN_00420188 with the
    targets named explicitly; returns the damage dealt. */
 int32_t game_session_resolve_attack_hit(GameSession *session,

@@ -24,8 +24,64 @@ int game_session_queue_audio_event(GameSession *session, uint8_t kind,
     event->owner_id = owner_id;
     event->sound = 0;
     event->island = UINT8_MAX;
+    event->x = -1;
     ++session->audio_event_count;
     return 1;
+}
+
+/* FUN_004181a6 plays an instance's SOUND on its first tick: queue it with
+   the instance island and x when the def names a sound. */
+int game_session_queue_effect_sound(GameSession *session, int def_index,
+                                    uint8_t island, int32_t x)
+{
+    unsigned int tail;
+    GameSessionAudioEvent *event;
+
+    if (session == NULL || def_index < 0 || def_index >= FLOATER_EFFECT_MAX ||
+        session->attack_effect_defs[def_index].sound[0] == '\0' ||
+        session->audio_event_count >= GAME_SESSION_MAX_AUDIO_EVENTS) return 0;
+    tail = ((unsigned int)session->audio_event_head +
+            session->audio_event_count) % GAME_SESSION_MAX_AUDIO_EVENTS;
+    event = &session->audio_events[tail];
+    event->kind = GAME_SESSION_AUDIO_EFFECT;
+    event->owner_id = -1;
+    event->sound = (uint8_t)def_index;
+    event->island = island;
+    event->x = (int16_t)(x < 0 ? -1 : x > INT16_MAX ? INT16_MAX : x);
+    ++session->audio_event_count;
+    return 1;
+}
+
+int game_session_effect_def_index(const GameSession *session,
+                                  const char *name)
+{
+    unsigned int i;
+    if (session == NULL || name == NULL) return -1;
+    for (i = 0; i < FLOATER_EFFECT_MAX; ++i) {
+        const char *a = session->attack_effect_defs[i].name;
+        const char *b = name;
+        while (*a != '\0' && *b != '\0' &&
+               (*a | 0x20) == (*b | 0x20)) { ++a; ++b; }
+        if (*a == '\0' && *b == '\0' && session->attack_effect_defs[i].name[0])
+            return (int)i;
+    }
+    return -1;
+}
+
+/* FUN_00416342 / FUN_00416ff8 realm IMPACT defs, by attack realm. */
+int game_session_impact_def_index(const GameSession *session, unsigned int realm)
+{
+    static const char *const names[4] = {"PHYIMP", "SUPIMP", "ETHIMP", "NATIMP"};
+    return realm < 4U ? game_session_effect_def_index(session, names[realm]) : -1;
+}
+
+/* FUN_0045b24d needs the instance x; set it on the event just queued. */
+void game_session_set_last_audio_x(GameSession *session, int32_t x)
+{
+    if (session == NULL || session->audio_event_count == 0) return;
+    session->audio_events[((unsigned int)session->audio_event_head +
+        session->audio_event_count - 1U) % GAME_SESSION_MAX_AUDIO_EVENTS].x =
+        (int16_t)(x < 0 ? -1 : x > INT16_MAX ? INT16_MAX : x);
 }
 
 int game_session_queue_audio_event_at(GameSession *session, uint8_t kind,
@@ -105,6 +161,7 @@ int game_session_queue_cast_audio(GameSession *session, uint8_t island,
     event->owner_id = island;
     event->sound = sound;
     event->island = island;
+    event->x = -1;
     ++session->audio_event_count;
     return 1;
 }
