@@ -7,7 +7,7 @@
 - `src/core` (~25 k lignes) n'inclut aucun en-tête Windows; un seul `fopen`. Compilable par Emscripten sans changement attendu (non essayé).
 - `src/platform/win32` (~15 k lignes) concentre la dépendance. Le rendu n'en fait plus partie (étape 1) : il dessine dans un `RenderSurface` (`src/render`), et GDI ne sert qu'à présenter le tampon (`present_back_buffer`).
 - Boucle : un seul `GetMessageA`, cadence `SetTimer` 33 ms, pas de thread ni `Sleep` : compatible `emscripten_set_main_loop`.
-- Audio : mixeur `waveOut*` + `PlaySoundA` (effets), MCI `tone_music` (musiques `THING2\*.WAV`).
+- Audio : mixeur `waveOut*` + `PlaySoundA` (effets), MCI `tone_music` (musiques `THING2\*.WAV`) pour Win32; `remake_sdl` passe par SDL (étape 3).
 - Réseau : TCP Winsock (`net_session.inc`); sockets bruts interdits en navigateur.
 - Données : le jeu original n'est pas redistribuable. L'utilisateur fournit son ISO ou ses fichiers; `src/data/iso9660.c` lit déjà une image.
 
@@ -22,7 +22,8 @@
 2. [ ] **Interfaces plateforme.** Isoler entrée (souris, clavier, molette), horloge (`GetTickCount`), audio (effets + flux musique), fichiers (dossiers de sauvegarde, `FindFirstFileA`, `CreateDirectoryA`), boîtes d'erreur (`MessageBoxA` ×10) derrière de petites interfaces C; implémentation Win32 inchangée en comportement.
 3. [ ] **Adaptateur SDL3 bureau.** Fenêtre, présentation du tampon, événements, `SDL_AudioStream` pour le mixeur et les musiques WAV. Parité avec Win32 avant la cible Web.
    - Fait : `remake_sdl` (`src/platform/sdl/sdl_app.inc`, MSYS2 UCRT64, SDL3 3.4.18). SDL gère fenêtre, boucle, horloge 20 Hz, présentation (texture, trois modes d’échelle) et traduit ses événements en messages Win32 pour `menu_window_proc` : une seule logique d’entrée pour les deux shells. 34 captures `--bench-dump-set` identiques à Win32 32 et 64 bits ([mesures](bench/gameplay_hotspots.md#sdl3-shell-and-64-bit-build-2026-10-31)).
-   - Reste : audio (`waveOut`, `PlaySoundA`, MCI) vers `SDL_AudioStream`; le HWND sert encore aux titres, `MessageBoxA`, capture souris, curseurs d’origine (ressources de `FLOAT.EXE`) et `WSAAsyncSelect`; horloge `QueryPerformanceCounter`. À retirer avec l’étape 2 avant Linux/Web.
+   - Fait : audio SDL (`src/platform/sdl/sdl_audio.inc`). Un périphérique, deux `SDL_AudioStream` alimentés par rappel (thread audio, donc pas de coupure pendant une boucle modale Win32) : le mixeur d'effets de `sfx_mixer.inc` (mêmes voix, volume et panoramique; voix modifiées sous `SDL_LockAudioStream`) et la musique lue du disque dans son format (WAV PCM 8 bits stéréo 22 050 Hz, conversion par SDL; boucle sans relance, gain du curseur = `SDL_SetAudioStreamGain`). Le clic de bouton (`PlaySoundA`) passe par une voix du mixeur. Vérifié : compilation sans avertissement, démarrage (périphérique WASAPI ouvert) et fermeture propre; écoute comparée à Win32 non faite.
+   - Reste : le HWND sert encore aux titres, `MessageBoxA`, capture souris, curseurs d’origine (ressources de `FLOAT.EXE`) et `WSAAsyncSelect`; horloge `QueryPerformanceCounter`. À retirer avec l’étape 2 avant Linux/Web.
 4. [ ] **Cible Emscripten.** Préréglage CMake (`emcmake`), boucle `emscripten_set_main_loop`, page HTML minimale, `-sALLOW_MEMORY_GROWTH`. Mesurer taille `.wasm` et temps de chargement.
 5. [ ] **Données utilisateur.** Sélecteur de fichier (ISO ou dossier `THING1`/`THING2`) vers le système de fichiers virtuel, cache persistant `IDBFS` (équivalent de `iso_cache`); aucune donnée originale hébergée.
 6. [ ] **Sauvegardes et options.** `saves/` et `float.cfg` sur `IDBFS`, synchronisation après écriture; export/import manuel d'une sauvegarde.

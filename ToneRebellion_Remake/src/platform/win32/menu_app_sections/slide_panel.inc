@@ -129,11 +129,15 @@ static int slide_panel_hit(int x, int y)
 static void apply_music_volume(void)
 {
     if (g_music_device_open) {
+#ifdef TONE_PLATFORM_SDL
+        sdl_music_set_gain(volume_gain(g_music_volume));
+#else
         char command[64];
         (void)snprintf(command, sizeof(command),
                        "setaudio tone_music volume to %d",
                        (int)(1000.0 * volume_gain(g_music_volume) + 0.5));
         (void)mciSendStringA(command, NULL, 0, NULL);
+#endif
     }
 }
 

@@ -3,7 +3,7 @@
    Play), so several effects sound at once; a buffer already playing is not
    restarted unless it is a death sound (ev_aabff0f0). PlaySound has one
    voice and no volume or pan, so the remake mixes the effects itself into a
-   waveOut stream. */
+   waveOut stream (remake_sdl: an SDL audio stream, sdl_audio.inc). */
 
 enum {
     SFX_RATE = 22050,
@@ -25,11 +25,15 @@ typedef struct SfxVoice {
     double gain_right;
 } SfxVoice;
 
+#ifdef TONE_PLATFORM_SDL
+static SDL_AudioStream *g_sfx_stream;
+#else
 static HWAVEOUT g_sfx_device;
-static int g_sfx_open;
-static int g_sfx_failed;
 static WAVEHDR g_sfx_headers[SFX_BUFFERS];
 static int16_t g_sfx_buffers[SFX_BUFFERS][SFX_BUFFER_FRAMES * 2];
+#endif
+static int g_sfx_open;
+static int g_sfx_failed;
 static SfxVoice g_sfx_voices[SFX_VOICES];
 static const unsigned char *g_sfx_cache_keys[SFX_CACHE];
 static SfxSample g_sfx_cache[SFX_CACHE];
@@ -143,6 +147,59 @@ static void sfx_fill(int16_t *buffer)
     }
 }
 
+#ifdef TONE_PLATFORM_SDL
+/* Runs on SDL's audio thread with the stream locked, so the voices the main
+   thread changes under SDL_LockAudioStream stay consistent. */
+static void SDLCALL sfx_stream_callback(void *userdata, SDL_AudioStream *stream,
+                                        int additional_amount, int total_amount)
+{
+    int16_t buffer[SFX_BUFFER_FRAMES * 2];
+    (void)userdata;
+    (void)total_amount;
+    while (additional_amount > 0) {
+        sfx_fill(buffer);
+        (void)SDL_PutAudioStreamData(stream, buffer, (int)sizeof(buffer));
+        additional_amount -= (int)sizeof(buffer);
+    }
+}
+
+static int sfx_open(void)
+{
+    SDL_AudioSpec spec;
+    if (g_sfx_open) return 1;
+    if (g_sfx_failed) return 0;
+    spec.format = SDL_AUDIO_S16;
+    spec.channels = 2;
+    spec.freq = SFX_RATE;
+    g_sfx_stream = sdl_audio_stream(&spec, sfx_stream_callback, NULL);
+    if (g_sfx_stream == NULL) {
+        g_sfx_failed = 1;
+        return 0;
+    }
+    g_sfx_open = 1;
+    return 1;
+}
+
+/* The stream callback pulls the mix. */
+static void sfx_pump(void)
+{
+}
+
+static void sfx_close(void)
+{
+    unsigned int i;
+    if (!g_sfx_open) return;
+    SDL_DestroyAudioStream(g_sfx_stream);
+    g_sfx_stream = NULL;
+    memset(g_sfx_voices, 0, sizeof(g_sfx_voices));
+    g_sfx_open = 0;
+    for (i = 0; i < SFX_CACHE; ++i) {
+        free(g_sfx_cache[i].pcm);
+        g_sfx_cache[i].pcm = NULL;
+        g_sfx_cache_keys[i] = NULL;
+    }
+}
+#else
 static int sfx_open(void)
 {
     WAVEFORMATEX format;
@@ -211,6 +268,7 @@ static void sfx_close(void)
         g_sfx_cache_keys[i] = NULL;
     }
 }
+#endif
 
 /* FUN_0045afb9(sound, volume %, pan): volume and pan are DirectSound
    hundredths of a dB after FUN_004595cc; the effects slider scales every
@@ -227,26 +285,33 @@ static void sfx_play(const unsigned char *wav, int volume, int pan, int restart)
     if (!g_sound_enabled || g_sound_volume <= 0 || volume <= 0) return;
     sample = sfx_sample_for(wav);
     if (sample == NULL || !sfx_open()) return;
-    for (v = 0; v < SFX_VOICES; ++v) {
-        if (g_sfx_voices[v].sample == sample) {
-            if (!restart) return;
-            free_voice = v;
-            break;
-        }
-        if (g_sfx_voices[v].sample == NULL && free_voice == SFX_VOICES)
-            free_voice = v;
-    }
-    if (free_voice == SFX_VOICES) return;
     gain = volume_gain(volume) * volume_gain(g_sound_volume);
     left = gain;
     right = gain;
     if (pan > 0) left *= pow(10.0, -pan / 2000.0);
     else if (pan < 0) right *= pow(10.0, pan / 2000.0);
-    g_sfx_voices[free_voice].sample = sample;
-    g_sfx_voices[free_voice].position = 0;
-    g_sfx_voices[free_voice].gain_left = left;
-    g_sfx_voices[free_voice].gain_right = right;
-    sfx_pump();
+#ifdef TONE_PLATFORM_SDL
+    if (!SDL_LockAudioStream(g_sfx_stream)) return;
+#endif
+    for (v = 0; v < SFX_VOICES; ++v) {
+        if (g_sfx_voices[v].sample == sample) {
+            if (restart) free_voice = v;
+            else free_voice = SFX_VOICES + 1U; /* already playing */
+            break;
+        }
+        if (g_sfx_voices[v].sample == NULL && free_voice == SFX_VOICES)
+            free_voice = v;
+    }
+    if (free_voice < SFX_VOICES) {
+        g_sfx_voices[free_voice].sample = sample;
+        g_sfx_voices[free_voice].position = 0;
+        g_sfx_voices[free_voice].gain_left = left;
+        g_sfx_voices[free_voice].gain_right = right;
+    }
+#ifdef TONE_PLATFORM_SDL
+    (void)SDL_UnlockAudioStream(g_sfx_stream);
+#endif
+    if (free_voice < SFX_VOICES) sfx_pump();
 }
 
 /* FUN_0045b24d with d = view centre (scroll + 0x140) - effect x: volume

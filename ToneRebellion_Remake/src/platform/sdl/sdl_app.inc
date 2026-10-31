@@ -3,8 +3,8 @@
    640x480 RenderSurface through a streaming texture. The game code still
    reads Win32 window messages: SDL events are translated into the same
    menu_window_proc calls the Win32 shell receives, so both shells share
-   every input path. Audio (waveOut, MCI), files and sockets stay on Win32
-   for now (step 2 of TODO_WEB.md). */
+   every input path. Audio goes through SDL (sdl_audio.inc); files and
+   sockets stay on Win32 for now (step 2 of TODO_WEB.md). */
 
 static SDL_Window *g_sdl_window;
 static SDL_Renderer *g_sdl_renderer;
@@ -119,6 +119,11 @@ static HWND sdl_create_window(void)
 
 static void sdl_destroy_window(void)
 {
+    /* The audio streams go before SDL_Quit; the later shutdown calls of
+       content_loading.inc then find them closed. */
+    stop_background_tune();
+    sfx_close();
+    sdl_audio_close();
     if (g_sdl_texture != NULL) SDL_DestroyTexture(g_sdl_texture);
     if (g_sdl_renderer != NULL) SDL_DestroyRenderer(g_sdl_renderer);
     if (g_sdl_window != NULL) SDL_DestroyWindow(g_sdl_window);

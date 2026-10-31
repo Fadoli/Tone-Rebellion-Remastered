@@ -396,6 +396,22 @@ static double volume_gain(int volume)
     return volume <= 0 ? 0.0 : pow(10.0, volume_attenuation(volume) / 2000.0);
 }
 
+#ifdef TONE_PLATFORM_SDL
+#include "../sdl/sdl_audio.inc"
+
+static void sfx_play(const unsigned char *wav, int volume, int pan, int restart);
+
+/* remake_sdl has no PlaySound: the in-memory effect plays centred on a mixer
+   voice, restarting like PlaySound's single voice; the mixer applies the
+   effects slider. Stopping (NULL) has nothing left to stop. */
+static BOOL play_effect_sound(LPCSTR sound, HMODULE module, DWORD flags)
+{
+    (void)module;
+    if (sound != NULL && (flags & SND_MEMORY) != 0)
+        sfx_play((const unsigned char *)sound, 100, 0, 1);
+    return TRUE;
+}
+#else
 /* The SlideWindow sound toggle and effects slider act on every sound effect:
    in-memory WAV effects are copied and their PCM samples scaled by the slider
    attenuation (DirectSound-style volume, which PlaySound lacks). */
@@ -460,6 +476,7 @@ static BOOL play_effect_sound(LPCSTR sound, HMODULE module, DWORD flags)
     }
     return PlaySoundA((LPCSTR)ring[slot], module, flags);
 }
+#endif
 #define PlaySoundA(sound, module, flags) play_effect_sound((sound), (module), (flags))
 
 /* Ordered source fragments share private Win32 state in this one
