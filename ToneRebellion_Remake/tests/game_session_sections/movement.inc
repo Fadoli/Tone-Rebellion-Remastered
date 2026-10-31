@@ -29,6 +29,71 @@ static void test_charge_order_accepts_each_players_source_variant(void)
     }
 }
 
+static void test_bridge_crossing_keeps_soldier_hall_link(void)
+{
+    GameSession session = {0};
+    GameRuntimeLocation *hall;
+    GameFloaterStart *soldier;
+    unsigned int tick;
+    unsigned int slot;
+
+    session.island_count = 2;
+    session.floater_count = 1;
+    session.islands[0].location_count = 2;
+    session.islands[1].location_count = 1;
+    session.islands[0].floater_max_x[0] = 0x9ff;
+    session.islands[1].floater_max_x[0] = 0x9ff;
+    session.islands[0].locations[0].renderer_class = 2;
+    session.islands[0].locations[0].source_flags = 1;
+    session.islands[0].locations[0].bridge_neighbor_island = 1;
+    session.islands[0].locations[0].x = 300;
+    session.islands[0].locations[0].y = 200;
+    session.islands[1].locations[0].renderer_class = 2;
+    session.islands[1].locations[0].source_flags = 1;
+    session.islands[1].locations[0].bridge_neighbor_island = 0;
+    session.islands[1].locations[0].x = 500;
+    session.islands[1].locations[0].y = 260;
+    hall = &session.islands[0].locations[1];
+    hall->owner_id = 0;
+    hall->source_location_slot_18 = 3;
+    hall->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 20;
+    hall->charge_recent_floater = -1;
+    for (slot = 0; slot < 8; ++slot) hall->charge_floater_slots[slot] = -1;
+
+    soldier = &session.floaters[0];
+    soldier->is_active = 1;
+    soldier->island_index = 0;
+    soldier->type_index = 0;
+    soldier->owner_slot = 0;
+    soldier->source_subtype = 1;
+    soldier->source_link_0c = -1;
+    soldier->linked_task_slot = -1;
+    soldier->order_target_floater = -1;
+    soldier->order_target_location = -1;
+    assert(game_session_link_floater_charge(&session, 0, 1));
+    assert(hall->charge_floater_count == 1);
+
+    /* FUN_0041e569 state 0x11 never writes +0x0c: the soldier keeps its
+       home source while it lives on the neighbor island. */
+    assert(game_session_begin_floater_handoff(&session, soldier, 1));
+    soldier->x = soldier->destination_x;
+    soldier->y = soldier->destination_y;
+    for (tick = 0; tick < 1000 && soldier->movement_state == 0x11; ++tick)
+        (void)game_session_tick_floater_handoff(&session, soldier);
+    assert(soldier->movement_state != 0x11);
+    assert(soldier->island_index == 1);
+    assert(soldier->source_link_0c == 3);
+    assert(soldier->charge_source_island == 0);
+    assert(soldier->charge_source_location == 1);
+    assert(hall->charge_floater_count == 1);
+    assert(hall->charge_floater_slots[0] == 0);
+
+    /* Death away from home still frees the hall's charge slot. */
+    game_session_retire_floater(&session, 0);
+    assert(hall->charge_floater_count == 0);
+    assert(hall->charge_floater_slots[0] == -1);
+}
+
 static void test_floater_pickup_order_collects_ground_artifact(void)
 {
     GameSession session = {0};

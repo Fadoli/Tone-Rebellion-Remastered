@@ -1,6 +1,8 @@
 #include "game_session.h"
 #include "game_session_combat_internal.h"
 #include "game_session_delivery.h"
+#include "game_session_delivery_internal.h"
+#include "game_session_movement_internal.h"
 #include "iw_construct.h"
 #include "building_render.h"
 #include "island_render_rules.h"
@@ -509,6 +511,7 @@ int main(void)
     test_construction_completes_on_native_empty_status_one_site();
     test_wandering_worker_with_stale_delivery_claim_rejoins_pool();
     test_charge_order_accepts_each_players_source_variant();
+    test_bridge_crossing_keeps_soldier_hall_link();
     test_floater_pickup_order_collects_ground_artifact();
     test_floater_move_state_advances_only_simulation_assigned_destinations();
     test_floater_selection_uses_original_hit_radius_and_island();
