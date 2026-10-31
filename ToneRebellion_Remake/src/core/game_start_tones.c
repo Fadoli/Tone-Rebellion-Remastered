@@ -27,8 +27,10 @@ static const int8_t marker_item_table_a[16] = {
     0, 1, -1, -1, 3, 2, 0, 2, 1, 1, 3, 3, 1, 2, -1, 0
 };
 
+/* 0x4a28e8 (ev_614008e7): the earlier transcription had dropped the
+   leading -1 and shifted every island's second family by one shape. */
 static const int8_t marker_item_table_b[16] = {
-    -1, 2, 3, 1, 3, 1, 0, 2, 0, 0, 2, 3, 0, -1, 0, 0
+    -1, -1, 2, 3, 1, 3, 1, 0, 2, 0, 0, 2, 3, 0, -1, 0
 };
 
 static unsigned int count_marker_item_ids(const IslandData *island,

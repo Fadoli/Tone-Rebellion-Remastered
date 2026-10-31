@@ -143,7 +143,12 @@ int game_session_initialize(const WorldDefinition *world,
         }
     }
     if (!game_start_distribute_tones(runtime_layouts, shape_ids,
-                                     world->island_count, config->home_island_index,
+                                     world->island_count,
+                                     /* FUN_004535e4 opens all four families
+                                        on island DAT_006136b0 - 1: the
+                                        island count minus one, i.e. the
+                                        Leviathan's last island. */
+                                     (size_t)world->island_count - 1U,
                                      config->mode, &rng, &next.tone_placements,
                                      error, error_capacity)) {
         return 0;

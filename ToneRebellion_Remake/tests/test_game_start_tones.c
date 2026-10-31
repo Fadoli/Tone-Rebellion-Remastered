@@ -99,7 +99,9 @@ static void test_runtime_item_balance_and_five_marker_limit(void)
                                        &distribution, error, sizeof(error)));
     assert(distribution.placement_count == 3);
     assert(distribution.placements[1].island_index == 1);
-    assert(distribution.placements[1].item_id == 8); /* class 3 retains item 7; class 0 is reset first */
+    /* Shape 1 allows family 1 only (0x4a28c8/0x4a28e8 = 1/-1): item 7, even
+       though a class-3 record already holds it. */
+    assert(distribution.placements[1].item_id == 7);
     assert(distribution.placements[2].island_index == 4);
     assert(distribution.placements[2].location_index < 5); /* FUN_00464b9e considers only the first five */
 }
@@ -124,8 +126,34 @@ static void test_rejects_invalid_shape_without_partial_output(void)
     assert(memcmp(&distribution, &before, sizeof(distribution)) == 0);
 }
 
+static void test_leviathan_island_allows_every_family_only_as_last_island(void)
+{
+    /* Shape 14 has no family in either table; only the island compared with
+       DAT_006136b0 - 1 (the last one) may take any of items 6..9. */
+    IslandData islands[2];
+    int32_t shapes[2] = {0, 14};
+    GameStartToneDistribution distribution;
+    ToneRng rng;
+    char error[128];
+
+    memset(islands, 0, sizeof(islands));
+    add_marker(&islands[0], 0, 0);
+    add_marker(&islands[1], 0, 0);
+    tone_rng_seed(&rng, 3);
+    assert(game_start_distribute_tones(islands, shapes, 2, 1, 0, &rng,
+                                       &distribution, error, sizeof(error)));
+    assert(distribution.placement_count == 2);
+    assert(distribution.placements[0].item_id == 6); /* shape 0: family 0 */
+    assert(distribution.placements[1].item_id >= 6 &&
+           distribution.placements[1].item_id <= 9);
+    tone_rng_seed(&rng, 3);
+    assert(!game_start_distribute_tones(islands, shapes, 2, 0, 0, &rng,
+                                        &distribution, error, sizeof(error)));
+}
+
 int main(void)
 {
+    test_leviathan_island_allows_every_family_only_as_last_island();
     test_primary_markers_and_table_candidates();
     test_alternate_mode_adds_opposite_marker();
     test_runtime_item_balance_and_five_marker_limit();

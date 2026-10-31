@@ -64,8 +64,8 @@ int game_start_assign_locations(const IslandData *islands, size_t island_count,
 
 /*
  * Reproduces the marker-distribution phase of FUN_00464b9e. `home_island_index`
- * corresponds to DAT_006136b0 - 1 in FUN_004535e4; the original global's runtime
- * initializer is not yet identified, so callers supply the observed slot.
+ * corresponds to DAT_006136b0 - 1 in FUN_004535e4, where DAT_006136b0 is the
+ * world's island count (FUN_0045388f, FUN_00464b9e): the last island.
  * `shape_ids` come from the selected WORLDPOS island table. Existing item IDs
  * 6..9 in a location's renderer_variant participate in per-island balancing.
  * `rng` is the same stream used by surrounding new-game startup. This phase

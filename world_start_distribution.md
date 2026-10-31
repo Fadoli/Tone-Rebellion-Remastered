@@ -35,7 +35,7 @@ Deux tables de 16 shorts à `0x4a28c8` et `0x4a28e8`, indexées par shape ID (0�
 
 ```text
 table A: 0, 1, -1, -1, 3, 2, 0, 2, 1, 1, 3, 3, 1, 2, -1, 0
-table B: -1, 2, 3, 1, 3, 1, 0, 2, 0, 0, 2, 3, 0, -1, 0, 0
+table B: -1, -1, 2, 3, 1, 3, 1, 0, 2, 0, 0, 2, 3, 0, -1, 0
 ```
 
 Les `-1` sont omis. Les autres valeurs 0–3 deviennent les IDs d'item 6–9. Pour une île ordinaire, un ID autorisé absent du champ record `+0x10` est préféré. Si tous les IDs autorisés existent déjà, le tirage revient à l'ensemble autorisé. Le rôle métier précis des catégories encodées par les IDs 6–9 n'est pas établi par cette fonction seule.
