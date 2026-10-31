@@ -493,17 +493,11 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             InvalidateRect(window, NULL, FALSE);
             return 0;
         }
-        if (wparam == VK_F10 && g_menu.screen == SCREEN_WORLD_MAP) {
-            /* Port-only shortcut: enter the first accessible island without
-               aiming at the orbiting map icon (open_island_view applies the
-               same access check as the native click). */
-            int island_index;
-            const WorldDefinition *world =
-                &g_menu.world_map.worlds[g_menu.world_index];
-            for (island_index = 0; island_index < (int)world->island_count;
-                 ++island_index) {
-                if (open_island_view(window, island_index)) break;
-            }
+        if (wparam == 'R' && g_menu.screen == SCREEN_WORLD_MAP &&
+            e2e_enabled() && g_menu.selected_map_island >= 0) {
+            /* Test aid (only with TONE_REBELLION_E2E_STATE): reopen the last
+               island without aiming at its orbiting map icon. */
+            (void)open_island_view(window, g_menu.selected_map_island);
             InvalidateRect(window, NULL, FALSE);
             return 0;
         }
@@ -687,10 +681,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 g_hovered_location = -1;
                 InvalidateRect(window, NULL, FALSE);
             } else if (g_menu.screen == SCREEN_WORLD_MAP) {
-                g_hovered_island = -1;
-                g_menu.screen = SCREEN_NEW_GAME;
-                g_menu.setup_accepted = 0;
-                InvalidateRect(window, NULL, FALSE);
+                /* No native Esc on the world map. */
             } else if (g_menu.screen == SCREEN_NEW_GAME) {
                 net_leave_lobby();
                 g_menu.screen = SCREEN_MAIN_MENU;
@@ -706,14 +697,8 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 dispatch_newgame_master_message(window, 52);
             } else if (g_menu.screen == SCREEN_LOAD_GAME) {
                 leave_load_screen();
-            } else if (g_menu.screen == SCREEN_WORLD_MAP) {
-                int selected = g_menu.selected_map_island;
-                if (selected < 0) selected = g_menu.selected_tribe;
-                (void)open_island_view(window, selected);
             } else if (g_menu.screen == SCREEN_ISLAND) {
                 if (view_selected_location() >= 0) g_hovered_location = view_selected_location();
-            } else {
-                g_menu.screen = SCREEN_NEW_GAME;
             }
             InvalidateRect(window, NULL, FALSE);
         } else if (g_menu.screen == SCREEN_MAIN_MENU && wparam == 'N') {
@@ -729,14 +714,6 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             InvalidateRect(window, NULL, FALSE);
         } else if (g_menu.screen == SCREEN_MAIN_MENU && wparam == 'L') {
             g_menu.screen = SCREEN_LOAD_GAME;
-            InvalidateRect(window, NULL, FALSE);
-        } else if (g_menu.screen == SCREEN_WORLD_MAP &&
-                   (wparam == VK_LEFT || wparam == VK_RIGHT)) {
-            const int count = g_menu.world_map.world_count;
-            g_menu.world_index = (g_menu.world_index + count +
-                (wparam == VK_RIGHT ? 1 : -1)) % count;
-            g_menu.selected_map_island = -1;
-            g_hovered_island = -1;
             InvalidateRect(window, NULL, FALSE);
         } else if (g_menu.screen == SCREEN_ISLAND &&
                    (wparam == VK_LEFT || wparam == VK_RIGHT)) {

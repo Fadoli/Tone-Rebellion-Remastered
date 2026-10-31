@@ -230,9 +230,9 @@ try {
     Check ($c1 -gt $c0) "arrow keys scroll the island" "marker $c0 -> $c1"
     Key 0x1B        # Esc -> world map
     Check ((Title) -like "*World Map*") "Esc returns to the world map" (Title)
-    Key 0x0D        # Return -> reopen the same island
+    Key 0x52        # R (E2E test aid) -> reopen the same island
     Start-Sleep -Seconds 2
-    Check ((Title) -like "*Island*") "Return reopens the island" (Title)
+    Check ((Title) -like "*Island*") "the island reopens" (Title)
     $m2 = Capture "island_reentered"
     $c2 = MarkerColumn $m2 195 332 445 357
     Check ([math]::Abs($c2 - $c1) -le 3) "scroll position is kept on re-entry" "marker $c1 -> $c2"
