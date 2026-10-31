@@ -550,6 +550,7 @@ int main(void)
     test_out_of_range_caster_walks_then_casts();
     test_spore_deaths_go_through_the_native_damage_guard();
     test_training_refreshes_the_new_subtype_combat_row();
+    test_building_order_keeps_the_target_island();
     (void)puts("game session unit tests passed");
     return 0;
 }

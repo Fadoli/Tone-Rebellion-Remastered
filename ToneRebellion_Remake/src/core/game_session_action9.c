@@ -699,6 +699,7 @@ void game_session_apply_panic_orders(GameSession *session)
         floater->active_order_action = 0;
         floater->movement_state = 0;
         game_session_adopt_building_attack_order(session, index, 6,
+                                                 floater->island_index,
                                                  (unsigned int)best);
     }
 }
@@ -706,11 +707,15 @@ void game_session_apply_panic_orders(GameSession *session)
 void game_session_adopt_building_attack_order(GameSession *session,
                                               unsigned int floater_index,
                                               unsigned int genre,
+                                              uint8_t target_island,
                                               unsigned int target)
 {
     GameFloaterStart *floater;
     if (session == NULL || floater_index >= session->floater_count) return;
     floater = &session->floaters[floater_index];
+    /* Remake limit: a target on another island than the floater's is not
+       adopted (the native FUN_004211bb bridge routing is not ported). */
+    if (target_island != floater->island_index) return;
     if (!game_session_floater_is_active(floater) ||
         (floater->source_runtime_flags & 0x808U) != 0 ||
         floater->type_index == 4 ||

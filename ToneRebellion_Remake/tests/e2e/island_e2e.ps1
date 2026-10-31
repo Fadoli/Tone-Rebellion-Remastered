@@ -370,15 +370,20 @@ try {
         }
         Check $picked "clicking a linked worker selects it" "no linked worker could be clicked"
         # Cross-island shortcut: leave through a bridge, then use the slot.
+        # FUN_0042fa0f msgs 3001..3003 select the remembered building on its
+        # own island without changing the viewed island (building panel, mode 3).
         $tb = State
         $exit = $null
         foreach ($l in $tb.locations) { if ($l.class -eq 2 -and $l.bridge -eq 1 -and $l.neighbor -ge 0) { $exit = $l; break } }
         if ($exit -and $tb.clips.Count -gt 0) {
             $homeIsland = $tb.island
+            $slot = $tb.clips[0]
             if (ClickBridge $tb $exit) {
+                $away = State
                 Click 171 381                  # CLIPBD1
-                $back = WaitState { param($s) $s.island -eq $homeIsland } 3
-                Check ($back.island -eq $homeIsland) "a shortcut slot jumps to a training building on another island" "island $($back.island)"
+                $sel = WaitState { param($s) $s.selection_island -eq $slot.island } 3
+                Check ($sel.island -eq $away.island -and $sel.island -ne $homeIsland) "a shortcut slot keeps the viewed island" "island $($sel.island)"
+                Check ($sel.selection_island -eq $slot.island -and $sel.selected_location -eq $slot.location -and $sel.panel_mode -eq 3) "a shortcut slot selects its building on another island" "sel $($sel.selection_island)/$($sel.selected_location) mode $($sel.panel_mode)"
             }
         }
     }

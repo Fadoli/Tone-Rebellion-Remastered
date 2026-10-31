@@ -137,7 +137,7 @@ static int read_save_file(HWND window, const char *path)
     g_menu.animation_ticks = body.animation_ticks;
     g_sim_speed = body.sim_speed >= 1U && body.sim_speed <= 3U ? body.sim_speed : 1U;
     g_selected_floater = -1;
-    g_selected_location = -1;
+    select_location_on_view(-1);
     g_hovered_island = -1;
     g_defeat_ticks = 0;
     on_island = body.on_island && body.selected_map_island >= 0;
@@ -203,7 +203,7 @@ static int read_native_save_file(HWND window, const char *path, char *error,
     g_menu.setup_accepted = 1;
     g_sim_speed = 1U;
     g_selected_floater = -1;
-    g_selected_location = -1;
+    select_location_on_view(-1);
     g_hovered_island = -1;
     g_defeat_ticks = 0;
     g_menu.screen = SCREEN_WORLD_MAP;

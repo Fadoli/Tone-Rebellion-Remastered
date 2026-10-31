@@ -56,12 +56,15 @@ int game_session_order_floater_to_defend(GameSession *session,
    BC_DefendFlt (8) and BC_DefendArea (9) (cat 1 sub 0x10..0x13 ->
    FUN_0045d867/FUN_0045d8b2): writes the building's order record for an owned,
    built 0x2c..0x2e site. `target` is a floater index (6, 8), a location index
-   (7) or a pixel x with `target_y` (9). Linked floaters adopt it on their next
-   order poll (FUN_0042219e). */
+   (7) or a pixel x with `target_y` (9) on `target_island`, which may differ
+   from the building's island (FUN_0045d867 stores the target floater's
+   island, FUN_0045d8b2 the packet island). Linked floaters adopt it on their
+   next order poll (FUN_0042219e). */
 int game_session_set_building_order(GameSession *session, uint8_t player_slot,
                                     uint8_t island_index,
                                     uint16_t location_index,
-                                    unsigned int genre, unsigned int target,
+                                    unsigned int genre, uint8_t target_island,
+                                    unsigned int target,
                                     unsigned int target_y);
 int game_session_set_building_defend_area(GameSession *session,
                                           uint8_t player_slot,

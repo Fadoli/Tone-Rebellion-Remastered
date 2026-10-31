@@ -1245,16 +1245,21 @@ int game_session_training_stock_state(const GameSession *session,
 int game_session_set_building_order(GameSession *session, uint8_t player_slot,
                                     uint8_t island_index,
                                     uint16_t location_index,
-                                    unsigned int genre, unsigned int target,
+                                    unsigned int genre, uint8_t target_island,
+                                    unsigned int target,
                                     unsigned int target_y)
 {
     GameRuntimeLocation *location;
     if (!game_session_building_has_defend_area(session, player_slot,
                                                island_index, location_index) ||
-        genre < 6 || genre > 9) return 0;
+        genre < 6 || genre > 9 || target_island >= session->island_count)
+        return 0;
+    if ((genre == 6 || genre == 8) &&
+        (target >= session->floater_count ||
+         session->floaters[target].island_index != target_island)) return 0;
     location = &session->islands[island_index].locations[location_index];
     location->building_order_genre = (uint8_t)genre;
-    location->building_order_island = island_index;
+    location->building_order_island = target_island;
     if (genre == 9) {
         /* FUN_0041e3eb packs each coordinate as (v + 5) / 10. */
         location->building_order_coordinate = (uint16_t)(
@@ -1272,7 +1277,8 @@ int game_session_set_building_defend_area(GameSession *session,
                                           uint16_t x, uint16_t y)
 {
     return game_session_set_building_order(session, player_slot, island_index,
-                                           location_index, 9, x, y);
+                                           location_index, 9, island_index,
+                                           x, y);
 }
 
 /* FUN_0042219e: a linked floater copies the building's order whenever its own
@@ -1298,7 +1304,8 @@ static void game_session_adopt_building_order(GameSession *session,
         building->source_location_slot_18 != floater->source_link_0c) return;
     if (building->building_order_genre != 9) {
         game_session_adopt_building_attack_order(session, floater_index,
-            building->building_order_genre, building->building_order_coordinate);
+            building->building_order_genre, building->building_order_island,
+            building->building_order_coordinate);
         return;
     }
     coordinate = building->building_order_coordinate;

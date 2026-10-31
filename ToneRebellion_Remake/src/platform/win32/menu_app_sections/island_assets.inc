@@ -694,7 +694,7 @@ static int load_island_surface(int island_id, int map_island_index,
     g_island_scroll_x =
         map_island_index >= 0 && map_island_index < WORLD_MAP_MAX_ISLANDS
         ? g_island_scroll_by_island[map_island_index] : 0;
-    g_selected_location = -1;
+    select_location_on_view(-1);
     g_hovered_location = -1;
     g_island_panel_mode = WINDOW_ISLAND_PANEL_GENERAL;
     g_task_scroll_offset = 0;

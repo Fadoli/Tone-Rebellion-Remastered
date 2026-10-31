@@ -285,6 +285,9 @@ static GameDiplomacyHit g_diplomacy_hover;
 static int g_diplomacy_hover_valid;
 static uint8_t g_floater_overlay_flags;
 static int g_selected_location = -1;
+/* Island of the selected building when it is not the viewed island (the
+   native +0x16c is a location pointer on any island); -1 = viewed island. */
+static int g_selected_location_island = -1;
 static int g_selected_floater = -1;
 static IwConstructState g_iw_construct;
 static IwConstructInfoState g_iw_construct_info;
@@ -420,6 +423,36 @@ static BOOL play_effect_sound(LPCSTR sound, HMODULE module, DWORD flags)
 #include "menu_app_sections/game_paths.inc"
 
 #include "menu_app_sections/sprite_primitives.inc"
+
+/* Building selection (native island window +0x16c): FUN_0042f8f7 and the
+   clipboard click store a location of any island without changing the
+   viewed island (ev_aa63a0e6, 0x4317df). Map drawing and hit-tests only see
+   a selection on the viewed island; the building panels follow it anywhere. */
+static int selection_island(void)
+{
+    return g_selected_location_island >= 0 ? g_selected_location_island
+                                           : g_menu.selected_map_island;
+}
+
+static int view_selected_location(void)
+{
+    return g_selected_location_island < 0 ||
+           g_selected_location_island == g_menu.selected_map_island
+        ? g_selected_location : -1;
+}
+
+static void select_location_on_view(int location)
+{
+    g_selected_location = location;
+    g_selected_location_island = -1;
+}
+
+static void select_location_anywhere(int island, int location)
+{
+    g_selected_location = location;
+    g_selected_location_island =
+        location < 0 || island == g_menu.selected_map_island ? -1 : island;
+}
 
 #include "menu_app_sections/island_assets.inc"
 

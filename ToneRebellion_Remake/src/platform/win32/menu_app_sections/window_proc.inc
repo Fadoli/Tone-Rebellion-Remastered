@@ -424,50 +424,26 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             InvalidateRect(window, NULL, FALSE);
         } else if (g_menu.screen == SCREEN_ISLAND && g_game_session_valid &&
             x >= 0 && x < LOGICAL_WIDTH && y >= 0 && y < 320 &&
-            g_selected_floater >= 0 &&
-            g_selected_floater < g_game_session.floater_count &&
-            game_session_floater_is_active(
-                &g_game_session.floaters[g_selected_floater]) &&
             g_menu.selected_map_island >= 0 &&
             g_menu.selected_map_island < g_game_session.island_count &&
             g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
             int clicked_floater = game_session_floater_at(&g_game_session,
                 (uint8_t)g_menu.selected_map_island,
                 (uint16_t)(x + g_island_scroll_x), (uint16_t)y);
-            int issued_target_order = 0;
-            if (clicked_floater >= 0 && clicked_floater != g_selected_floater &&
+            if ((GetKeyState(VK_SHIFT) & 0x8000) != 0 &&
+                g_selected_floater >= 0 &&
+                g_selected_floater < g_game_session.floater_count &&
+                clicked_floater >= 0 && clicked_floater != g_selected_floater &&
                 g_game_session.floaters[clicked_floater].owner_slot ==
                     g_menu.selected_tribe) {
-                if ((GetKeyState(VK_SHIFT) & 0x8000) != 0) {
-                    issued_target_order = game_session_order_floater_to_merge(
-                        &g_game_session, g_menu.selected_tribe,
-                        (uint8_t)g_menu.selected_map_island,
-                        (unsigned int)g_selected_floater,
-                        (unsigned int)clicked_floater);
-                } else {
-                    issued_target_order = game_session_order_floater_to_defend(
-                        &g_game_session, g_menu.selected_tribe,
-                        (uint8_t)g_menu.selected_map_island,
-                        (unsigned int)g_selected_floater,
-                        (unsigned int)clicked_floater);
-                }
-            }
-            if (!issued_target_order) {
-                int clicked_location = island_location_at(x, y);
-                if (clicked_location >= 0 &&
-                    game_session_order_floater_to_charge_site(
-                        &g_game_session, g_menu.selected_tribe,
-                        (uint8_t)g_menu.selected_map_island,
-                        (unsigned int)g_selected_floater,
-                        (uint16_t)clicked_location)) {
-                    InvalidateRect(window, NULL, FALSE);
-                    return 0;
-                }
-                (void)game_session_order_floater_to_coordinate(
-                    &g_game_session, g_menu.selected_tribe,
-                    (uint8_t)g_menu.selected_map_island,
+                /* Remake shortcut kept from the earlier port (FA_MergeWith);
+                   FUN_00435826 has no modifier branch. */
+                (void)game_session_order_floater_to_merge(&g_game_session,
+                    g_menu.selected_tribe, (uint8_t)g_menu.selected_map_island,
                     (unsigned int)g_selected_floater,
-                    (uint16_t)(x + g_island_scroll_x), (uint16_t)y);
+                    (unsigned int)clicked_floater);
+            } else {
+                island_right_click(clicked_floater, x, y);
             }
             InvalidateRect(window, NULL, FALSE);
         }
@@ -555,7 +531,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                     if (placed) {
                         unsigned int floater_index;
                         unsigned int linked = 0;
-                        g_selected_location = (int)location_index;
+                        select_location_on_view((int)location_index);
                         /* Test aid: link two idle floaters of the tribe to the
                            new building so order adoption can be watched. */
                         for (floater_index = 0;
@@ -637,7 +613,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                         (uint8_t)g_menu.selected_map_island,
                         (uint16_t)location_index, &site, (uint16_t)item,
                         NULL, 0);
-                    if (placed) g_selected_location = (int)location_index;
+                    if (placed) select_location_on_view((int)location_index);
                 }
             }
             InvalidateRect(window, NULL, FALSE);
@@ -672,7 +648,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 if (placed) {
                     island->locations[location_index].source_value_22 |=
                         (uint16_t)(1U << g_menu.selected_tribe);
-                    g_selected_location = (int)location_index;
+                    select_location_on_view((int)location_index);
                 }
             }
             InvalidateRect(window, NULL, FALSE);
@@ -731,7 +707,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 if (selected < 0) selected = g_menu.selected_tribe;
                 (void)open_island_view(window, selected);
             } else if (g_menu.screen == SCREEN_ISLAND) {
-                if (g_selected_location >= 0) g_hovered_location = g_selected_location;
+                if (view_selected_location() >= 0) g_hovered_location = view_selected_location();
             } else {
                 g_menu.screen = SCREEN_NEW_GAME;
             }

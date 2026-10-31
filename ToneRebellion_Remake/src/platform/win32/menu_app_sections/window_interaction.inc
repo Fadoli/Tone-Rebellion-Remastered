@@ -83,7 +83,7 @@ static void handle_click(HWND window, int x, int y)
         if (obtain_button_at(x, y)) {
             (void)game_session_queue_obtain_task(&g_game_session,
                 (uint8_t)g_menu.selected_tribe,
-                (uint8_t)g_menu.selected_map_island,
+                (uint8_t)selection_island(),
                 (uint16_t)g_selected_location);
             InvalidateRect(window, NULL, FALSE);
             return;
@@ -91,7 +91,7 @@ static void handle_click(HWND window, int x, int y)
         if (upgspread_button_at(x, y)) {
             (void)game_session_toggle_upgspread(&g_game_session,
                 (uint8_t)g_menu.selected_tribe,
-                (uint8_t)g_menu.selected_map_island,
+                (uint8_t)selection_island(),
                 (uint16_t)g_selected_location);
             InvalidateRect(window, NULL, FALSE);
             return;
@@ -110,18 +110,18 @@ static void handle_click(HWND window, int x, int y)
                 g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
                 uint8_t clip_island = 0;
                 uint16_t clip_location = 0;
-                /* Interpretation: select the remembered building (the traced
-                   message path only re-selects the current record); a slot on
-                   another island switches to it. */
+                /* FUN_0042fa0f msgs 3001..3003 (0x431758..0x4317f6): an
+                   empty slot does nothing; otherwise FUN_0042f303(0), then
+                   +0x16c = the remembered building (any island) and
+                   FUN_0042f755(building, 1) = building panel mode 3. The
+                   viewed island never changes (ev_427f8632). */
                 if (game_session_clip_slot(&g_game_session,
                         (uint8_t)g_menu.selected_tribe,
                         (unsigned int)clip_control - 11U, &clip_island,
                         &clip_location) != 0) {
-                    if (clip_island == (uint8_t)g_menu.selected_map_island) {
-                        g_selected_location = (int)clip_location;
-                    } else if (open_island_view(window, clip_island)) {
-                        g_selected_location = (int)clip_location;
-                    }
+                    select_location_anywhere((int)clip_island,
+                                             (int)clip_location);
+                    g_island_panel_mode = WINDOW_ISLAND_PANEL_LOCATION;
                 }
                 InvalidateRect(window, NULL, FALSE);
                 return;
@@ -129,13 +129,13 @@ static void handle_click(HWND window, int x, int y)
         }
         if (g_menu.screen == SCREEN_ISLAND && g_game_session_valid &&
             island_panel_location_info_visible(g_island_panel_mode) &&
-            g_menu.selected_map_island >= 0 &&
-            g_menu.selected_map_island < g_game_session.island_count) {
+            selection_island() >= 0 &&
+            selection_island() < g_game_session.island_count) {
             /* IWLocInfo slot floaters (FUN_0044003d case 6 ->
                FUN_00440451), then message 0x3f selects the floater while the
                location context is kept. */
             const GameRuntimeIsland *slot_island =
-                &g_game_session.islands[g_menu.selected_map_island];
+                &g_game_session.islands[selection_island()];
             const WindowTemplate *slot_info = window_catalog_find(
                 &g_window_catalog, "IWLocInfo", 3);
             if (slot_info != NULL && g_selected_location >= 0 &&
@@ -149,7 +149,7 @@ static void handle_click(HWND window, int x, int y)
                         g_selected_location, g_selected_floater
                     };
                     island_panel_select_floater(&selection, slot_floater);
-                    g_selected_location = selection.location_index;
+                    select_location_anywhere(selection_island(), selection.location_index);
                     g_selected_floater = slot_floater;
                     g_hovered_location = -1;
                     InvalidateRect(window, NULL, FALSE);
@@ -162,7 +162,7 @@ static void handle_click(HWND window, int x, int y)
             if (training_control != 0) {
                 (void)game_session_toggle_training_stock(&g_game_session,
                     (uint8_t)g_menu.selected_tribe,
-                    (uint8_t)g_menu.selected_map_island,
+                    (uint8_t)selection_island(),
                     (uint16_t)g_selected_location, training_control - 1);
                 InvalidateRect(window, NULL, FALSE);
                 return;
@@ -173,11 +173,12 @@ static void handle_click(HWND window, int x, int y)
             if (order_genre == 10) {
                 /* FUN_0045dcf4: genre 9 at the building's own packed tile. */
                 const GameRuntimeLocation *own = &g_game_session.islands[
-                    g_menu.selected_map_island].locations[g_selected_location];
+                    selection_island()].locations[g_selected_location];
                 (void)game_session_set_building_order(&g_game_session,
                     (uint8_t)g_menu.selected_tribe,
-                    (uint8_t)g_menu.selected_map_island,
-                    (uint16_t)g_selected_location, 9, own->x, own->y);
+                    (uint8_t)selection_island(),
+                    (uint16_t)g_selected_location, 9,
+                    (uint8_t)selection_island(), own->x, own->y);
                 g_defend_area_armed = 0;
                 update_interaction_cursor();
                 InvalidateRect(window, NULL, FALSE);
@@ -209,9 +210,10 @@ static void handle_click(HWND window, int x, int y)
             }
             if (target >= 0 && game_session_set_building_order(&g_game_session,
                     (uint8_t)g_menu.selected_tribe,
-                    (uint8_t)g_menu.selected_map_island,
+                    (uint8_t)selection_island(),
                     (uint16_t)g_selected_location,
                     (unsigned int)g_defend_area_armed,
+                    (uint8_t)g_menu.selected_map_island,
                     (unsigned int)target, target_y)) {
                 g_defend_area_armed = 0;
                 update_interaction_cursor();
@@ -226,7 +228,7 @@ static void handle_click(HWND window, int x, int y)
                     &g_game_session, (uint8_t)g_menu.selected_tribe,
                     (uint8_t)g_menu.selected_map_island,
                     (uint16_t)target_location)) {
-                g_selected_location = target_location;
+                select_location_on_view(target_location);
                 g_selected_floater = -1;
                 g_hovered_location = target_location;
             }
@@ -358,16 +360,16 @@ static void handle_click(HWND window, int x, int y)
             }
         }
         if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL &&
-            g_game_session_valid && g_menu.selected_map_island >= 0 &&
-            g_menu.selected_map_island < g_game_session.island_count &&
+            g_game_session_valid && selection_island() >= 0 &&
+            selection_island() < g_game_session.island_count &&
             g_selected_location >= 0 &&
             g_selected_location < g_game_session.islands[
-                g_menu.selected_map_island].location_count) {
+                selection_island()].location_count) {
             int cast_action = selected_cast_action_at(x, y);
             if (cast_action >= 0) {
                 (void)game_session_queue_cast_action_target(&g_game_session,
                     (uint8_t)g_menu.selected_tribe,
-                    (uint8_t)g_menu.selected_map_island,
+                    (uint8_t)selection_island(),
                     (uint16_t)g_selected_location, (uint8_t)cast_action,
                     (int16_t)g_selected_floater);
                 InvalidateRect(window, NULL, FALSE);
@@ -384,7 +386,7 @@ static void handle_click(HWND window, int x, int y)
                    tick applies the observed bit-0x400 toggle and budget gate. */
                 (void)game_session_queue_onoff_action(&g_game_session,
                     (uint8_t)g_menu.selected_tribe,
-                    (uint8_t)g_menu.selected_map_island,
+                    (uint8_t)selection_island(),
                     (uint16_t)g_selected_location);
                 InvalidateRect(window, NULL, FALSE);
                 return;
@@ -396,17 +398,17 @@ static void handle_click(HWND window, int x, int y)
                     sizeof(upgrade_names) / sizeof(upgrade_names[0])) : NULL;
             if (upgrade_control != NULL) {
                 const GameRuntimeLocation *location = &g_game_session.islands[
-                    g_menu.selected_map_island].locations[g_selected_location];
+                    selection_island()].locations[g_selected_location];
                 int32_t base_item_id = location->record_value_10 -
                     (int32_t)g_menu.selected_tribe * 16;
                 if (base_item_id >= 0x2c && base_item_id <= 0x2f) {
                     (void)game_session_toggle_staff_upgrade_request(
                         &g_game_session, (uint8_t)g_menu.selected_tribe,
-                        (uint8_t)g_menu.selected_map_island,
+                        (uint8_t)selection_island(),
                         (uint16_t)g_selected_location);
                 } else {
                     (void)game_session_cycle_source_capacity(&g_game_session,
-                        (uint8_t)g_menu.selected_map_island,
+                        (uint8_t)selection_island(),
                         (uint16_t)g_selected_location);
                 }
                 InvalidateRect(window, NULL, FALSE);
@@ -422,7 +424,7 @@ static void handle_click(HWND window, int x, int y)
                    +0x0e for location on repair task records. */
                 (void)game_session_pending_event_add(&g_game_session,
                     (int16_t)g_menu.selected_tribe,
-                    (int16_t)g_menu.selected_map_island,
+                    (int16_t)selection_island(),
                     0x12, 0, (int16_t)g_selected_location, 0);
                 return;
             }
@@ -450,7 +452,7 @@ static void handle_click(HWND window, int x, int y)
                     } else if (selected_location_can_be_grabbed()) {
                         (void)game_session_begin_location_move(&g_game_session,
                             &g_pad_catalog, (uint8_t)g_menu.selected_tribe,
-                            (uint8_t)g_menu.selected_map_island,
+                            (uint8_t)selection_island(),
                             (uint16_t)g_selected_location);
                     }
                     InvalidateRect(window, NULL, FALSE);
@@ -556,7 +558,7 @@ static void handle_click(HWND window, int x, int y)
                     }
                     g_menu.screen = SCREEN_WORLD_MAP;
                     g_selected_floater = -1;
-                    g_selected_location = -1;
+                    select_location_on_view(-1);
                     g_hovered_location = -1;
                     g_hovered_island_button = -1;
                     g_hovered_hall_command = -1;
@@ -654,7 +656,7 @@ static void handle_click(HWND window, int x, int y)
                    while retaining the selected IWLocInfo location context. */
                 island_panel_select_floater(&selection,
                                              clicked_roster_floater);
-                g_selected_location = selection.location_index;
+                select_location_anywhere(selection_island(), selection.location_index);
                 g_selected_floater = clicked_roster_floater;
                 select_floater_source_building(clicked_roster_floater);
                 g_hovered_location = -1;
@@ -670,7 +672,7 @@ static void handle_click(HWND window, int x, int y)
                         g_selected_location, g_selected_floater
                     };
                     island_panel_select_floater(&selection, clicked_floater);
-                    g_selected_location = selection.location_index;
+                    select_location_anywhere(selection_island(), selection.location_index);
                     g_selected_floater = clicked_floater;
                     select_floater_source_building(clicked_floater);
                     g_hovered_location = -1;
@@ -694,7 +696,7 @@ static void handle_click(HWND window, int x, int y)
                     if (clicked_ground_item) {
                         /* Keep the map target selected and the worker active;
                            the Obtain button posts the type-0xd task. */
-                        g_selected_location = clicked_location;
+                        select_location_on_view(clicked_location);
                         g_hovered_location = -1;
                     } else {
                         g_selected_floater = -1;
@@ -783,38 +785,21 @@ static void handle_click(HWND window, int x, int y)
                                                             clicked_location)) {
                             /* island changed; selection already reset */
                         } else {
-                            g_selected_location = clicked_location;
+                            select_location_on_view(clicked_location);
                             (void)open_iw_construct(clicked_location);
                         }
                         InvalidateRect(window, NULL, FALSE);
                     } else if (clicked_location < 0) {
-                        g_selected_location = -1;
-                        /* Clicking empty ground returns to the local Hall view. */
-                        if (g_game_session_valid &&
-                            g_menu.selected_tribe < GAME_START_PLAYER_COUNT &&
-                            g_menu.selected_map_island >= 0 &&
-                            g_menu.selected_map_island <
-                                g_game_session.island_count &&
-                            g_selected_glyph < 0 &&
+                        /* FUN_00435826 empty ground: msg 0x33 clears +0x16c and
+                           +0x170, then FUN_0042f303(0) shows the player's Hall
+                           (on any island) in mode 0 (ev_52232fe9, ev_379f1f88);
+                           hall_default_selected() is that default. */
+                        select_location_on_view(-1);
+                        if (g_selected_glyph < 0 &&
                             g_selected_inventory_item <
                                 GAME_INVENTORY_ITEM_FIRST_ID) {
-                            const GamePlayerEconomy *economy =
-                                &g_game_session.economy[g_menu.selected_tribe];
-                            if (economy->hall_island_index ==
-                                    (uint8_t)g_menu.selected_map_island &&
-                                economy->hall_location_index <
-                                    g_game_session.islands[
-                                        g_menu.selected_map_island].location_count) {
-                                g_selected_location =
-                                    (int)economy->hall_location_index;
-                                if (selected_hall_player() < 0) {
-                                    g_selected_location = -1;
-                                } else {
-                                    g_island_panel_mode =
-                                        WINDOW_ISLAND_PANEL_GENERAL;
-                                    g_hovered_hall_command = -1;
-                                }
-                            }
+                            g_island_panel_mode = WINDOW_ISLAND_PANEL_GENERAL;
+                            g_hovered_hall_command = -1;
                         }
                         InvalidateRect(window, NULL, FALSE);
                     }

@@ -638,7 +638,7 @@ static void render_island_view(HDC dc)
     const int status_top = 320;
     const IslandLocation *focus = NULL;
     const GameFloaterStart *selected_floater = NULL;
-    int focus_index = g_hovered_location >= 0 ? g_hovered_location : g_selected_location;
+    int focus_index = g_hovered_location >= 0 ? g_hovered_location : view_selected_location();
     int hall_player = selected_hall_player();
     int saved_dc;
     uint16_t i;
@@ -652,10 +652,10 @@ static void render_island_view(HDC dc)
     if (g_game_session_valid && g_menu.selected_map_island >= 0 &&
         g_menu.selected_map_island < g_game_session.island_count) {
         runtime_island = &g_game_session.islands[g_menu.selected_map_island];
-        if (g_selected_location >= 0 &&
-            g_selected_location < runtime_island->location_count) {
+        if (view_selected_location() >= 0 &&
+            view_selected_location() < runtime_island->location_count) {
             selected_runtime_location =
-                &runtime_island->locations[g_selected_location];
+                &runtime_island->locations[view_selected_location()];
             selected_ground_item = island_panel_info_ground_item_id(
                 selected_runtime_location->record_value_10,
                 selected_runtime_location->renderer_class,
@@ -1306,9 +1306,9 @@ static void render_island_view(HDC dc)
                     int32_t badge_x;
                     int32_t badge_y;
                     const GameRuntimeLocation *current_location = NULL;
-                    if (runtime_island != NULL && g_selected_location >= 0 &&
-                        g_selected_location < runtime_island->location_count) {
-                        current_location = &runtime_island->locations[g_selected_location];
+                    if (runtime_island != NULL && view_selected_location() >= 0 &&
+                        view_selected_location() < runtime_island->location_count) {
+                        current_location = &runtime_island->locations[view_selected_location()];
                     }
                     int32_t body_left = sprite_x + body_frame->x_offset +
                                         body_frame->hit_left;
@@ -1600,10 +1600,10 @@ static void draw_clipboard_strip(HDC dc)
            selected training building in the active group. */
         game_session_clip_auto_register(&g_game_session,
                                         (uint8_t)g_menu.selected_tribe);
-        if (g_selected_location >= 0 && g_menu.selected_map_island >= 0)
+        if (g_selected_location >= 0 && selection_island() >= 0)
             game_session_clip_remember(&g_game_session,
                 (uint8_t)g_menu.selected_tribe,
-                (uint8_t)g_menu.selected_map_island,
+                (uint8_t)selection_island(),
                 (uint16_t)g_selected_location);
         for (index = 0; index < 3U; ++index) {
             const WindowTemplate *tab = window_catalog_find(&g_window_catalog, tabs[index], 3);
@@ -1658,10 +1658,10 @@ static void draw_location_action_panel(HDC dc)
     if (!island_panel_location_control_visible(g_island_panel_mode) ||
         !iw_construct_location_control_pane_visible(g_iw_construct_open) ||
         !g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
-        g_menu.selected_map_island < 0 ||
-        g_menu.selected_map_island >= g_game_session.island_count ||
+        selection_island() < 0 ||
+        selection_island() >= g_game_session.island_count ||
         g_selected_location < 0) return;
-    island = &g_game_session.islands[g_menu.selected_map_island];
+    island = &g_game_session.islands[selection_island()];
     if (g_selected_location >= island->location_count) return;
     selected_location = &island->locations[g_selected_location];
     panel = window_catalog_find(&g_window_catalog, "IWLocControl", 3);
@@ -1815,7 +1815,7 @@ static void draw_location_action_panel(HDC dc)
         }
     }
     if (g_hall_stock_art.frame_count >= 5 && g_selected_location >= 0 &&
-        g_menu.selected_tribe >= 0 && g_menu.selected_map_island >= 0) {
+        g_menu.selected_tribe >= 0 && selection_island() >= 0) {
         static const char *const names[2] = {"BC_TrnStkC", "BC_TrnStkM"};
         unsigned int index;
         for (index = 0; index < 2U; ++index) {
@@ -1824,13 +1824,13 @@ static void draw_location_action_panel(HDC dc)
             uint32_t frame;
             if (control == NULL || !game_session_training_stock_visible(
                     &g_game_session, (uint8_t)g_menu.selected_tribe,
-                    (uint8_t)g_menu.selected_map_island,
+                    (uint8_t)selection_island(),
                     (uint16_t)g_selected_location, (int)index)) continue;
             /* NSTATES 2: frame = SHAPEFRAME + state; the state is the
                building's +0x58 / +0x5c flag (FUN_004421f1). */
             frame = (uint32_t)control->shape_frame +
                 (uint32_t)game_session_training_stock_state(&g_game_session,
-                    (uint8_t)g_menu.selected_map_island,
+                    (uint8_t)selection_island(),
                     (uint16_t)g_selected_location, (int)index);
             if (frame < g_hall_stock_art.frame_count)
                 draw_sprite(dc, &g_hall_stock_art, frame,
@@ -1845,9 +1845,9 @@ static void draw_location_action_panel(HDC dc)
     }
     if (g_game_session_valid && g_menu.selected_tribe >= 0 &&
         g_menu.selected_tribe < GAME_START_PLAYER_COUNT &&
-        g_menu.selected_map_island >= 0 && g_selected_location >= 0 &&
+        selection_island() >= 0 && g_selected_location >= 0 &&
         game_session_upgspread_available(&g_game_session,
-            (uint8_t)g_menu.selected_tribe, (uint8_t)g_menu.selected_map_island,
+            (uint8_t)g_menu.selected_tribe, (uint8_t)selection_island(),
             (uint16_t)g_selected_location) &&
         g_upgrade_button_art.frame_count > 13) {
         const WindowTemplate *control = window_catalog_find(
@@ -1857,7 +1857,7 @@ static void draw_location_action_panel(HDC dc)
                (FUN_00442a7b animation counter); HILITEFRAME 13 on hover. */
             int active = game_session_upgspread_active(&g_game_session,
                 (uint8_t)g_menu.selected_tribe,
-                (uint8_t)g_menu.selected_map_island,
+                (uint8_t)selection_island(),
                 (uint16_t)g_selected_location);
             uint32_t frame = (uint32_t)control->shape_frame +
                 (active ? (uint32_t)((GetTickCount() / 100U) % 13U) : 0U);

@@ -58,7 +58,16 @@ Plusieurs items sont « portés, non vérifiés en jeu » (ordre des panneaux Ha
 
 Corrigés (preuve en commentaire dans le code) : bilan d'attaque appliqué à l'attaquant (`FUN_004200d2`/`FUN_00420188`, ECX = attaquant à `0x41ec64`) et dégâts de site débloqués; FA_Cast hors portée avance vers sa cible, destination résolue une seule fois, fin via drapeau 0x200 et +5 en `+0x08` (`FUN_0042383d`); morts Spore via `FUN_004204bc` (garde 0x8, son, compteurs). Ensuite : l'entraînement (`FUN_0045cd75`) rafraîchit portée, royaume, vitesse, force et PV depuis la ligne du nouveau sous-type (une unité à distance entraînée gardait la portée 0 de l'ouvrier et immobilisait sa cible comme en mêlée); royaume de combat via `FUN_0042003c` (±1 selon 0x10000/0x20000 du bâtiment lié, ligne du sous-type 0 pour un attaquant non chargé).
 
+Contrôle des guerriers (REA, `FUN_00435826`, `FUN_0042f8f7`, `FUN_0042fa0f` 3001..3003) : la sélection d'un floater prend son bâtiment sur toute île (panneau mode 3); un raccourci sélectionne son bâtiment sans changer l'île affichée; le clic droit (`param_3 = événement 7`) avec un bâtiment d'entraînement possédé sélectionné écrit l'ordre du bâtiment (genres 6/8 floater, 7 site ennemi, 9 sol) adopté par tout le groupe; l'ordre garde l'île de la cible; le clic sur le sol revient au Hall par défaut; la traversée d'un pont accorde l'accès à l'île (`FUN_00466b09` à l'étape 0x3c).
+
 Écarts confirmés, non corrigés :
+
+- Adoption d'un ordre dont la cible est sur une autre île que le floater : le routage par pont de `FUN_004211bb` n'est pas porté (le floater l'ignore).
+- Contre-attaque des Léviathans tenus en mêlée (`FUN_0042219e` -> `FUN_00421d82`, flag 0x10) absente.
+- Tirage `FUN_00467260(3)` de `FUN_0042219e` fait dès qu'une cible floater existe; le port ne tire qu'avec une cible lieu aussi (séquence RNG décalée).
+- Traversée de pont : le port force l'action 9 au départ et l'état 9 à l'arrivée; le natif garde l'action et finit en état 0 (`FUN_004210a9`, cas 0x10).
+- Presse-papiers : enregistrement automatique de tous les bâtiments d'entraînement (natif : seulement le bâtiment sélectionné).
+- `IWFltInfo` affiché seulement en modes général/lieu (natif : tout mode après 0x3f); masquage d'un floater mourant (0x8, timer >= 40) non testé au rendu.
 
 - Hall de départ : le port préfère un pad typé; `FUN_0046466f` prend le site classe 0 vide le plus proche (`ev_3cb7946b`).
 - Source de recharge Build Tone : priorité Hall absente de `FUN_00420a55`/`FUN_00420dbd` (`game_session_delivery.c` `construction_refill_source`).

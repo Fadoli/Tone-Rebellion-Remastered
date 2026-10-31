@@ -248,10 +248,10 @@ static IslandLocationActionControl selected_location_action(void)
     if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
         g_menu.selected_tribe < 0 ||
         g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
-        g_menu.selected_map_island < 0 ||
-        g_menu.selected_map_island >= g_game_session.island_count ||
+        selection_island() < 0 ||
+        selection_island() >= g_game_session.island_count ||
         g_selected_location < 0) return ISLAND_LOCATION_ACTION_NONE;
-    island = &g_game_session.islands[g_menu.selected_map_island];
+    island = &g_game_session.islands[selection_island()];
     if (g_selected_location >= island->location_count) {
         return ISLAND_LOCATION_ACTION_NONE;
     }
@@ -271,13 +271,13 @@ static int selected_repair_button_visible(void)
     int16_t current_hit_points;
     int16_t maximum_hit_points;
     if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
-        g_menu.selected_map_island < 0 ||
-        g_menu.selected_map_island >= g_game_session.island_count ||
+        selection_island() < 0 ||
+        selection_island() >= g_game_session.island_count ||
         g_selected_location < 0) return 0;
-    island = &g_game_session.islands[g_menu.selected_map_island];
+    island = &g_game_session.islands[selection_island()];
     if (g_selected_location >= island->location_count) return 0;
     if (!game_session_repair_location_values(&g_game_session, &g_pad_catalog,
-            (uint8_t)g_menu.selected_map_island,
+            (uint8_t)selection_island(),
             (uint16_t)g_selected_location,
             &current_hit_points, &maximum_hit_points)) return 0;
     return island_panel_repair_button_visible(
@@ -292,10 +292,10 @@ static int selected_onoff_button_visible(void)
     const GameRuntimeIsland *island;
     const GameRuntimeLocation *location;
     if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
-        g_menu.selected_map_island < 0 ||
-        g_menu.selected_map_island >= g_game_session.island_count ||
+        selection_island() < 0 ||
+        selection_island() >= g_game_session.island_count ||
         g_selected_location < 0) return 0;
-    island = &g_game_session.islands[g_menu.selected_map_island];
+    island = &g_game_session.islands[selection_island()];
     if (g_selected_location >= island->location_count) return 0;
     location = &island->locations[g_selected_location];
     return island_panel_onoff_button_visible(location->record_value_10,
@@ -312,10 +312,10 @@ static int selected_upgrade_button_visible(void)
     if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
         g_menu.selected_tribe < 0 ||
         g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
-        g_menu.selected_map_island < 0 ||
-        g_menu.selected_map_island >= g_game_session.island_count ||
+        selection_island() < 0 ||
+        selection_island() >= g_game_session.island_count ||
         g_selected_location < 0) return 0;
-    island = &g_game_session.islands[g_menu.selected_map_island];
+    island = &g_game_session.islands[selection_island()];
     if ((unsigned int)g_selected_location >= island->location_count) return 0;
     location = &island->locations[g_selected_location];
     if (location->renderer_class != 0 ||
@@ -345,10 +345,10 @@ static int selected_cast_action_at(int x, int y)
         g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
         g_menu.selected_map_island < 0 ||
         g_menu.selected_map_island >= g_game_session.island_count ||
-        g_selected_location < 0) return -1;
+        view_selected_location() < 0) return -1;
     island = &g_game_session.islands[g_menu.selected_map_island];
-    if ((unsigned int)g_selected_location >= island->location_count) return -1;
-    location = &island->locations[g_selected_location];
+    if ((unsigned int)view_selected_location() >= island->location_count) return -1;
+    location = &island->locations[view_selected_location()];
     if (location->renderer_class != 0 ||
         location->owner_id != g_menu.selected_tribe ||
         location->source_location_slot_18 < 0 ||
@@ -415,10 +415,10 @@ static int hovered_spell_button_kind(int x, int y)
         g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
         g_menu.selected_map_island < 0 ||
         g_menu.selected_map_island >= g_game_session.island_count ||
-        g_selected_location < 0) return -1;
+        view_selected_location() < 0) return -1;
     island = &g_game_session.islands[g_menu.selected_map_island];
-    if ((unsigned int)g_selected_location >= island->location_count) return -1;
-    location = &island->locations[g_selected_location];
+    if ((unsigned int)view_selected_location() >= island->location_count) return -1;
+    location = &island->locations[view_selected_location()];
     if (location->renderer_class != 0 ||
         location->owner_id != g_menu.selected_tribe ||
         location->source_location_slot_18 < 0 ||
@@ -461,9 +461,9 @@ static int update_location_action_hover(int x, int y)
         g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL &&
         g_menu.selected_map_island >= 0 &&
         g_menu.selected_map_island < g_game_session.island_count &&
-        g_selected_location >= 0) {
+        view_selected_location() >= 0) {
         island = &g_game_session.islands[g_menu.selected_map_island];
-        if (g_selected_location < island->location_count) {
+        if (view_selected_location() < island->location_count) {
             if (selected_repair_button_visible()) {
                 repair_control = window_catalog_hit_test_names(&g_window_catalog,
                     3, x, y, repair_names,
@@ -514,12 +514,12 @@ static int obtain_button_visible(void)
     if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
         g_island_panel_mode != WINDOW_ISLAND_PANEL_GENERAL ||
         g_selected_location < 0 ||
-        g_menu.selected_map_island < 0 ||
-        g_menu.selected_map_island >= g_game_session.island_count ||
+        selection_island() < 0 ||
+        selection_island() >= g_game_session.island_count ||
         g_menu.selected_tribe < 0 ||
         g_menu.selected_tribe >= GAME_START_PLAYER_COUNT) return 0;
     return game_session_ground_object_item(&g_game_session,
-        (uint8_t)g_menu.selected_map_island,
+        (uint8_t)selection_island(),
         (uint16_t)g_selected_location) != 0;
 }
 
@@ -553,9 +553,9 @@ static int defend_area_button_visible(void)
     if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
         g_menu.selected_tribe < 0 ||
         g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
-        g_menu.selected_map_island < 0 || g_selected_location < 0) return 0;
+        selection_island() < 0 || g_selected_location < 0) return 0;
     return game_session_building_has_defend_area(&g_game_session,
-        (uint8_t)g_menu.selected_tribe, (uint8_t)g_menu.selected_map_island,
+        (uint8_t)g_menu.selected_tribe, (uint8_t)selection_island(),
         (uint16_t)g_selected_location);
 }
 
@@ -592,7 +592,7 @@ static int training_stock_control_at(int x, int y)
     if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
         g_menu.selected_tribe < 0 ||
         g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
-        g_menu.selected_map_island < 0 || g_selected_location < 0) return 0;
+        selection_island() < 0 || g_selected_location < 0) return 0;
     for (index = 0; index < 2U; ++index) {
         const WindowTemplate *control = window_catalog_find(
             &g_window_catalog, names[index], 3);
@@ -601,7 +601,7 @@ static int training_stock_control_at(int x, int y)
             y < control->pane.bottom &&
             game_session_training_stock_visible(&g_game_session,
                 (uint8_t)g_menu.selected_tribe,
-                (uint8_t)g_menu.selected_map_island,
+                (uint8_t)selection_island(),
                 (uint16_t)g_selected_location, (int)index)) return (int)index + 1;
     }
     return 0;
@@ -651,9 +651,9 @@ static int upgspread_button_at(int x, int y)
     if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
         g_menu.selected_tribe < 0 ||
         g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
-        g_menu.selected_map_island < 0 || g_selected_location < 0 ||
+        selection_island() < 0 || g_selected_location < 0 ||
         !game_session_upgspread_available(&g_game_session,
-            (uint8_t)g_menu.selected_tribe, (uint8_t)g_menu.selected_map_island,
+            (uint8_t)g_menu.selected_tribe, (uint8_t)selection_island(),
             (uint16_t)g_selected_location)) return 0;
     control = window_catalog_find(&g_window_catalog, "BC_UpgSpread", 3);
     return control != NULL && x >= control->pane.left &&
@@ -712,10 +712,10 @@ static int selected_location_can_be_grabbed(void)
         g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
         g_menu.selected_map_island < 0 ||
         g_menu.selected_map_island >= g_game_session.island_count ||
-        g_selected_location < 0) return 0;
+        view_selected_location() < 0) return 0;
     island = &g_game_session.islands[g_menu.selected_map_island];
-    if (g_selected_location >= island->location_count) return 0;
-    location = &island->locations[g_selected_location];
+    if (view_selected_location() >= island->location_count) return 0;
+    location = &island->locations[view_selected_location()];
     item_id = location->record_value_10 - (int32_t)g_menu.selected_tribe * 16;
     if (location->owner_id != (int32_t)g_menu.selected_tribe ||
         item_id < 0x25 || item_id > 0x34 || item_id == 0x28 ||
@@ -723,7 +723,7 @@ static int selected_location_can_be_grabbed(void)
     if ((location->source_value_22 & (uint16_t)(1U << g_menu.selected_tribe)) == 0 ||
         !game_session_location_move_costs(&g_game_session, &g_pad_catalog,
             (uint8_t)g_menu.selected_map_island,
-            (uint16_t)g_selected_location, costs)) return 0;
+            (uint16_t)view_selected_location(), costs)) return 0;
     if (g_game_session.economy[g_menu.selected_tribe].hall_island_index >=
             g_game_session.island_count ||
         g_game_session.economy[g_menu.selected_tribe].hall_location_index >=
@@ -763,15 +763,15 @@ static int hall_default_selected(void)
 static int effective_info_location(const GameRuntimeIsland **island_out,
                                    int *location_out, uint8_t *island_index_out)
 {
-    if (!g_game_session_valid || g_menu.selected_map_island < 0 ||
-        g_menu.selected_map_island >= g_game_session.island_count) return 0;
+    if (!g_game_session_valid || selection_island() < 0 ||
+        selection_island() >= g_game_session.island_count) return 0;
     if (g_selected_location >= 0) {
         const GameRuntimeIsland *island =
-            &g_game_session.islands[g_menu.selected_map_island];
+            &g_game_session.islands[selection_island()];
         if (g_selected_location >= island->location_count) return 0;
         *island_out = island;
         *location_out = g_selected_location;
-        *island_index_out = (uint8_t)g_menu.selected_map_island;
+        *island_index_out = (uint8_t)selection_island();
         return 1;
     }
     if (hall_default_selected()) {
@@ -793,15 +793,15 @@ static int selected_hall_player(void)
     const GameRuntimeLocation *hall;
     if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
         g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
-        g_menu.selected_map_island < 0 ||
-        g_menu.selected_map_island >= g_game_session.island_count ||
+        selection_island() < 0 ||
+        selection_island() >= g_game_session.island_count ||
         g_selected_location < 0) return -1;
     player = g_menu.selected_tribe;
     if (g_game_session.economy[player].hall_island_index !=
-            (uint8_t)g_menu.selected_map_island ||
+            (uint8_t)selection_island() ||
         g_game_session.economy[player].hall_location_index !=
             (uint16_t)g_selected_location) return -1;
-    island = &g_game_session.islands[g_menu.selected_map_island];
+    island = &g_game_session.islands[selection_island()];
     if (g_selected_location >= island->location_count) return -1;
     hall = &island->locations[g_selected_location];
     if (hall->owner_id != (int32_t)player ||
@@ -833,31 +833,117 @@ static uint8_t collect_initial_worker_roster(unsigned int player,
 
 /* FUN_0042f8f7 (floater select, message 0x3f) resolves the floater's +0x0c
    link through FUN_004207f2/FUN_0045c3bb to its source building and shows it
-   via FUN_0042f755, which stores the location index only when the building is
-   on the viewed island. With no link the current location is kept. */
+   via FUN_0042f755, on any island. With no link the current location is kept
+   unless it has no staff slot. */
 static void select_floater_source_building(int floater_index)
 {
     const GameFloaterStart *floater;
-    const GameRuntimeIsland *island;
     if (!g_game_session_valid || floater_index < 0 ||
-        (unsigned int)floater_index >= g_game_session.floater_count ||
-        g_menu.selected_map_island < 0 ||
-        g_menu.selected_map_island >= g_game_session.island_count) return;
+        (unsigned int)floater_index >= g_game_session.floater_count) return;
     floater = &g_game_session.floaters[floater_index];
-    island = &g_game_session.islands[g_menu.selected_map_island];
     if (floater->source_link_0c < 0) {
         /* FUN_0042f8f7: no linked row and the kept location is null or has
-           +0x18 == -1 (no staff slot) -> FUN_0042f303(0), the Hall default. */
-        if (g_selected_location >= 0 &&
-            (uint16_t)g_selected_location < island->location_count &&
+           +0x18 == -1 (no staff slot) -> FUN_0042f303(0), the Hall default
+           in mode 0. */
+        const GameRuntimeIsland *island = selection_island() >= 0 &&
+            selection_island() < g_game_session.island_count
+            ? &g_game_session.islands[selection_island()] : NULL;
+        if (island == NULL || g_selected_location < 0 ||
+            (uint16_t)g_selected_location >= island->location_count ||
             island->locations[g_selected_location].source_location_slot_18 ==
-                -1) g_selected_location = -1;
+                -1) {
+            select_location_on_view(-1);
+            g_island_panel_mode = WINDOW_ISLAND_PANEL_GENERAL;
+        }
         return;
     }
-    if (floater->charge_source_island != (uint8_t)g_menu.selected_map_island)
+    /* +0x16c takes the linked building on any island, and FUN_0042f755(.., 1)
+       switches to the building panel (FUN_0042f303(3)) (ev_aa63a0e6). */
+    if (floater->charge_source_island >= g_game_session.island_count ||
+        floater->charge_source_location >=
+            g_game_session.islands[floater->charge_source_island].location_count)
         return;
-    if (floater->charge_source_location >= island->location_count) return;
-    g_selected_location = floater->charge_source_location;
+    select_location_anywhere((int)floater->charge_source_island,
+                             (int)floater->charge_source_location);
+    g_island_panel_mode = WINDOW_ISLAND_PANEL_LOCATION;
+}
+
+/* FUN_00435826 with param_3 = (event == 7), the right button (call site
+   0x4341c1..0x4341d6, ev_136c9e2d). With an owned building holding a staff
+   record selected (+0x16c, any island) it gives that building's group order
+   (FUN_0043530b mode, then msg 0x41 / 0x40 / 0x4c -> FUN_00465793 ->
+   FUN_0045d867 / FUN_0045d8b2, ev_52232fe9, ev_614c66b1):
+   - a floater: genre 6 (attack) for category 4 or an enemy owner, else 8
+     (defend); the clicked floater is then selected (msg 0x3f);
+   - a site of category 4 or an enemy: genre 7 (attack location);
+   - an unowned or friendly site, or empty ground: genre 9 at the point.
+   "Enemy" is a zero DAT_00619290[player][owner] policy flag. Interpretation:
+   the self entry is not established, so the player's own floaters and sites
+   are treated as friendly (defend) rather than attacked.
+   Without such a building the click only selects, like the left button. */
+static void island_right_click(int clicked_floater, int x, int y)
+{
+    uint8_t player = (uint8_t)g_menu.selected_tribe;
+    uint8_t viewed = (uint8_t)g_menu.selected_map_island;
+    int building_island = selection_island();
+    int clicked_location = clicked_floater >= 0 ? -1 : island_location_at(x, y);
+    int ordering = g_selected_location >= 0 && building_island >= 0 &&
+        building_island < g_game_session.island_count &&
+        game_session_building_has_defend_area(&g_game_session, player,
+            (uint8_t)building_island, (uint16_t)g_selected_location);
+
+    if (ordering) {
+        unsigned int genre = 9;
+        unsigned int target = (unsigned int)(x + g_island_scroll_x);
+        unsigned int target_y = (unsigned int)y;
+        if (clicked_floater >= 0) {
+            const GameFloaterStart *victim =
+                &g_game_session.floaters[clicked_floater];
+            int friendly = victim->type_index != 4U &&
+                (victim->owner_slot == player ||
+                 (victim->owner_slot < GAME_START_PLAYER_COUNT &&
+                  ((g_game_session.diplomacy_policy_mask[player] >>
+                    victim->owner_slot) & 1U) != 0));
+            genre = friendly ? 8U : 6U;
+            target = (unsigned int)clicked_floater;
+            target_y = 0;
+        } else if (clicked_location >= 0) {
+            const GameRuntimeLocation *site =
+                &g_game_session.islands[viewed].locations[clicked_location];
+            int enemy = site->owner_id == 4 ||
+                (site->owner_id >= 0 &&
+                 site->owner_id < GAME_START_PLAYER_COUNT &&
+                 site->owner_id != (int32_t)player &&
+                 ((g_game_session.diplomacy_policy_mask[player] >>
+                   site->owner_id) & 1U) == 0);
+            if (enemy) {
+                genre = 7;
+                target = (unsigned int)clicked_location;
+                target_y = 0;
+            }
+        }
+        (void)game_session_set_building_order(&g_game_session, player,
+            (uint8_t)building_island, (uint16_t)g_selected_location, genre,
+            viewed, target, target_y);
+        g_defend_area_armed = 0;
+        update_interaction_cursor();
+        if (clicked_floater < 0) return;
+    }
+    if (clicked_floater >= 0) {
+        /* msg 0x3f -> FUN_0042f8f7. */
+        g_selected_floater = clicked_floater;
+        select_floater_source_building(clicked_floater);
+        g_hovered_location = -1;
+    } else if (!ordering && clicked_location >= 0) {
+        /* msg 0x32: the site becomes +0x16c. */
+        g_selected_floater = -1;
+        select_location_on_view(clicked_location);
+    } else if (!ordering) {
+        /* msg 0x4b then 0x33: FUN_0042f303(0). */
+        g_selected_floater = -1;
+        select_location_on_view(-1);
+        g_island_panel_mode = WINDOW_ISLAND_PANEL_GENERAL;
+    }
 }
 
 static int selected_hall_roster_hit_test(int x, int y)
@@ -874,7 +960,7 @@ static int selected_hall_roster_hit_test(int x, int y)
     count = collect_initial_worker_roster((unsigned int)player, roster);
     if (count == 0) return -1;
     for (slot = 0; slot < count; ++slot) occupied |= (uint8_t)(1u << slot);
-    island = &g_game_session.islands[g_menu.selected_map_island];
+    island = &g_game_session.islands[selection_island()];
     if ((uint16_t)g_selected_location < island->location_count) {
         special_layout = island->locations[g_selected_location].record_value_10 == 0x2f;
     }
@@ -1200,16 +1286,16 @@ static int select_iw_construct_item(void)
                 g_game_session.config.selected_tribe < GAME_START_PLAYER_COUNT &&
                 g_menu.selected_map_island >= 0 &&
                 g_menu.selected_map_island < g_game_session.island_count &&
-                g_selected_location >= 0 &&
-                g_selected_location <= UINT16_MAX &&
-                g_selected_location < g_island_surface_data.location_count) {
+                view_selected_location() >= 0 &&
+                view_selected_location() <= UINT16_MAX &&
+                view_selected_location() < g_island_surface_data.location_count) {
                 /* FUN_0042fa0f turns this selection message into the observed
                    category-0/type-5 request. Its consumer is unknown, so the
                    UI queues the packet and does not place the item here. */
                 build_queued = game_session_queue_build_selection(
                     &g_game_session, g_game_session.config.selected_tribe,
                     (uint8_t)g_menu.selected_map_island,
-                    (uint16_t)g_selected_location,
+                    (uint16_t)view_selected_location(),
                     (uint16_t)message->value);
                 handled = build_queued;
             }

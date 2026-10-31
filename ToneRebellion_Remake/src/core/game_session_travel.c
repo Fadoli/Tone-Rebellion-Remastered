@@ -225,6 +225,14 @@ int game_session_tick_floater_handoff(GameSession *session,
         return 1;
     }
     if (floater->order_timer == 60) {
+        /* FUN_0041e569 state 17 at counter 0x3c calls FUN_00466b09(+0x00,
+           +0x0e, +0x30) on every crossing (call 0x41f28e..0x41f2b7): the
+           first arrival of the tribe grants the target island's access,
+           window, visibility and world event 12. */
+        if (floater->type_index < GAME_START_PLAYER_COUNT)
+            (void)game_session_acquire_island_access(session,
+                floater->type_index, floater->island_index,
+                floater->handoff_target_island);
         preferred_arrival = find_linked_bridge(
             session, floater->handoff_target_island, floater->island_index);
         if (preferred_arrival >= 0 &&

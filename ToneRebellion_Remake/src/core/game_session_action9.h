@@ -30,10 +30,12 @@ int game_session_assign_category4_subtype9_order(
 
 /* FUN_0042219e copy of a building's genre 6/7/8 order (FUN_0045d867 /
    FUN_0045d8b2) into a linked floater: 6 attacks a floater, 7 a location,
-   8 defends a floater. `target` is the floater or location index. */
+   8 defends a floater. `target` is the floater or location index on
+   `target_island`. */
 void game_session_adopt_building_attack_order(GameSession *session,
                                               unsigned int floater_index,
                                               unsigned int genre,
+                                              uint8_t target_island,
                                               unsigned int target);
 
 #endif

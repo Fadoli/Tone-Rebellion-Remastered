@@ -1281,3 +1281,37 @@ static void test_training_refreshes_the_new_subtype_combat_row(void)
     assert(worker->current_hit_points == worker->max_hit_points);
     assert(worker->max_attack_points == 4);
 }
+
+static void test_building_order_keeps_the_target_island(void)
+{
+    /* FUN_0045d867 stores the target floater's island and FUN_0045d8b2 the
+       packet island in B+0x28, so a training building on island 0 can order
+       its group against a target on island 1. */
+    static GameSession session;
+    GameRuntimeLocation *school;
+
+    memset(&session, 0, sizeof(session));
+    session.island_count = 2;
+    session.islands[0].location_count = 1;
+    session.islands[1].location_count = 2;
+    school = &session.islands[0].locations[0];
+    school->owner_id = 0;
+    school->source_value_14 = 0;
+    school->record_value_10 = 0x2c;
+    school->source_location_slot_18 = 0;
+    add_test_worker(&session, 0, 1, 500, 200, 1);
+
+    assert(game_session_set_building_order(&session, 0, 0, 0, 6, 1, 0, 0));
+    assert(school->building_order_genre == 6);
+    assert(school->building_order_island == 1);
+    assert(school->building_order_coordinate == 0);
+    /* The target floater must be on the named island. */
+    assert(!game_session_set_building_order(&session, 0, 0, 0, 8, 0, 0, 0));
+    assert(game_session_set_building_order(&session, 0, 0, 0, 7, 1, 1, 0));
+    assert(school->building_order_island == 1);
+    assert(school->building_order_coordinate == 1);
+    /* Genre 9 packs the point as (v + 5) / 10 on the target island. */
+    assert(game_session_set_building_order(&session, 0, 0, 0, 9, 1, 300, 200));
+    assert(school->building_order_island == 1);
+    assert(school->building_order_coordinate == ((30U << 8) | 20U));
+}
