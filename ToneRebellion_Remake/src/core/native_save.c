@@ -465,9 +465,10 @@ static int restore_task_order(GameSession *session, GameFloaterStart *floater,
     return 1;
 }
 
-/* FA_Recharge (action 2, state 2): the unit waits at a linked site and
-   withdraws one resource. +0x40 / +0x42 name the island and site, +0x30 the
-   requested code, +0x34 the wait counter. */
+/* FA_Recharge (action 2, state 2): the unit stays in its linked building to
+   heal or recharge (FUN_0041e569 case 1). +0x40 / +0x42 name the island and
+   site, +0x30 the mode (0 hit points, 1 charge), +0x34 the counter; stage
+   +0x46 is already -1, so the order ends with the stay. */
 static int restore_recharge_order(const GameSession *session,
                                   GameFloaterStart *floater, const uint8_t *rec)
 {
@@ -480,7 +481,8 @@ static int restore_recharge_order(const GameSession *session,
     floater->movement_state = 2;
     floater->order_target_island = floater->island_index;
     floater->order_target_location = site;
-    floater->source_order_coordinate_30 = u16_at(rec + 0x30);
+    floater->order_resource_code = i16_at(rec + 0x30);
+    floater->order_progress = 1;
     floater->order_timer = u16_at(rec + 0x34);
     floater->destination_x = u16_at(rec + 0x28);
     floater->destination_y = u16_at(rec + 0x2a);

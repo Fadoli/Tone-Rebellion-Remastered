@@ -318,6 +318,24 @@ int game_session_tick_floater_handoff(GameSession *session,
                 return 1;
             }
             return 1;
+        } else if (resume_action == 2 && resume_state == 2) {
+            /* FA_Recharge across a bridge: state 2 toward the building. */
+            if (floater->order_target_island != floater->island_index ||
+                floater->order_target_location < 0 ||
+                (uint16_t)floater->order_target_location >=
+                    session->islands[floater->island_index].location_count) {
+                cancel_handoff(session, floater);
+                return 1;
+            }
+            {
+                const GameRuntimeLocation *building =
+                    &session->islands[floater->island_index]
+                         .locations[(uint16_t)floater->order_target_location];
+                floater->destination_x = building->x;
+                floater->destination_y = building->y;
+            }
+            floater->movement_state = 2;
+            floater->active_order_action = 2;
         } else if (resume_action == 0x0e) {
             floater->movement_state = 0;
             floater->active_order_action = 0x0e;
@@ -330,6 +348,9 @@ int game_session_tick_floater_handoff(GameSession *session,
                 (uint16_t)(floater->source_order_coordinate_30 >> 8) * 10U;
             floater->destination_y =
                 (uint16_t)(floater->source_order_coordinate_30 & 0xffU) * 10U;
+            if (floater->source_order_state_2c == 9 &&
+                !game_session_plan_defend_waypoint(session, floater))
+                return 1;
         }
         floater->stop_radius = 0;
         floater->has_move_order = (uint8_t)(resume_action != 0x0e);

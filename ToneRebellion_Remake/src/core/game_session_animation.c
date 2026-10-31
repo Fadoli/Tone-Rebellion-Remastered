@@ -1293,7 +1293,11 @@ static void tick_source_staff_cycle(GameSession *session,
         stats = floater_catalog_find(floater_catalog, floater->type_index,
                                      floater->source_subtype);
         if (stats != NULL) {
-            floater->charge_current = stats->attack_strength;
+            /* +0x22 = row +8 of FUN_00464242: floater.txt column 5 (max
+               attack points), parsed by FUN_004633a7 into the 0xe-byte row
+               {+0 range, +2 realm, +4 shape, +6 HP, +8 max attack points,
+               +0xa strength, +0xc speed} (ev_8709314a, ev_90928339). */
+            floater->charge_current = stats->max_attack_points;
             apply_trained_floater_stats(session, floater_catalog, floater,
                                         stats);
             level = (uint16_t)(floater->attack_level_flags & 0x0fU);

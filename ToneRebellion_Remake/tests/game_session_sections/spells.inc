@@ -1276,7 +1276,7 @@ static void test_training_refreshes_the_new_subtype_combat_row(void)
     assert(worker->attack_range == 120);
     assert(worker->attack_realm == 2);
     assert(worker->movement_speed == 7);
-    assert(worker->charge_current == 6);
+    assert(worker->charge_current == 4); /* row +8: max attack points */
     assert(worker->max_hit_points == 9); /* level 0: (0 + 2) * 9 / 2 */
     assert(worker->current_hit_points == worker->max_hit_points);
     assert(worker->max_attack_points == 4);
@@ -1314,4 +1314,140 @@ static void test_building_order_keeps_the_target_island(void)
     assert(game_session_set_building_order(&session, 0, 0, 0, 9, 1, 300, 200));
     assert(school->building_order_island == 1);
     assert(school->building_order_coordinate == ((30U << 8) | 20U));
+}
+
+static void soldier(GameSession *session, unsigned int index, uint8_t owner,
+                    uint16_t x, uint16_t building)
+{
+    GameFloaterStart *f;
+    add_test_worker(session, index, 0, x, 200, owner);
+    f = &session->floaters[index];
+    f->type_index = owner;
+    f->source_subtype = 1;
+    f->current_hit_points = 60;
+    f->max_hit_points = 60;
+    f->charge_current = 20;
+    f->attack_strength = 5;
+    f->attack_level_flags = 2;
+    f->movement_speed = 3;
+    f->attack_period = 5;
+    f->source_link_0c = 0;
+    f->charge_source_island = 0;
+    f->charge_source_location = building;
+    f->linked_task_slot = -1;
+    f->order_target_floater = -1;
+    f->order_target_location = -1;
+}
+
+static GameRuntimeLocation *school(GameSession *session, uint16_t index,
+                                   int32_t owner, uint16_t x)
+{
+    GameRuntimeLocation *b = &session->islands[0].locations[index];
+    unsigned int slot;
+    b->x = x;
+    b->y = 200;
+    b->owner_id = owner;
+    b->source_value_14 = owner;
+    b->record_value_10 = 0x2c + owner * 16;
+    b->source_location_slot_18 = 0;
+    b->charge_recent_floater = -1;
+    b->charge_staff_task_handle = -1;
+    for (slot = 0; slot < 8; ++slot) b->charge_floater_slots[slot] = -1;
+    return b;
+}
+
+static void test_soldiers_fight_through_building_orders(void)
+{
+    /* FUN_004211bb case 8 advances DefendArea only after FUN_0041e569 ends
+       the current state, so a defender strikes; FUN_0042219e copies a new
+       building order onto a floater that is already attacking (it only
+       waits while a strike, state 6/7, runs). */
+    static GameSession session;
+    PadCatalog pads;
+    unsigned int tick;
+    unsigned int index;
+
+    make_pad_catalog(&pads);
+    memset(&session, 0, sizeof(session));
+    session.island_count = 1;
+    session.islands[0].location_count = 2;
+    for (index = 0; index < 5; ++index) {
+        session.islands[0].floater_min_x[index] = 0;
+        session.islands[0].floater_max_x[index] = 0x9ff;
+    }
+    session.random_state = 77;
+    (void)school(&session, 0, 0, 600);
+    (void)school(&session, 1, 1, 1300);
+    soldier(&session, 0, 0, 700, 0);
+    soldier(&session, 1, 1, 1000, 1);
+    soldier(&session, 2, 1, 1020, 1);
+    session.floaters[2].source_link_0c = -1; /* an unlinked enemy target */
+
+    /* The defender guards its own spot; the attacker is sent at it. */
+    assert(game_session_set_building_order(&session, 1, 0, 1, 9, 0, 1000, 200));
+    assert(game_session_set_building_order(&session, 0, 0, 0, 6, 0, 1, 0));
+    for (tick = 1; tick <= 600; ++tick)
+        game_session_tick_floater_moves(&session, tick, &pads);
+    assert(session.floaters[1].current_hit_points < 60);
+    assert(session.floaters[0].current_hit_points < 60); /* defender struck */
+
+    /* A new order reaches a floater still approaching its first target
+       (a floater held in melee answers its holder instead, FUN_00421d82). */
+    soldier(&session, 3, 0, 100, 0);
+    session.floaters[0].source_link_0c = -1;
+    session.floaters[3].charge_source_location = 0;
+    assert(game_session_set_building_order(&session, 0, 0, 0, 6, 0, 2, 0));
+    for (tick = 601; tick <= 610; ++tick)
+        game_session_tick_floater_moves(&session, tick, &pads);
+    assert(session.floaters[3].active_order_action == 6);
+    assert(session.floaters[3].order_target_floater == 2);
+    assert(game_session_set_building_order(&session, 0, 0, 0, 6, 0, 1, 0));
+    for (tick = 611; tick <= 640 &&
+         session.floaters[3].order_target_floater != 1; ++tick)
+        game_session_tick_floater_moves(&session, tick, &pads);
+    assert(session.floaters[3].order_target_floater == 1);
+}
+
+static void test_wounded_soldier_heals_in_its_building(void)
+{
+    /* FUN_0042219e sends a linked floater under a third of its hit points
+       back to its building (action 2) when the +0x2a pool can refill it;
+       FUN_0041e569 state 2 then gives one hit point per pool unit every
+       ninth update inside the building (flag 1) and leaves when full. */
+    static GameSession session;
+    PadCatalog pads;
+    GameRuntimeLocation *home;
+    GameFloaterStart *wounded;
+    unsigned int tick;
+    unsigned int index;
+    int entered = 0;
+
+    make_pad_catalog(&pads);
+    memset(&session, 0, sizeof(session));
+    session.island_count = 1;
+    session.islands[0].location_count = 1;
+    for (index = 0; index < 5; ++index)
+        session.islands[0].floater_max_x[index] = 0x9ff;
+    home = school(&session, 0, 0, 600);
+    home->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 50;
+    soldier(&session, 0, 0, 700, 0);
+    wounded = &session.floaters[0];
+    wounded->base_max_attack_points = 20;
+    wounded->current_hit_points = 10; /* under 60 / 3 */
+
+    for (tick = 1; tick <= 1000 && wounded->current_hit_points < 60; ++tick) {
+        game_session_tick_floater_moves(&session, tick, &pads);
+        if ((wounded->source_runtime_flags & 1U) != 0) {
+            entered = 1;
+            assert(wounded->x == home->x);
+            assert(wounded->active_order_action == 2);
+        }
+    }
+    assert(entered);
+    assert(wounded->current_hit_points == 60);
+    assert(home->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] == 0);
+    for (; tick <= 1100; ++tick)
+        game_session_tick_floater_moves(&session, tick, &pads);
+    assert((wounded->source_runtime_flags & 1U) == 0);
+    assert(wounded->active_order_action != 2);
 }

@@ -1197,8 +1197,11 @@ void game_session_advance_local_resource_task(GameSession *session,
     int recharge_order;
 
     if (session == NULL || floater == NULL) return;
-    recharge_order = floater->active_order_action == 2 ||
-        floater->active_order_action == 17;
+    /* Actions 2 and 17 start state 2 (FUN_004211bb cases 1/0x10), which
+       FUN_0041e569 case 1 runs as the heal/recharge stay inside the linked
+       building (game_session_tick_building_stay); the withdrawal below is
+       state 3's case 2 and is not reached by them (ev_8578fcc7). */
+    recharge_order = 0;
     if ((floater->active_order_action != 4 && !recharge_order &&
          floater->active_order_action != 0x12) ||
         catalog == NULL ||

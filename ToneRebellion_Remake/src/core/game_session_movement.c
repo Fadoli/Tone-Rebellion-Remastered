@@ -1283,21 +1283,221 @@ int game_session_set_building_defend_area(GameSession *session,
 
 /* FUN_0042219e: a linked floater copies the building's order whenever its own
    differs; the record is never cleared, so a finished order is reapplied. */
+/* FUN_0045dd3c / FUN_0045ddb8 on the linked building: the healing pool is
+   its +0x2a stock (the 4/3 branch of FUN_0045dd3c needs an item equal to
+   0x2c, 0x2d and 0x2e at once, so it never applies, ev_e33131f1); one unit
+   is taken per call and the call reports whether one was available
+   (ev_95bce0a0). */
+static int16_t building_heal_pool(const GameRuntimeLocation *building)
+{
+    return (int16_t)building->resource_stock[GAME_RESOURCE_CRYSTAL_TONE];
+}
+
+static int take_building_heal_unit(GameRuntimeLocation *building)
+{
+    int16_t pool = building_heal_pool(building);
+    if (pool < 1) return 0;
+    building->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] =
+        (uint16_t)(pool - 1);
+    return 1;
+}
+
+/* FUN_0042219e, linked floater: unless it is the building's current worker
+   (B+0x4c) or already inside the building on action 2 (flag 1), a floater
+   whose hit points or charge fall under a threshold goes back to heal (mode
+   0) or recharge (mode 1) when the building's pool can refill it. Fighting
+   (action 6/7, or 8/9 past stage 0) lowers the thresholds to a third of
+   the hit points and one charge; otherwise a third of each, or the full
+   amounts while the building defends its own spot (FUN_0045de20: genre 9 on
+   its island within 0x14, ev_72655553). Returns 1 when the order copy must
+   be skipped (ev_7b65b088). */
+static int game_session_check_linked_retreat(GameSession *session,
+                                             unsigned int floater_index,
+                                             GameRuntimeLocation *building)
+{
+    GameFloaterStart *floater = &session->floaters[floater_index];
+    int32_t hp_max = floater->max_hit_points;
+    int32_t charge_max = floater->base_max_attack_points;
+    int32_t hp_limit;
+    int32_t charge_limit;
+    int32_t pool;
+    int mode = -1;
+    uint8_t action = floater->active_order_action;
+
+    if (building->charge_recent_floater == (int16_t)floater_index) return 1;
+    if (action == 2 && (floater->source_runtime_flags & 1U) != 0) return 1;
+    if (action == 6 || action == 7 ||
+        ((action == 8 || action == 9) && floater->order_progress != 0)) {
+        charge_limit = 1;
+        hp_limit = hp_max / 3;
+    } else {
+        int32_t anchor_x =
+            (int32_t)(building->building_order_coordinate >> 8) * 10;
+        int32_t anchor_y =
+            (int32_t)(building->building_order_coordinate & 0xffU) * 10;
+        int guarding_home = building->building_order_genre == 9 &&
+            building->building_order_island == floater->charge_source_island &&
+            game_session_source_chebyshev_distance(building->x, building->y,
+                                                   anchor_x, anchor_y) < 0x14;
+        charge_limit = guarding_home ? charge_max : charge_max / 3;
+        hp_limit = guarding_home ? hp_max : hp_max / 3;
+    }
+    pool = building_heal_pool(building);
+    if (floater->current_hit_points < hp_limit &&
+        hp_max <= floater->current_hit_points + pool) {
+        mode = 0;
+    } else if (floater->charge_current < charge_limit &&
+               charge_max <= floater->charge_current + pool) {
+        mode = 1;
+    }
+    if (mode < 0) return 0;
+    if (action != 2) {
+        /* FUN_00421ec1(-1), then +0x3c = 2, +0x40/+0x42 = the building,
+           +0x44 = mode, +0x46 = 0. */
+        floater->active_order_action = 2;
+        floater->movement_state = 0;
+        floater->has_move_order = 0;
+        floater->has_wander_order = 0;
+        floater->order_target_floater = -1;
+        floater->order_target_island = floater->charge_source_island;
+        floater->order_target_location =
+            (int16_t)floater->charge_source_location;
+        floater->order_resource_code = (int16_t)mode;
+        floater->order_progress = 0;
+        floater->order_timer = 0;
+        floater->source_order_state_2c = 0;
+        floater->source_runtime_flags &= ~0x065U;
+    }
+    return 1;
+}
+
+/* FUN_004211bb case 1 (action 2) once the floater is idle: stage 0 starts
+   state 2 toward the building (+0x32 = +0x42, +0x30 = +0x44), through a
+   bridge when the building is on another island; the next idle poll ends
+   the order (stage -1, ev_3477c421). */
+static void game_session_advance_building_stay(GameSession *session,
+                                               GameFloaterStart *floater)
+{
+    const GameRuntimeLocation *building;
+    if (floater->active_order_action != 2 || floater->movement_state != 0 ||
+        floater->has_move_order) return;
+    if (floater->order_progress != 0 ||
+        floater->order_target_island >= session->island_count ||
+        floater->order_target_location < 0 ||
+        (uint16_t)floater->order_target_location >=
+            session->islands[floater->order_target_island].location_count) {
+        floater->active_order_action = 0;
+        floater->order_progress = 0;
+        floater->order_target_location = -1;
+        return;
+    }
+    floater->order_progress = 1;
+    if (floater->order_target_island != floater->island_index) {
+        if (game_session_begin_floater_handoff(session, floater,
+                                               floater->order_target_island)) {
+            floater->handoff_resume_action = 2;
+            floater->handoff_resume_state = 2;
+        } else {
+            floater->active_order_action = 0;
+            floater->order_progress = 0;
+        }
+        return;
+    }
+    building = &session->islands[floater->island_index].locations[
+        (uint16_t)floater->order_target_location];
+    floater->movement_state = 2;
+    floater->destination_x = building->x;
+    floater->destination_y = building->y;
+    floater->stop_radius = 0;
+    floater->order_timer = 0;
+    floater->has_move_order = 1;
+}
+
+/* FUN_0041e569 case 1 (state 2, ev_8578fcc7): on arrival the floater enters
+   the building (flag 1, which also stops FUN_00422d27) and every ninth
+   update takes one pool unit for +1 hit point (mode 0 first) or +1 charge
+   (mode 1 first) up to FUN_00420f28 / row +8; with nothing left to refill
+   or no pool it leaves (flag 1 cleared, state over). */
+static void game_session_tick_building_stay(GameSession *session,
+                                            GameFloaterStart *floater)
+{
+    GameRuntimeLocation *building;
+    int32_t hp_missing;
+    int32_t charge_missing;
+    int16_t mode;
+
+    if (floater->movement_state != 2 ||
+        (floater->active_order_action != 2 &&
+         floater->active_order_action != 17)) return;
+    if (floater->order_target_location < 0 ||
+        floater->island_index >= session->island_count ||
+        (uint16_t)floater->order_target_location >=
+            session->islands[floater->island_index].location_count) {
+        floater->movement_state = 0;
+        floater->has_move_order = 0;
+        floater->source_runtime_flags &= ~1U;
+        return;
+    }
+    building = &session->islands[floater->island_index].locations[
+        (uint16_t)floater->order_target_location];
+    if (floater->order_timer == 0) {
+        if (floater->has_move_order) return;
+        floater->source_runtime_flags |= 1U;
+        floater->order_timer = 1;
+        return;
+    }
+    if (floater->order_timer < 10U) {
+        ++floater->order_timer;
+        return;
+    }
+    floater->order_timer = 1;
+    hp_missing = floater->max_hit_points - floater->current_hit_points;
+    charge_missing = floater->base_max_attack_points - floater->charge_current;
+    if (hp_missing < 0) hp_missing = 0;
+    if (charge_missing < 0) charge_missing = 0;
+    mode = floater->order_resource_code;
+    if (hp_missing != 0 && (mode == 0 || charge_missing == 0) &&
+        take_building_heal_unit(building)) {
+        ++floater->current_hit_points;
+    } else if (charge_missing != 0 && (mode == 1 || hp_missing == 0) &&
+               take_building_heal_unit(building)) {
+        ++floater->charge_current;
+    } else {
+        floater->source_runtime_flags &= ~1U;
+        floater->movement_state = 0;
+        floater->has_move_order = 0;
+    }
+}
+
 static void game_session_adopt_building_order(GameSession *session,
                                               unsigned int floater_index)
 {
     GameFloaterStart *floater = &session->floaters[floater_index];
     const GameRuntimeLocation *building;
     uint16_t coordinate;
+    /* FUN_0042219e returns while a strike runs (+0x2c state 6/7, not the
+       +0x3c action: an attacking floater still takes a new building order)
+       and skips the copy during FA_Cast (action 0x13) (ev_7b65b088). */
     if (floater->source_link_0c < 0 || floater->source_order_pending ||
         floater->charge_source_island >= session->island_count ||
         floater->charge_source_location >=
             session->islands[floater->charge_source_island].location_count ||
-        floater->active_order_action == 0x13 ||
-        floater->active_order_action == 6 || floater->active_order_action == 7)
+        floater->movement_state == 6 || floater->movement_state == 7)
         return;
+    /* A linked floater held in melee (flag 0x10) answers the holder through
+       FUN_00421d82 instead of copying the building order. */
+    if ((floater->source_runtime_flags & 0x010U) != 0) {
+        game_session_counter_attack_holder(session, floater_index);
+        return;
+    }
+    if (floater->active_order_action == 0x13) return;
     building = &session->islands[floater->charge_source_island].locations[
         floater->charge_source_location];
+    if (building->owner_id == (int32_t)floater->owner_slot &&
+        building->source_location_slot_18 == floater->source_link_0c &&
+        game_session_check_linked_retreat(session, floater_index,
+            &session->islands[floater->charge_source_island].locations[
+                floater->charge_source_location])) return;
     if (building->building_order_genre < 6 ||
         building->building_order_genre > 9 ||
         building->owner_id != (int32_t)floater->owner_slot ||
@@ -1312,9 +1512,59 @@ static void game_session_adopt_building_order(GameSession *session,
     if (floater->source_order_state_2c == 9 &&
         floater->source_order_island_28 == building->building_order_island &&
         floater->source_order_coordinate_30 == coordinate) return;
+    /* FUN_00421ec1(-1) ends the previous order before the copy. */
+    if (floater->active_order_action >= 6 && floater->active_order_action <= 8) {
+        floater->active_order_action = 0;
+        floater->movement_state = 0;
+        floater->order_target_floater = -1;
+        floater->order_target_location = -1;
+        floater->order_progress = 0;
+        floater->has_move_order = 0;
+        floater->source_runtime_flags &= ~0x065U;
+    }
     (void)game_session_order_floater_to_coordinate(session,
         floater->owner_slot, building->building_order_island, floater_index,
         (uint16_t)((coordinate >> 8) * 10U), (uint16_t)((coordinate & 0xffU) * 10U));
+}
+
+/* FUN_00423068 for state 9 (called once, at the end of FUN_004211bb; its
+   only other caller is the 0xe/0xf approach, xrefs ev_babf5a19): a random
+   point within +-100 of the packed order anchor, inside the owner's span.
+   Returns 0 (order cancelled) when the point is rejected. */
+int game_session_plan_defend_waypoint(GameSession *session,
+                                      GameFloaterStart *floater)
+{
+    FloaterPosition waypoint;
+    int32_t raw_min_x = 0;
+    int32_t raw_max_x = 0x9ff;
+    int32_t anchor_x =
+        (int32_t)(floater->source_order_coordinate_30 >> 8) * 10;
+    int32_t anchor_y =
+        (int32_t)(floater->source_order_coordinate_30 & 0xffU) * 10;
+
+    if (floater->island_index < session->island_count &&
+        floater->owner_slot != 4U &&
+        floater->owner_slot < GAME_FLOATER_CATEGORY_COUNT) {
+        GameRuntimeIsland *island = &session->islands[floater->island_index];
+        raw_min_x = island->floater_min_x[floater->owner_slot];
+        raw_max_x = island->floater_max_x[floater->owner_slot];
+    }
+    if (!floater_motion_wander_destination(&session->random_state, anchor_x,
+            anchor_y, raw_min_x, raw_max_x, &waypoint)) {
+        floater->source_order_state_2c = 0;
+        floater->active_order_action = 0;
+        floater->movement_state = 0;
+        floater->has_move_order = 0;
+        floater->order_progress = 0;
+        return 0;
+    }
+    floater->destination_x = (uint16_t)waypoint.x;
+    floater->destination_y = (uint16_t)waypoint.y;
+    floater->stop_radius = 0;
+    floater->has_move_order = 1;
+    if (waypoint.x < floater->x) floater->facing_left = 1;
+    else if (waypoint.x > floater->x) floater->facing_left = 0;
+    return 1;
 }
 
 void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
@@ -1382,6 +1632,9 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
            FA_Cast (0x13), then transfers it to the tick record at a later poll. */
         if (floater->movement_state == 0 || (source_tick + i) % 10U == 0)
             game_session_adopt_building_order(session, i);
+        /* FUN_004211bb case 1 then FUN_0041e569 case 1 for FA_Recharge. */
+        game_session_advance_building_stay(session, floater);
+        game_session_tick_building_stay(session, floater);
         if (floater->source_order_pending &&
             floater->active_order_action != 0x13 &&
             (floater->movement_state == 0 || (source_tick + i) % 10U == 0)) {
@@ -1403,6 +1656,7 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
                 floater->wander_timer = 0;
                 floater->has_move_order = 1;
                 floater->order_progress = 1;
+                (void)game_session_plan_defend_waypoint(session, floater);
             }
         }
 
@@ -1513,42 +1767,17 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
         if (game_session_tick_floater_wander(session, floater, source_tick))
             continue;
 
+        /* FUN_0041e569 state 9 (case 8): while the walk to the planned
+           point is not over, every eighth update (tick + index) looks for an
+           enemy floater (FUN_00420829) or site (FUN_00420d97(4)) near the
+           anchor; one ends the state so FUN_004211bb attacks it
+           (ev_8578fcc7). */
         if (floater->movement_state == 9 &&
-            floater->source_order_state_2c == 9) {
-            FloaterPosition waypoint;
-            int32_t raw_min_x = 0;
-            int32_t raw_max_x = 0x9ff;
-            int32_t anchor_x =
-                (int32_t)(floater->source_order_coordinate_30 >> 8) * 10;
-            int32_t anchor_y =
-                (int32_t)(floater->source_order_coordinate_30 & 0xffU) * 10;
-
-            if (floater->island_index < session->island_count &&
-                floater->owner_slot != 4U &&
-                floater->owner_slot < GAME_FLOATER_CATEGORY_COUNT) {
-                GameRuntimeIsland *island =
-                    &session->islands[floater->island_index];
-                raw_min_x = island->floater_min_x[floater->owner_slot];
-                raw_max_x = island->floater_max_x[floater->owner_slot];
-            }
-            /* FUN_00423068 recomputes this destination on every state-9
-               update, centered on the packed order anchor. */
-            if (!floater_motion_wander_destination(
-                    &session->random_state, anchor_x, anchor_y,
-                    raw_min_x, raw_max_x, &waypoint)) {
-                floater->source_order_state_2c = 0;
-                floater->active_order_action = 0;
-                floater->movement_state = 0;
-                floater->has_move_order = 0;
-                floater->order_progress = 0;
-                continue;
-            }
-            floater->destination_x = (uint16_t)waypoint.x;
-            floater->destination_y = (uint16_t)waypoint.y;
-            floater->stop_radius = 0;
-            floater->has_move_order = 1;
-            if (waypoint.x < floater->x) floater->facing_left = 1;
-            else if (waypoint.x > floater->x) floater->facing_left = 0;
+            floater->source_order_state_2c == 9 &&
+            ((source_tick + i) & 7U) == 0 &&
+            game_session_defend_area_has_target(session, i)) {
+            floater->movement_state = 0;
+            floater->has_move_order = 0;
         }
 
         if (floater->movement_state == 8) {

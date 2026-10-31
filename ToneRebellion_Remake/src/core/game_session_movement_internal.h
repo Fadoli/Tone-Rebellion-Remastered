@@ -15,5 +15,9 @@ int game_session_tick_floater_handoff(GameSession *session,
                                       GameFloaterStart *floater);
 void game_session_drop_carried_artifact(GameSession *session,
                                         GameFloaterStart *floater);
+int game_session_plan_defend_waypoint(GameSession *session,
+                                      GameFloaterStart *floater);
+int game_session_defend_area_has_target(GameSession *session,
+                                        unsigned int floater_index);
 
 #endif

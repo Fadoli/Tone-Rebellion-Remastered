@@ -60,7 +60,10 @@ Corrigés (preuve en commentaire dans le code) : bilan d'attaque appliqué à l'
 
 Contrôle des guerriers (REA, `FUN_00435826`, `FUN_0042f8f7`, `FUN_0042fa0f` 3001..3003) : la sélection d'un floater prend son bâtiment sur toute île (panneau mode 3); un raccourci sélectionne son bâtiment sans changer l'île affichée; le clic droit (`param_3 = événement 7`) avec un bâtiment d'entraînement possédé sélectionné écrit l'ordre du bâtiment (genres 6/8 floater, 7 site ennemi, 9 sol) adopté par tout le groupe; l'ordre garde l'île de la cible; le clic sur le sol revient au Hall par défaut; la traversée d'un pont accorde l'accès à l'île (`FUN_00466b09` à l'étape 0x3c).
 
+Combat des soldats (REA `FUN_004633a7`, `FUN_004211bb`, `FUN_0042219e`, `FUN_00421d82`, `FUN_0041e569` case 8; simulation avec `floater.txt`/`fltinf.txt`) : la charge d'entraînement vient de la ligne +8 (points d'attaque max, colonne 5) et non de la force; DefendArea (action 9) n'avance d'étape qu'à la fin de l'état courant (les défenseurs ne frappaient jamais); le point de l'état 9 est tiré une fois et l'état s'arrête dès qu'un ennemi est près de l'ancre (tous les 8 ticks); l'ordre du bâtiment est recopié sauf pendant une frappe (état 6/7, pas l'action), y compris sur un floater qui attaque ou défend une zone; un floater tenu en mêlée riposte (`FUN_00421d82`, soldats et Léviathans). Un soldat lié sous un tiers de ses PV (ou à court de charge en combat) rentre se soigner / recharger dans son bâtiment sur le stock +0x2a (action 2, état 2 : `FUN_0042219e`, `FUN_004211bb` case 1, `FUN_0041e569` case 1, `FUN_0045ddb8`), puis reprend l'ordre du bâtiment.
+
 Écarts confirmés, non corrigés :
+
 
 - Adoption d'un ordre dont la cible est sur une autre île que le floater : le routage par pont de `FUN_004211bb` n'est pas porté (le floater l'ignore).
 - Contre-attaque des Léviathans tenus en mêlée (`FUN_0042219e` -> `FUN_00421d82`, flag 0x10) absente.

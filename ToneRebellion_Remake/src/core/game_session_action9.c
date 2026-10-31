@@ -5,6 +5,7 @@
 #include "game_session_delivery.h"
 #include "game_session_delivery_internal.h"
 #include "game_session_combat_internal.h"
+#include "game_session_movement_internal.h"
 
 #include <string.h>
 
@@ -319,6 +320,14 @@ int game_session_assign_category4_autonomous_order(
 
     if (session == NULL || floater_index >= session->floater_count) return 0;
     floater = &session->floaters[floater_index];
+    /* FUN_0042219e: a category-4 floater (not subtype 9) held in melee
+       answers through FUN_00421d82 (ev_7b65b088). */
+    if (game_session_floater_is_active(floater) &&
+        (floater->source_runtime_flags & 0x018U) == 0x010U &&
+        floater->type_index == 4U && floater->source_subtype != 9U) {
+        game_session_counter_attack_holder(session, floater_index);
+        return 0;
+    }
     if (!game_session_floater_is_active(floater) ||
         (floater->source_runtime_flags & (0x008U | 0x010U)) != 0 ||
         floater->type_index != 4U || floater->source_subtype == 9U ||
@@ -461,6 +470,21 @@ uint16_t game_session_floater_approach_radius(
     return 10;
 }
 
+/* The two FUN_0041e569 state-9 probes: FUN_00420829 (a floater near the
+   anchor, as in stage 1 below) or FUN_00420d97(4) (an enemy site). */
+int game_session_defend_area_has_target(GameSession *session,
+                                        unsigned int floater_index)
+{
+    const GameFloaterStart *floater = &session->floaters[floater_index];
+    uint16_t anchor_x =
+        (uint16_t)(floater->source_order_coordinate_30 >> 8) * 10U;
+    uint16_t anchor_y =
+        (uint16_t)(floater->source_order_coordinate_30 & 0xffU) * 10U;
+    return action9_find_floater(session, floater_index, anchor_x, anchor_y,
+                                250) >= 0 ||
+           action9_find_enemy_site(session, floater, anchor_x, anchor_y) >= 0;
+}
+
 void game_session_advance_action9(GameSession *session,
                                          unsigned int floater_index)
 {
@@ -469,14 +493,18 @@ void game_session_advance_action9(GameSession *session,
     uint16_t target_y;
     int target_index;
 
+    /* FUN_004211bb case 8 (action 9) only runs once FUN_0041e569 has
+       finished the current state (+0x2c back to 0): stage 0 walks to the
+       point (state 9), 1 picks a floater (0xf -> stage 2) or a site (0x10 ->
+       stage 3) near it, 2 strikes (state 6), 3 strikes a site (state 7),
+       each strike returning to stage 1 (ev_3477c421). Advancing while an
+       approach or a strike was still running reset the attack timer every
+       tick, so defenders never struck. */
     if (!game_session_floater_is_active(floater) ||
         (floater->source_runtime_flags & 0x008U) != 0 ||
         floater->active_order_action == 4 ||
         floater->source_order_state_2c != 9 ||
-        (floater->movement_state != 0 && floater->movement_state != 9 &&
-         floater->movement_state != 6 && floater->movement_state != 7 &&
-         floater->movement_state != 0x0f &&
-         floater->movement_state != 0x10)) return;
+        floater->movement_state != 0 || floater->has_move_order) return;
 
     if (floater->order_progress == 0) {
         floater->destination_x =
@@ -490,6 +518,7 @@ void game_session_advance_action9(GameSession *session,
         floater->wander_timer = 0;
         floater->has_move_order = 1;
         floater->order_progress = 1;
+        (void)game_session_plan_defend_waypoint(session, floater);
         return;
     }
     if (floater->order_progress == 2) {
@@ -704,6 +733,39 @@ void game_session_apply_panic_orders(GameSession *session)
     }
 }
 
+/* FUN_00421d82 (ev_50cad67a): a floater held in melee (flag 0x10) that is
+   not striking (state 6/7), not subtype 0 or 9, and not subtype 4 casting
+   (action 0x13) attacks the first floater of its island that targets it
+   (+0x32) with flag 0x40, unless it already attacks that one. */
+void game_session_counter_attack_holder(GameSession *session,
+                                        unsigned int floater_index)
+{
+    GameFloaterStart *floater;
+    unsigned int index;
+    if (session == NULL || floater_index >= session->floater_count) return;
+    floater = &session->floaters[floater_index];
+    if ((floater->source_runtime_flags & 0x010U) == 0 ||
+        floater->movement_state == 6 || floater->movement_state == 7 ||
+        floater->source_subtype == 0 || floater->source_subtype == 9 ||
+        (floater->source_subtype == 4 && floater->active_order_action == 0x13))
+        return;
+    for (index = 0; index < session->floater_count; ++index) {
+        const GameFloaterStart *holder = &session->floaters[index];
+        if (!game_session_floater_is_active(holder) ||
+            holder->island_index != floater->island_index ||
+            holder->order_target_floater != (int16_t)floater_index ||
+            (holder->source_runtime_flags & 0x040U) == 0) continue;
+        if (floater->active_order_action == 6 &&
+            floater->order_target_floater == (int16_t)index) return;
+        release_task_claim(session, floater);
+        floater->active_order_action = 0;
+        floater->movement_state = 0;
+        game_session_adopt_building_attack_order(session, floater_index, 6,
+                                                 floater->island_index, index);
+        return;
+    }
+}
+
 void game_session_adopt_building_attack_order(GameSession *session,
                                               unsigned int floater_index,
                                               unsigned int genre,
@@ -718,11 +780,16 @@ void game_session_adopt_building_attack_order(GameSession *session,
     if (target_island != floater->island_index) return;
     if (!game_session_floater_is_active(floater) ||
         (floater->source_runtime_flags & 0x808U) != 0 ||
-        floater->type_index == 4 ||
         floater->island_index >= session->island_count ||
         floater->active_order_action == 0x13 ||
-        floater->active_order_action == 9 ||
         floater->movement_state == 6 || floater->movement_state == 7) return;
+    /* FUN_00421ec1(-1) ends a running DefendArea (action 9) before the new
+       order is written, as for any other action. */
+    if (floater->active_order_action == 9) {
+        floater->source_order_state_2c = 0;
+        floater->order_progress = 0;
+        floater->has_move_order = 0;
+    }
     if (genre == 7) {
         const GameRuntimeLocation *site;
         if (floater->active_order_action == 7 &&
