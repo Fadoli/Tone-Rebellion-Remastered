@@ -68,7 +68,7 @@ bâtiment lui-même (`FUN_0045c325`): la capacité est 50 + 25*(`+0x4a` du bâti
 Port: les tâches type 4, payload 2/3, sur un site à bloc staff (`+0x18 != -1`) sont
 dessinées en SUPPLY (`gamey.txt`), icône 3, secondaire `(item == 0x2f) + 5`,
 tonecrys/magctone et jauge `+0x2a`/`+0x2c` sur cette capacité (avant: STOCK sans jauge).
-Non porté: SUPPLY pour payload 1 sans UPGRADE en cours (`FUN_0045c9fe == 0`).
+SUPPLY pour payload 1 sans UPGRADE en cours (`FUN_0045c9fe == 0`, lien `+0x4e == -1`, `ev_639bf60d…`, REA haiku 2026-10-31, non relue) : porté dans le rendu Tasks (branche magie `+0x2c`, magctone, sous-type != 2); le port ne produit pas ce cas (une tâche sous-type 1 garde son lien), donc il ne sert qu'aux sauvegardes natives ou liens perdus. Producteurs type 4 (`FUN_004666c9`, appelants `0x45c9b5` UPGRADE, `0x45cc17` SUPPLY 2/3 par tick `FUN_0045cd75`, `0x45fd91` REPAIR genre 0, `0x45fe62` UPGSPREAD genre 1) et table `FUN_0045fcbe` (16 entrées de 10 octets: propriétaire, île, genre, slot -1 = vide) lus; le port encode le slot en +1 (0 = vide) et ne porte pas l'entrée genre 0.
 
 ### Prédicats des lignes de tâches (REA, ev_dfe2cb4b…, ev_6cd3f421…, ev_c3ae4d74…) et ligne UPGRADE portée
 

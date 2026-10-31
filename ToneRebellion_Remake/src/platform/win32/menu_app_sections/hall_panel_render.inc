@@ -156,6 +156,14 @@ static void draw_hall_panel(HDC dc, int hall_player)
                         upgrade_site->spread_task_plus1[event->player_id] ==
                             (uint16_t)(task_slots[(size_t)offset +
                                                   visible_index] + 1U);
+                    /* FUN_004459e6 draws UPGRADE only while the staff block's
+                       +0x4e link is set (FUN_0045c9fe); a sub-type-1 task
+                       whose site link is unset falls through to SUPPLY. */
+                    const int sub1_supply = upgrade_site != NULL && !spread_row &&
+                        upgrade_site->upgrade_task_handle !=
+                            (int16_t)task_slots[(size_t)offset + visible_index] &&
+                        upgrade_site->source_location_slot_18 != -1;
+                    if (sub1_supply) upgrade_site = NULL;
                     if (upgrade_site != NULL) {
                         row.label_key = spread_row ? "UPGSPREAD" : "UPGRADE";
                         row.task_icon_frame = 2;
@@ -170,7 +178,8 @@ static void draw_hall_panel(HDC dc, int hall_player)
                        FUN_0045cd27 = 50 + 25 * its +0x4a. */
                     const GameRuntimeLocation *supply_site = NULL;
                     if (stock_resource < 0 && upgrade_site == NULL &&
-                        event->action_type == 4 && event->payload_12 >= 2 &&
+                        event->action_type == 4 &&
+                        (event->payload_12 >= 2 || sub1_supply) &&
                         event->payload_12 <= GAME_RESOURCE_TYPE_COUNT &&
                         event->payload_0a >= 0 &&
                         (unsigned int)event->payload_0a <
@@ -184,8 +193,10 @@ static void draw_hall_panel(HDC dc, int hall_player)
                             .source_location_slot_18 != -1)
                         supply_site = &g_game_session.islands[event->payload_0a]
                             .locations[event->payload_0e];
+                    /* Sub-type != 2 takes the magic branch (+0x2c, magctone),
+                       so a sub-type-1 fallback reads the magic stock. */
                     const int supply_resource = supply_site != NULL
-                        ? event->payload_12 - 1 : -1;
+                        ? (event->payload_12 == 2 ? 1 : 2) : -1;
                     if (!(upgrade_site != NULL ? 1 : stock_resource >= 0
                             ? island_panel_info_stock_task_row(
                                   (unsigned int)stock_resource, &row)
