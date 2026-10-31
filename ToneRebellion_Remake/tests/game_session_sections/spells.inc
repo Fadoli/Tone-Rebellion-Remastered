@@ -724,6 +724,39 @@ static void test_oneshot_attack_visual_plays_once_at_the_attacker(void)
     assert(frame == 15);
 }
 
+static void test_melee_impact_lands_on_the_target(void)
+{
+    /* FUN_00416ff8: when a non-bullet attack effect hits, its IMPACT is
+       placed on the target with a FUN_00467260(0xf) - 7 offset per axis. */
+    static GameSession session;
+    GameFloaterStart *attacker;
+    int def = -1;
+    unsigned int frame = 0;
+    uint16_t x = 0;
+    uint16_t y = 0;
+    uint8_t island = 9;
+    int impact = -1;
+    unsigned int tick;
+
+    setup_attack_visual_session(&session, 1, 1, 0); /* BHOOD (ONESHOT) */
+    attacker = spell_caster(&session, 0, 0, 0, 1);
+    attacker->type_index = 1;
+    attacker->source_subtype = 1;
+    attacker->attack_realm = 0;
+    attacker->order_target_floater = 1;
+    add_test_worker(&session, 1, 0, 1200, 900, 4);
+    session.effect_impact_frame_counts[0][1] = 4;
+    assert(game_session_spawn_attack_visual(&session, attacker, -1, 6,
+                                            1200, 900, 2));
+    for (tick = 0; tick < 40 && impact < 0; ++tick) {
+        game_session_tick_combat_effects(&session, 1);
+        assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y,
+                                          &island, &impact));
+    }
+    assert(impact == 0);
+    assert(x >= 1193 && x <= 1207 && y >= 893 && y <= 907);
+}
+
 static void test_cast_attack_visual_chains_into_a_bullet_that_reaches_its_target(void)
 {
     static GameSession session;

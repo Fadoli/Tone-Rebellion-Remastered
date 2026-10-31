@@ -553,6 +553,7 @@ int main(void)
     test_attack_impact_visual_steps_one_frame_per_odd_update();
     test_effect_defs_parse_types_levels_chain_and_speed();
     test_oneshot_attack_visual_plays_once_at_the_attacker();
+    test_melee_impact_lands_on_the_target();
     test_cast_attack_visual_chains_into_a_bullet_that_reaches_its_target();
     test_bullet_visual_applies_attxy_mirroring_and_timeout();
     test_lightning_visual_grows_toward_the_target_then_ends();

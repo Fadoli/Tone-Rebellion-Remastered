@@ -1740,6 +1740,33 @@ static void finish_attack_visual(GameSession *session,
         visual->active = 0;
         return;
     }
+    if (visual->def >= 0 && visual->def < FLOATER_EFFECT_MAX &&
+        session->attack_effect_defs[visual->def].type != FLOATER_EFFECT_BULLET) {
+        /* FUN_00416ff8 (ev_e14a0501): a non-bullet effect (a melee swing
+           drawn on the attacker) places its IMPACT on the target (FUN_00414fbf:
+           the live floater, or the site for a site strike) offset by
+           FUN_00467260(0xf) - 7 on each axis. A bullet has already arrived. */
+        int32_t target_x = visual->x;
+        int32_t target_y = visual->y;
+        if (visual->strike_state == GAME_FLOATER_STATE_ATTACK &&
+            visual->target_floater >= 0 &&
+            (unsigned int)visual->target_floater < session->floater_count) {
+            target_x = session->floaters[visual->target_floater].x;
+            target_y = session->floaters[visual->target_floater].y;
+        } else if (visual->target_location >= 0 &&
+                   visual->island_index < session->island_count &&
+                   (uint16_t)visual->target_location <
+                       session->islands[visual->island_index].location_count) {
+            const GameRuntimeLocation *site = &session->islands[
+                visual->island_index].locations[(uint16_t)visual->target_location];
+            target_x = site->x;
+            target_y = site->y;
+        }
+        target_x += tone_rng_bounded(&session->random_state, 15) - 7;
+        target_y += tone_rng_bounded(&session->random_state, 15) - 7;
+        visual->x = (uint16_t)(target_x < 0 ? 0 : target_x);
+        visual->y = (uint16_t)(target_y < 0 ? 0 : target_y);
+    }
     visual->impact_phase = 1;
     visual->frame = session->effect_impact_frame_starts[realm][level];
     visual->impact_frames_left = session->effect_impact_frame_counts[realm][level];
