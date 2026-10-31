@@ -42,6 +42,10 @@ Items à faible risque, parallélisables : polices (`bigfont` des étiquettes), 
 
 Volume/pan par distance, bullets et impacts des producteurs (`FUN_00450a71`, table d'attaque à lire), sons d'île.
 
+## Phase 6 — Portage Web (dernière priorité)
+
+Seulement après les phases 1 à 5. Surface de rendu portable, adaptateur SDL3, cible Emscripten, données fournies par l'utilisateur. Plan : [TODO_WEB.md](TODO_WEB.md).
+
 ## Transverse — Vérification
 
 Plusieurs items sont « portés, non vérifiés en jeu » (ordre des panneaux Hall, sélection floater, panneau inférieur droit, `IWMove`). Étendre `island_e2e.ps1` pour couvrir chacun, puis cocher.
