@@ -15,6 +15,25 @@
 #include "island_data.h"
 #include "tone_rng.h"
 
+/* Remake safeguard: an artifact is a unique quest item, and losing one can
+   leave the game unwinnable. A worker that is about to take other cargo
+   first drops its artifact (FUN_00425084 path: nearest empty site, else the
+   owner's Inventory) instead of overwriting it. */
+static int floater_carries_artifact(const GameFloaterStart *floater)
+{
+    return floater->carried_resource_code > 4 &&
+        floater->carried_resource_code < 0x22;
+}
+
+static void take_cargo(GameSession *session, GameFloaterStart *floater,
+                       int16_t code)
+{
+    if (floater_carries_artifact(floater) &&
+        floater->carried_resource_code != code)
+        game_session_drop_carried_artifact(session, floater);
+    floater->carried_resource_code = code;
+}
+
 static int location_is_player_hall(const GameRuntimeLocation *location)
 {
     return location != NULL && location->owner_id >= 0 &&
@@ -738,6 +757,10 @@ static void assign_resource_tasks(GameSession *session,
         int replacing_move;
         int can_take_local_task;
         int can_take_construction;
+        /* Remake safeguard: a worker holding an artifact only takes another
+           Obtain (whose pickup sets the old artifact down); any other cargo
+           would replace it and could lose a quest item for good. */
+        const int artifact_carrier = floater_carries_artifact(floater);
 
         reclaim_orphaned_task_claim(session, floater);
         /* FUN_0041e569 skips floaters with +0x1c bits 0x808. */
@@ -776,6 +799,7 @@ static void assign_resource_tasks(GameSession *session,
             if (slot == GAME_SESSION_MAX_PENDING_EVENTS) break;
             visited |= (uint64_t)1 << slot;
             event = &session->pending_events[slot];
+            if (artifact_carrier && event->action_type != 0x0d) continue;
             if (priority_three_pending[floater->owner_slot] &&
                 event->priority != 3 && !task_is_urgent(event)) continue;
             if (!task_count_rule_accepts(event, current_count, current_class))
@@ -851,6 +875,17 @@ static void assign_resource_tasks(GameSession *session,
             *floater = saved_floater;
             memcpy(session->pending_events, saved_events, sizeof(saved_events));
         }
+        /* An idle artifact carrier resumes its delivery leg; with no Hall in
+           reach it keeps holding the artifact (never dropped silently). */
+        if (artifact_carrier && !assigned_task &&
+            floater->linked_task_slot == -1 &&
+            (floater->active_order_action == 0 ||
+             (floater->active_order_action == 0x0e &&
+              !floater->has_move_order)) &&
+            (floater->movement_state == 0 ||
+             (floater->movement_state == 0x0e && floater->has_wander_order &&
+              !floater->has_move_order)))
+            (void)game_session_start_artifact_delivery(session, floater);
         if (assigned_task) {
             /* FUN_0042219e assigns through FUN_00421ec1, which always clears
                mask 0x65 (ev_16b5390f): a former attacker drops 0x40, so its
@@ -1343,7 +1378,7 @@ void game_session_advance_local_resource_task(GameSession *session,
                 game_session_consume_location_resource(session,
                     floater->island_index,
                     (uint16_t)floater->order_target_location, code)) {
-                floater->carried_resource_code = code;
+                take_cargo(session, floater, code);
             }
         } else {
             int available = 0;
@@ -1367,7 +1402,7 @@ void game_session_advance_local_resource_task(GameSession *session,
                 }
             }
             if (available) {
-                floater->carried_resource_code = code;
+                take_cargo(session, floater, code);
             } else if (local_refill_source_is_valid(session,
                            floater->island_index,
                            (uint16_t)floater->order_target_location,
@@ -1469,7 +1504,7 @@ void game_session_advance_local_resource_task(GameSession *session,
                 return;
             }
         }
-        floater->carried_resource_code = code;
+        take_cargo(session, floater, code);
         /* The source lock ends at pickup, even though the delivery task stays
            linked until the cargo reaches its destination. */
         floater->order_source_location = -1;

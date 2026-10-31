@@ -459,6 +459,42 @@ static void test_task_assignment_drops_a_stale_melee_hold(void)
     assert((held->source_runtime_flags & 0x010U) == 0);
 }
 
+static void test_artifact_carrier_never_loses_its_artifact(void)
+{
+    /* Remake safeguard: an idle worker holding an artifact skips Tone tasks
+       (whose pickup would overwrite it) and resumes its delivery leg. */
+    GameSession session;
+    int slot_a = setup_two_delivery_tasks(&session, 1, 3);
+    GameFloaterStart *worker = &session.floaters[0];
+    GameRuntimeLocation *hall = &session.islands[0].locations[2];
+    unsigned int tick;
+
+    make_workers_idle(&session);
+    hall->resource_stock[GAME_RESOURCE_BUILD_TONE] = 5;
+    hall->x = 300;
+    worker->x = 100;
+    worker->carried_resource_code = 6;
+    session.economy[0].hall_island_index = 0;
+    session.economy[0].hall_location_index = 2;
+    for (tick = 0; tick < 5; ++tick) {
+        session.simulation_tick = tick;
+        game_session_assign_local_resource_tasks(&session, NULL);
+        assert(worker->linked_task_slot != slot_a);
+        assert(worker->linked_task_slot != slot_a + 1);
+        assert(worker->carried_resource_code == 6);
+    }
+    assert(worker->movement_state == 14); /* back on the delivery leg */
+
+    /* Without a reachable Hall the worker keeps the artifact. */
+    hall->owner_id = 1;
+    hall->record_value_10 = 0x2a + 16;
+    worker->movement_state = 0;
+    worker->has_move_order = 0;
+    game_session_assign_local_resource_tasks(&session, NULL);
+    assert(worker->carried_resource_code == 6);
+    assert(worker->linked_task_slot == -1);
+}
+
 static void test_worker_tasks_and_panic(void)
 {
     test_reallocation_does_not_wait_for_the_ten_tick_phase();
@@ -481,4 +517,5 @@ static void test_worker_tasks_and_panic(void)
     test_home_wander_fallback_worker_is_idle();
     test_orphaned_order_without_claim_is_released();
     test_task_assignment_drops_a_stale_melee_hold();
+    test_artifact_carrier_never_loses_its_artifact();
 }
