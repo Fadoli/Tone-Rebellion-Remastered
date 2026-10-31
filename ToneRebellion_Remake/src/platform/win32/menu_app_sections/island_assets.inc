@@ -259,9 +259,32 @@ static int load_island_surface(int island_id, int map_island_index,
     }
     /* Load only item sheets referenced by this island's actual runtime records.
        bldinf.txt supplies their animation ranges; pad.txt supplies the SHP key. */
-    if (runtime_island != NULL) {
-        for (hall_index = 0; hall_index < runtime_island->location_count; ++hall_index) {
-            int32_t raw_id = runtime_island->locations[hall_index].record_value_10;
+    /* IWLocInfo follows the selection (or the default Hall) on any island, so
+       the home island's and the selected location's island sheets load too. */
+    {
+        const GameRuntimeIsland *sheet_islands[3];
+        unsigned int sheet_island_count = 0;
+        unsigned int sheet_island_index;
+        sheet_islands[sheet_island_count++] = runtime_island;
+        if (g_game_session_valid) {
+            if (g_menu.selected_tribe >= 0 &&
+                g_menu.selected_tribe < GAME_START_PLAYER_COUNT &&
+                g_game_session.economy[g_menu.selected_tribe].hall_island_index <
+                    g_game_session.island_count)
+                sheet_islands[sheet_island_count++] = &g_game_session.islands[
+                    g_game_session.economy[g_menu.selected_tribe]
+                        .hall_island_index];
+            if (g_selected_location_island >= 0 &&
+                g_selected_location_island < g_game_session.island_count)
+                sheet_islands[sheet_island_count++] = &g_game_session.islands[
+                    g_selected_location_island];
+        }
+        for (sheet_island_index = 0; sheet_island_index < sheet_island_count;
+             ++sheet_island_index) {
+        const GameRuntimeIsland *sheet_island = sheet_islands[sheet_island_index];
+        if (sheet_island == NULL) continue;
+        for (hall_index = 0; hall_index < sheet_island->location_count; ++hall_index) {
+            int32_t raw_id = sheet_island->locations[hall_index].record_value_10;
             const BuildingRenderItem *definition;
             char item_shape[BUILDING_RENDER_SHAPE_CAPACITY];
             char item_member[48];
@@ -290,6 +313,7 @@ static int load_island_surface(int island_id, int map_island_index,
                 free_sprite_sheet(&building_candidates[item_id]);
                 continue;
             }
+        }
         }
     }
 

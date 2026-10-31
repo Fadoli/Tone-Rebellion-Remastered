@@ -741,7 +741,17 @@ static void render_island_view(HDC dc)
     const int image_top = 0;
     const int status_top = 320;
     const GameFloaterStart *selected_floater = NULL;
-    int hall_player = selected_hall_player();
+    int hall_player;
+    /* FUN_0042f303 mode 0 selects the home Hall through FUN_0042f755, so an
+       empty selection behaves exactly like a manual Hall click (description,
+       controls, clipboard entry), on any island. */
+    if (hall_default_selected()) {
+        const GamePlayerEconomy *home =
+            &g_game_session.economy[g_menu.selected_tribe];
+        select_location_anywhere(home->hall_island_index,
+                                 (int)home->hall_location_index);
+    }
+    hall_player = selected_hall_player();
     int saved_dc;
     uint16_t i;
     const GameRuntimeIsland *runtime_island = NULL;
