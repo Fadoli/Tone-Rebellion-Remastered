@@ -499,6 +499,7 @@ int main(void)
     test_leviathan_spawner_births_units_on_its_island_over_time();
     test_leviathan_defense_hurts_only_workers_in_reach_on_its_island();
     test_inactive_leviathan_defense_does_not_fire();
+    test_leviathan_bolt_starts_at_the_prod_offset();
     test_tone_producers_output_their_own_resource_for_every_tribe();
     test_item_animation_uses_source_flags_and_per_object_counters();
     test_tone_pool_uses_two_source_counter_sequences();

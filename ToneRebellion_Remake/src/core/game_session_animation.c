@@ -967,8 +967,15 @@ static void tick_leviathan_defense(GameSession *session,
                     /* FUN_004153b8 initializes each effect's SPEED to 5;
                        the four Leviathan bullet definitions omit SPEED. */
                     projectile->movement_speed = 5;
-                    projectile->x = state->x;
-                    projectile->y = state->y;
+                    /* FUN_00416342 starts the bolt at the site plus the PROD
+                       record's offset (g+6/g+8 of FUN_00456bd0, bldinf.txt
+                       e.g. V-SHOT1 "-3,-50"), not at the site anchor. */
+                    projectile->x = (uint16_t)((int32_t)state->x +
+                        (item != NULL && item->prod.present
+                            ? item->prod.offset_x : 0));
+                    projectile->y = (uint16_t)((int32_t)state->y +
+                        (item != NULL && item->prod.present
+                            ? item->prod.offset_y : 0));
                     {
                         static const char *const bullet_defs[4] = {
                             "VSHT1B", "VSHROD", "VSPIRL", "VSHT2B"

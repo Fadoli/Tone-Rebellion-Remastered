@@ -708,6 +708,55 @@ static void test_leviathan_defense_hurts_only_workers_in_reach_on_its_island(voi
     assert(session.floaters[2].current_hit_points == 200);
 }
 
+static void test_leviathan_bolt_starts_at_the_prod_offset(void)
+{
+    /* FUN_00416342: a V-SHOT bolt starts at the site plus the PROD record's
+       offset (bldinf.txt V-SHOT1 "-3,-50"). */
+    static GameSession session;
+    PadCatalog pads;
+    BuildingRenderCatalog buildings = {0};
+    GameRuntimeLocation *tower;
+    unsigned int tick;
+    unsigned int slot;
+    int fired = 0;
+
+    memset(&session, 0, sizeof(session));
+    make_leviathan_pads(&pads);
+    make_leviathan_buildings(&buildings);
+    pads.items[0x10].movement_cost[0] = 150;
+    pads.items[0].movement_cost[2] = 50;
+    buildings.items[0x10].prod.present = 1;
+    buildings.items[0x10].prod.threshold = 5;
+    buildings.items[0x10].prod.first_frame = 1;
+    buildings.items[0x10].prod.last_frame = 8;
+    buildings.items[0x10].prod.ticks_per_frame = 2;
+    buildings.items[0x10].prod.offset_x = -3;
+    buildings.items[0x10].prod.offset_y = -50;
+    session.island_count = 1;
+    session.islands[0].location_count = 1;
+    tower = &session.islands[0].locations[0];
+    make_leviathan_marker(tower, 0, 0x10);
+    tower->x = 500;
+    tower->y = 500;
+    tower->source_flags = 0x001U;
+    tower->resource_retry_tick_36 = -1;
+    add_test_worker(&session, 0, 0, 600, 500, 0);
+    for (tick = 0; tick < 60 && !fired; ++tick) {
+        game_session_tick_item_animations_with_floaters(
+            &session, &buildings, NULL, &pads);
+        for (slot = 0; slot < 32; ++slot) {
+            const GameDefenseProjectile *bolt = &session.defense_projectiles[slot];
+            if (bolt->active && bolt->impact_phase == 0) {
+                /* At most one 5-pixel step toward the worker. */
+                assert(bolt->y <= 450 && bolt->y >= 445);
+                assert(bolt->x >= 497 && bolt->x <= 502);
+                fired = 1;
+            }
+        }
+    }
+    assert(fired);
+}
+
 static void test_inactive_leviathan_defense_does_not_fire(void)
 {
     static GameSession session;
