@@ -108,16 +108,20 @@ static void handle_click(HWND window, int x, int y)
             if (clip_control >= 11 && clip_control <= 13 &&
                 g_menu.selected_tribe >= 0 &&
                 g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
-                uint8_t clip_island;
-                uint16_t clip_location;
+                uint8_t clip_island = 0;
+                uint16_t clip_location = 0;
                 /* Interpretation: select the remembered building (the traced
-                   message path only re-selects the current record). */
+                   message path only re-selects the current record); a slot on
+                   another island switches to it. */
                 if (game_session_clip_slot(&g_game_session,
                         (uint8_t)g_menu.selected_tribe,
                         (unsigned int)clip_control - 11U, &clip_island,
-                        &clip_location) != 0 &&
-                    clip_island == (uint8_t)g_menu.selected_map_island) {
-                    g_selected_location = (int)clip_location;
+                        &clip_location) != 0) {
+                    if (clip_island == (uint8_t)g_menu.selected_map_island) {
+                        g_selected_location = (int)clip_location;
+                    } else if (open_island_view(window, clip_island)) {
+                        g_selected_location = (int)clip_location;
+                    }
                 }
                 InvalidateRect(window, NULL, FALSE);
                 return;
@@ -585,7 +589,26 @@ static void handle_click(HWND window, int x, int y)
             } else if (g_island_panel_mode == WINDOW_ISLAND_PANEL_TASKS ||
                        g_island_panel_mode == WINDOW_ISLAND_PANEL_EFFECT_DEBUG) {
                 /* FUN_0042f303 hides IWLocInfo/IWLocControl in these states;
-                   consume clicks outside the visible task/effect panels. */
+                   consume clicks outside the visible task/effect panels. The
+                   island view itself (y < 320) keeps receiving clicks: a
+                   constructed bridge still switches island with the panel
+                   open (no mode switch on that path); any other pick returns
+                   to mode 0 (FUN_0042f8f7 / FUN_0042f303(0)) and is handled
+                   as a normal click. */
+                if (y < 320 && x >= 0 && x < LOGICAL_WIDTH) {
+                    int over_floater = game_session_floater_at(&g_game_session,
+                        (uint8_t)g_menu.selected_map_island,
+                        (uint16_t)(x + g_island_scroll_x), (uint16_t)y);
+                    int over_location = island_location_at(x, y);
+                    if (over_floater < 0 && over_location >= 0 &&
+                        enter_bridge_destination(window, over_location)) {
+                        InvalidateRect(window, NULL, FALSE);
+                        return;
+                    }
+                    g_island_panel_mode = WINDOW_ISLAND_PANEL_GENERAL;
+                    handle_click(window, x, y);
+                    return;
+                }
                 InvalidateRect(window, NULL, FALSE);
                 return;
             } else if (hall_panel_mode != WINDOW_ISLAND_PANEL_NONE) {

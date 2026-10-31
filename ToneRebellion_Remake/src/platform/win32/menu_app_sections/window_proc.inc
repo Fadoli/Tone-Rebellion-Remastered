@@ -14,6 +14,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
     case WM_ERASEBKGND:
         return 1;
     case WM_TIMER:
+        if (wparam == 1) e2e_write_state();
         if (wparam == 2) {
             keep_background_tune_playing();
             return 0;
@@ -499,6 +500,17 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             /* Port shortcut for the Save screen (state 5); the native entry
                point is not established. */
             enter_save_screen();
+            InvalidateRect(window, NULL, FALSE);
+            return 0;
+        }
+        if (wparam == 'H' && g_menu.screen == SCREEN_WORLD_MAP &&
+            e2e_enabled() && g_game_session_valid &&
+            g_menu.selected_tribe >= 0 &&
+            g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
+            /* Test aid (only with TONE_REBELLION_E2E_STATE): open the island
+               holding the player's Hall. */
+            (void)open_island_view(window, g_game_session
+                .economy[g_menu.selected_tribe].hall_island_index);
             InvalidateRect(window, NULL, FALSE);
             return 0;
         }

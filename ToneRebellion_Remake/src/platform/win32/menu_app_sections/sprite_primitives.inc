@@ -118,6 +118,7 @@ static void set_background_tune(const char *tune_id);
 static void set_background_tune_once(const char *tune_id);
 static void stop_background_tune(void);
 static void draw_location_action_panel(HDC dc);
+static void draw_clipboard_strip(HDC dc);
 static int load_game_session_for_selected_world(char *error, size_t error_capacity);
 static int draw_building_preview(HDC dc, uint16_t item_id, uint8_t player_slot,
                                  int x, int y, uint32_t scale_16_16);

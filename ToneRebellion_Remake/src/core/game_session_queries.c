@@ -197,6 +197,46 @@ void game_session_clip_remember(GameSession *session, uint8_t player_slot,
     }
 }
 
+/* Remake: every training building the player owns gets a shortcut slot (first
+   free slot across the three groups), so the strip lists them without having to
+   select each one first. */
+void game_session_clip_auto_register(GameSession *session, uint8_t player_slot)
+{
+    unsigned int island_index;
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT) return;
+    for (island_index = 0; island_index < session->island_count; ++island_index) {
+        const GameRuntimeIsland *island = &session->islands[island_index];
+        unsigned int location_index;
+        for (location_index = 0; location_index < island->location_count;
+             ++location_index) {
+            unsigned int slot;
+            int known = 0;
+            if (!game_session_clip_building(session, player_slot,
+                    (uint8_t)island_index, (uint16_t)location_index)) continue;
+            for (slot = 0; slot < 9U; ++slot) {
+                if (session->clip_slot_used[slot] &&
+                    session->clip_slot_island[slot] == island_index &&
+                    session->clip_slot_location[slot] == location_index) {
+                    known = 1;
+                    break;
+                }
+            }
+            if (known) continue;
+            /* Fill the active group first, then the following ones. */
+            for (slot = 0; slot < 9U; ++slot) {
+                unsigned int candidate =
+                    ((unsigned int)(session->clip_group % 3U) * 3U + slot) % 9U;
+                if (!session->clip_slot_used[candidate]) {
+                    session->clip_slot_used[candidate] = 1;
+                    session->clip_slot_island[candidate] = (uint8_t)island_index;
+                    session->clip_slot_location[candidate] = (uint16_t)location_index;
+                    break;
+                }
+            }
+        }
+    }
+}
+
 void game_session_clip_set_group(GameSession *session, unsigned int group)
 {
     if (session != NULL && group < 3U) session->clip_group = (uint8_t)group;
@@ -218,6 +258,11 @@ unsigned int game_session_clip_slot(GameSession *session, uint8_t player_slot,
     }
     if (island_index != NULL) *island_index = session->clip_slot_island[slot];
     if (location_index != NULL) *location_index = session->clip_slot_location[slot];
-    return (unsigned int)session->islands[session->clip_slot_island[slot]]
-        .locations[session->clip_slot_location[slot]].source_category_slot_60 + 1U;
+    {
+        /* Dots = sub-slot + 1; buildings whose sub-slot is unassigned (-1) still
+           show one dot so their shortcut is visible. */
+        int16_t sub_slot = session->islands[session->clip_slot_island[slot]]
+            .locations[session->clip_slot_location[slot]].source_category_slot_60;
+        return sub_slot >= 0 ? (unsigned int)sub_slot + 1U : 1U;
+    }
 }

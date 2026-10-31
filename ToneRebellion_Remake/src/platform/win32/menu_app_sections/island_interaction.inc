@@ -737,9 +737,54 @@ static int selected_location_can_be_grabbed(void)
     return 1;
 }
 
+/* FUN_0042f303 mode 0 shows the player's home record (FUN_0042f755 on the
+   Hall at DAT_0061a580/82) whatever the current island is, so with nothing
+   else selected the Hall stays the default selection even away from its
+   island. */
+static int hall_default_selected(void)
+{
+    const GamePlayerEconomy *economy;
+    if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
+        g_menu.selected_tribe < 0 ||
+        g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
+        g_selected_location >= 0 || g_selected_floater >= 0) return 0;
+    economy = &g_game_session.economy[g_menu.selected_tribe];
+    return economy->hall_island_index < g_game_session.island_count &&
+        economy->hall_location_index <
+            g_game_session.islands[economy->hall_island_index].location_count;
+}
+
+/* Island/location whose record IWLocInfo describes: the selected site, or the
+   default Hall. Returns 0 when there is none. */
+static int effective_info_location(const GameRuntimeIsland **island_out,
+                                   int *location_out, uint8_t *island_index_out)
+{
+    if (!g_game_session_valid || g_menu.selected_map_island < 0 ||
+        g_menu.selected_map_island >= g_game_session.island_count) return 0;
+    if (g_selected_location >= 0) {
+        const GameRuntimeIsland *island =
+            &g_game_session.islands[g_menu.selected_map_island];
+        if (g_selected_location >= island->location_count) return 0;
+        *island_out = island;
+        *location_out = g_selected_location;
+        *island_index_out = (uint8_t)g_menu.selected_map_island;
+        return 1;
+    }
+    if (hall_default_selected()) {
+        const GamePlayerEconomy *economy =
+            &g_game_session.economy[g_menu.selected_tribe];
+        *island_out = &g_game_session.islands[economy->hall_island_index];
+        *location_out = (int)economy->hall_location_index;
+        *island_index_out = economy->hall_island_index;
+        return 1;
+    }
+    return 0;
+}
+
 static int selected_hall_player(void)
 {
     unsigned int player;
+    if (hall_default_selected()) return g_menu.selected_tribe;
     const GameRuntimeIsland *island;
     const GameRuntimeLocation *hall;
     if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||

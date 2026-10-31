@@ -1134,15 +1134,17 @@ static void draw_hall_stock_summary(HDC dc, int hall_player,
     int saved_dc;
     unsigned int resource;
 
+    int hall_location;
+    uint8_t hall_island_index;
+
     if (hall_player < 0 || selected_hall_player() != hall_player ||
-        island == NULL ||
         g_island_panel_mode != WINDOW_ISLAND_PANEL_GENERAL ||
-        g_selected_location < 0 ||
-        (uint16_t)g_selected_location >= island->location_count) return;
+        !effective_info_location(&island, &hall_location,
+                                 &hall_island_index)) return;
     info = window_catalog_find(&g_window_catalog, "IWLocInfo", 3);
     if (info == NULL || g_temp_hole_art.frame_count <= 1U) return;
 
-    hall = &island->locations[g_selected_location];
+    hall = &island->locations[hall_location];
     /* FUN_00440567 draws this summary only inside the P+0x18 == -1 branch
        when P+0x10 == 0x2a (ev_671a1431...). */
     if (hall->source_location_slot_18 != -1 ||

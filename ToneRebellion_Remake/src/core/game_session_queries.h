@@ -51,6 +51,7 @@ int game_session_end_game_score(const GameSession *session, uint8_t player_slot,
 /* Clipboard (CLIPSEL1-3 / CLIPBD1-3). Selecting an owned, built 0x2c..0x32
    building remembers it in the first empty slot of the active group
    (FUN_00438120 via FUN_0042f755; no duplicates, silent when full). */
+void game_session_clip_auto_register(GameSession *session, uint8_t player_slot);
 void game_session_clip_remember(GameSession *session, uint8_t player_slot,
                                 uint8_t island_index, uint16_t location_index);
 void game_session_clip_set_group(GameSession *session, unsigned int group);

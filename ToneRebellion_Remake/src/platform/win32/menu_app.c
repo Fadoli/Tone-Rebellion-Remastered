@@ -467,6 +467,7 @@ static BOOL play_effect_sound(LPCSTR sound, HMODULE module, DWORD flags)
 
 #include "menu_app_sections/window_interaction.inc"
 
+#include "menu_app_sections/e2e_state.inc"
 #include "menu_app_sections/window_proc.inc"
 
 #include "menu_app_sections/content_loading.inc"

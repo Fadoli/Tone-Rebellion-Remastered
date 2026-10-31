@@ -632,6 +632,9 @@ static void render_island_view(HDC dc)
     const GameRuntimeIsland *runtime_island = NULL;
     const GameRuntimeLocation *selected_runtime_location = NULL;
     int selected_ground_item = -1;
+    const GameRuntimeIsland *info_island = NULL;
+    int info_location = -1;
+    uint8_t info_island_index = 0;
 
     if (g_game_session_valid && g_menu.selected_map_island >= 0 &&
         g_menu.selected_map_island < g_game_session.island_count) {
@@ -1386,10 +1389,10 @@ static void render_island_view(HDC dc)
             if (saved_info_dc != 0) RestoreDC(dc, saved_info_dc);
         }
     } else if (island_panel_location_info_visible(g_island_panel_mode) &&
-               runtime_island != NULL && g_selected_location >= 0 &&
-               g_selected_location < runtime_island->location_count) {
+               effective_info_location(&info_island, &info_location,
+                                       &info_island_index)) {
         const GameRuntimeLocation *selected_location =
-            &runtime_island->locations[g_selected_location];
+            &info_island->locations[info_location];
         int32_t raw_item_id = selected_location->record_value_10;
         /* FUN_00440567 paints any kind-0 site with item >= 2 (Evidence
            ev_cb0962ae...); owner-4 sites draw only the building sprite there.
@@ -1427,8 +1430,7 @@ static void render_island_view(HDC dc)
                     }
                 }
                 draw_building_info_extras(dc, info, selected_location,
-                    (uint8_t)g_menu.selected_map_island,
-                    (uint16_t)g_selected_location);
+                    info_island_index, (uint16_t)info_location);
                 draw_building_slot_floaters(dc, info, selected_location);
                 if (saved_info_dc != 0) RestoreDC(dc, saved_info_dc);
             }
@@ -1523,6 +1525,7 @@ static void render_island_view(HDC dc)
             }
         }
     }
+    draw_clipboard_strip(dc);
     draw_location_action_panel(dc);
 
     /* IWLocControl's backdrop overlaps the Hall command buttons. Draw the
@@ -1552,6 +1555,62 @@ static void render_island_view(HDC dc)
         }
     }
     draw_island_access_notice(dc);
+}
+
+/* CLIPSEL1-3 / CLIPBD1-3 are not among the 16 windows FUN_0042f303 hides, so
+   the shortcut strip shows in every panel mode and whatever is selected. */
+static void draw_clipboard_strip(HDC dc)
+{
+    if (g_game_session_valid && g_menu.selected_tribe >= 0 &&
+        g_menu.selected_tribe < GAME_START_PLAYER_COUNT &&
+        ensure_clipboard_art()) {
+        static const char *const tabs[3] = {"CLIPSEL1", "CLIPSEL2", "CLIPSEL3"};
+        static const char *const slots[3] = {"CLIPBD1", "CLIPBD2", "CLIPBD3"};
+        unsigned int index;
+        /* FUN_0042f755 -> FUN_00438120: each selection refresh remembers the
+           selected training building in the active group. */
+        game_session_clip_auto_register(&g_game_session,
+                                        (uint8_t)g_menu.selected_tribe);
+        if (g_selected_location >= 0 && g_menu.selected_map_island >= 0)
+            game_session_clip_remember(&g_game_session,
+                (uint8_t)g_menu.selected_tribe,
+                (uint8_t)g_menu.selected_map_island,
+                (uint16_t)g_selected_location);
+        for (index = 0; index < 3U; ++index) {
+            const WindowTemplate *tab = window_catalog_find(&g_window_catalog, tabs[index], 3);
+            const WindowTemplate *slot = window_catalog_find(&g_window_catalog, slots[index], 3);
+            uint8_t clip_island = 0;
+            uint16_t clip_location = 0;
+            unsigned int dots;
+            if (tab != NULL && tab->shape_frame >= 0) {
+                /* CLIP frames: 4 per group; +2 marks the active group. */
+                uint32_t frame = (uint32_t)tab->shape_frame +
+                    (g_game_session.clip_group == index ? 2U : 0U);
+                if (frame < g_clip_art.frame_count)
+                    draw_sprite(dc, &g_clip_art, frame, tab->pane.left, tab->pane.top);
+            }
+            if (slot == NULL) continue;
+            if (slot->shape_frame >= 0 &&
+                (uint32_t)slot->shape_frame < g_temp_hole_art.frame_count)
+                draw_sprite(dc, &g_temp_hole_art, (uint32_t)slot->shape_frame,
+                            slot->pane.left, slot->pane.top);
+            dots = game_session_clip_slot(&g_game_session,
+                (uint8_t)g_menu.selected_tribe, index, &clip_island, &clip_location);
+            if (dots != 0) {
+                /* FUN_004391ab: dots at step 5, five per row from (1,1), frame =
+                   the owner's tribe (clamped 0..3). */
+                uint32_t frame = (uint32_t)(g_menu.selected_tribe > 3
+                                            ? 3 : g_menu.selected_tribe);
+                unsigned int dot;
+                for (dot = 0; dot < dots && dot < 10U; ++dot) {
+                    if (frame < g_bildicon_art.frame_count)
+                        draw_sprite(dc, &g_bildicon_art, frame,
+                            slot->pane.left + 1 + (int)(dot % 5U) * 5,
+                            slot->pane.top + 1 + (int)(dot / 5U) * 5);
+                }
+            }
+        }
+    }
 }
 
 static void draw_location_action_panel(HDC dc)
@@ -1751,54 +1810,6 @@ static void draw_location_action_panel(HDC dc)
                 draw_sprite(dc, &g_hall_stock_art,
                             (uint32_t)control->hilite_frame,
                             control->pane.left, control->pane.top);
-        }
-    }
-    if (g_game_session_valid && g_menu.selected_tribe >= 0 &&
-        g_menu.selected_tribe < GAME_START_PLAYER_COUNT &&
-        ensure_clipboard_art()) {
-        static const char *const tabs[3] = {"CLIPSEL1", "CLIPSEL2", "CLIPSEL3"};
-        static const char *const slots[3] = {"CLIPBD1", "CLIPBD2", "CLIPBD3"};
-        unsigned int index;
-        /* FUN_0042f755 -> FUN_00438120: each selection refresh remembers the
-           selected training building in the active group. */
-        if (g_selected_location >= 0 && g_menu.selected_map_island >= 0)
-            game_session_clip_remember(&g_game_session,
-                (uint8_t)g_menu.selected_tribe,
-                (uint8_t)g_menu.selected_map_island,
-                (uint16_t)g_selected_location);
-        for (index = 0; index < 3U; ++index) {
-            const WindowTemplate *tab = window_catalog_find(&g_window_catalog, tabs[index], 3);
-            const WindowTemplate *slot = window_catalog_find(&g_window_catalog, slots[index], 3);
-            uint8_t clip_island = 0;
-            uint16_t clip_location = 0;
-            unsigned int dots;
-            if (tab != NULL && tab->shape_frame >= 0) {
-                /* CLIP frames: 4 per group; +2 marks the active group. */
-                uint32_t frame = (uint32_t)tab->shape_frame +
-                    (g_game_session.clip_group == index ? 2U : 0U);
-                if (frame < g_clip_art.frame_count)
-                    draw_sprite(dc, &g_clip_art, frame, tab->pane.left, tab->pane.top);
-            }
-            if (slot == NULL) continue;
-            if (slot->shape_frame >= 0 &&
-                (uint32_t)slot->shape_frame < g_temp_hole_art.frame_count)
-                draw_sprite(dc, &g_temp_hole_art, (uint32_t)slot->shape_frame,
-                            slot->pane.left, slot->pane.top);
-            dots = game_session_clip_slot(&g_game_session,
-                (uint8_t)g_menu.selected_tribe, index, &clip_island, &clip_location);
-            if (dots != 0) {
-                /* FUN_004391ab: dots at step 5, five per row from (1,1), frame =
-                   the owner's tribe (clamped 0..3). */
-                uint32_t frame = (uint32_t)(g_menu.selected_tribe > 3
-                                            ? 3 : g_menu.selected_tribe);
-                unsigned int dot;
-                for (dot = 0; dot < dots && dot < 10U; ++dot) {
-                    if (frame < g_bildicon_art.frame_count)
-                        draw_sprite(dc, &g_bildicon_art, frame,
-                            slot->pane.left + 1 + (int)(dot % 5U) * 5,
-                            slot->pane.top + 1 + (int)(dot / 5U) * 5);
-                }
-            }
         }
     }
     if (g_game_session_valid && g_menu.selected_tribe >= 0 &&
