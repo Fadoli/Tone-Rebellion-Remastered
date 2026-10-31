@@ -265,12 +265,13 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         y = GET_Y_LPARAM(lparam);
         if (g_slide_drag) {
             if ((wparam & MK_LBUTTON) == 0) {
-                g_slide_drag = 0;
-                ReleaseCapture();
+                slide_panel_end_drag();
             } else {
+                /* No repaint: the panel only exists on the world map and
+                   island view, which redraw every 20 Hz frame (see the
+                   IWLilMap drag below). */
                 slide_panel_drag(((x - viewport.left) * LOGICAL_WIDTH) /
                                  (viewport.right - viewport.left));
-                InvalidateRect(window, NULL, FALSE);
                 return 0;
             }
         }
@@ -469,10 +470,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         int x;
         int y;
         if (g_menu.screen == SCREEN_LOGO || g_menu.screen == SCREEN_END_GAME) return 0;
-        if (g_slide_drag) {
-            g_slide_drag = 0;
-            ReleaseCapture();
-        }
+        slide_panel_end_drag();
         if (g_lilmap_drag) {
             g_lilmap_drag = 0;
             ReleaseCapture();

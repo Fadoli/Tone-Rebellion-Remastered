@@ -10,7 +10,11 @@ static int g_slide_phase;
 static int g_slide_pos;
 static int g_paused;
 static int g_music_volume = 100;
+/* Set while dragging: the MCI volume command blocks, so slide_panel_tick
+   sends it at most once per frame instead of once per mouse move. */
+static int g_music_volume_pending;
 static SpriteSheet g_slide_art;
+static void apply_music_volume(void);
 
 /* Table DAT_004a33f0 (xmin, ymin, xmax, ymax): 0 Save, 1 Load, 2 pause,
    3 quit to the title (writes resume.gam), 4 music, 5 sound. The first
@@ -80,6 +84,10 @@ static void ensure_load_save_art(void)
    tick while closing. */
 static void slide_panel_tick(void)
 {
+    if (g_music_volume_pending) {
+        g_music_volume_pending = 0;
+        apply_music_volume();
+    }
     if (g_slide_phase == 1) {
         int remaining = SLIDE_OPEN_HEIGHT - g_slide_pos;
         int step = remaining < 50 ? remaining * 15 / 50 + 1 : SLIDE_STEP;
@@ -169,17 +177,30 @@ static void load_audio_settings(void)
     (void)fclose(file);
 }
 
-/* Slider thumb under the held button: value = x - 456 clamped to 0..100. */
+/* Slider thumb under the held button: value = x - 456 clamped to 0..100.
+   audio.cfg is written once on release (slide_panel_end_drag), not on
+   every mouse move. */
 static void slide_panel_drag(int x)
 {
     int value = x - 456;
     if (value < 0) value = 0;
     if (value > 100) value = 100;
-    if (g_slide_drag == 1) {
+    if (g_slide_drag == 1 && g_music_volume != value) {
         g_music_volume = value;
-        apply_music_volume();
+        g_music_volume_pending = 1;
     } else if (g_slide_drag == 2) {
         g_sound_volume = value;
+    }
+}
+
+static void slide_panel_end_drag(void)
+{
+    if (g_slide_drag == 0) return;
+    g_slide_drag = 0;
+    ReleaseCapture();
+    if (g_music_volume_pending) {
+        g_music_volume_pending = 0;
+        apply_music_volume();
     }
     save_audio_settings();
 }
@@ -208,13 +229,13 @@ static int slide_panel_press(HWND window, int x, int y)
         if (value > 100) value = 100;
         if (y >= 11 && y <= 31) {
             g_slide_drag = 1;
-            g_music_volume = value;
-            apply_music_volume();
-            save_audio_settings();
+            if (g_music_volume != value) {
+                g_music_volume = value;
+                g_music_volume_pending = 1;
+            }
         } else if (y >= 57 && y <= 77) {
             g_slide_drag = 2;
             g_sound_volume = value;
-            save_audio_settings();
         }
         if (g_slide_drag != 0) SetCapture(window);
     }

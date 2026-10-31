@@ -64,9 +64,13 @@ typedef struct SpriteFrame {
     int hit_bottom;
 } SpriteFrame;
 
+typedef struct SpriteSheetShare SpriteSheetShare;
+
 typedef struct SpriteSheet {
     SpriteFrame *frames;
     uint32_t frame_count;
+    /* Non-NULL when the frames are owned by the shared sheet cache. */
+    SpriteSheetShare *share;
 } SpriteSheet;
 
 typedef struct MenuState {

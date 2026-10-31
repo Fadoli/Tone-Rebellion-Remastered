@@ -417,6 +417,87 @@ static COLORREF native_text_color(const COLORREF palette[256], int slot)
     return palette[best];
 }
 
+/* Port choice: island palettes differ only in entries 224..254, so a sheet
+   whose opaque pixels avoid them converts to the same bitmaps on every
+   island. Loaded sheets are shared by COB member and the colors their pixels
+   use, which lets an island switch reuse them instead of decoding again. */
+struct SpriteSheetShare {
+    SpriteSheetShare *next;
+    SpriteSheetShare *mirror;    /* shared horizontal mirror of this sheet */
+    SpriteSheetShare *mirror_of; /* source sheet of a mirror */
+    char name[COB_ARCHIVE_NAME_CAPACITY]; /* empty for mirrors */
+    uint32_t offset;
+    uint32_t length;
+    uint32_t used[8];
+    COLORREF palette[256];
+    unsigned int references;
+    SpriteFrame *frames;
+    uint32_t frame_count;
+};
+
+static SpriteSheetShare *g_sprite_sheet_shares;
+
+static SpriteSheetShare *sprite_share_find(const CobMember *member,
+                                           const COLORREF palette[256])
+{
+    SpriteSheetShare *share;
+    for (share = g_sprite_sheet_shares; share != NULL; share = share->next) {
+        unsigned int i;
+        if (share->name[0] == '\0' || share->offset != member->offset ||
+            share->length != member->length ||
+            strcmp(share->name, member->name) != 0) continue;
+        for (i = 0; i < 256U; ++i) {
+            if (((share->used[i >> 5] >> (i & 31U)) & 1U) != 0U &&
+                share->palette[i] != palette[i]) break;
+        }
+        if (i == 256U) return share;
+    }
+    return NULL;
+}
+
+static void sprite_share_attach(SpriteSheetShare *share, SpriteSheet *sheet)
+{
+    ++share->references;
+    sheet->frames = share->frames;
+    sheet->frame_count = share->frame_count;
+    sheet->share = share;
+}
+
+/* Hands a freshly built sheet's frames to a new share; on allocation failure
+   the sheet simply stays private. */
+static SpriteSheetShare *sprite_share_adopt(SpriteSheet *sheet)
+{
+    SpriteSheetShare *share = (SpriteSheetShare *)calloc(1, sizeof(*share));
+    if (share == NULL) return NULL;
+    share->frames = sheet->frames;
+    share->frame_count = sheet->frame_count;
+    share->references = 1;
+    share->next = g_sprite_sheet_shares;
+    g_sprite_sheet_shares = share;
+    sheet->share = share;
+    return share;
+}
+
+static void sprite_share_release(SpriteSheetShare *share)
+{
+    SpriteSheetShare **link;
+    uint32_t i;
+    if (--share->references != 0) return;
+    for (link = &g_sprite_sheet_shares; *link != NULL; link = &(*link)->next) {
+        if (*link == share) {
+            *link = share->next;
+            break;
+        }
+    }
+    if (share->mirror != NULL) share->mirror->mirror_of = NULL;
+    if (share->mirror_of != NULL) share->mirror_of->mirror = NULL;
+    for (i = 0; i < share->frame_count; ++i) {
+        if (share->frames[i].bitmap != NULL) DeleteObject(share->frames[i].bitmap);
+    }
+    free(share->frames);
+    free(share);
+}
+
 static int load_sprite_sheet(CobArchive *archive, const char *member_name,
                              const COLORREF palette[256], SpriteSheet *sheet,
                              char *error, size_t error_capacity)
@@ -425,9 +506,17 @@ static int load_sprite_sheet(CobArchive *archive, const char *member_name,
     unsigned char *bytes;
     ShpFile source;
     uint32_t frame_index;
+    uint32_t used[8] = {0};
+    SpriteSheetShare *share;
+    sheet->share = NULL;
     if (member == NULL) {
         (void)snprintf(error, error_capacity, "%s was not found in TONE01.COB", member_name);
         return 0;
+    }
+    share = sprite_share_find(member, palette);
+    if (share != NULL) {
+        sprite_share_attach(share, sheet);
+        return 1;
     }
     bytes = (unsigned char *)malloc(member->length == 0 ? 1 : member->length);
     if (bytes == NULL || !cob_archive_read_member(archive, member, bytes, member->length,
@@ -483,6 +572,7 @@ static int load_sprite_sheet(CobArchive *archive, const char *member_name,
             if (decoded.opaque[p]) {
                 int pixel_x = (int)(p % decoded.width);
                 int pixel_y = (int)(p / decoded.width);
+                used[decoded.pixels[p] >> 5] |= 1U << (decoded.pixels[p] & 31U);
                 *pixel = 0xff000000u | ((DWORD)GetRValue(color) << 16) |
                          ((DWORD)GetGValue(color) << 8) | (DWORD)GetBValue(color);
                 if (pixel_x < hit_left) hit_left = pixel_x;
@@ -505,13 +595,23 @@ static int load_sprite_sheet(CobArchive *archive, const char *member_name,
         shp_frame_free(&decoded);
     }
     free(bytes);
+    share = sprite_share_adopt(sheet);
+    if (share != NULL) {
+        (void)snprintf(share->name, sizeof(share->name), "%s", member->name);
+        share->offset = member->offset;
+        share->length = member->length;
+        memcpy(share->used, used, sizeof(share->used));
+        memcpy(share->palette, palette, sizeof(share->palette));
+    }
     return 1;
 }
 
 static void free_sprite_sheet(SpriteSheet *sheet)
 {
     uint32_t i;
-    if (sheet->frames != NULL) {
+    if (sheet->share != NULL) {
+        sprite_share_release(sheet->share);
+    } else if (sheet->frames != NULL) {
         for (i = 0; i < sheet->frame_count; ++i) {
             if (sheet->frames[i].bitmap != NULL) DeleteObject(sheet->frames[i].bitmap);
         }
@@ -531,6 +631,10 @@ static int mirror_sprite_sheet_horizontally(const SpriteSheet *source,
     if (source == NULL || out == NULL || source->frames == NULL ||
         source->frame_count == 0) return 0;
     memset(out, 0, sizeof(*out));
+    if (source->share != NULL && source->share->mirror != NULL) {
+        sprite_share_attach(source->share->mirror, out);
+        return 1;
+    }
     out->frames = (SpriteFrame *)calloc(source->frame_count, sizeof(*out->frames));
     if (out->frames == NULL) {
         (void)snprintf(error, error_capacity, "could not allocate mirrored floater frames");
@@ -598,6 +702,13 @@ static int mirror_sprite_sheet_horizontally(const SpriteSheet *source,
         output->x_offset = -input->x_offset - input->width;
         output->hit_left = input->width - input->hit_right;
         output->hit_right = input->width - input->hit_left;
+    }
+    if (source->share != NULL) {
+        SpriteSheetShare *mirror = sprite_share_adopt(out);
+        if (mirror != NULL) {
+            mirror->mirror_of = source->share;
+            source->share->mirror = mirror;
+        }
     }
     return 1;
 }
