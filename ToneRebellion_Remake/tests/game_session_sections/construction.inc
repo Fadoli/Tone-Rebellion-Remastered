@@ -486,6 +486,9 @@ static void test_several_workers_share_one_construction_task_from_the_hall(void)
         floater->island_index = 0;
         floater->source_link_0c = -1;
         floater->linked_task_slot = -1;
+        /* FUN_00420a55 skips a source at distance 0. */
+        floater->x = 100;
+        floater->y = 100;
     }
     slot = game_session_pending_event_add(&session, 0, 0, 5, 0, 0, 0x25);
     assert(slot == 0);
