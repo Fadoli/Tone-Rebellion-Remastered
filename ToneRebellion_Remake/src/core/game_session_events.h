@@ -11,6 +11,11 @@ size_t game_session_collect_task_slots(const GameSession *session,
                                        int16_t player_id,
                                        uint8_t *slot_indices,
                                        size_t capacity);
+/* Remake addition (no native draw/click path found): slot of the player's
+   active CONSTR (type 5) task on island/location, or -1. */
+int game_session_construction_task_slot(const GameSession *session,
+                                        int16_t player_id, uint16_t island,
+                                        uint16_t location);
 /* FUN_00465793 category-3 subtypes 12..15 match the queued record by player,
    payload_0a, action_type and payload_12 before cancelling or changing its
    priority. `expected` is the task snapshot used to form the command. */

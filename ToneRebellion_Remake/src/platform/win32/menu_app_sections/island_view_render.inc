@@ -860,7 +860,26 @@ static void render_island_view(HDC dc)
                 draw_ground_item_fallback(dc, runtime_location, x, y);
             }
             if (has_runtime_item || occupied) drew_location = 1;
-            else if (island_site_should_draw_pad(pad_group, occupied) &&
+            else if (is_construction_site && g_game_session_valid &&
+                     g_tone_field_art.frame_count == 40 &&
+                     game_session_construction_task_slot(&g_game_session,
+                         (int16_t)g_game_session.config.selected_tribe,
+                         (uint16_t)g_menu.selected_map_island,
+                         (uint16_t)location_index) >= 0) {
+                /* Remake addition: no native marker for a pending CONSTR
+                   task was found (FUN_0040bf98/FUN_0040ab42 do not read the
+                   task table). The active tribe's pending build shows the
+                   POOL tone art in place of the PADS ring; a click opens
+                   the task (island_interaction). */
+                draw_sprite(dc, &g_tone_field_art,
+                            ISLAND_TONE_POOL_BASE_FRAME, x, y);
+                draw_sprite(dc, &g_tone_field_art,
+                            island_tone_pool_frame(
+                                ISLAND_TONE_POOL_ITEM_DEFAULT,
+                                g_menu.animation_ticks),
+                            x, y);
+                drew_location = 1;
+            } else if (island_site_should_draw_pad(pad_group, occupied) &&
                                           g_pad_art.frame_count == 27) {
                 uint32_t frame = island_pad_frame(g_menu.animation_ticks,
                                                   location->x,

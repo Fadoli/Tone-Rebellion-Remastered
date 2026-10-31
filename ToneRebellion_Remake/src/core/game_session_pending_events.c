@@ -71,6 +71,22 @@ size_t game_session_collect_task_slots(const GameSession *session,
     return count;
 }
 
+int game_session_construction_task_slot(const GameSession *session,
+                                        int16_t player_id, uint16_t island,
+                                        uint16_t location)
+{
+    unsigned int slot;
+    if (session == NULL) return -1;
+    for (slot = 0; slot < GAME_SESSION_MAX_PENDING_EVENTS; ++slot) {
+        const GamePendingEvent *event = &session->pending_events[slot];
+        if (event->active != 0 && event->action_type == 5 &&
+            event->player_id == player_id &&
+            event->payload_0a == (int16_t)island &&
+            event->payload_0e == (int16_t)location) return (int)slot;
+    }
+    return -1;
+}
+
 int game_session_dispatch_task_command(GameSession *session, uint8_t slot,
                                        uint8_t subtype,
                                        const GamePendingEvent *expected)

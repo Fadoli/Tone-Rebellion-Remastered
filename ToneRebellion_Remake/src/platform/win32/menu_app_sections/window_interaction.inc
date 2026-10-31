@@ -768,6 +768,9 @@ static void handle_click(HWND window, int x, int y)
                         } else if (enter_bridge_destination(window,
                                                             clicked_location)) {
                             /* island changed; selection already reset */
+                        } else if (open_construction_task(clicked_location)) {
+                            /* Remake addition: pending build site opens its
+                               task in the Tasks view. */
                         } else {
                             select_location_on_view(clicked_location);
                             select_building_warrior();

@@ -232,6 +232,9 @@ static void setup_panic_island(GameSession *session, unsigned int workers,
     unsigned int index;
 
     memset(session, 0, sizeof(*session));
+    /* game_session_initialize seeds each tribe as its own friend. */
+    for (index = 0; index < GAME_START_PLAYER_COUNT; ++index)
+        session->diplomacy_policy_mask[index] = (uint8_t)(1U << index);
     session->island_count = 1;
     session->floater_count = (uint16_t)(workers + leviathans);
     for (index = 0; index < session->floater_count; ++index) {
@@ -261,15 +264,41 @@ static void test_panic_sends_workers_to_the_nearest_enemy(void)
     setup_panic_island(&session, 2, 2);
     /* FUN_0042219e panic: action 6 against the nearest valid candidate on the
        island. Workers at x=100/200, leviathans at x=300 (index 2) and x=90
-       (index 3): worker 0 is nearest to index 3 (10); worker 1 ties between
-       worker 0 and index 2 (100) and takes the first. */
+       (index 3): worker 0 is nearest to index 3 (10); worker 1 skips its
+       tribe-mate worker 0 (100) and takes index 2 (100) before index 3. */
     session.floaters[3].x = 90;
     session.islands[0].source_event_state[0] = 1;
     game_session_apply_panic_orders(&session);
     assert(session.floaters[0].active_order_action == 6);
     assert(session.floaters[0].order_target_floater == 3);
     assert(session.floaters[1].active_order_action == 6);
-    assert(session.floaters[1].order_target_floater == 0);
+    assert(session.floaters[1].order_target_floater == 2);
+}
+
+/* Regression: a fresh session left DAT_00619290[tribe][tribe] at zero, so a
+   soldier defending a tribe-mate picked the next tribe-mate as its enemy. */
+static void test_defending_soldier_ignores_its_own_tribe(void)
+{
+    GameSession session;
+
+    setup_panic_island(&session, 3, 0);
+    session.floaters[1].x = 120;
+    session.floaters[2].x = 140;
+    session.floaters[0].source_subtype = 1;
+    session.floaters[0].active_order_action = 8;
+    session.floaters[0].defend_target_floater = 1;
+    session.floaters[0].order_progress = 1;
+    session.floaters[0].destination_x = 1;
+    game_session_advance_defend_order(&session, 0);
+    assert(session.floaters[0].order_progress == 1);
+    assert(session.floaters[0].movement_state != 0x0f);
+
+    /* An enemy tribe's floater in range is still taken. */
+    session.floaters[2].owner_slot = 1;
+    session.floaters[2].type_index = 1;
+    game_session_advance_defend_order(&session, 0);
+    assert(session.floaters[0].order_progress == 2);
+    assert(session.floaters[0].order_target_floater == 2);
 }
 
 static void test_panic_is_per_player_and_per_island(void)
@@ -302,7 +331,7 @@ static void test_panic_skips_friends_but_not_leviathans(void)
     session.floaters[1].x = 110;
     /* DAT_00619290[0][1] set = friend: the nearby player-1 worker is skipped
        and the Leviathan (category 4, always a candidate) is chosen. */
-    session.diplomacy_policy_mask[0] = 1U << 1;
+    session.diplomacy_policy_mask[0] |= 1U << 1;
     session.islands[0].source_event_state[0] = 1;
     game_session_apply_panic_orders(&session);
     assert(session.floaters[0].active_order_action == 6);
@@ -422,6 +451,7 @@ static void test_worker_tasks_and_panic(void)
     test_worker_at_build_site_is_never_reallocated();
     test_combat_and_handoff_workers_are_not_reallocated();
     test_panic_sends_workers_to_the_nearest_enemy();
+    test_defending_soldier_ignores_its_own_tribe();
     test_panic_is_per_player_and_per_island();
     test_panic_skips_friends_but_not_leviathans();
     test_panic_releases_the_task_claim();

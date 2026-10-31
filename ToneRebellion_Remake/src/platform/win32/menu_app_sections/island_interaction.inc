@@ -1252,6 +1252,44 @@ static int open_iw_construct(int location_index)
     return 1;
 }
 
+/* Remake addition (no native path found): a site holding the active tribe's
+   pending CONSTR task opens the Tasks view with that task selected and
+   scrolled into view, instead of IWConstruct. */
+static int open_construction_task(int location_index)
+{
+    const WindowTemplate *task_panel;
+    uint8_t task_slots[GAME_SESSION_MAX_TASKS];
+    size_t task_count;
+    size_t index;
+    int slot;
+    int visible_rows;
+    if (!g_game_session_valid || location_index < 0 ||
+        g_menu.selected_map_island < 0 ||
+        g_menu.selected_map_island >= g_game_session.island_count) return 0;
+    slot = game_session_construction_task_slot(&g_game_session,
+        (int16_t)g_game_session.config.selected_tribe,
+        (uint16_t)g_menu.selected_map_island, (uint16_t)location_index);
+    if (slot < 0) return 0;
+    task_count = game_session_collect_task_slots(&g_game_session,
+        (int16_t)g_game_session.config.selected_tribe, task_slots,
+        sizeof(task_slots) / sizeof(task_slots[0]));
+    task_panel = window_catalog_find(&g_window_catalog, "IWTasks", 3);
+    visible_rows = task_panel != NULL
+        ? (task_panel->pane.bottom - task_panel->pane.top) / 13 : 0;
+    g_iw_construct_open = 0;
+    g_island_panel_mode = WINDOW_ISLAND_PANEL_TASKS;
+    g_selected_task_slot = slot;
+    g_task_scroll_offset = 0;
+    for (index = 0; index < task_count &&
+         index < sizeof(task_slots) / sizeof(task_slots[0]); ++index) {
+        if (task_slots[index] != (uint8_t)slot) continue;
+        if (visible_rows > 0 && (int)index >= visible_rows)
+            g_task_scroll_offset = (int)index - visible_rows + 1;
+        break;
+    }
+    return 1;
+}
+
 static int apply_iw_construct_messages(const IwConstructTransition *transition)
 {
     unsigned int i;
