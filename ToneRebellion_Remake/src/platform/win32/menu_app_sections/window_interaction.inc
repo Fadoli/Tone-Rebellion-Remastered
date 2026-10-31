@@ -1,5 +1,6 @@
 static void dispatch_newgame_master_message(HWND window, int message)
 {
+    if (net_newgame_message(window, message)) return;
     if (message == 52) {
         (void)begin_new_game(window);
     } else if (message == 53) {
@@ -47,23 +48,22 @@ static void handle_click(HWND window, int x, int y)
                             "Tone Rebellion remake", MB_OK | MB_ICONERROR);
         }
     } else if (g_menu.screen == SCREEN_NEW_GAME && clicked_tribe >= 0) {
-        /* NewGameWin's custom mouse handler resolves the animated tribe glyphs. */
-        g_menu.selected_tribe = clicked_tribe;
-        g_menu.setup_accepted = 0;
+        /* NewGameWin's custom mouse handler resolves the animated tribe glyphs
+           (messages 60..63). */
+        dispatch_newgame_master_message(window, 60 + clicked_tribe);
     } else if (g_menu.screen == SCREEN_NEW_GAME &&
                (x - 320) * (x - 320) + (y - 240) * (y - 240) < 100) {
         /* The NewGameWin handler assigns this inner hit region to difficulty. */
-        g_menu.difficulty = (g_menu.difficulty + 1) % g_difficulty_count;
-        g_menu.setup_accepted = 0;
+        dispatch_newgame_master_message(window, 55);
     } else if (g_menu.screen == SCREEN_NEW_GAME &&
                (x - 320) * (x - 320) + (y - 240) * (y - 240) < 200) {
         /* The surrounding NewGameWin hit region changes world size. */
-        g_menu.world_index = (g_menu.world_index + 1) % g_menu.world_map.world_count;
-        g_menu.setup_accepted = 0;
+        dispatch_newgame_master_message(window, 53);
     } else if (g_menu.screen == SCREEN_NEW_GAME) {
         control = window_catalog_hit_test(&g_window_catalog, 1, x, y);
         if (control != NULL && strcmp(control->message_destination, "WINMGR") == 0 &&
             control->send_message[0] == 1 && control->send_message[1] == 0) {
+            net_leave_lobby();
             g_menu.screen = SCREEN_MAIN_MENU;
             g_menu.setup_accepted = 0;
         } else if (control != NULL && strcmp(control->message_destination, "MASTER") == 0) {

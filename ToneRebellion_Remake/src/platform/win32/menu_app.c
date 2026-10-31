@@ -1,4 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
+/* Winsock 2 must precede windows.h (net_session.inc). */
+#include <winsock2.h>
 #include <windows.h>
 #include <windowsx.h>
 
@@ -26,6 +28,7 @@
 #include "window_catalog.h"
 #include "world_map.h"
 #include "tone_rng.h"
+#include "net_lobby.h"
 
 #include <math.h>
 #include <limits.h>
@@ -495,6 +498,8 @@ static void select_location_anywhere(int island, int location)
 
 #include "menu_app_sections/logo_splash.inc"
 #include "menu_app_sections/end_game_screen.inc"
+
+#include "menu_app_sections/net_session.inc"
 
 #include "menu_app_sections/render_dispatch.inc"
 

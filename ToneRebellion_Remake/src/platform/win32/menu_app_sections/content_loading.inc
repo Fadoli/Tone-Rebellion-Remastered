@@ -646,6 +646,24 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
                     "Tone Rebellion remake", MB_OK | MB_ICONERROR);
         return 1;
     }
+    {
+        char net_value[128];
+        if (command_line_value(command_line, "--name", net_value, sizeof(net_value)))
+            (void)snprintf(g_net_name, sizeof(g_net_name), "%s", net_value);
+        if (command_line_value(command_line, "--port", net_value, sizeof(net_value)) &&
+            atoi(net_value) > 0 && atoi(net_value) < 65536)
+            g_net_port = (unsigned short)atoi(net_value);
+        if (command_line_value(command_line, "--join", net_value, sizeof(net_value)))
+            (void)snprintf(g_net_join_address, sizeof(g_net_join_address), "%s", net_value);
+        /* --host / --join open the lobby (New Game screen) directly. */
+        if (command_line != NULL &&
+            (strstr(command_line, "--host") != NULL ? net_start_host()
+             : strstr(command_line, "--join") != NULL ? net_start_join() : 0)) {
+            free(g_logo_pixels);
+            g_logo_pixels = NULL;
+            g_menu.screen = SCREEN_NEW_GAME;
+        }
+    }
     update_window_title(window);
     /* The original main loop requests `start` without a repeat flag before
        the title menu settles on `ambi1`, after the logo when float.cfg has

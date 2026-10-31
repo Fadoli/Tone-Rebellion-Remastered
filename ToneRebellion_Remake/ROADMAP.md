@@ -78,4 +78,4 @@ Doutes à trancher : sites « hidden pad » exclus du hit-test (commit `4452b0a`
 
 ## Hors périmètre pour l'instant
 
-Multijoueur (transport du commerce, cartes `ENDGNONP`), `intro.avi` et commandes `nevada` (rotation/zoom clavier).
+Multijoueur en jeu (synchronisation des commandes, transport du commerce, cartes `ENDGNONP`; le lobby hôte/invité est porté, voir [multijoueur](../behavior/multiplayer.md)), `intro.avi` et commandes `nevada` (rotation/zoom clavier).

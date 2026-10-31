@@ -54,6 +54,7 @@ add_library(tone_core STATIC
     src/core/game_music.c
     src/core/floater_motion.c
     src/core/tone_rng.c
+    src/core/net_lobby.c
 )
 target_include_directories(tone_core PUBLIC src/core src/data)
 target_compile_features(tone_core PUBLIC c_std_11)
@@ -227,6 +228,12 @@ if(BUILD_TESTING)
     enable_test_assertions(test_game_music)
     add_test(NAME game_music_unit COMMAND test_game_music)
 
+    add_executable(test_net_lobby tests/test_net_lobby.c)
+    target_link_libraries(test_net_lobby PRIVATE tone_core)
+    target_compile_features(test_net_lobby PRIVATE c_std_11)
+    enable_test_assertions(test_net_lobby)
+    add_test(NAME net_lobby_unit COMMAND test_net_lobby)
+
     add_executable(test_island_corpus tests/test_island_corpus.c)
     target_link_libraries(test_island_corpus PRIVATE tone_core)
     target_compile_features(test_island_corpus PRIVATE c_std_11)
@@ -240,7 +247,7 @@ endif()
 
 if(WIN32)
     add_executable(remake_menu WIN32 src/platform/win32/menu_app.c)
-    target_link_libraries(remake_menu PRIVATE tone_core user32 gdi32 msimg32 winmm)
+    target_link_libraries(remake_menu PRIVATE tone_core user32 gdi32 msimg32 winmm ws2_32)
     target_compile_features(remake_menu PRIVATE c_std_11)
     if(NOT MSVC)
         target_link_libraries(remake_menu PRIVATE m)

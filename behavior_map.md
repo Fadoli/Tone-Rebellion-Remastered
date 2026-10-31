@@ -57,3 +57,7 @@ Cette page est un index; le détail est réparti en pages thématiques pour limi
 ## Limites
 
 - [Limites](behavior_map_pages/page-02.md)
+
+## Multijoueur
+
+- [Session DirectPlay, transport, lobby et synchronisation](behavior/multiplayer.md): `FUN_0041c1d6` → feuille `FUN_0044c2b9` → `DAT_004befe0`; `FUN_004133f2` → `FUN_00412d70` (Send) / `FUN_00412eac` (Receive); `FUN_00413e8a` → `FUN_00413675` (cadence) et `FUN_004121b7` (lobby, type 9 → `FUN_004637fc`); canal 1 → `FUN_00466221` → `FUN_00465793`/`FUN_004672ef`.

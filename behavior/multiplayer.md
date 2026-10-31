@@ -1,0 +1,40 @@
+# Multijoueur (DirectPlay, lobby, transport et synchronisation)
+
+Source: REA statique sur `FLOAT.EXE` (Ghidra, aucune exécution), trois sous-agents haiku; ECX vérifié à l'assembleur aux sites cités. Evidence IDs (préfixes): `ev_5d525afa`, `ev_4ecf4428`, `ev_dc2683ef`, `ev_942674`, `ev_2a8abf`, `ev_7dafbeac`, `ev_a94628c9`, `ev_407c43b3`, `ev_e76bb0bc`, `ev_8b91ebeb`, `ev_b3126f57`, `ev_54c0ae3b`, `ev_4be6368`, `ev_6f7dd1e6`, `ev_e2e16cc25be5`, `ev_f9766eff3e03`, `ev_96e30c7a`, `ev_0b3cd8f3fb26`, `ev_1143a3a4`, `ev_8e521b0585d1`, `ev_add94e1e200`, `ev_0123adaea3de`, `ev_814508f2b1dc`, `ev_374a5bda4d8c`, `ev_bbdf10287a1e`, `ev_c1868c923bd8`, `ev_1f76cc3b`, `ev_1a99fa08`, `ev_242a6f46`, `ev_ff1cb528`.
+
+## Session DirectPlay (observation)
+
+- Imports réseau: `DPLAYX.DLL` `DirectPlayCreate` (`FUN_0044ab7a`) et `DirectPlayEnumerateA` (`FUN_0044aa7e`, fournisseurs de service). Pas de `DirectPlayLobby`, pas de Winsock trouvé (table d'import non énumérée en entier). `CoCreateInstance` ne sert qu'à DirectShow (`intro.avi`).
+- Interface `DAT_005e1770` (QI de `DAT_005e1ef0`); appels COM avec l'interface poussée en premier argument. Décalages: `+0x18` CreatePlayer, `+0x34` EnumSessions (`FUN_0044aed8`, GUID d'application `0x494688`), `+0x60` Open (drapeau 1 = rejoindre `FUN_0044afcc`, 2 = créer `FUN_0044acd8`, au plus 8 joueurs), `+0x64` Receive, `+0x68` Send. Noms déduits des arguments et des chaînes d'erreur voisines, `dplay.h` non consulté.
+- Interface de connexion: `FUN_0044c2b9`, `PropertySheetA` de 5 pages (gabarits 0x81, 0x6c, 0x82, 0x83, 0x84), clé `HKLM\Software\The Logic Factory\Tone R…`; chaînes « Héberger / Rejoindre une session (3/4) ». Ce n'est pas un écran de `windows.txt` (états 0..8 seulement). Appelants des fonctions DirectPlay: procédures de pages non résolues.
+- `float.cfg` `network` → `DAT_004c2b88 = 1`, lu seulement par `FUN_0041c1d6`: avec ce mot-clé le jeu ouvre la feuille de propriétés puis pose `DAT_004befe0 = 1`; sinon `DAT_004befe4 = 1` (solo). `net_name` est copié dans `DAT_0049c9b8` sans lecteur trouvé.
+
+## Table des joueurs `0x4befe0` (observation, ECX de `FUN_004121b7`)
+
+`+0` drapeau multijoueur (`DAT_004befe0`), `+4` nombre de joueurs, `+8` indice de l'hôte, `+0xc` indice local, `+0x10 + k·0x40` noms, `+0x110 + 4k` masques de tribus, `+0x120 + 4k` DPID (`DAT_004bf100`), `+0x138` taille de monde, `+0x13c` difficulté, `+0x140` partie lancée. Écrivains de `+8/+0xc/+0x10` non décompilés.
+
+## Transport (observation)
+
+- File unique `FUN_004133f2(canal, type, données, longueur, drapeaux, instant)`: 32 entrées de 0x60 octets (`+0` occupée, `+4` canal, `+8` instant d'exécution, `+0xc` longueur + 4, `+0x10` type, `+0x14` données). Mise en file locale si solo, si local = hôte ou si `drapeaux & 6`; envoi réseau si multijoueur et `!(drapeaux & 6)` par `FUN_00412d70`: en-tête de 12 octets (canal, instant, type) + données (≤ 0x53), destinataire `DPID[hôte]` pour un invité, tous (0) pour l'hôte. Les invités ne parlent qu'à l'hôte; l'hôte reçoit, met en file et rediffuse.
+- Instant d'exécution: solo `maintenant + période`; réseau, prochain multiple de la période (`+0x1278`) plus un compteur de créneau. Défilement `FUN_00413344`: premier enregistrement du canal dont l'instant ≤ tick courant `+0x1274`.
+- Canaux: 1 commandes de jeu (`FUN_00414081`, 18 sites; vidé par `FUN_00466221`: type 1 → `FUN_00465793`, 2 → `FUN_004672ef`); 2 lobby/session (`FUN_004140dd`; vidé par `FUN_00413e8a` → `FUN_004121b7`); 3 texte (`FUN_0041412d`, multijoueur seulement); 4 contrôle de cadence (`FUN_00414106`, lu par `FUN_00413675`).
+- Réception: `FUN_00412eac` boucle sur Receive et remet chaque paquet en file avec son instant.
+
+## Lobby et début de partie (observation)
+
+- L'écran Nouvelle partie (état 1) sert de lobby: `FUN_0044ec5d` liste les joueurs; taille du monde et difficulté (messages 53/55 → types 7/8) seulement chez l'hôte (`befec == befe8`); un clic de tribu (60..63) envoie le type 6 pour le joueur local (bascule de bit refusée si un autre joueur la tient).
+- `FUN_004121b7`: 1 ajout de joueur, 2 retrait (si l'hôte part: retour au solo, seul écrivain de `DAT_004befe0 = 0`), 4 indice local, 5/6 réservation de tribu, 7/8 réglages, 9 début, 10/11 réglages divers, 12 remise à zéro.
+- BEGINGAME (52): si tous les masques de tribus sont non nuls, l'hôte envoie le type 9 dont la seule charge est `FUN_0041be72()` (dword bas de `QueryPerformanceCounter`); le cas 9 en fait la graine du tirage `DAT_004a4b78` (`FUN_00467260`) sur chaque machine, puis `FUN_004637fc(monde, difficulté, …)`. Monde, difficulté et tribus sont donc déjà connus de tous avant le type 9.
+
+## Synchronisation en jeu (observation et interprétation)
+
+- Observation: les commandes passent par le canal 1 avec un instant futur commun; l'exécution est gardée par le tick, pas par une attente par joueur. Canal 4: type 1 période, 2 créneau validé par l'hôte (`FUN_00413088`: l'hôte n'avance que si chaque invité a annoncé plus de 0x1f), 3 arrivée d'un pair, 5 accusé, 6 progression d'un invité (tous les 5 créneaux). `FUN_00413b68` (invité) pose `DAT_004bf114 = retard >> 2` pour rattraper (appels de tick supplémentaires par image).
+- Interprétation: pas de jeu verrouillé à tour strict mais un ordonnancement de commandes à instant différé, cadencé par l'hôte; la simulation est déterministe à partir de la graine du type 9.
+
+## Inconnues
+
+Procédures des pages de la feuille de propriétés et callbacks EnumSessions; écrivains de l'indice hôte/local et des noms; types précis des commandes du canal 1; `FUN_00412c1d` (cas 3); sens des cas 10/11; flags de session 0x44; débordement possible d'une entrée de file (> 76 octets) sur le chemin local (inférence statique).
+
+## Port
+
+Le remake ne peut pas utiliser DirectPlay. `src/core/net_lobby.c` (sans API système) modélise le lobby: emplacements (hôte = 0), noms, tribus distinctes, réglages réservés à l'hôte, enregistrement de début (graine = compteur de performance de l'hôte, monde, difficulté, tribu par emplacement); types 1/6/9 repris des numéros natifs, format d'octets propre au remake (TCP, en-tête de 4 octets). `menu_app_sections/net_session.inc` transporte ces enregistrements en TCP non bloquant (port 28610 par défaut). Entrée: touches `H`/`J` du titre ou `--host` / `--join adresse` (`--port`, `--name`); l'écran Nouvelle partie devient le lobby (liste en haut au centre, géométrie de `FUN_0044ec5d` non portée). Vérifié avec deux instances sur 127.0.0.1: l'invité voit l'hôte, une tribu tenue est refusée, les réglages de l'invité sont ignorés, BEGINGAME amène les deux fenêtres sur la carte du monde avec la même graine et leur tribu. Non porté: synchronisation en jeu (canal 1, cadence du canal 4), départ en cours de partie, commerce et diplomatie réseau; chaque instance simule seule après le début.

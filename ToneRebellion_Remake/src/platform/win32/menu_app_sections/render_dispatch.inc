@@ -261,8 +261,10 @@ static void paint_window(HWND window)
         back = g_paint_buffer_dc;
         if (g_menu.screen == SCREEN_MAIN_MENU) {
             render_main_menu(back);
+            render_net_lobby(back);
         } else if (g_menu.screen == SCREEN_NEW_GAME) {
             render_new_game(back);
+            render_net_lobby(back);
         } else if (g_menu.screen == SCREEN_WORLD_MAP) {
             render_world_map(back);
         } else if (g_menu.screen == SCREEN_ISLAND) {

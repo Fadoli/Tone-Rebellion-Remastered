@@ -14,7 +14,10 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
     case WM_ERASEBKGND:
         return 1;
     case WM_TIMER:
-        if (wparam == 1) e2e_write_state();
+        if (wparam == 1) {
+            e2e_write_state();
+            if (net_poll(window)) InvalidateRect(window, NULL, FALSE);
+        }
         if (wparam == 2) {
             keep_background_tune_playing();
             return 0;
@@ -689,6 +692,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 g_menu.setup_accepted = 0;
                 InvalidateRect(window, NULL, FALSE);
             } else if (g_menu.screen == SCREEN_NEW_GAME) {
+                net_leave_lobby();
                 g_menu.screen = SCREEN_MAIN_MENU;
                 g_menu.setup_accepted = 0;
                 InvalidateRect(window, NULL, FALSE);
@@ -699,7 +703,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             if (g_menu.screen == SCREEN_MAIN_MENU) {
                 g_menu.screen = SCREEN_NEW_GAME;
             } else if (g_menu.screen == SCREEN_NEW_GAME) {
-                (void)begin_new_game(window);
+                dispatch_newgame_master_message(window, 52);
             } else if (g_menu.screen == SCREEN_LOAD_GAME) {
                 leave_load_screen();
             } else if (g_menu.screen == SCREEN_WORLD_MAP) {
@@ -714,6 +718,14 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             InvalidateRect(window, NULL, FALSE);
         } else if (g_menu.screen == SCREEN_MAIN_MENU && wparam == 'N') {
             g_menu.screen = SCREEN_NEW_GAME;
+            InvalidateRect(window, NULL, FALSE);
+        } else if (g_menu.screen == SCREEN_MAIN_MENU && (wparam == 'H' || wparam == 'J')) {
+            /* Remake entry points: the native host/join property sheet
+               (FUN_0044c2b9) has no screen in windows.txt. */
+            if (wparam == 'H' ? net_start_host() : net_start_join()) {
+                g_menu.screen = SCREEN_NEW_GAME;
+                g_menu.setup_accepted = 0;
+            }
             InvalidateRect(window, NULL, FALSE);
         } else if (g_menu.screen == SCREEN_MAIN_MENU && wparam == 'L') {
             g_menu.screen = SCREEN_LOAD_GAME;
@@ -731,6 +743,10 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             g_island_scroll_x += wparam == VK_RIGHT ? 160 : -160;
             g_island_scroll_x = island_clamp_scroll(g_island_scroll_x);
             g_hovered_location = -1;
+            InvalidateRect(window, NULL, FALSE);
+        } else if (g_menu.screen == SCREEN_NEW_GAME && g_net_mode != NET_MODE_NONE &&
+                   (wparam == VK_LEFT || wparam == VK_RIGHT)) {
+            dispatch_newgame_master_message(window, 53);
             InvalidateRect(window, NULL, FALSE);
         } else if (g_menu.screen == SCREEN_NEW_GAME &&
                    (wparam == VK_LEFT || wparam == VK_RIGHT)) {
@@ -756,6 +772,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         update_interaction_cursor();
         return 0;
     case WM_DESTROY:
+        net_shutdown();
         write_resume_file();
         destroy_sprite_source_dc();
         destroy_paint_buffer();

@@ -29,6 +29,10 @@ static void e2e_write_state(void)
             g_selected_floater, g_selected_location, g_island_panel_mode,
             g_menu.selected_tribe);
     fprintf(file, "hall_player %d\n", selected_hall_player());
+    fprintf(file, "net_mode %d\nnet_slot %d\nnet_players %u\nnet_world %d\n",
+            g_net_mode, g_net_mode != NET_MODE_NONE ? (int)g_net_lobby.local_slot : -1,
+            g_net_mode != NET_MODE_NONE ? net_lobby_player_count(&g_net_lobby) : 0U,
+            g_menu.world_index);
     fprintf(file, "selection_island %d\n", selection_island());
     if (g_game_session_valid && g_menu.selected_tribe >= 0 &&
         g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
