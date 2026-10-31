@@ -85,27 +85,57 @@ static void rebuild_island_palette_lookup(void)
     }
 }
 
+static int g_mouse_x;
+static int g_mouse_y;
+static int island_location_at(int x, int y);
+
+/* FUN_00435581 hit test under the mouse: 2 = floater, 1 = island site,
+   0 = nothing (playfield only). */
+static int island_cursor_hit_kind(void)
+{
+    if (!g_game_session_valid || g_mouse_x < 0 || g_mouse_x >= LOGICAL_WIDTH ||
+        g_mouse_y < 0 || g_mouse_y >= 320) return 0;
+    if (game_session_floater_at(&g_game_session,
+            (uint8_t)g_menu.selected_map_island,
+            (uint16_t)(g_mouse_x + g_island_scroll_x),
+            (uint16_t)g_mouse_y) >= 0) return 2;
+    return island_location_at(g_mouse_x, g_mouse_y) >= 0 ? 1 : 0;
+}
+
 static void update_interaction_cursor(void)
 {
     int slot = 0;
     if (g_menu.screen == SCREEN_ISLAND) {
-        /* FUN_0043530b mode -> slot: grab (mode 1) 9; armed item/glyph (mode
-           0x11) 11; building order targets 0x10 -> 3, 0x11 -> 13, 0x12 -> 5,
-           0x13 -> 15. Order genre 6..9 -> mode 0x10..0x13 is interpreted from
-           the "mode 19 = BC_DefendArea" note and the msg 0x40 modes 16..19. */
+        /* FUN_0043530b mode -> slot (+0x17e) and hit kind (+0x178): grab
+           (mode 1) 9/kind 1; armed item/glyph (mode 0x11) 11/kind 1; order
+           genres 6..9 -> modes 0x10..0x13: 3/kind 2, 13/kind 1, 5/kind 2,
+           15/kind 4; spells 0xb/kind 1 for a site pick, 7/kind 2 for a
+           floater pick (ev_614c66b1). FUN_004337d9 case 10 (ev_bf1a97d8)
+           shows slot + 1 while the hovered hit matches the kind; with no
+           mode any floater or site hit shows cursor 1 (resource 0x75). */
         static const int k_order_slots[4] = {3, 13, 5, 15};
+        static const int k_order_kinds[4] = {2, 1, 2, 4};
+        int kind = 0;
+        int hit = island_cursor_hit_kind();
         if (game_glyph_inventory_cursor_slot(g_selected_glyph,
                                              g_selected_inventory_item) == 0x0b) {
             slot = 0x0b;
+            kind = 1;
         } else if (g_defend_area_armed >= 6 && g_defend_area_armed <= 9) {
             slot = k_order_slots[g_defend_area_armed - 6];
+            kind = k_order_kinds[g_defend_area_armed - 6];
         } else if (g_armed_spell_action != 0) {
-            /* FUN_0043530b spell modes: +0x17e = 0xb for a site pick, 7 for
-               a floater pick. */
             slot = g_armed_spell_pick == 2 ? 7 : 0x0b;
+            kind = g_armed_spell_pick == 2 ? 2 : 1;
         } else if (g_game_session_valid &&
                    g_game_session.location_move_active) {
             slot = 9;
+            kind = 1;
+        }
+        if (kind == 0) {
+            if (hit != 0) slot = 1;
+        } else if (kind == hit) {
+            ++slot;
         }
     }
     if (g_interaction_cursors[slot] != NULL) {
@@ -114,8 +144,7 @@ static void update_interaction_cursor(void)
     }
     SetCursor(LoadCursorA(NULL, IDC_ARROW));
 }
-static int g_mouse_x;
-static int g_mouse_y;
+
 
 static void update_window_title(HWND window);
 static void set_background_tune(const char *tune_id);
