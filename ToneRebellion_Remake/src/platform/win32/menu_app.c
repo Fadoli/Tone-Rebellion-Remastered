@@ -135,6 +135,8 @@ static SpriteSheet g_initial_floater_bodies_flipped[4];
 static SpriteSheet g_initial_floater_legs_flipped[4];
 static SpriteSheet g_leviathan_body_art;
 static SpriteSheet g_leviathan_body_art_flipped;
+static SpriteSheet g_ascend_legs_art;
+static SpriteSheet g_ascend_legs_art_flipped;
 static SpriteSheet g_leviathan_legs[9];
 static SpriteSheet g_leviathan_legs_flipped[9];
 static SpriteSheet g_floater_info_art;

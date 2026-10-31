@@ -136,6 +136,21 @@ int game_session_dispatch_task_command(GameSession *session, uint8_t slot,
                 target->owner_id == event->player_id)
                 target->upgrade_task_handle = -1;
         }
+        if (event->action_type == 4 &&
+            (event->payload_12 == 2 || event->payload_12 == 3) &&
+            event->payload_0a >= 0 &&
+            (uint16_t)event->payload_0a < session->island_count &&
+            event->payload_0e >= 0 &&
+            (uint16_t)event->payload_0e <
+                session->islands[(uint16_t)event->payload_0a].location_count) {
+            /* Training supply link (+0x52 / +0x54): dropped with its task. */
+            GameRuntimeLocation *target = &session->islands[
+                (uint16_t)event->payload_0a].locations[
+                    (uint16_t)event->payload_0e];
+            if (target->source_task_slot[event->payload_12 - 1] ==
+                (int16_t)slot)
+                target->source_task_slot[event->payload_12 - 1] = -1;
+        }
         /* FUN_00466533 calls FUN_00420669 for every live floater before
            releasing the pending slot. The native helper drops that floater's
            task claim and clears its active order when it points at this slot. */

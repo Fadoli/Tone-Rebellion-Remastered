@@ -75,6 +75,32 @@ int island_worker_stat_badge_layout(uint8_t worker_type,
                                     uint32_t *frame,
                                     int32_t *x, int32_t *y);
 
+/* FUN_0042704b's third overlay-enable global (flag bit 2) gates a second
+   FLTINFO gauge for non-spore floaters with a nonzero subtype: frame
+   10 - stat (stat capped at ten), beside the combat-stat badge at the opposite
+   X offset (+5 when mirrored, +0 otherwise). Interpretation: the x87 operands
+   before __ftol are not in the decompiled output; the remake feeds it
+   charge/max * 10. */
+int island_worker_state_overlay_enabled(uint8_t flags,
+                                        int renderer_allows_overlays);
+int island_worker_charge_badge_layout(uint8_t floater_type,
+                                      uint8_t worker_type,
+                                      int16_t charge_stat, int facing_left,
+                                      int32_t body_hit_left,
+                                      int32_t body_hit_top,
+                                      int32_t body_hit_right_exclusive,
+                                      uint32_t *frame,
+                                      int32_t *x, int32_t *y);
+
+/* FUN_0042704b draws the body shape at fltinf.txt's `base lo hi` for the
+   (class, subtype) item (floater.txt row -> item, e.g. Protector subtype 1 is
+   ptrain1, base 1 4), at lo + level clamped to hi, level being the low nibble
+   of record +0x0a (FUN_0041ff2e). Subtype 8 (ascend) has no body line.
+   Returns 0 when no body shape is drawn. Table transcribed from fltinf.txt and
+   floater.txt. */
+int island_floater_body_frame(uint8_t floater_class, uint8_t subtype,
+                              unsigned level, uint32_t *frame);
+
 /* FUN_0042003c resolves the starting *work row's realm to FLTINFO frames
    22..25. When a current location is available, 0x10000 increments the realm
    modulo four and takes precedence over 0x20000, which decrements it. */

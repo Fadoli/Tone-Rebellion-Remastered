@@ -1,3 +1,44 @@
+static const SpriteSheet g_empty_floater_sheet;
+
+/* fltinf.txt's ascend item (floater.txt subtype 8 of every tribe) has an
+   alegs shape and no body line. */
+static int island_floater_is_ascended(const GameFloaterStart *floater)
+{
+    return floater->type_index < 4U && floater->source_subtype == 8U;
+}
+
+static const SpriteSheet *island_floater_body_art(
+    const GameFloaterStart *floater)
+{
+    if (island_floater_is_ascended(floater)) return &g_empty_floater_sheet;
+    return floater->facing_left
+        ? &g_initial_floater_bodies_flipped[floater->type_index]
+        : &g_initial_floater_bodies[floater->type_index];
+}
+
+static const SpriteSheet *island_floater_legs_art(
+    const GameFloaterStart *floater)
+{
+    if (island_floater_is_ascended(floater))
+        return floater->facing_left ? &g_ascend_legs_art_flipped
+                                    : &g_ascend_legs_art;
+    return floater->facing_left
+        ? &g_initial_floater_legs_flipped[floater->type_index]
+        : &g_initial_floater_legs[floater->type_index];
+}
+
+static uint32_t island_floater_body_sprite_frame(
+    const GameFloaterStart *floater, const SpriteSheet *body_art)
+{
+    uint32_t frame;
+    if (floater == NULL || body_art == NULL ||
+        !island_floater_body_frame(
+            floater->type_index, floater->source_subtype,
+            floater->attack_level_flags & 0x0fU, &frame) ||
+        frame >= body_art->frame_count) return 0;
+    return frame;
+}
+
 static uint32_t island_floater_legs_frame(const GameFloaterStart *floater)
 {
     if (floater == NULL) return 0;
@@ -8,6 +49,13 @@ static uint32_t island_floater_legs_frame(const GameFloaterStart *floater)
             floater->attack_frame_first, floater->attack_frame_last,
             floater->attack_frame_ticks_per_frame,
             floater->attack_frame_ping_pong, floater->attack_timer);
+    }
+    if (island_floater_is_ascended(floater))
+    {
+        /* hover 0..28, speed div 2; clamp to the shipped sheet. */
+        uint32_t count = g_ascend_legs_art.frame_count < 29U
+            ? g_ascend_legs_art.frame_count : 29U;
+        return count == 0U ? 0U : (g_menu.animation_ticks / 2U) % count;
     }
     return island_worker_legs_frame(
         floater->type_index, floater->carried_resource_code != 0,
@@ -73,6 +121,45 @@ static uint32_t island_leviathan_body_frame(const GameFloaterStart *floater)
     uint32_t level = floater->attack_level_flags & 0xfU;
     return 2U * (uint32_t)(floater->source_subtype - 10U) +
            (level > 1U ? 1U : level);
+}
+
+/* FUN_0042704b draws cargo first (behind body and legs) at floater + fltinf
+   graspxy (record +0x25/+0x26), the offset mirrored with the facing while the
+   cargo sprite itself is drawn unflipped (plain FUN_00404770/FUN_00410bd2
+   calls, no scale argument), plus the per-item vertical offset (DAT_0049acbe,
+   not yet extracted: 0 here). */
+static void draw_island_floater_cargo(HDC dc, const GameFloaterStart *floater,
+                                      int x, int y)
+{
+    static const int8_t grasp_x[4] = {10, 10, 13, 11};
+    static const int8_t grasp_y[4] = {12, 14, 14, 20};
+    int hand_x;
+    int hand_y;
+    if (floater == NULL || floater->carried_resource_code == 0 ||
+        floater->type_index > 3U) return;
+    hand_x = x + (floater->facing_left ? -grasp_x[floater->type_index]
+                                       : grasp_x[floater->type_index]);
+    hand_y = y + grasp_y[floater->type_index];
+    if (floater->carried_resource_code >= 1 &&
+        floater->carried_resource_code <= GAME_RESOURCE_TYPE_COUNT) {
+        static const SpriteSheet *const carried_art[] = {
+            &g_bildtone_art, &g_tone_crys_art, &g_magctone_art
+        };
+        const SpriteSheet *cargo_art = carried_art[
+            (unsigned int)floater->carried_resource_code - 1U];
+        if (cargo_art->frame_count != 0)
+            draw_sprite_scaled(dc, cargo_art, 0, hand_x, hand_y, 0x00008000U);
+    } else if (floater->carried_resource_code >= GAME_INVENTORY_ITEM_FIRST_ID &&
+               floater->carried_resource_code <
+                   GAME_INVENTORY_ITEM_FIRST_ID + GAME_INVENTORY_ITEM_COUNT &&
+               (uint32_t)(floater->carried_resource_code -
+                   GAME_INVENTORY_ITEM_FIRST_ID) <
+                       g_inventory_item_art.frame_count) {
+        draw_sprite_scaled(dc, &g_inventory_item_art,
+                           (uint32_t)(floater->carried_resource_code -
+                               GAME_INVENTORY_ITEM_FIRST_ID),
+                           hand_x, hand_y, 0x00008000U);
+    }
 }
 
 static uint32_t island_leviathan_legs_frame(const GameFloaterStart *floater,
@@ -143,7 +230,9 @@ static void draw_island_floater_overlays(HDC dc, const GameFloaterStart *floater
     uint32_t frame;
     int32_t badge_x;
     int32_t badge_y;
-    if (g_floater_info_art.frame_count < 26 || body_art == NULL ||
+    int16_t charge_now;
+    int16_t charge_max;
+    if (g_floater_info_art.frame_count < 26|| body_art == NULL ||
         body_frame_index >= body_art->frame_count) return;
     body_frame = &body_art->frames[body_frame_index];
     body_left = x + body_frame->x_offset + body_frame->hit_left;
@@ -160,7 +249,24 @@ static void draw_island_floater_overlays(HDC dc, const GameFloaterStart *floater
        FUN_00466fe4/FUN_0041e4e4, so their world badge is eligible. */
     if (island_worker_health_overlay_enabled(g_floater_overlay_flags, 1) &&
         island_worker_stat_badge_layout(
-            floater->type_index, island_floater_health_stat(floater),
+            floater->type_index < 4U ? floater->source_subtype
+                                     : floater->type_index,
+            island_floater_health_stat(floater),
+            floater->facing_left, body_left, body_top, body_right,
+            &frame, &badge_x, &badge_y) &&
+        frame < g_floater_info_art.frame_count) {
+        draw_sprite(dc, &g_floater_info_art, frame, badge_x, badge_y);
+    }
+    /* Charge gauge beside the health one, friendly units only. */
+    if (island_worker_state_overlay_enabled(g_floater_overlay_flags, 1) &&
+        floater->owner_slot == g_menu.selected_tribe &&
+        game_session_floater_charge_values(floater, &g_floater_catalog,
+                                           &charge_now, &charge_max) &&
+        charge_max > 0 &&
+        island_worker_charge_badge_layout(
+            floater->type_index, floater->source_subtype,
+            (int16_t)(((int32_t)(charge_now > 0 ? charge_now : 0) * 10) /
+                      charge_max),
             floater->facing_left, body_left, body_top, body_right,
             &frame, &badge_x, &badge_y) &&
         frame < g_floater_info_art.frame_count) {
@@ -182,13 +288,17 @@ static void draw_island_leviathan_floater(HDC dc,
         ? &g_leviathan_legs_flipped[sheet_index]
         : &g_leviathan_legs[sheet_index];
     leg_frame = island_leviathan_legs_frame(floater, sheet_index);
-    draw_sprite(dc, leg_art, leg_frame, x, y);
-    if (floater->source_subtype == 9U) return;
-    body_art = floater->facing_left
-        ? &g_leviathan_body_art_flipped : &g_leviathan_body_art;
-    if (body_art->frame_count >= 16U) {
-        draw_sprite(dc, body_art, island_leviathan_body_frame(floater), x, y);
+    /* FUN_0042704b draws the optional body shape (fltinf shape 0) before the
+       mandatory legs shape (shape 1); subtype 9 has legs only. */
+    if (floater->source_subtype != 9U) {
+        body_art = floater->facing_left
+            ? &g_leviathan_body_art_flipped : &g_leviathan_body_art;
+        if (body_art->frame_count >= 16U) {
+            draw_sprite(dc, body_art, island_leviathan_body_frame(floater),
+                        x, y);
+        }
     }
+    draw_sprite(dc, leg_art, leg_frame, x, y);
 }
 
 static void draw_leviathan_sprite_revealed(HDC dc, const SpriteSheet *art,
@@ -246,8 +356,6 @@ static int draw_island_leviathan_spawn_effect(
         ? &g_leviathan_legs_flipped[sheet_index]
         : &g_leviathan_legs[sheet_index];
     leg_frame = island_leviathan_legs_frame(floater, sheet_index);
-    draw_leviathan_sprite_revealed(dc, leg_art, leg_frame,
-                                   output.x, output.y, mask_progress);
     if (floater->source_subtype >= 10U && floater->source_subtype <= 17U) {
         const SpriteSheet *body_art = floater->facing_left
             ? &g_leviathan_body_art_flipped : &g_leviathan_body_art;
@@ -255,6 +363,8 @@ static int draw_island_leviathan_spawn_effect(
         draw_leviathan_sprite_revealed(dc, body_art, body_frame,
                                        output.x, output.y, mask_progress);
     }
+    draw_leviathan_sprite_revealed(dc, leg_art, leg_frame,
+                                   output.x, output.y, mask_progress);
     return 1;
 }
 
@@ -264,20 +374,22 @@ static int draw_island_leviathan_spawn_effect(
    floater's +0x0a (the port's unit level). FUN_00440567 then draws each
    present floater through FUN_0042704b at the fixed pane offsets below; the
    selected-floater highlight path is not ported. */
-static void draw_building_slot_floaters(HDC dc, const WindowTemplate *info,
-                                        const GameRuntimeLocation *location)
+static int building_slot_floater_layout(const GameRuntimeLocation *location,
+                                        int16_t slots[6], const int **xs,
+                                        const int **ys)
 {
     static const int x_default[6] = {230, 230, 230, 195, 195, 160};
     static const int y_default[6] = {21, 55, 89, 35, 72, 55};
     static const int x_hall[6] = {220, 999, 999, 220, 999, 170};
     static const int y_hall[6] = {28, 999, 999, 82, 999, 55};
-    int16_t slots[6] = {-1, -1, -1, -1, -1, -1};
-    const int *xs = location->record_value_10 == 0x2f ? x_hall : x_default;
-    const int *ys = location->record_value_10 == 0x2f ? y_hall : y_default;
     unsigned int kind;
     unsigned int slot;
 
-    if (!g_game_session_valid || location->source_location_slot_18 == -1) return;
+    for (slot = 0; slot < 6U; ++slot) slots[slot] = -1;
+    *xs = location->record_value_10 == 0x2f ? x_hall : x_default;
+    *ys = location->record_value_10 == 0x2f ? y_hall : y_default;
+    if (!g_game_session_valid || location->source_location_slot_18 == -1)
+        return 0;
     for (kind = 0; kind < 3U; ++kind) {
         unsigned int k = kind == 1U ? 3U : kind == 2U ? 5U : 0U;
         int link;
@@ -290,8 +402,42 @@ static void draw_building_slot_floaters(HDC dc, const WindowTemplate *info,
             ++k;
         }
     }
+    return 1;
+}
+
+/* FUN_00440451: the first filled slot within |dx| < 15 and |dy| < 15 of its
+   fixed pane offset. Returns the floater index or -1. */
+static int building_slot_floater_at(const WindowTemplate *info,
+                                    const GameRuntimeLocation *location,
+                                    int x, int y)
+{
+    int16_t slots[6];
+    const int *xs;
+    const int *ys;
+    unsigned int slot;
+    if (info == NULL || location == NULL ||
+        !building_slot_floater_layout(location, slots, &xs, &ys)) return -1;
+    for (slot = 0; slot < 6U; ++slot) {
+        int dx = x - (info->pane.left + xs[slot]);
+        int dy = y - (info->pane.top + ys[slot]);
+        if (slots[slot] < 0 || xs[slot] == 999) continue;
+        if (dx > -15 && dx < 15 && dy > -15 && dy < 15) return slots[slot];
+    }
+    return -1;
+}
+
+static void draw_building_slot_floaters(HDC dc, const WindowTemplate *info,
+                                        const GameRuntimeLocation *location)
+{
+    int16_t slots[6];
+    const int *xs;
+    const int *ys;
+    unsigned int slot;
+    if (!building_slot_floater_layout(location, slots, &xs, &ys)) return;
     for (slot = 0; slot < 6U; ++slot) {
         const GameFloaterStart *floater;
+        GameFloaterStart mirrored;
+        uint32_t body_frame;
         const SpriteSheet *body_art;
         const SpriteSheet *leg_art;
         int x = info->pane.left + xs[slot];
@@ -299,15 +445,28 @@ static void draw_building_slot_floaters(HDC dc, const WindowTemplate *info,
         if (slots[slot] < 0 || xs[slot] == 999) continue;
         floater = &g_game_session.floaters[slots[slot]];
         if (floater->type_index >= 4U) continue;
-        body_art = floater->facing_left
-            ? &g_initial_floater_bodies_flipped[floater->type_index]
-            : &g_initial_floater_bodies[floater->type_index];
-        leg_art = floater->facing_left
-            ? &g_initial_floater_legs_flipped[floater->type_index]
-            : &g_initial_floater_legs[floater->type_index];
+        /* FUN_00440567 sets flag bit 2 (mirrored) on the floater copy it
+           passes to FUN_0042704b, so staff face left; param_5 = 1 keeps the
+           fltinfo overlays (realm, health, charge) enabled. */
+        mirrored = *floater;
+        mirrored.facing_left = 1;
+        body_art = island_floater_body_art(&mirrored);
+        leg_art = island_floater_legs_art(&mirrored);
+        body_frame = island_floater_body_sprite_frame(&mirrored, body_art);
+        /* param_8 = 1 for the selected floater: FUN_00404c3b loads the
+           FUN_004106dd(1, 1) table so body and legs blit through it
+           (FUN_00405265 flag bit 0); overlays are drawn unremapped. */
+        if (slots[slot] == g_selected_floater) {
+            g_sprite_haze_selector = 1;
+            g_sprite_haze_level = 1;
+        }
+        if (body_art->frame_count != 0)
+            draw_sprite_scaled(dc, body_art, body_frame, x, y, 0x10000U);
         if (leg_art->frame_count != 0)
-            draw_sprite(dc, leg_art, island_floater_legs_frame(floater), x, y);
-        if (body_art->frame_count != 0) draw_sprite(dc, body_art, 0, x, y);
+            draw_sprite_scaled(dc, leg_art, island_floater_legs_frame(&mirrored),
+                               x, y, 0x10000U);
+        g_sprite_haze_level = -1;
+        draw_island_floater_overlays(dc, &mirrored, body_art, body_frame, x, y);
     }
 }
 
@@ -646,6 +805,7 @@ static void render_island_view(HDC dc)
             int floater_x;
             int floater_y;
             uint32_t leg_frame;
+            uint32_t body_frame_index;
             const SpriteSheet *body_art;
             const SpriteSheet *leg_art;
             if (!game_session_floater_is_active(floater) ||
@@ -670,51 +830,18 @@ static void render_island_view(HDC dc)
                 continue;
             }
             leg_frame = island_floater_legs_frame(floater);
-            body_art = floater->facing_left
-                           ? &g_initial_floater_bodies_flipped[floater->type_index]
-                           : &g_initial_floater_bodies[floater->type_index];
-            leg_art = floater->facing_left
-                          ? &g_initial_floater_legs_flipped[floater->type_index]
-                          : &g_initial_floater_legs[floater->type_index];
-            /* FUN_0042704b draws cargo first (behind legs and body) at
-               floater + fltinf graspxy (record +0x25/+0x26), mirrored with
-               the facing, plus the per-item vertical offset (DAT_0049acbe,
-               not yet extracted: 0 here). */
-            if (floater->carried_resource_code != 0) {
-                static const int8_t grasp_x[4] = {10, 10, 13, 11};
-                static const int8_t grasp_y[4] = {12, 14, 14, 20};
-                int hand_x = floater_x + (floater->facing_left
-                    ? -grasp_x[floater->type_index]
-                    : grasp_x[floater->type_index]);
-                int hand_y = floater_y + grasp_y[floater->type_index];
-                if (floater->carried_resource_code >= 1 &&
-                    floater->carried_resource_code <= GAME_RESOURCE_TYPE_COUNT) {
-                    static const SpriteSheet *const carried_art[] = {
-                        &g_bildtone_art, &g_tone_crys_art, &g_magctone_art
-                    };
-                    const SpriteSheet *cargo_art = carried_art[
-                        (unsigned int)floater->carried_resource_code - 1U];
-                    if (cargo_art->frame_count != 0) {
-                        draw_sprite_scaled(dc, cargo_art, 0, hand_x, hand_y,
-                                           0x00008000U);
-                    }
-                } else if (floater->carried_resource_code >=
-                               GAME_INVENTORY_ITEM_FIRST_ID &&
-                           floater->carried_resource_code <
-                               GAME_INVENTORY_ITEM_FIRST_ID +
-                                   GAME_INVENTORY_ITEM_COUNT &&
-                           (uint32_t)(floater->carried_resource_code -
-                               GAME_INVENTORY_ITEM_FIRST_ID) <
-                                   g_inventory_item_art.frame_count) {
-                    draw_sprite_scaled(dc, &g_inventory_item_art,
-                                       (uint32_t)(floater->carried_resource_code -
-                                           GAME_INVENTORY_ITEM_FIRST_ID),
-                                       hand_x, hand_y, 0x00008000U);
-                }
-            }
-            draw_sprite(dc, leg_art, leg_frame, floater_x, floater_y);
-            draw_sprite(dc, body_art, 0, floater_x, floater_y);
-            draw_island_floater_overlays(dc, floater, body_art, 0,
+            body_art = island_floater_body_art(floater);
+            leg_art = island_floater_legs_art(floater);
+            draw_island_floater_cargo(dc, floater, floater_x, floater_y);
+            body_frame_index = island_floater_body_sprite_frame(floater,
+                                                                body_art);
+            if (body_art->frame_count != 0)
+                draw_sprite(dc, body_art, body_frame_index,
+                            floater_x, floater_y);
+            if (leg_art->frame_count != 0)
+                draw_sprite(dc, leg_art, leg_frame, floater_x, floater_y);
+            draw_island_floater_overlays(dc, floater, body_art,
+                                         body_frame_index,
                                          floater_x, floater_y);
         }
     }
@@ -1034,58 +1161,28 @@ static void render_island_view(HDC dc)
                 int sprite_x = info->pane.right - 50;
                 int sprite_y = info->pane.top +
                     (info->pane.bottom - info->pane.top) / 2 + 5;
-                const SpriteSheet *body_art = selected_floater->facing_left
-                    ? &g_initial_floater_bodies_flipped[selected_floater->type_index]
-                    : &g_initial_floater_bodies[selected_floater->type_index];
-                const SpriteSheet *leg_art = selected_floater->facing_left
-                    ? &g_initial_floater_legs_flipped[selected_floater->type_index]
-                    : &g_initial_floater_legs[selected_floater->type_index];
-                const SpriteFrame *body_frame = &body_art->frames[0];
-                draw_sprite(dc, leg_art, leg_frame, sprite_x, sprite_y);
-                draw_sprite(dc, body_art, 0, sprite_x, sprite_y);
-                /* The source draws a carried item as part of FUN_0042704b's
-                   floater sprite, never as a separate CARRY text row. Until
-                   shapeinf.txt hand anchors and carry-frame ranges are loaded,
-                   keep the icon attached to the body's hand area. */
-                if (selected_floater->carried_resource_code >= 1 &&
-                    selected_floater->carried_resource_code <=
-                        GAME_RESOURCE_TYPE_COUNT) {
-                    static const SpriteSheet *const carried_art[] = {
-                        &g_bildtone_art, &g_tone_crys_art, &g_magctone_art
-                    };
-                    unsigned int resource_index =
-                        (unsigned int)selected_floater->carried_resource_code - 1U;
-                    int hand_x = sprite_x + body_frame->x_offset +
-                                 (selected_floater->facing_left ? -6 : 5);
-                    int hand_y = sprite_y + body_frame->y_offset - 1;
-                    if (carried_art[resource_index]->frame_count != 0) {
-                        draw_sprite_scaled(dc, carried_art[resource_index], 0,
-                            hand_x, hand_y, 0x00008000U);
-                    }
-                } else if (selected_floater->carried_resource_code >=
-                               GAME_INVENTORY_ITEM_FIRST_ID &&
-                           selected_floater->carried_resource_code <
-                               GAME_INVENTORY_ITEM_FIRST_ID +
-                                   GAME_INVENTORY_ITEM_COUNT &&
-                           (uint32_t)(selected_floater->carried_resource_code -
-                               GAME_INVENTORY_ITEM_FIRST_ID) <
-                                   g_inventory_item_art.frame_count &&
-                           body_art->frame_count != 0) {
-                    const SpriteFrame *body_frame = &body_art->frames[0];
-                    int hand_x = sprite_x + body_frame->x_offset +
-                                 (selected_floater->facing_left ? -6 : 5);
-                    int hand_y = sprite_y + body_frame->y_offset - 1;
-                    uint32_t item_frame = (uint32_t)(
-                        selected_floater->carried_resource_code -
-                        GAME_INVENTORY_ITEM_FIRST_ID);
-                    draw_sprite_scaled(dc, &g_inventory_item_art, item_frame,
-                                       hand_x, hand_y, 0x00008000U);
-                }
+                const SpriteSheet *body_art = island_floater_body_art(selected_floater);
+                const SpriteSheet *leg_art = island_floater_legs_art(selected_floater);
+                uint32_t body_frame_index =
+                    island_floater_body_sprite_frame(selected_floater,
+                                                     body_art);
+                const SpriteFrame *body_frame = body_art->frame_count != 0
+                    ? &body_art->frames[body_frame_index] : NULL;
+                /* FUN_0042704b draws the carried item first, behind the body
+                   and legs, at the fltinf graspxy anchor, never as a separate
+                   CARRY text row. */
+                draw_island_floater_cargo(dc, selected_floater, sprite_x,
+                                          sprite_y);
+                if (body_art->frame_count != 0)
+                    draw_sprite(dc, body_art, body_frame_index,
+                                sprite_x, sprite_y);
+                if (leg_art->frame_count != 0)
+                    draw_sprite(dc, leg_art, leg_frame, sprite_x, sprite_y);
                 /* FUN_0044338b enables the info flags around this sprite.
                    FUN_0042003c maps the startup *work row's realm to frames
                    22..25 and adjusts it from the retained current-location
                    flags when that location context is available. */
-                if (g_floater_info_art.frame_count >= 26) {
+                if (g_floater_info_art.frame_count >= 26 && body_frame != NULL) {
                     uint32_t realm_frame;
                     int32_t badge_x;
                     int32_t badge_y;
@@ -1229,6 +1326,10 @@ static void render_island_view(HDC dc)
                     int sprite_y;
                     if (island_panel_info_building_sprite_position(
                             info, &sprite_x, &sprite_y)) {
+                        /* FUN_00440567 shifts training halls right by level
+                           (location +0x4a) to leave room for the staff. */
+                        sprite_x += island_panel_info_training_hall_x_shift(
+                            raw_item_id, selected_location->source_capacity_4a);
                         /* FUN_0044338b passes full scale (0x10000) and a
                            pane-relative width/height anchor to FUN_0042704b. */
                         (void)draw_runtime_item_scaled(dc, selected_location,
@@ -1279,20 +1380,17 @@ static void render_island_view(HDC dc)
                                                           &offset_x, &offset_y)) {
                         continue;
                     }
-                    body_art = floater->facing_left
-                        ? &g_initial_floater_bodies_flipped[floater->type_index]
-                        : &g_initial_floater_bodies[floater->type_index];
-                    leg_art = floater->facing_left
-                        ? &g_initial_floater_legs_flipped[floater->type_index]
-                        : &g_initial_floater_legs[floater->type_index];
-                    if (leg_art->frame_count != 0) {
-                        draw_sprite(dc, leg_art,
-                            island_floater_legs_frame(floater),
+                    body_art = island_floater_body_art(floater);
+                    leg_art = island_floater_legs_art(floater);
+                    if (body_art->frame_count != 0) {
+                        draw_sprite(dc, body_art,
+                            island_floater_body_sprite_frame(floater, body_art),
                             info->pane.left + offset_x,
                             info->pane.top + offset_y);
                     }
-                    if (body_art->frame_count != 0) {
-                        draw_sprite(dc, body_art, 0,
+                    if (leg_art->frame_count != 0) {
+                        draw_sprite(dc, leg_art,
+                            island_floater_legs_frame(floater),
                             info->pane.left + offset_x,
                             info->pane.top + offset_y);
                     }

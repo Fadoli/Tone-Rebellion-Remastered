@@ -705,6 +705,27 @@ static uint8_t collect_initial_worker_roster(unsigned int player,
     return count;
 }
 
+/* FUN_0042f8f7 (floater select, message 0x3f) resolves the floater's +0x0c
+   link through FUN_004207f2/FUN_0045c3bb to its source building and shows it
+   via FUN_0042f755, which stores the location index only when the building is
+   on the viewed island. With no link the current location is kept. */
+static void select_floater_source_building(int floater_index)
+{
+    const GameFloaterStart *floater;
+    const GameRuntimeIsland *island;
+    if (!g_game_session_valid || floater_index < 0 ||
+        (unsigned int)floater_index >= g_game_session.floater_count ||
+        g_menu.selected_map_island < 0 ||
+        g_menu.selected_map_island >= g_game_session.island_count) return;
+    floater = &g_game_session.floaters[floater_index];
+    if (floater->source_link_0c < 0 ||
+        floater->charge_source_island != (uint8_t)g_menu.selected_map_island)
+        return;
+    island = &g_game_session.islands[g_menu.selected_map_island];
+    if (floater->charge_source_location >= island->location_count) return;
+    g_selected_location = floater->charge_source_location;
+}
+
 static int selected_hall_roster_hit_test(int x, int y)
 {
     int roster[ISLAND_PANEL_INFO_ROSTER_SLOT_COUNT];

@@ -70,8 +70,11 @@ int game_session_set_building_defend_area(GameSession *session,
                                           uint16_t x, uint16_t y);
 /* BC_TrnStkC / BC_TrnStkM (list indices 5, 6; FUN_0045d5ba): offered for an
    owned, built 0x2c..0x32 site, the magic control only for 0x2f/0x30.
-   The toggle flips the building's +0x58 (crystal) or +0x5c (magic) flag; no
-   reader other than the control's own state was found. */
+   The toggle flips the building's +0x58 (crystal) or +0x5c (magic) flag. FUN_0045cd75
+   reads them as "keep stocked" switches: while set and the pool (+0x2a / +0x2c) is
+   below FUN_0045cd27 = 50 + 25 * level it holds a type-4 SUPPLY task (sub 2 / 3). */
+/* FUN_0045cd27: stock level at which a training building stops requesting supply. */
+int32_t game_session_training_supply_threshold(const GameRuntimeLocation *site);
 int game_session_training_stock_visible(const GameSession *session,
                                         uint8_t player_slot,
                                         uint8_t island_index,

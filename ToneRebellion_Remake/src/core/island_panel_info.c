@@ -233,6 +233,15 @@ int island_panel_info_building_sprite_position(const WindowTemplate *panel,
     return 1;
 }
 
+int island_panel_info_training_hall_x_shift(int32_t item_id, int16_t level)
+{
+    if (item_id < 0x2c || item_id > 0x2f) return 0;
+    if (level == 0) return 0x1e;
+    if (level == 1) return item_id == 0x2f ? 0x1e : 0x14;
+    if (level == 2 && item_id == 0x2f) return 10;
+    return 0;
+}
+
 int island_panel_info_hall_resource_row(unsigned int resource,
                                         IslandHallResourceRow *row)
 {

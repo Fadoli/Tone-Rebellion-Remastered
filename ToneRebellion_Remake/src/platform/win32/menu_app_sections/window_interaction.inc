@@ -123,6 +123,36 @@ static void handle_click(HWND window, int x, int y)
                 return;
             }
         }
+        if (g_menu.screen == SCREEN_ISLAND && g_game_session_valid &&
+            island_panel_location_info_visible(g_island_panel_mode) &&
+            g_menu.selected_map_island >= 0 &&
+            g_menu.selected_map_island < g_game_session.island_count) {
+            /* IWLocInfo slot floaters (FUN_0044003d case 6 ->
+               FUN_00440451), then message 0x3f selects the floater while the
+               location context is kept. */
+            const GameRuntimeIsland *slot_island =
+                &g_game_session.islands[g_menu.selected_map_island];
+            const WindowTemplate *slot_info = window_catalog_find(
+                &g_window_catalog, "IWLocInfo", 3);
+            if (slot_info != NULL && g_selected_location >= 0 &&
+                g_selected_location < slot_island->location_count &&
+                x >= slot_info->pane.left && x <= slot_info->pane.right &&
+                y >= slot_info->pane.top && y <= slot_info->pane.bottom) {
+                int slot_floater = building_slot_floater_at(slot_info,
+                    &slot_island->locations[g_selected_location], x, y);
+                if (slot_floater >= 0) {
+                    IslandPanelSelection selection = {
+                        g_selected_location, g_selected_floater
+                    };
+                    island_panel_select_floater(&selection, slot_floater);
+                    g_selected_location = selection.location_index;
+                    g_selected_floater = slot_floater;
+                    g_hovered_location = -1;
+                    InvalidateRect(window, NULL, FALSE);
+                    return;
+                }
+            }
+        }
         {
             int training_control = training_stock_control_at(x, y);
             if (training_control != 0) {
@@ -603,6 +633,7 @@ static void handle_click(HWND window, int x, int y)
                                              clicked_roster_floater);
                 g_selected_location = selection.location_index;
                 g_selected_floater = clicked_roster_floater;
+                select_floater_source_building(clicked_roster_floater);
                 g_hovered_location = -1;
             } else {
                 int clicked_floater = g_game_session_valid &&
@@ -620,6 +651,7 @@ static void handle_click(HWND window, int x, int y)
                     island_panel_select_floater(&selection, clicked_floater);
                     g_selected_location = selection.location_index;
                     g_selected_floater = clicked_floater;
+                    select_floater_source_building(clicked_floater);
                     g_hovered_location = -1;
                     InvalidateRect(window, NULL, FALSE);
                 } else {

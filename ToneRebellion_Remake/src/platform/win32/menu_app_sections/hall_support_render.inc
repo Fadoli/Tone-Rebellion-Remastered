@@ -122,8 +122,8 @@ static void draw_diplomacy_initial_worker_icon(HDC dc,
     /* FUN_0042704b uses frame zero for the observed initial worker pose.
        Its later per-object animation and status-dependent frames are not
        represented by the four-worker startup model. */
-    draw_sprite(dc, leg_art, 0, x, y);
     draw_sprite(dc, body_art, 0, x, y);
+    draw_sprite(dc, leg_art, 0, x, y);
 }
 
 static void draw_diplomacy_panel(HDC dc, const WindowTemplate *panel,

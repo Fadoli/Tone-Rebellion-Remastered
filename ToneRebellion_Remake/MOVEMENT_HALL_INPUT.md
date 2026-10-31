@@ -30,6 +30,21 @@ supported subset; no move command is exposed. Evidence:
 `ev_ed92b375145a0b030776f82d115ccc237230777746be74169b6aac305580d646`,
 and named-window lookup `ev_8ca518262f6e9da0f51b7f516b986760a38b2cc4962b4ea5adf47c2f5b350e01`.
 
+## Floater click selects its source building
+
+Observation (REA): the `0x3f` case in `FUN_0042fa0f` only stores the floater
+pointer (`this+0x170`) and calls `FUN_0042f8f7`. That calls `FUN_004207f2`
+(floater `+0x0c` short, `-1` = none, to the 100-byte per-owner source row
+`0x6192b0 + idx*100 + owner*0x14a0`) then `FUN_0045c3bb` (row `+0` island,
+`+2` location) and `FUN_0042f755`, which stores the location index only when
+the island is the viewed one. Without a link the current location is kept.
+`behavior/island-ground-object-interaction.md` records `FUN_0045c470` as the
+writer of floater `+0x0c` (production attach). Interpretation: the remake's
+`source_link_0c` + `charge_source_island/location` are that link, used by
+`select_floater_source_building`. Initial units keep `-1`, so they select
+no building. Evidence: `ev_2979cbdd…b1e8`, `ev_4ba95749…7405`,
+`ev_9dfe8ccb…18c`, `ev_21af0363…b6f`. Unknown: owner check, other-island view.
+
 `FUN_0045f4f5` starts the move context after its eligibility checks; it does
 not issue order 9. `FUN_0045f5c5` ends the context: for target item `0x2a`,
 a different target plus successful `FUN_0046562b(owner, 8)` writes order 9

@@ -207,11 +207,11 @@ static void render_load_game(HDC dc)
                 (g_load_slot_header[slot][0x1d] << 8));
             if (tribe < 4U && g_load_floater_body[tribe].frame_count > 0U) {
                 int sprite_y = y + (tribe == 3U ? 14 : 17);
+                draw_sprite(dc, &g_load_floater_body[tribe], 0, x + 250,
+                            sprite_y);
                 if (g_load_floater_legs[tribe].frame_count > 0U)
                     draw_sprite(dc, &g_load_floater_legs[tribe], 0, x + 250,
                                 sprite_y);
-                draw_sprite(dc, &g_load_floater_body[tribe], 0, x + 250,
-                            sprite_y);
             }
         }
         {

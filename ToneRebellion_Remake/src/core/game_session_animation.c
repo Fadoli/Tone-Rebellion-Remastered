@@ -1095,6 +1095,48 @@ void game_session_refresh_player_attack_points(GameSession *session,
     }
 }
 
+/* FUN_0045cd75 / FUN_0045cc17: channel 2 (flag +0x58, pool +0x2a, link +0x52)
+   serves every training site, channel 3 (flag +0x5c, pool +0x2c, link +0x54)
+   only base item 0x2f. A set flag with the pool below FUN_0045cd27 holds a
+   type-4 task (sub 2 / 3); a cleared flag or a full pool cancels it. The native
+   create path also requires the pool under 100. */
+static void update_training_supply(GameSession *session,
+                                   GameRuntimeLocation *source,
+                                   int32_t base_item_id, uint8_t island_index,
+                                   unsigned int location_index)
+{
+    unsigned int channel;
+    const int32_t threshold = game_session_training_supply_threshold(source);
+
+    for (channel = 1; channel <= 2; ++channel) {
+        const int wanted_flag = channel == 1 ? source->training_stock_crystal != 0
+            : (source->training_stock_magic != 0 && base_item_id == 0x2f);
+        const uint16_t pool = source->resource_stock[channel];
+        int16_t handle = source->source_task_slot[channel];
+
+        if (handle >= 0 && (handle >= GAME_SESSION_MAX_PENDING_EVENTS ||
+            session->pending_events[(uint8_t)handle].active == 0 ||
+            session->pending_events[(uint8_t)handle].action_type != 4 ||
+            session->pending_events[(uint8_t)handle].payload_12 !=
+                (int16_t)(channel + 1U))) {
+            source->source_task_slot[channel] = handle = -1;
+        }
+        if (handle >= 0) {
+            if (!wanted_flag || threshold <= (int32_t)pool) {
+                GamePendingEvent expected = session->pending_events[(uint8_t)handle];
+                (void)game_session_dispatch_task_command(
+                    session, (uint8_t)handle, 12, &expected);
+                source->source_task_slot[channel] = -1;
+            }
+        } else if (wanted_flag && (int32_t)pool < threshold && pool < 100U) {
+            int slot = game_session_pending_event_add(
+                session, (int16_t)source->owner_id, (int16_t)island_index, 4, 0,
+                (int16_t)location_index, (int16_t)(channel + 1U));
+            if (slot >= 0) source->source_task_slot[channel] = (int16_t)slot;
+        }
+    }
+}
+
 static void tick_source_staff_cycle(GameSession *session,
                                     GameRuntimeLocation *source,
                                     const FloaterCatalog *floater_catalog,
@@ -1116,6 +1158,9 @@ static void tick_source_staff_cycle(GameSession *session,
     base_item_id = source->record_value_10 - source->owner_id * 16;
     if (base_item_id < 0x2c || base_item_id > 0x32 ||
         (source->source_flags & 0x90U) != 0) return;
+
+    update_training_supply(session, source, base_item_id, island_index,
+                           location_index);
 
     /* FUN_0045cd75 clears OCCU at the start of each staff-building update,
        then sets it again if a worker occupies the training slot. */

@@ -1174,6 +1174,11 @@ int game_session_training_stock_visible(const GameSession *session,
            (!magic || item == 0x2f || item == 0x30);
 }
 
+int32_t game_session_training_supply_threshold(const GameRuntimeLocation *site)
+{
+    return 50 + 25 * (int32_t)site->source_capacity_4a;
+}
+
 int game_session_toggle_training_stock(GameSession *session,
                                        uint8_t player_slot,
                                        uint8_t island_index,

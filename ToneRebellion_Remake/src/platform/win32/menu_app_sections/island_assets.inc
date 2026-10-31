@@ -51,6 +51,8 @@ static int load_island_surface(int island_id, int map_island_index,
     SpriteSheet floater_leg_candidates[4] = {{0}};
     SpriteSheet floater_body_flipped_candidates[4] = {{0}};
     SpriteSheet floater_leg_flipped_candidates[4] = {{0}};
+    SpriteSheet ascend_legs_candidate = {0};
+    SpriteSheet ascend_legs_flipped_candidate = {0};
     SpriteSheet leviathan_body_candidate = {0};
     SpriteSheet leviathan_body_flipped_candidate = {0};
     SpriteSheet leviathan_leg_candidates[9] = {{0}};
@@ -352,6 +354,18 @@ static int load_island_surface(int island_id, int map_island_index,
             goto done;
         }
     }
+    /* fltinf.txt's ascend item has legs alegs only (no body line), hover 0..28
+       and attack 30..59. */
+    if (!load_sprite_sheet(&archive, "data\\alegs.shp", palette,
+                           &ascend_legs_candidate, error, error_capacity))
+        goto done;
+    if (ascend_legs_candidate.frame_count == 0 ||
+        !mirror_sprite_sheet_horizontally(&ascend_legs_candidate,
+            &ascend_legs_flipped_candidate, error, error_capacity)) {
+        (void)snprintf(error, error_capacity,
+                       "data\\alegs.shp has no Ascended One frames");
+        goto done;
+    }
     if (!load_sprite_sheet(&archive, "data\\vbod.shp", palette,
                            &leviathan_body_candidate, error, error_capacity))
         goto done;
@@ -569,6 +583,13 @@ static int load_island_surface(int island_id, int map_island_index,
         memset(&floater_leg_flipped_candidates[hall_index], 0,
                sizeof(floater_leg_flipped_candidates[hall_index]));
     }
+    free_sprite_sheet(&g_ascend_legs_art);
+    g_ascend_legs_art = ascend_legs_candidate;
+    memset(&ascend_legs_candidate, 0, sizeof(ascend_legs_candidate));
+    free_sprite_sheet(&g_ascend_legs_art_flipped);
+    g_ascend_legs_art_flipped = ascend_legs_flipped_candidate;
+    memset(&ascend_legs_flipped_candidate, 0,
+           sizeof(ascend_legs_flipped_candidate));
     free_sprite_sheet(&g_leviathan_body_art);
     g_leviathan_body_art = leviathan_body_candidate;
     memset(&leviathan_body_candidate, 0, sizeof(leviathan_body_candidate));
@@ -729,6 +750,8 @@ done:
         free_sprite_sheet(&floater_body_flipped_candidates[hall_index]);
         free_sprite_sheet(&floater_leg_flipped_candidates[hall_index]);
     }
+    free_sprite_sheet(&ascend_legs_candidate);
+    free_sprite_sheet(&ascend_legs_flipped_candidate);
     free_sprite_sheet(&leviathan_body_candidate);
     free_sprite_sheet(&leviathan_body_flipped_candidate);
     for (hall_index = 0; hall_index < 9; ++hall_index) {

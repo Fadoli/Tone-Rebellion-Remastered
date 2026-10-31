@@ -197,9 +197,9 @@ static void render_end_game_player_card(HDC dc, int tick)
         /* FUN_00428191 -> FUN_0042704b draws the tribe's floater sprite at
            (410,175), scale 1.0; legs frame 0 and the body's first frame
            are an approximation (fltdraw shape table not established). */
+        draw_sprite(dc, &g_initial_floater_bodies[player], 0, 410, 175);
         if (g_initial_floater_legs[player].frame_count > 0U)
             draw_sprite(dc, &g_initial_floater_legs[player], 0, 410, 175);
-        draw_sprite(dc, &g_initial_floater_bodies[player], 0, 410, 175);
     }
     if (tick > 250) {
         (void)snprintf(text, sizeof(text), "%d %s:",

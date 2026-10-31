@@ -713,8 +713,9 @@ static void draw_hall_panel(HDC dc, int hall_player)
         if (glyph_mask != 0) {
             int anchor_x = panel->pane.left + pane_width;
             int anchor_y = panel->pane.top + pane_height;
-            draw_sprite(dc, &g_glyph_inventory_art, 0,
-                        panel->pane.left, panel->pane.top);
+            /* FUN_0043dee3 draws the stone (frame 0) at the same (width,
+               height) anchor as the glyph frames; offsets are negative. */
+            draw_sprite(dc, &g_glyph_inventory_art, 0, anchor_x, anchor_y);
             for (glyph_index = 0; glyph_index < GAME_GLYPH_COUNT; ++glyph_index) {
                 uint32_t frame = game_glyph_inventory_frame(
                     glyph_mask, (int)glyph_index, g_hovered_glyph);

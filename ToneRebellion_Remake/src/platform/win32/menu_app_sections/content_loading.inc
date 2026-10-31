@@ -732,6 +732,8 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
             free_sprite_sheet(&g_initial_floater_bodies_flipped[hall_index]);
             free_sprite_sheet(&g_initial_floater_legs_flipped[hall_index]);
         }
+        free_sprite_sheet(&g_ascend_legs_art);
+        free_sprite_sheet(&g_ascend_legs_art_flipped);
         free_sprite_sheet(&g_leviathan_body_art);
         free_sprite_sheet(&g_leviathan_body_art_flipped);
         for (hall_index = 0; hall_index < 9; ++hall_index) {

@@ -118,6 +118,57 @@ int island_worker_health_overlay_enabled(uint8_t flags,
            (flags & ISLAND_FLOATER_OVERLAY_HEALTH) != 0;
 }
 
+int island_floater_body_frame(uint8_t floater_class, uint8_t subtype,
+                              unsigned level, uint32_t *frame)
+{
+    /* {lo, hi} per class and subtype 0..7. */
+    static const uint8_t base[4][8][2] = {
+        {{0, 0}, {1, 4}, {5, 8}, {9, 11}, {12, 14}, {9, 11}, {9, 11}, {9, 11}},
+        {{0, 0}, {1, 3}, {4, 6}, {7, 8}, {9, 11}, {12, 14}, {4, 6}, {4, 6}},
+        {{0, 0}, {1, 4}, {5, 8}, {9, 11}, {12, 14}, {15, 17}, {1, 4}, {1, 4}},
+        {{0, 0}, {1, 3}, {4, 6}, {7, 8}, {9, 11}, {4, 6}, {4, 6}, {4, 6}}
+    };
+    uint32_t lo;
+    uint32_t hi;
+    uint32_t value;
+    if (floater_class >= 4U || subtype >= 8U || frame == NULL) return 0;
+    lo = base[floater_class][subtype][0];
+    hi = base[floater_class][subtype][1];
+    value = lo + (level & 0x0fU);
+    if (value > hi) value = hi;
+    *frame = value;
+    return 1;
+}
+
+int island_worker_state_overlay_enabled(uint8_t flags,
+                                        int renderer_allows_overlays)
+{
+    return renderer_allows_overlays &&
+           (flags & ISLAND_FLOATER_OVERLAY_STATE) != 0;
+}
+
+int island_worker_charge_badge_layout(uint8_t floater_type,
+                                      uint8_t worker_type,
+                                      int16_t charge_stat, int facing_left,
+                                      int32_t body_hit_left,
+                                      int32_t body_hit_top,
+                                      int32_t body_hit_right_exclusive,
+                                      uint32_t *frame,
+                                      int32_t *x, int32_t *y)
+{
+    int32_t stat = charge_stat;
+    if (floater_type == 4U || worker_type == 0U || worker_type > 8U ||
+        frame == NULL || x == NULL || y == NULL ||
+        body_hit_right_exclusive <= body_hit_left) return 0;
+    if (stat < 0) stat = 0;
+    if (stat > 10) stat = 10;
+    *frame = (uint32_t)(10 - stat);
+    *x = (facing_left ? body_hit_right_exclusive - 1 : body_hit_left - 8) +
+         (facing_left ? 5 : 0);
+    *y = body_hit_top;
+    return 1;
+}
+
 uint32_t island_worker_legs_frame(uint8_t worker_type, int has_cargo,
                                   uint32_t animation_ticks)
 {

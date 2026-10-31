@@ -231,6 +231,18 @@ Port: `draw_building_slot_floaters` (corps + jambes comme le panneau unité), ki
 port). Non porté: surbrillance du floater sélectionné, sprites des types >= 4,
 écrivains natifs de `+0x0a`. Interprétation: kind = niveau d'unité.
 
+Affichage des unités de niveau (pseudocode stocké de `FUN_00440567`/`FUN_0042704b`,
+`ev_cb0962ae…`, `ev_d21d92e7…`; session REA fermée, pas de nouvelle analyse): chaque
+slot passe une copie du floater avec le bit `+0x1c |= 2` (miroir, x négatif) et
+`param_5 = 1` (overlays fltinfo: royaume 0x16+, santé, charge). Les halls 0x2c..0x2f
+décalent aussi le bâtiment en x selon `+0x4a`: niveau 0 → +30, niveau 1 → +30 (0x2f) ou
++20, niveau 2 → +10 (0x2f seul); y = 0x5a. Port: miroir, overlays et décalage x
+(`island_panel_info_training_hall_x_shift`). Surbrillance (param_8 = 1 pour le floater sélectionné → table haze
+`FUN_004106dd(1,1)` via `FUN_00404c3b`/`FUN_00405265`, `ev_82e26c10…`): portée sur corps et
+jambes, overlays non remappés. Non porté: y = 0x5a (le port garde son ancrage `H-0x0f`,
+écart de 2 px), phase d'animation `DAT_00618e44` (le port utilise `animation_ticks`). Interprétation:
+« bit 2 = miroir » vient de `local_34 = -local_34` quand `+0x1c & 2`.
+
 ### Jauges taskicon et barres du Hall (REA, port partiel)
 
 Observation (asm 0x440aee-0x440b2a, ev_1b288a5409cf…, ev_5202cf39…, ev_13fb39e1…):

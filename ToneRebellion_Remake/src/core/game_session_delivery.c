@@ -289,6 +289,20 @@ static int assign_delivery_task_for_floater(GameSession *session,
             (uint32_t)target->resource_stock[GAME_RESOURCE_BUILD_TONE] +
                 (uint16_t)event->assigned_floater_count >= 20U) return 0;
     }
+    if ((event->payload_12 == 2 || event->payload_12 == 3) &&
+        event->payload_0a >= 0 && event->payload_0a < session->island_count &&
+        event->payload_0e >= 0 &&
+        (uint16_t)event->payload_0e <
+            session->islands[event->payload_0a].location_count) {
+        /* Cap workers on a training SUPPLY task so deliveries in flight never
+           overshoot the stop level (remake guard, like UPGRADE above). */
+        const GameRuntimeLocation *target = &session->islands[
+            event->payload_0a].locations[(uint16_t)event->payload_0e];
+        if (target->source_task_slot[event->payload_12 - 1] == (int16_t)slot &&
+            (int32_t)target->resource_stock[event->payload_12 - 1] +
+                (int32_t)event->assigned_floater_count >=
+                game_session_training_supply_threshold(target)) return 0;
+    }
 
     source_index = floater->carried_resource_code == event->payload_12
         ? -1
@@ -924,10 +938,52 @@ static int floater_has_staff_upgrade_task(const GameSession *session,
         event->payload_12 == 1;
 }
 
+/* Target of a floater's training SUPPLY task (type 4, item 2 / 3), or NULL.
+   The task is the one linked from the site's source_task_slot. */
+static GameRuntimeLocation *floater_training_supply_target(
+    GameSession *session, const GameFloaterStart *floater)
+{
+    int16_t slot = floater->linked_task_slot;
+    const GamePendingEvent *event;
+    GameRuntimeLocation *target;
+
+    if (slot < 0 || slot >= GAME_SESSION_MAX_PENDING_EVENTS ||
+        floater->order_target_island >= session->island_count ||
+        floater->order_target_location < 0 ||
+        (uint16_t)floater->order_target_location >=
+            session->islands[floater->order_target_island].location_count ||
+        (floater->order_resource_code != 2 && floater->order_resource_code != 3))
+        return NULL;
+    event = &session->pending_events[(uint8_t)slot];
+    target = &session->islands[floater->order_target_island].locations[
+        (uint16_t)floater->order_target_location];
+    if (event->active == 0 || event->action_type != 4 ||
+        event->player_id != floater->owner_slot ||
+        event->payload_0a != floater->order_target_island ||
+        event->payload_0e != floater->order_target_location ||
+        event->payload_12 != floater->order_resource_code ||
+        target->source_task_slot[floater->order_resource_code - 1] != slot ||
+        target->owner_id != floater->owner_slot) return NULL;
+    return target;
+}
+
 static void credit_floater_delivery(GameSession *session,
                                     GameFloaterStart *floater,
                                     int16_t resource_code)
 {
+    {
+        /* FUN_004503bd codes 2 / 3 add the delivered amount (1) to the site's
+           +0x2a / +0x2c pool; no cap is applied there. */
+        GameRuntimeLocation *supply = floater_training_supply_target(
+            session, floater);
+        if (supply != NULL && resource_code == floater->order_resource_code) {
+            if (supply->resource_stock[resource_code - 1] < UINT16_MAX) {
+                ++supply->resource_stock[resource_code - 1];
+                floater->carried_resource_code = 0;
+            }
+            return;
+        }
+    }
     if (resource_code == 1 && floater->linked_task_slot >= 0 &&
         floater->owner_slot < GAME_START_PLAYER_COUNT &&
         floater->order_target_island < session->island_count &&

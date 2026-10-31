@@ -122,6 +122,11 @@ IslandLocationActionControl island_panel_location_action_control(
 int island_panel_info_building_sprite_position(const WindowTemplate *panel,
                                                int *x, int *y);
 
+/* FUN_00440567 adds a level-dependent x shift to the building anchor for the
+   training halls 0x2c..0x2f (level = location +0x4a): level 0 -> +30, level 1
+   -> +30 for item 0x2f else +20, level 2 -> +10 for item 0x2f only. */
+int island_panel_info_training_hall_x_shift(int32_t item_id, int16_t level);
+
 /* FUN_00440567 draws the three Hall stock icons and short counters in
    IWLocInfo-relative coordinates. */
 int island_panel_info_hall_resource_row(unsigned int resource,
