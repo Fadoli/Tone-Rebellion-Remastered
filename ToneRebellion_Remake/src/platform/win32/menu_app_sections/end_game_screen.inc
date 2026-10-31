@@ -62,7 +62,7 @@ static int load_end_game_screen(void)
     unsigned char *bytes;
     char error[128];
     if (g_end_game_loaded) return 1;
-    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE01.COB", &archive,
+    if (!cob_archive_open(game_file_path("TONE01.COB"), &archive,
                           error, sizeof(error))) return 0;
     if (!load_palette(&archive, "data\\endgame.pal", g_end_game_palette, NULL,
                       error, sizeof(error)) ||
@@ -76,7 +76,7 @@ static int load_end_game_screen(void)
         return 0;
     }
     cob_archive_close(&archive);
-    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE00.COB", &archive,
+    if (!cob_archive_open(game_file_path("TONE00.COB"), &archive,
                           error, sizeof(error))) return 0;
     member = cob_archive_find(&archive, "endgame.txt");
     bytes = member == NULL ? NULL : (unsigned char *)malloc(member->length + 1);

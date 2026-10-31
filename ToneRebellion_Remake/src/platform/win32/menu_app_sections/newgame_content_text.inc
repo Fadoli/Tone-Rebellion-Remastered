@@ -5,7 +5,7 @@ static int load_newgame_captions(char *error, size_t error_capacity)
     unsigned char *bytes = NULL;
     int success = 0;
     int i;
-    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE00.COB", &archive,
+    if (!cob_archive_open(game_file_path("TONE00.COB"), &archive,
                           error, error_capacity)) return 0;
     member = cob_archive_find(&archive, "gamey.txt");
     if (member == NULL) {
@@ -244,7 +244,7 @@ static int load_tribe_descriptions(char *error, size_t error_capacity)
     int tribe;
     int part;
     int success = 0;
-    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE00.COB", &archive,
+    if (!cob_archive_open(game_file_path("TONE00.COB"), &archive,
                           error, error_capacity)) return 0;
     member = cob_archive_find(&archive, "newgame.txt");
     if (member == NULL) {
@@ -321,7 +321,7 @@ static int load_island_names(char *error, size_t error_capacity)
     const CobMember *member;
     unsigned char *bytes = NULL;
     int success = 0;
-    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE00.COB", &archive,
+    if (!cob_archive_open(game_file_path("TONE00.COB"), &archive,
                           error, error_capacity)) return 0;
     member = cob_archive_find(&archive, "names.txt");
     if (member == NULL) {

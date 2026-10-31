@@ -20,7 +20,7 @@ static int load_island_panel_info_text(char *error, size_t error_capacity)
     unsigned int glyph_index;
     int success = 0;
 
-    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE00.COB", &archive,
+    if (!cob_archive_open(game_file_path("TONE00.COB"), &archive,
                           error, error_capacity)) return 0;
     member = cob_archive_find(&archive, "newtext.txt");
     if (member == NULL) {
@@ -191,7 +191,7 @@ static int load_menu_help(char *error, size_t error_capacity)
     unsigned char *bytes;
     int i;
     int success = 0;
-    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE00.COB", &archive,
+    if (!cob_archive_open(game_file_path("TONE00.COB"), &archive,
                           error, error_capacity)) return 0;
     member = cob_archive_find(&archive, "tonehelp.txt");
     if (member == NULL) {

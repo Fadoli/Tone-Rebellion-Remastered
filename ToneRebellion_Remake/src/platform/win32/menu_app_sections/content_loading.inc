@@ -3,7 +3,7 @@ static int load_world_map(char *error, size_t error_capacity)
     CobArchive archive = {0};
     const CobMember *member;
     unsigned char *data;
-    const char *archive_path = "C:\\Program Files\\Tone\\TONE01.COB";
+    const char *archive_path = game_file_path("TONE01.COB");
     int success;
     if (!cob_archive_open(archive_path, &archive, error, error_capacity)) {
         return 0;
@@ -44,7 +44,7 @@ static int load_game_session_for_selected_world(char *error, size_t error_capaci
     }
     world = &g_menu.world_map.worlds[g_menu.world_index];
     memset(island_records, 0, sizeof(island_records));
-    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE01.COB", &archive,
+    if (!cob_archive_open(game_file_path("TONE01.COB"), &archive,
                           error, error_capacity)) return 0;
 
     for (island_index = 0; island_index < world->island_count; ++island_index) {
@@ -126,7 +126,7 @@ static int load_window_catalog(char *error, size_t error_capacity)
     unsigned char *bytes = NULL;
     int success = 0;
 
-    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE00.COB", &archive,
+    if (!cob_archive_open(game_file_path("TONE00.COB"), &archive,
                           error, error_capacity)) return 0;
     member = cob_archive_find(&archive, "windows.txt");
     if (member == NULL) {
@@ -167,7 +167,7 @@ static int load_building_render_catalog(char *error, size_t error_capacity)
     BuildingRenderCatalog animations;
     int success = 0;
 
-    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE00.COB", &archive,
+    if (!cob_archive_open(game_file_path("TONE00.COB"), &archive,
                           error, error_capacity)) return 0;
     pad_member = cob_archive_find(&archive, "pad.txt");
     floater_member = cob_archive_find(&archive, "floater.txt");
@@ -290,7 +290,7 @@ static int load_menu_art(char *error, size_t error_capacity)
     COLORREF newgame_palette[256];
     COLORREF mainmap_palette[256];
     COLORREF load_save_palette[256];
-    const char *path = "C:\\Program Files\\Tone\\TONE01.COB";
+    const char *path = game_file_path("TONE01.COB");
     int success = 0;
     if (!cob_archive_open(path, &archive, error, error_capacity)) return 0;
     if (!load_palette(&archive, "data\\titscrn.pal", title_palette, NULL,
@@ -576,12 +576,12 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     char error[256];
     unsigned int cursor_index;
     (void)previous_instance;
-    (void)command_line;
+    game_directory_resolve(command_line);
 
     /* Read the original PE cursor resources without executing FLOAT.EXE.
        Resource IDs follow the 17-entry table at DAT_0049c950. */
     g_original_cursor_module = LoadLibraryExA(
-        "C:\\Program Files\\Tone\\FLOAT.EXE", NULL,
+        game_file_path("FLOAT.EXE"), NULL,
         LOAD_LIBRARY_AS_DATAFILE);
     if (g_original_cursor_module != NULL) {
         for (cursor_index = 0; cursor_index < GAME_CURSOR_SLOT_COUNT;

@@ -3,6 +3,7 @@
 #include <windowsx.h>
 
 #include "cob_archive.h"
+#include "iso9660.h"
 #include "building_render.h"
 #include "font_image.h"
 #include "bitmap_font_render.h"
@@ -407,6 +408,8 @@ static BOOL play_effect_sound(LPCSTR sound, HMODULE module, DWORD flags)
 
 /* Ordered source fragments share private Win32 state in this one
    translation unit; the split is organizational and keeps internal linkage. */
+#include "menu_app_sections/game_paths.inc"
+
 #include "menu_app_sections/sprite_primitives.inc"
 
 #include "menu_app_sections/island_assets.inc"

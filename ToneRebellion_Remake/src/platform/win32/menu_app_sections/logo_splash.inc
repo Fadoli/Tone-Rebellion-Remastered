@@ -18,7 +18,7 @@ static unsigned g_logo_tick;
 /* True when the first token of a float.cfg line equals `keyword`. */
 static int float_cfg_has_keyword(const char *keyword)
 {
-    FILE *file = fopen("C:\\Program Files\\Tone\\FLOAT.CFG", "rb");
+    FILE *file = fopen(game_file_path("FLOAT.CFG"), "rb");
     char line[256];
     int found = 0;
     size_t keyword_length = strlen(keyword);

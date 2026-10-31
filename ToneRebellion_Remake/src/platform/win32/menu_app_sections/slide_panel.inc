@@ -42,7 +42,7 @@ static int ensure_slide_art(void)
     free_sprite_sheet(&g_slide_art);
     memset(&g_slide_art, 0, sizeof(g_slide_art));
     g_slide_art_tribe = -1;
-    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE01.COB", &archive,
+    if (!cob_archive_open(game_file_path("TONE01.COB"), &archive,
                           error, sizeof(error))) return 0;
     (void)snprintf(name, sizeof(name), "data\\slidwin%d.shp", tribe);
     (void)load_sprite_sheet(&archive, name, g_load_save_palette,
@@ -61,7 +61,7 @@ static void ensure_load_save_art(void)
     SpriteSheet candidate = {0};
     int tribe = ui_art_tribe();
     if (g_load_save_art_tribe == tribe) return;
-    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE01.COB", &archive,
+    if (!cob_archive_open(game_file_path("TONE01.COB"), &archive,
                           error, sizeof(error))) return;
     (void)snprintf(name, sizeof(name), "data\\loadsav%d.shp", tribe);
     if (load_sprite_sheet(&archive, name, g_load_save_palette, &candidate,

@@ -101,7 +101,8 @@ static void scan_load_slots(void)
                 continue;
             }
         }
-        (void)snprintf(path, sizeof(path), "C:\\Program Files\\Tone\\%02d.SAV", slot);
+        { char native_name[16]; (void)snprintf(native_name, sizeof(native_name), "%02d.SAV", slot);
+        (void)snprintf(path, sizeof(path), "%s", game_file_path(native_name)); }
         if (save_header_is_valid(path)) {
             g_load_slot_valid[slot] = 1;
             g_load_slot_native[slot] = 1;

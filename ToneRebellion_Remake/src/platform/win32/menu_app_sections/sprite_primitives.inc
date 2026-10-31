@@ -197,6 +197,7 @@ static int resolve_music_directory(const char *file_name,
     DWORD executable_length;
     char *separator;
 
+    if (g_iso_open && iso_extract_music(file_name, path, path_capacity)) return 1;
     if (g_music_directory[0] != '\0' &&
         music_file_exists_in(g_music_directory, file_name, path, path_capacity)) {
         return 1;
@@ -220,6 +221,15 @@ static int resolve_music_directory(const char *file_name,
                 if (music_file_exists_in(g_music_directory, file_name,
                                          path, path_capacity)) return 1;
             }
+        }
+    }
+    /* Disc layout: game files in THING1, music in the sibling THING2. */
+    if (strlen(g_game_directory) + sizeof("\\..\\THING2") < sizeof(candidate)) {
+        (void)snprintf(candidate, sizeof(candidate), "%s\\..\\THING2", g_game_directory);
+        if (music_file_exists_in(candidate, file_name, path, path_capacity)) {
+            (void)strncpy(g_music_directory, candidate, sizeof(g_music_directory) - 1);
+            g_music_directory[sizeof(g_music_directory) - 1] = '\0';
+            return 1;
         }
     }
     if (music_file_exists_in("C:\\toneIso\\THING2", file_name,

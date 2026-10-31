@@ -5,6 +5,7 @@ include(CTest)
 
 add_library(tone_core STATIC
     src/data/cob_archive.c
+    src/data/iso9660.c
     src/data/font_image.c
     src/core/bitmap_font_render.c
     src/data/shp_image.c

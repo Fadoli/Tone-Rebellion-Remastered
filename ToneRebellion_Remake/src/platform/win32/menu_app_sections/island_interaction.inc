@@ -552,7 +552,7 @@ static int ensure_clipboard_art(void)
     CobArchive archive = {0};
     char error[128];
     if (g_clip_art.frame_count != 0 && g_bildicon_art.frame_count != 0) return 1;
-    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE01.COB", &archive,
+    if (!cob_archive_open(game_file_path("TONE01.COB"), &archive,
                           error, sizeof(error))) return 0;
     if (g_clip_art.frame_count == 0)
         (void)load_sprite_sheet(&archive, "data\\clip0.shp", g_island_palette,
@@ -587,7 +587,7 @@ static int ensure_trainb_art(void)
     CobArchive archive = {0};
     char error[128];
     if (g_trainb_art.frame_count != 0) return 1;
-    if (!cob_archive_open("C:\\Program Files\\Tone\\TONE01.COB", &archive,
+    if (!cob_archive_open(game_file_path("TONE01.COB"), &archive,
                           error, sizeof(error))) return 0;
     (void)load_sprite_sheet(&archive, "data\\trainb.shp", g_island_palette,
                             &g_trainb_art, error, sizeof(error));

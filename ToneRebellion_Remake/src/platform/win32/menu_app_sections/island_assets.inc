@@ -92,7 +92,7 @@ static int load_island_surface(int island_id, int map_island_index,
     unsigned int item_id;
     int selected_player;
     const GameRuntimeIsland *runtime_island = NULL;
-    const char *archive_path = "C:\\Program Files\\Tone\\TONE01.COB";
+    const char *archive_path = game_file_path("TONE01.COB");
     int success = 0;
 
     if (island_id < 0 || island_id >= ISLAND_NAME_COUNT) {
