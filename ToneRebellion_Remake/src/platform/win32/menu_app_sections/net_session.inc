@@ -4,10 +4,15 @@
    so it carries the core NetLobby records over a plain TCP connection: one
    host socket accepts up to three guests, guests talk only to the host (the
    native send path FUN_00412d70 also routes non-host records to the host).
-   Sockets are non-blocking and polled by the 50 ms UI timer. After the
+   Sockets are non-blocking and post WM_NET_SOCKET to the window, so frames
+   are handled when they arrive rather than at the next 50 ms timer (that
+   polling alone added up to two frames to every round trip). After the
    start, the same connections carry the NetLockstep turns. */
 
 enum { NET_MODE_NONE, NET_MODE_HOST, NET_MODE_CLIENT };
+enum { WM_NET_SOCKET = WM_APP + 1 };
+
+static HWND g_net_window;
 
 static int g_net_mode;
 static int g_net_wsa_started;
@@ -27,6 +32,11 @@ static NetLockstep g_net_lockstep;
    the shared session generator during a network game. */
 static ToneRng g_net_local_rng;
 static GameSession g_net_predicted_session;
+/* Host: smoothed round trip per guest (ms), from PING/PONG every second. */
+static uint32_t g_net_round_trip[NET_LOBBY_MAX_PLAYERS];
+static unsigned g_net_ping_frames;
+/* E2E timing aid: clock and tick of the last issued and applied command. */
+static uint32_t g_net_issue_ms, g_net_issue_tick, g_net_apply_ms, g_net_apply_tick;
 
 static void simulate_session_tick(uint32_t source_tick);
 
@@ -84,6 +94,10 @@ static void net_default_name(void)
 static void net_set_nonblocking(SOCKET socket_handle)
 {
     u_long enabled = 1;
+    /* WSAAsyncSelect also makes the socket non-blocking. */
+    if (g_net_window != NULL &&
+        WSAAsyncSelect(socket_handle, g_net_window, WM_NET_SOCKET,
+                       FD_ACCEPT | FD_CONNECT | FD_READ | FD_CLOSE) == 0) return;
     (void)ioctlsocket(socket_handle, FIONBIO, &enabled);
 }
 
@@ -263,6 +277,21 @@ static void net_host_handle_frame(unsigned slot, const NetFrame *frame)
             game_command_decode(frame->payload, frame->length, &command)) {
             if (!net_lockstep_queue_command(&g_net_lockstep, &command))
                 net_set_status("File de commandes pleine: commande perdue");
+        } else if (frame->type == NET_RECORD_PONG && frame->length == 4U) {
+            uint32_t sent = (uint32_t)frame->payload[0] | ((uint32_t)frame->payload[1] << 8) |
+                ((uint32_t)frame->payload[2] << 16) | ((uint32_t)frame->payload[3] << 24);
+            uint32_t sample = (uint32_t)GetTickCount() - sent;
+            unsigned peer;
+            uint32_t slowest = 0;
+            /* Rise at once, fall slowly, so a jitter spike widens the delay
+               before it can stall a turn. */
+            g_net_round_trip[slot] = sample > g_net_round_trip[slot] ? sample
+                : (g_net_round_trip[slot] * 3U + sample) / 4U;
+            for (peer = 1; peer < NET_LOBBY_MAX_PLAYERS; ++peer)
+                if ((g_net_lockstep.peer_mask & (1U << peer)) &&
+                    g_net_round_trip[peer] > slowest) slowest = g_net_round_trip[peer];
+            net_lockstep_set_delay(&g_net_lockstep,
+                net_lockstep_delay_for_round_trip(slowest, 50U));
         } else if (frame->type == NET_RECORD_TURN_ACK && frame->length == 4U) {
             net_lockstep_receive_ack(&g_net_lockstep, (uint8_t)slot,
                 (uint32_t)frame->payload[0] | ((uint32_t)frame->payload[1] << 8) |
@@ -317,6 +346,14 @@ static void net_poll_peer(HWND window, unsigned slot)
                 net_host_handle_frame(slot, &frame);
                 /* A refused HELLO closes the socket. */
                 if (g_net_peers[slot] != before) return;
+            } else if (frame.type == NET_RECORD_PING && frame.length == 4U) {
+                uint8_t bytes[NET_FRAME_MAX_SIZE];
+                size_t length = net_frame_encode(bytes, sizeof(bytes), NET_RECORD_PONG,
+                    g_net_lobby.local_slot, frame.payload, 4);
+                if (!net_send(0, bytes, length)) {
+                    net_drop_peer(0);
+                    return;
+                }
             } else if (frame.type == NET_RECORD_TURN) {
                 NetTurnBundle bundle;
                 if (g_net_in_game &&
@@ -464,6 +501,8 @@ static int issue_command(GameCommandKind kind, size_t count, const int32_t *args
     int predicted;
     context.pads = &g_pad_catalog;
     if (!g_net_in_game) return game_command_apply(&g_game_session, &context, &command);
+    g_net_issue_ms = (uint32_t)GetTickCount();
+    g_net_issue_tick = g_net_lockstep.tick;
     g_net_predicted_session = g_game_session;
     predicted = game_command_apply(&g_net_predicted_session, &context, &command);
     if (g_net_mode == NET_MODE_HOST) {
@@ -486,7 +525,9 @@ static int issue_command(GameCommandKind kind, size_t count, const int32_t *args
 
 /* Runs the turns this frame may take: one tick per 50 ms frame like solo,
    up to three when a guest holds bundles well ahead (FUN_00413b68's
-   catch-up). Commands of a turn run before its first tick. */
+   catch-up). Commands of a turn run before its first tick. The host pings
+   every guest once a second; the slowest round trip sets the input delay
+   (native: the period the host sends on channel 4, type 1). */
 static void net_run_frame(HWND window)
 {
     unsigned budget = 1;
@@ -494,26 +535,43 @@ static void net_run_frame(HWND window)
     (void)window;
     if (!g_net_in_game || !g_game_session_valid) return;
     context.pads = &g_pad_catalog;
+    if (g_net_mode == NET_MODE_HOST && ++g_net_ping_frames >= 20U) {
+        uint8_t bytes[NET_FRAME_MAX_SIZE];
+        uint32_t now = (uint32_t)GetTickCount();
+        const uint8_t stamp[4] = {(uint8_t)(now & 0xffU), (uint8_t)((now >> 8) & 0xffU),
+                                  (uint8_t)((now >> 16) & 0xffU), (uint8_t)(now >> 24)};
+        size_t length = net_frame_encode(bytes, sizeof(bytes), NET_RECORD_PING, 0, stamp, 4);
+        g_net_ping_frames = 0;
+        net_host_broadcast(bytes, length);
+    }
     if (g_net_mode == NET_MODE_CLIENT &&
-        net_lockstep_turns_ready(&g_net_lockstep) > NET_TURN_DELAY + 1U) budget = 3;
+        net_lockstep_turns_ready(&g_net_lockstep) > 4U) budget = 3;
     while (budget-- != 0U && net_lockstep_can_tick(&g_net_lockstep)) {
         const NetTurnBundle *bundle = net_lockstep_turn_commands(&g_net_lockstep);
-        NetTurnBundle created;
+        NetTurnBundle created[NET_TURN_MAX_DELAY + 1];
+        size_t created_count;
         unsigned i;
         if (bundle != NULL)
-            for (i = 0; i < bundle->command_count; ++i)
+            for (i = 0; i < bundle->command_count; ++i) {
                 (void)game_command_apply(&g_game_session, &context, &bundle->commands[i]);
+                g_net_apply_ms = (uint32_t)GetTickCount();
+                g_net_apply_tick = g_net_lockstep.tick;
+            }
         simulate_session_tick(g_game_session.simulation_tick);
-        if (net_lockstep_finish_tick(&g_net_lockstep, game_session_sync_hash(&g_game_session),
-                                     &created)) {
+        created_count = net_lockstep_finish_tick(&g_net_lockstep,
+            game_session_sync_hash(&g_game_session), created,
+            sizeof(created) / sizeof(created[0]));
+        {
             uint8_t payload[NET_FRAME_MAX_PAYLOAD];
             uint8_t bytes[NET_FRAME_MAX_SIZE];
             size_t length;
             if (g_net_mode == NET_MODE_HOST) {
-                length = net_lockstep_encode_bundle(&created, payload, sizeof(payload));
-                length = net_frame_encode(bytes, sizeof(bytes), NET_RECORD_TURN, 0,
-                                          payload, length);
-                if (length != 0U) net_host_broadcast(bytes, length);
+                for (i = 0; i < created_count; ++i) {
+                    length = net_lockstep_encode_bundle(&created[i], payload, sizeof(payload));
+                    length = net_frame_encode(bytes, sizeof(bytes), NET_RECORD_TURN, 0,
+                                              payload, length);
+                    if (length != 0U) net_host_broadcast(bytes, length);
+                }
             } else {
                 uint32_t done = net_lockstep_turn(&g_net_lockstep);
                 payload[0] = (uint8_t)(done & 0xffU);

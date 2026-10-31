@@ -34,6 +34,11 @@ static void e2e_write_state(void)
             g_net_mode != NET_MODE_NONE ? net_lobby_player_count(&g_net_lobby) : 0U,
             g_menu.world_index);
     if (g_net_in_game && g_game_session_valid)
+        fprintf(file, "net_delay %u\nnet_rtt %lu\nnet_issue %lu %lu\nnet_apply %lu %lu\n",
+                (unsigned)g_net_lockstep.delay, (unsigned long)g_net_round_trip[1],
+                (unsigned long)g_net_issue_tick, (unsigned long)g_net_issue_ms,
+                (unsigned long)g_net_apply_tick, (unsigned long)g_net_apply_ms);
+    if (g_net_in_game && g_game_session_valid)
         fprintf(file, "net_tick %lu\nnet_desync %d\nnet_stock_mode %d\nsync_hash %08lx\n",
                 (unsigned long)g_net_lockstep.tick, (int)g_net_lockstep.desync,
                 g_menu.selected_tribe >= 0 && g_menu.selected_tribe < GAME_START_PLAYER_COUNT

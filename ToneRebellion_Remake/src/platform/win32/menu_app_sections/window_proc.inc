@@ -769,6 +769,9 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         update_window_title(window);
         update_interaction_cursor();
         return 0;
+    case WM_NET_SOCKET:
+        if (net_poll(window)) InvalidateRect(window, NULL, FALSE);
+        return 0;
     case WM_DESTROY:
         net_shutdown();
         write_resume_file();

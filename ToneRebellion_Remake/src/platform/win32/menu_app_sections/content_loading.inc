@@ -646,6 +646,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
                     "Tone Rebellion remake", MB_OK | MB_ICONERROR);
         return 1;
     }
+    g_net_window = window;
     {
         char net_value[128];
         if (command_line_value(command_line, "--name", net_value, sizeof(net_value)))

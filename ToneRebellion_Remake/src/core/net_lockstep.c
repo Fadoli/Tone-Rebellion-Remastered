@@ -8,9 +8,28 @@ void net_lockstep_init(NetLockstep *lockstep, int is_host, uint8_t peer_mask)
     memset(lockstep, 0, sizeof(*lockstep));
     lockstep->is_host = is_host != 0;
     lockstep->peer_mask = is_host ? peer_mask : 0;
-    /* Turns before NET_TURN_DELAY have no bundle: nobody could have issued
-       a command for them. */
-    lockstep->latest_bundle_turn = NET_TURN_DELAY;
+    lockstep->delay = NET_TURN_START_DELAY;
+    /* Turns before NET_TURN_START_DELAY have no bundle: nobody could have
+       issued a command for them. */
+    lockstep->latest_bundle_turn = NET_TURN_START_DELAY;
+}
+
+uint8_t net_lockstep_delay_for_round_trip(uint32_t round_trip_ms, uint32_t tick_ms)
+{
+    uint32_t delay;
+    if (tick_ms == 0U) tick_ms = 1U;
+    delay = 1U + (round_trip_ms / 2U + tick_ms - 1U) / tick_ms;
+    if (delay < NET_TURN_MIN_DELAY) delay = NET_TURN_MIN_DELAY;
+    if (delay > NET_TURN_MAX_DELAY) delay = NET_TURN_MAX_DELAY;
+    return (uint8_t)delay;
+}
+
+void net_lockstep_set_delay(NetLockstep *lockstep, uint8_t delay)
+{
+    if (lockstep == NULL || !lockstep->is_host) return;
+    if (delay < NET_TURN_MIN_DELAY) delay = NET_TURN_MIN_DELAY;
+    if (delay > NET_TURN_MAX_DELAY) delay = NET_TURN_MAX_DELAY;
+    lockstep->delay = delay;
 }
 
 uint32_t net_lockstep_turn(const NetLockstep *lockstep)
@@ -29,7 +48,7 @@ int net_lockstep_queue_command(NetLockstep *lockstep, const GameCommand *command
 static int bundle_held(const NetLockstep *lockstep, uint32_t turn)
 {
     const NetTurnBundle *bundle = &lockstep->bundles[turn % NET_TURN_WINDOW];
-    return turn < NET_TURN_DELAY || (bundle->valid && bundle->turn == turn);
+    return turn < NET_TURN_START_DELAY || (bundle->valid && bundle->turn == turn);
 }
 
 int net_lockstep_can_tick(const NetLockstep *lockstep)
@@ -65,22 +84,25 @@ const NetTurnBundle *net_lockstep_turn_commands(const NetLockstep *lockstep)
     return bundle->valid && bundle->turn == turn ? bundle : NULL;
 }
 
-static void check_hash(NetLockstep *lockstep, uint32_t turn, uint32_t hash)
+static void compare_hash(NetLockstep *lockstep, uint32_t turn)
 {
     unsigned index = turn % NET_TURN_WINDOW;
     if (lockstep->local_hash_valid[index] && lockstep->local_hash_turns[index] == turn &&
-        lockstep->local_hashes[index] != hash && !lockstep->desync) {
+        lockstep->remote_hash_valid[index] && lockstep->remote_hash_turns[index] == turn &&
+        lockstep->local_hashes[index] != lockstep->remote_hashes[index] &&
+        !lockstep->desync) {
         lockstep->desync = 1;
         lockstep->desync_turn = turn;
     }
 }
 
-int net_lockstep_finish_tick(NetLockstep *lockstep, uint32_t session_hash,
-                             NetTurnBundle *out_bundle)
+size_t net_lockstep_finish_tick(NetLockstep *lockstep, uint32_t session_hash,
+                                NetTurnBundle *out, size_t capacity)
 {
     uint32_t turn;
+    uint32_t target;
     unsigned index;
-    const NetTurnBundle *later;
+    size_t created = 0;
     if (lockstep == NULL) return 0;
     ++lockstep->tick;
     if (lockstep->tick % NET_TURN_TICKS != 0U) return 0;
@@ -89,25 +111,30 @@ int net_lockstep_finish_tick(NetLockstep *lockstep, uint32_t session_hash,
     lockstep->local_hashes[index] = session_hash;
     lockstep->local_hash_turns[index] = turn;
     lockstep->local_hash_valid[index] = 1;
-    later = &lockstep->bundles[(turn + NET_TURN_DELAY) % NET_TURN_WINDOW];
-    if (later->valid && later->has_hash && later->hash_turn == turn)
-        check_hash(lockstep, turn, later->hash);
-    if (lockstep->is_host) {
-        NetTurnBundle *bundle = &lockstep->bundles[(turn + NET_TURN_DELAY) % NET_TURN_WINDOW];
+    compare_hash(lockstep, turn);
+    if (!lockstep->is_host) return 0;
+    /* One bundle per turn, none skipped: a grown delay emits the missing
+       turns empty; a shrunk delay emits nothing and keeps the commands. */
+    target = turn + lockstep->delay;
+    while (lockstep->latest_bundle_turn <= target) {
+        NetTurnBundle *bundle =
+            &lockstep->bundles[lockstep->latest_bundle_turn % NET_TURN_WINDOW];
         memset(bundle, 0, sizeof(*bundle));
         bundle->valid = 1;
-        bundle->turn = turn + NET_TURN_DELAY;
-        bundle->has_hash = 1;
-        bundle->hash_turn = turn;
-        bundle->hash = session_hash;
-        bundle->command_count = lockstep->pending_count;
-        memcpy(bundle->commands, lockstep->pending,
-               sizeof(GameCommand) * lockstep->pending_count);
-        lockstep->pending_count = 0;
-        lockstep->latest_bundle_turn = bundle->turn + 1U;
-        if (out_bundle != NULL) *out_bundle = *bundle;
+        bundle->turn = lockstep->latest_bundle_turn++;
+        if (created == 0U) {
+            bundle->has_hash = 1;
+            bundle->hash_turn = turn;
+            bundle->hash = session_hash;
+            bundle->command_count = lockstep->pending_count;
+            memcpy(bundle->commands, lockstep->pending,
+                   sizeof(GameCommand) * lockstep->pending_count);
+            lockstep->pending_count = 0;
+        }
+        if (out != NULL && created < capacity) out[created] = *bundle;
+        ++created;
     }
-    return 1;
+    return created < capacity ? created : capacity;
 }
 
 int net_lockstep_receive_bundle(NetLockstep *lockstep, const NetTurnBundle *bundle)
@@ -118,7 +145,13 @@ int net_lockstep_receive_bundle(NetLockstep *lockstep, const NetTurnBundle *bund
     lockstep->bundles[bundle->turn % NET_TURN_WINDOW] = *bundle;
     if (bundle->turn + 1U > lockstep->latest_bundle_turn)
         lockstep->latest_bundle_turn = bundle->turn + 1U;
-    if (bundle->has_hash) check_hash(lockstep, bundle->hash_turn, bundle->hash);
+    if (bundle->has_hash) {
+        unsigned index = bundle->hash_turn % NET_TURN_WINDOW;
+        lockstep->remote_hashes[index] = bundle->hash;
+        lockstep->remote_hash_turns[index] = bundle->hash_turn;
+        lockstep->remote_hash_valid[index] = 1;
+        compare_hash(lockstep, bundle->hash_turn);
+    }
     return 1;
 }
 
