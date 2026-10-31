@@ -784,12 +784,10 @@ static void render_island_view(HDC dc)
             runtime_location->bridge_neighbor_island < 0) {
             runtime_class = 0;
         }
-        /* A bridge whose WORLDPOS flag is disabled is not drawn. */
-        if (runtime_location != NULL && runtime_class == 2 &&
-            !game_session_bridge_marker_is_active(&g_game_session,
-                (uint8_t)g_menu.selected_map_island, location_index)) {
-            continue;
-        }
+        /* The island loop FUN_00435f4d and the painter FUN_0040bf98 do not
+           test the WORLDPOS bridge flag (DAT_006136b4) or +0x36: a marker
+           whose link is inactive still draws its BASE layer
+           (ev_9466be6d877d3a7686cb6bcf7838301774c412a8e560a476b938307aac8b32ad). */
         /* PIT_Object has no building SHP of its own; generated collectible
            items draw their TRIGGERS frame from +0x24 below. PIT_FeatureTrigger
            also has no SHP. Item IDs are distinct from renderer_class. */
