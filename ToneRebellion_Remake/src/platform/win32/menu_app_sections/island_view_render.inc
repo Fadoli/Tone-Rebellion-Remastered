@@ -583,38 +583,16 @@ static void draw_building_slot_floaters(HDC dc, const WindowTemplate *info,
    block carries the owner index (type 4 = both diagonal pixels), the rest
    is slot 0. Colour: slot 1; own floater with link +0x0c != -1 -> slot 2
    (slot 4 for subtype 4); selected own floater -> slot 5.
-   Palette slots DAT_0049e140[1..6] are the 6-bit RGB triples at 0x49e148
-   matched to the island palette by FUN_0041081b (assumed nearest colour).
+   Palette slots: g_lilmap_slot_colors (lilmap_slot_color).
    No explored/fog test: the painter never reads the per-player visibility
    spans (FUN_00462285), so unexplored columns are drawn like the rest. */
-static COLORREF lilmap_slot_color(int slot)
-{
-    static const unsigned char rgb6[7][3] = {
-        {0, 0, 0}, {63, 63, 63}, {63, 0, 0}, {0, 63, 0},
-        {0, 0, 63}, {63, 63, 0}, {50, 50, 50}
-    };
-    int best = 0;
-    int best_distance = 0x7fffffff;
-    int index;
-    if (slot <= 0 || slot > 6) return g_island_palette[0];
-    for (index = 0; index < 256; ++index) {
-        int dr = (int)GetRValue(g_island_palette[index]) - rgb6[slot][0] * 255 / 63;
-        int dg = (int)GetGValue(g_island_palette[index]) - rgb6[slot][1] * 255 / 63;
-        int db = (int)GetBValue(g_island_palette[index]) - rgb6[slot][2] * 255 / 63;
-        int distance = dr * dr + dg * dg + db * db;
-        if (distance < best_distance) {
-            best_distance = distance;
-            best = index;
-        }
-    }
-    return g_island_palette[best];
-}
-
 static void lilmap_fill(HDC dc, int left, int top, int width, int height,
                         COLORREF color)
 {
     RECT box;
     HBRUSH brush;
+    if (soft_fill_rect(dc, left, top, left + width, top + height, color))
+        return;
     box.left = left; box.top = top;
     box.right = left + width; box.bottom = top + height;
     brush = CreateSolidBrush(color);
@@ -646,7 +624,7 @@ static void draw_island_lilmap_dots(HDC dc, const WindowTemplate *mini_map,
                 if ((loc->source_flags & 1U) != 0) slot = 5;
             }
             if (slot < 0) continue;
-            lilmap_fill(dc, cx - 1, cy - 1, 3, 3, lilmap_slot_color(slot));
+            lilmap_fill(dc, cx - 1, cy - 1, 3, 3, g_lilmap_slot_colors[slot]);
         }
     }
     if (g_game_session_valid) {
@@ -675,7 +653,7 @@ static void draw_island_lilmap_dots(HDC dc, const WindowTemplate *mini_map,
                 int lit = fl->type_index == 4 ? (pixel == 0 || pixel == 3)
                                               : pixel == fl->type_index;
                 lilmap_fill(dc, px + (pixel & 1), py + (pixel >> 1), 1, 1,
-                            lilmap_slot_color(lit ? slot : 0));
+                            g_lilmap_slot_colors[lit ? slot : 0]);
             }
         }
     }
@@ -716,9 +694,9 @@ static void draw_island_lilmap_dots(HDC dc, const WindowTemplate *mini_map,
         }
         line_x = mini_map->pane.left + g_island_scroll_x / 10;
         lilmap_fill(dc, line_x, mini_map->pane.top, 1, pane_height,
-                    lilmap_slot_color(1));
+                    g_lilmap_slot_colors[1]);
         lilmap_fill(dc, line_x + 63, mini_map->pane.top, 1, pane_height,
-                    lilmap_slot_color(1));
+                    g_lilmap_slot_colors[1]);
     }
     if (saved != 0) RestoreDC(dc, saved);
 }

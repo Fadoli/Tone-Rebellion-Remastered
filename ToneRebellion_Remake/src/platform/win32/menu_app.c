@@ -62,6 +62,12 @@ typedef struct SpriteFrame {
     int hit_top;
     int hit_right;
     int hit_bottom;
+    /* Lazily cached DIB bits of `bitmap` for the software blitter: valid
+       while pixels_bitmap == bitmap. Row stride in pixels; pixels points at
+       the top row. */
+    HBITMAP pixels_bitmap;
+    const DWORD *pixels;
+    int pixel_stride;
 } SpriteFrame;
 
 typedef struct SpriteSheetShare SpriteSheetShare;
@@ -159,6 +165,9 @@ static COLORREF g_map_palette[256];
 static COLORREF g_island_palette[256];
 static IslandPaletteLookup g_island_palette_lookup;
 static DWORD g_task_highlight_pixels[256];
+/* IWLilMap dot colours of palette slots 0..6 for the island palette,
+   rebuilt with it (rebuild_island_palette_lookup). */
+static COLORREF g_lilmap_slot_colors[7];
 static uint32_t g_random_state;
 static unsigned char *g_button_sound;
 static unsigned char *g_fltbuild_sound;
@@ -439,6 +448,79 @@ static BOOL play_effect_sound(LPCSTR sound, HMODULE module, DWORD flags)
 }
 #define PlaySoundA(sound, module, flags) play_effect_sound((sound), (module), (flags))
 
+/* Software clip of the back buffer, mirrored from its DC so sprites can be
+   copied straight into g_paint_buffer_pixels. A region clip (feature reveal
+   stipples) marks it complex; drawing then goes through GDI. The stack is
+   indexed by the SaveDC level, as RestoreDC takes it. */
+typedef struct SoftClip {
+    RECT box;
+    int complex;
+} SoftClip;
+enum { SOFT_CLIP_STACK = 64 };
+static SoftClip g_soft_clip = {{0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT}, 0};
+static SoftClip g_soft_clip_stack[SOFT_CLIP_STACK];
+static int g_soft_clip_depth;
+
+static void soft_clip_reset(void)
+{
+    g_soft_clip.box.left = 0;
+    g_soft_clip.box.top = 0;
+    g_soft_clip.box.right = LOGICAL_WIDTH;
+    g_soft_clip.box.bottom = LOGICAL_HEIGHT;
+    g_soft_clip.complex = 0;
+    g_soft_clip_depth = 0;
+}
+
+static int soft_save_dc(HDC dc)
+{
+    int level = SaveDC(dc);
+    if (dc == g_paint_buffer_dc && level > 0) {
+        if (level < SOFT_CLIP_STACK) g_soft_clip_stack[level] = g_soft_clip;
+        else g_soft_clip.complex = 1;
+        g_soft_clip_depth = level;
+    }
+    return level;
+}
+
+static BOOL soft_restore_dc(HDC dc, int level)
+{
+    BOOL restored = RestoreDC(dc, level);
+    if (dc == g_paint_buffer_dc && restored) {
+        int target = level < 0 ? g_soft_clip_depth + level + 1 : level;
+        if (target >= 1 && target < SOFT_CLIP_STACK &&
+            target <= g_soft_clip_depth) {
+            g_soft_clip = g_soft_clip_stack[target];
+            g_soft_clip_depth = target - 1;
+        } else {
+            g_soft_clip.complex = 1;
+        }
+    }
+    return restored;
+}
+
+static int soft_intersect_clip_rect(HDC dc, int left, int top, int right,
+                                    int bottom)
+{
+    int result = IntersectClipRect(dc, left, top, right, bottom);
+    if (dc == g_paint_buffer_dc) {
+        if (left > g_soft_clip.box.left) g_soft_clip.box.left = left;
+        if (top > g_soft_clip.box.top) g_soft_clip.box.top = top;
+        if (right < g_soft_clip.box.right) g_soft_clip.box.right = right;
+        if (bottom < g_soft_clip.box.bottom) g_soft_clip.box.bottom = bottom;
+    }
+    return result;
+}
+
+static int soft_ext_select_clip_rgn(HDC dc, HRGN region, int mode)
+{
+    if (dc == g_paint_buffer_dc) g_soft_clip.complex = 1;
+    return ExtSelectClipRgn(dc, region, mode);
+}
+#define SaveDC(dc) soft_save_dc(dc)
+#define RestoreDC(dc, level) soft_restore_dc((dc), (level))
+#define IntersectClipRect(dc, l, t, r, b) soft_intersect_clip_rect((dc), (l), (t), (r), (b))
+#define ExtSelectClipRgn(dc, region, mode) soft_ext_select_clip_rgn((dc), (region), (mode))
+
 /* Ordered source fragments share private Win32 state in this one
    translation unit; the split is organizational and keeps internal linkage. */
 #include "menu_app_sections/game_paths.inc"
@@ -561,5 +643,6 @@ static void clear_island_messages(void);
 
 #include "menu_app_sections/e2e_state.inc"
 #include "menu_app_sections/window_proc.inc"
+#include "menu_app_sections/bench.inc"
 
 #include "menu_app_sections/content_loading.inc"

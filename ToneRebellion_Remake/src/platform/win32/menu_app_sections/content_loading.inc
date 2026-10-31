@@ -642,6 +642,10 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     char error[256];
     unsigned int cursor_index;
     (void)previous_instance;
+    /* Run every GDI call at once instead of batching it, so the software
+       blitter (soft_blit_frame) can write the back buffer between GDI
+       calls without a GdiFlush system call per sprite. */
+    (void)GdiSetBatchLimit(1);
     game_directory_resolve(command_line);
 
     /* Read the original PE cursor resources without executing FLOAT.EXE.
@@ -740,6 +744,18 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     /* frame_limit 20: frame_clock_due releases one frame per 50 ms; the
        10 ms timer and 1 ms timer resolution only keep it punctual. */
     (void)timeBeginPeriod(1);
+    if (command_line != NULL && strstr(command_line, "--bench") != NULL) {
+        int exit_code;
+        free(g_logo_pixels);
+        g_logo_pixels = NULL;
+        ShowWindow(window, show_command);
+        UpdateWindow(window);
+        exit_code = bench_run(window, command_line);
+        (void)timeEndPeriod(1);
+        /* No DestroyWindow: WM_DESTROY would write the bench session over
+           the resume save. The process exit releases the window. */
+        return exit_code;
+    }
     (void)SetTimer(window, 1, 10, NULL);
     (void)SetTimer(window, 2, 1000, NULL);
     ShowWindow(window, show_command);

@@ -243,69 +243,77 @@ static void render_load_game(HDC dc)
         draw_sprite(dc, &g_load_title_art, (g_load_save_mode ? 0U : 4U) + tribe, 317, 0);
     }
 }
+/* Composes the current screen into the 640x480 back buffer. */
+static void render_back_buffer(HDC back)
+{
+    soft_clip_reset();
+    if (g_menu.screen == SCREEN_MAIN_MENU) {
+        render_main_menu(back);
+        render_net_setup_title_button(back);
+        render_net_lobby(back);
+    } else if (g_menu.screen == SCREEN_NEW_GAME) {
+        render_new_game(back);
+        render_net_lobby(back);
+    } else if (g_menu.screen == SCREEN_WORLD_MAP) {
+        render_world_map(back);
+    } else if (g_menu.screen == SCREEN_ISLAND) {
+        render_island_view(back);
+    } else if (g_menu.screen == SCREEN_LOGO) {
+        render_logo(back);
+    } else if (g_menu.screen == SCREEN_END_GAME) {
+        render_end_game(back);
+    } else if (g_menu.screen == SCREEN_NET_SETUP) {
+        render_net_setup(back);
+    } else {
+        render_load_game(back);
+    }
+    if (g_menu.screen == SCREEN_WORLD_MAP || g_menu.screen == SCREEN_ISLAND)
+        render_slide_panel(back);
+    (void)GdiFlush();
+}
+
+/* Scales the back buffer into the client area and clears the letterbox. */
+static void present_back_buffer(HDC screen, const RECT *client)
+{
+    int width = client->right - client->left;
+    int height = client->bottom - client->top;
+    RECT viewport;
+    if (!logical_viewport(width, height, &viewport)) return;
+    /* Clearing the whole client before each StretchBlt exposed a black
+       frame on every animated paint. Only clear the letterbox bars. */
+    if (viewport.top > 0) {
+        RECT bar = {client->left, client->top, client->right, viewport.top};
+        FillRect(screen, &bar, (HBRUSH)GetStockObject(BLACK_BRUSH));
+    }
+    if (viewport.bottom < height) {
+        RECT bar = {client->left, viewport.bottom, client->right, client->bottom};
+        FillRect(screen, &bar, (HBRUSH)GetStockObject(BLACK_BRUSH));
+    }
+    if (viewport.left > 0) {
+        RECT bar = {client->left, viewport.top, viewport.left, viewport.bottom};
+        FillRect(screen, &bar, (HBRUSH)GetStockObject(BLACK_BRUSH));
+    }
+    if (viewport.right < width) {
+        RECT bar = {viewport.right, viewport.top, client->right, viewport.bottom};
+        FillRect(screen, &bar, (HBRUSH)GetStockObject(BLACK_BRUSH));
+    }
+    /* Nearest pixel: HALFTONE filtered the whole frame on the CPU, about
+       5 ms per frame at 1024x781 (bench/gameplay_hotspots.md). */
+    SetStretchBltMode(screen, COLORONCOLOR);
+    StretchBlt(screen, viewport.left, viewport.top,
+               viewport.right - viewport.left, viewport.bottom - viewport.top,
+               g_paint_buffer_dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, SRCCOPY);
+}
+
 static void paint_window(HWND window)
 {
     PAINTSTRUCT paint;
     HDC screen = BeginPaint(window, &paint);
     RECT client;
     GetClientRect(window, &client);
-    {
-        int width = client.right - client.left;
-        int height = client.bottom - client.top;
-        RECT viewport;
-        HDC back;
-        if (!ensure_paint_buffer(screen)) {
-            EndPaint(window, &paint);
-            return;
-        }
-        back = g_paint_buffer_dc;
-        if (g_menu.screen == SCREEN_MAIN_MENU) {
-            render_main_menu(back);
-            render_net_setup_title_button(back);
-            render_net_lobby(back);
-        } else if (g_menu.screen == SCREEN_NEW_GAME) {
-            render_new_game(back);
-            render_net_lobby(back);
-        } else if (g_menu.screen == SCREEN_WORLD_MAP) {
-            render_world_map(back);
-        } else if (g_menu.screen == SCREEN_ISLAND) {
-            render_island_view(back);
-        } else if (g_menu.screen == SCREEN_LOGO) {
-            render_logo(back);
-        } else if (g_menu.screen == SCREEN_END_GAME) {
-            render_end_game(back);
-        } else if (g_menu.screen == SCREEN_NET_SETUP) {
-            render_net_setup(back);
-        } else {
-            render_load_game(back);
-        }
-        if (g_menu.screen == SCREEN_WORLD_MAP || g_menu.screen == SCREEN_ISLAND)
-            render_slide_panel(back);
-        (void)GdiFlush();
-        if (logical_viewport(width, height, &viewport)) {
-            /* Clearing the whole client before each StretchBlt exposed a black
-               frame on every animated paint. Only clear the letterbox bars. */
-            if (viewport.top > 0) {
-                RECT bar = {client.left, client.top, client.right, viewport.top};
-                FillRect(screen, &bar, (HBRUSH)GetStockObject(BLACK_BRUSH));
-            }
-            if (viewport.bottom < height) {
-                RECT bar = {client.left, viewport.bottom, client.right, client.bottom};
-                FillRect(screen, &bar, (HBRUSH)GetStockObject(BLACK_BRUSH));
-            }
-            if (viewport.left > 0) {
-                RECT bar = {client.left, viewport.top, viewport.left, viewport.bottom};
-                FillRect(screen, &bar, (HBRUSH)GetStockObject(BLACK_BRUSH));
-            }
-            if (viewport.right < width) {
-                RECT bar = {viewport.right, viewport.top, client.right, viewport.bottom};
-                FillRect(screen, &bar, (HBRUSH)GetStockObject(BLACK_BRUSH));
-            }
-            SetStretchBltMode(screen, HALFTONE);
-            StretchBlt(screen, viewport.left, viewport.top,
-                       viewport.right - viewport.left, viewport.bottom - viewport.top,
-                       back, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, SRCCOPY);
-        }
+    if (ensure_paint_buffer(screen)) {
+        render_back_buffer(g_paint_buffer_dc);
+        present_back_buffer(screen, &client);
     }
     EndPaint(window, &paint);
 }

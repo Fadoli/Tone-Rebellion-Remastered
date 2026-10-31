@@ -1,7 +1,9 @@
 static void fill_rect(HDC dc, int left, int top, int right, int bottom, COLORREF color)
 {
     RECT rect = {left, top, right, bottom};
-    HBRUSH brush = CreateSolidBrush(color);
+    HBRUSH brush;
+    if (soft_fill_rect(dc, left, top, right, bottom, color)) return;
+    brush = CreateSolidBrush(color);
     FillRect(dc, &rect, brush);
     DeleteObject(brush);
 }

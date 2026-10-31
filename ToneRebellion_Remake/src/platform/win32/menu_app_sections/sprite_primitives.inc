@@ -62,6 +62,32 @@ static void destroy_paint_buffer(void)
     g_paint_buffer_dc = NULL;
 }
 
+/* IWLilMap palette slots DAT_0049e140[1..6] are the 6-bit RGB triples at
+   0x49e148 matched to the island palette by FUN_0041081b (assumed nearest
+   colour); slot 0 is palette entry 0. */
+static COLORREF lilmap_slot_color(int slot)
+{
+    static const unsigned char rgb6[7][3] = {
+        {0, 0, 0}, {63, 63, 63}, {63, 0, 0}, {0, 63, 0},
+        {0, 0, 63}, {63, 63, 0}, {50, 50, 50}
+    };
+    int best = 0;
+    int best_distance = 0x7fffffff;
+    int index;
+    if (slot <= 0 || slot > 6) return g_island_palette[0];
+    for (index = 0; index < 256; ++index) {
+        int dr = (int)GetRValue(g_island_palette[index]) - rgb6[slot][0] * 255 / 63;
+        int dg = (int)GetGValue(g_island_palette[index]) - rgb6[slot][1] * 255 / 63;
+        int db = (int)GetBValue(g_island_palette[index]) - rgb6[slot][2] * 255 / 63;
+        int distance = dr * dr + dg * dg + db * db;
+        if (distance < best_distance) {
+            best_distance = distance;
+            best = index;
+        }
+    }
+    return g_island_palette[best];
+}
+
 static void rebuild_island_palette_lookup(void)
 {
     uint32_t palette_rgb24[256];
@@ -83,6 +109,9 @@ static void rebuild_island_palette_lookup(void)
             ((DWORD)GetRValue(color) << 16) |
             ((DWORD)GetGValue(color) << 8) | (DWORD)GetBValue(color);
     }
+    /* A 256-entry search per slot: once per palette, not per dot. */
+    for (index = 0; index < 7U; ++index)
+        g_lilmap_slot_colors[index] = lilmap_slot_color((int)index);
 }
 
 static int g_mouse_x;
@@ -730,6 +759,140 @@ static void build_island_draw_order(void)
     }
 }
 
+static DWORD hazed_island_pixel(DWORD pixel, int selector, int level);
+
+/* Top row and stride of a frame's 32-bit DIB, read once per bitmap. */
+static int sprite_frame_bits(const SpriteFrame *frame, const DWORD **top,
+                             int *stride)
+{
+    SpriteFrame *cache = (SpriteFrame *)frame;
+    if (frame->bitmap == NULL) return 0;
+    if (frame->pixels_bitmap != frame->bitmap) {
+        DIBSECTION dib;
+        ZeroMemory(&dib, sizeof(dib));
+        cache->pixels = NULL;
+        cache->pixels_bitmap = frame->bitmap;
+        if (GetObjectA(frame->bitmap, sizeof(dib), &dib) >= (int)sizeof(dib) &&
+            dib.dsBm.bmBits != NULL && dib.dsBm.bmBitsPixel == 32 &&
+            dib.dsBm.bmWidth >= frame->width &&
+            dib.dsBm.bmHeight >= frame->height) {
+            /* Every sprite DIB is created top-down (negative biHeight);
+               GetObject reports biHeight positive either way, so it cannot
+               tell the row order (same layout as recolor_under_sprite). */
+            cache->pixels = (const DWORD *)dib.dsBm.bmBits;
+            cache->pixel_stride = dib.dsBm.bmWidthBytes / 4;
+        }
+    }
+    if (frame->pixels == NULL) return 0;
+    *top = frame->pixels;
+    *stride = frame->pixel_stride;
+    return 1;
+}
+
+/* Software AlphaBlend (AC_SRC_OVER, premultiplied source) of a frame region
+   into the back buffer: destination rectangle (x, y, width, height) samples
+   source (source_x + column * 65536 / scale, ...) like nearest_scaled_frame,
+   optionally through the island haze. Returns 0 when the target is not the
+   back buffer or its clip is not a rectangle; the caller then uses GDI. */
+static int soft_blit_frame(HDC target, const SpriteFrame *frame,
+                           int source_x, int source_y, int width, int height,
+                           int x, int y, uint32_t scale_16_16,
+                           int haze_selector, int haze_level)
+{
+    const DWORD *top;
+    int stride;
+    int left = x;
+    int right = x + width;
+    int upper = y;
+    int lower = y + height;
+    int row;
+    int column;
+    int columns[LOGICAL_WIDTH];
+    if (target == NULL || target != g_paint_buffer_dc ||
+        g_paint_buffer_pixels == NULL || g_soft_clip.complex ||
+        scale_16_16 == 0U || !sprite_frame_bits(frame, &top, &stride))
+        return 0;
+    if (left < g_soft_clip.box.left) left = g_soft_clip.box.left;
+    if (upper < g_soft_clip.box.top) upper = g_soft_clip.box.top;
+    if (right > g_soft_clip.box.right) right = g_soft_clip.box.right;
+    if (lower > g_soft_clip.box.bottom) lower = g_soft_clip.box.bottom;
+    if (left < 0) left = 0;
+    if (upper < 0) upper = 0;
+    if (right > LOGICAL_WIDTH) right = LOGICAL_WIDTH;
+    if (lower > LOGICAL_HEIGHT) lower = LOGICAL_HEIGHT;
+    if (left >= right || upper >= lower) return 1;
+    /* No GdiFlush (a system call each time): WinMain sets
+       GdiSetBatchLimit(1), so earlier GDI drawing is already done. */
+    /* Source column of each destination column, computed once. Offsets
+       below 0x8000 keep the 16.16 quotient in 32-bit arithmetic (a 64-bit
+       division per pixel dominated scaled floaters). */
+    if (right - x > 0x7fff || lower - y > 0x7fff) return 0;
+    for (column = left; column < right; ++column) {
+        int sample = source_x + (scale_16_16 == 0x10000U ? column - x :
+            (int)(((uint32_t)(column - x) << 16) / scale_16_16));
+        if (sample >= frame->width) sample = frame->width - 1;
+        columns[column - left] = sample;
+    }
+    for (row = upper; row < lower; ++row) {
+        int sample_row = source_y + (scale_16_16 == 0x10000U ? row - y :
+            (int)(((uint32_t)(row - y) << 16) / scale_16_16));
+        const DWORD *in;
+        DWORD *out = g_paint_buffer_pixels + (size_t)row * LOGICAL_WIDTH;
+        if (sample_row >= frame->height) sample_row = frame->height - 1;
+        in = top + (ptrdiff_t)sample_row * stride;
+        for (column = left; column < right; ++column) {
+            DWORD pixel = in[columns[column - left]];
+            DWORD alpha = pixel >> 24;
+            if (alpha == 0U) continue;
+            if (haze_level >= 0) {
+                pixel = hazed_island_pixel(pixel, haze_selector, haze_level);
+                alpha = pixel >> 24;
+            }
+            if (alpha == 255U) {
+                out[column] = pixel;
+            } else {
+                DWORD under = out[column];
+                DWORD keep = 255U - alpha;
+                out[column] =
+                    ((alpha + (((under >> 24) & 0xffU) * keep + 127U) / 255U) << 24) |
+                    ((((pixel >> 16) & 0xffU) +
+                      (((under >> 16) & 0xffU) * keep + 127U) / 255U) << 16) |
+                    ((((pixel >> 8) & 0xffU) +
+                      (((under >> 8) & 0xffU) * keep + 127U) / 255U) << 8) |
+                    ((pixel & 0xffU) + ((under & 0xffU) * keep + 127U) / 255U);
+            }
+        }
+    }
+    return 1;
+}
+
+/* Solid fill of the back buffer within its rectangular clip; 0 = use GDI.
+   FillRect leaves alpha 0 on a 32-bit DIB, and so does this. */
+static int soft_fill_rect(HDC target, int left, int top, int right, int bottom,
+                          COLORREF color)
+{
+    DWORD value = ((DWORD)GetRValue(color) << 16) |
+                  ((DWORD)GetGValue(color) << 8) | (DWORD)GetBValue(color);
+    int row;
+    if (target == NULL || target != g_paint_buffer_dc ||
+        g_paint_buffer_pixels == NULL || g_soft_clip.complex) return 0;
+    if (left < g_soft_clip.box.left) left = g_soft_clip.box.left;
+    if (top < g_soft_clip.box.top) top = g_soft_clip.box.top;
+    if (right > g_soft_clip.box.right) right = g_soft_clip.box.right;
+    if (bottom > g_soft_clip.box.bottom) bottom = g_soft_clip.box.bottom;
+    if (left < 0) left = 0;
+    if (top < 0) top = 0;
+    if (right > LOGICAL_WIDTH) right = LOGICAL_WIDTH;
+    if (bottom > LOGICAL_HEIGHT) bottom = LOGICAL_HEIGHT;
+    if (left >= right || top >= bottom) return 1;
+    for (row = top; row < bottom; ++row) {
+        DWORD *out = g_paint_buffer_pixels + (size_t)row * LOGICAL_WIDTH;
+        int column;
+        for (column = left; column < right; ++column) out[column] = value;
+    }
+    return 1;
+}
+
 static void draw_sprite(HDC target, const SpriteSheet *sheet, uint32_t frame_index,
                         int x, int y)
 {
@@ -740,6 +903,9 @@ static void draw_sprite(HDC target, const SpriteSheet *sheet, uint32_t frame_ind
     if (sheet == NULL || frame_index >= sheet->frame_count) return;
     frame = &sheet->frames[frame_index];
     if (frame->bitmap == NULL) return;
+    if (soft_blit_frame(target, frame, 0, 0, frame->width, frame->height,
+                        x + frame->x_offset, y + frame->y_offset, 0x10000U,
+                        0, -1)) return;
     source = get_sprite_source_dc(target);
     if (source == NULL) return;
     previous = SelectObject(source, frame->bitmap);
@@ -815,6 +981,8 @@ static void draw_sprite_scaled_plain(HDC target, const SpriteSheet *sheet,
     if (width <= 0 || height <= 0) return;
     offset_x = (int)(((int64_t)frame->x_offset * scale_16_16) >> 16);
     offset_y = (int)(((int64_t)frame->y_offset * scale_16_16) >> 16);
+    if (soft_blit_frame(target, frame, 0, 0, width, height, x + offset_x,
+                        y + offset_y, scale_16_16, 0, -1)) return;
     source = get_sprite_source_dc(target);
     if (source == NULL) return;
     if (scale_16_16 != 0x10000U) {
@@ -880,6 +1048,15 @@ static void draw_sprite_scaled(HDC target, const SpriteSheet *sheet, uint32_t fr
         return;
     }
     frame = &sheet->frames[frame_index];
+    if (frame->bitmap != NULL && scale_16_16 != 0U) {
+        int width = (int)(((uint64_t)(unsigned)frame->width * scale_16_16) >> 16);
+        int height = (int)(((uint64_t)(unsigned)frame->height * scale_16_16) >> 16);
+        if (width <= 0 || height <= 0) return;
+        if (soft_blit_frame(target, frame, 0, 0, width, height,
+                x + (int)(((int64_t)frame->x_offset * scale_16_16) >> 16),
+                y + (int)(((int64_t)frame->y_offset * scale_16_16) >> 16),
+                scale_16_16, g_sprite_haze_selector, level)) return;
+    }
     if (!read_sprite_frame_pixels(frame, &dib)) return;
     ZeroMemory(&info, sizeof(info));
     info.bmiHeader.biSize = sizeof(info.bmiHeader);
@@ -904,6 +1081,7 @@ static void draw_sprite_scaled(HDC target, const SpriteSheet *sheet, uint32_t fr
     }
     hazed = *frame;
     hazed.bitmap = bitmap;
+    hazed.pixels_bitmap = NULL;
     single.frames = &hazed;
     single.frame_count = 1;
     draw_sprite_scaled_plain(target, &single, 0, x, y, scale_16_16);
@@ -967,6 +1145,8 @@ static void draw_sprite_region(HDC target, const SpriteSheet *sheet, uint32_t fr
     frame = &sheet->frames[frame_index];
     if (frame->bitmap == NULL || source_x < 0 || source_y < 0 ||
         source_x + width > frame->width || source_y + height > frame->height) return;
+    if (soft_blit_frame(target, frame, source_x, source_y, width, height,
+                        destination_x, destination_y, 0x10000U, 0, -1)) return;
     source = get_sprite_source_dc(target);
     if (source == NULL) return;
     previous = SelectObject(source, frame->bitmap);
