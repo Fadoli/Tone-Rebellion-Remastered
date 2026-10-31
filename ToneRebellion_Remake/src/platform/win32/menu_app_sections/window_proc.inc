@@ -31,8 +31,15 @@ static void simulate_session_tick(uint32_t source_tick)
                 g_menu.animation_ticks + 90U;
         } else if (world_event.kind ==
             GAME_SESSION_WORLD_EVENT_BUILDING_DESTROYED) {
-            g_building_destroyed_notice_until =
-                g_menu.animation_ticks + 90U;
+            /* FUN_0042fa0f message 5, event 8: only a selected destroyed
+               site matters; FUN_0042f303(0) returns to the Hall default. */
+            if (selection_island() == (int)world_event.island_index &&
+                g_selected_location ==
+                    (int)((uint32_t)world_event.payload & 0xffffU)) {
+                g_selected_floater = -1;
+                select_location_on_view(-1);
+                g_island_panel_mode = WINDOW_ISLAND_PANEL_GENERAL;
+            }
         }
     }
     /* Drain the whole queue each frame; every audible instance plays on

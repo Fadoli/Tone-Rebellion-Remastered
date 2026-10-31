@@ -186,16 +186,12 @@ static void draw_island_access_notice(HDC dc)
     char label[96];
     const char *island_name;
     int level = g_island_access_notice_level;
-    if (g_menu.animation_ticks < g_building_destroyed_notice_until) {
-        (void)snprintf(label, sizeof(label), "BATIMENT DETRUIT");
-    } else {
-        if (level < 0 || level >= ISLAND_NAME_COUNT ||
-            g_menu.animation_ticks >= g_island_access_notice_until) return;
-        island_name = g_island_names[level][0] != '\0'
-            ? g_island_names[level] : "?";
-        /* The bundled bitmap font is byte-oriented; keep this caption ASCII. */
-        (void)snprintf(label, sizeof(label), "ACCES OUVERT : %.32s", island_name);
-    }
+    if (level < 0 || level >= ISLAND_NAME_COUNT ||
+        g_menu.animation_ticks >= g_island_access_notice_until) return;
+    island_name = g_island_names[level][0] != '\0'
+        ? g_island_names[level] : "?";
+    /* The bundled bitmap font is byte-oriented; keep this caption ASCII. */
+    (void)snprintf(label, sizeof(label), "ACCES OUVERT : %.32s", island_name);
     fill_rect(dc, 176, 10, 464, 34, RGB(20, 30, 35));
     fill_rect(dc, 178, 12, 462, 32, RGB(47, 77, 75));
     draw_bitmap_label(dc, label, 188, 18, RGB(238, 226, 177));
