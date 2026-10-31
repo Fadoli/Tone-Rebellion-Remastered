@@ -118,7 +118,7 @@ void game_session_tick_floater_combat(GameSession *session,
                                              impact_x, impact_y);
         if (uses_atteff &&
             game_session_spawn_attack_visual(session, floater, state, impact_x,
-                                             impact_y) &&
+                                             impact_y, damage) &&
             floater->attack_effect_active)
             floater->attack_effect_hidden = 1;
     } else if (floater->attack_timer > floater->attack_period &&
@@ -1488,7 +1488,7 @@ static uint8_t attack_visual_level(const FloaterEffectDef *def, uint8_t wanted)
 int game_session_spawn_attack_visual(GameSession *session,
                                      const GameFloaterStart *attacker,
                                      uint8_t state, uint16_t target_x,
-                                     uint16_t target_y)
+                                     uint16_t target_y, int32_t damage)
 {
     const FloaterEffectDef *def;
     int row;
@@ -1533,9 +1533,37 @@ int game_session_spawn_attack_visual(GameSession *session,
             ? attacker->order_target_floater : -1;
         visual->target_x = target_x;
         visual->target_y = target_y;
+        visual->impact_damage = (int16_t)(damage > INT16_MAX ? INT16_MAX : damage);
+        visual->impact_realm = attacker->attack_realm >= 0 &&
+                               attacker->attack_realm < 4
+            ? (int8_t)attacker->attack_realm : (int8_t)-1;
         return 1;
     }
     return 0;
+}
+
+/* FUN_00416ff8: a positive hit turns the arrived slot into the realm IMPACT
+   (level value / 2, one frame per odd update); otherwise the slot is freed. */
+static void finish_attack_visual(GameSession *session,
+                                 struct GameAttackVisual *visual)
+{
+    unsigned int level;
+    unsigned int realm;
+    if (visual->impact_damage <= 0 || visual->impact_realm < 0) {
+        visual->active = 0;
+        return;
+    }
+    realm = (unsigned int)visual->impact_realm & 3U;
+    level = (unsigned int)visual->impact_damage / 2U;
+    if (level > 3U) level = 3U;
+    if (session->effect_impact_frame_counts[realm][level] == 0) {
+        visual->active = 0;
+        return;
+    }
+    visual->impact_phase = 1;
+    visual->frame = session->effect_impact_frame_starts[realm][level];
+    visual->impact_frames_left = session->effect_impact_frame_counts[realm][level];
+    visual->def = -1;
 }
 
 static void tick_attack_visuals(GameSession *session)
@@ -1546,6 +1574,12 @@ static void tick_attack_visuals(GameSession *session)
         const FloaterEffectDef *def;
         unsigned int last;
         if (!visual->active) continue;
+        if (visual->impact_phase) {
+            ++visual->frame;
+            if (visual->impact_frames_left > 0) --visual->impact_frames_left;
+            if (visual->impact_frames_left == 0) visual->active = 0;
+            continue;
+        }
         if (visual->def < 0 || visual->def >= FLOATER_EFFECT_MAX) {
             visual->active = 0;
             continue;
@@ -1567,19 +1601,27 @@ static void tick_attack_visuals(GameSession *session)
                 visual->target_x = session->floaters[visual->target_floater].x;
                 visual->target_y = session->floaters[visual->target_floater].y;
             }
-            /* FUN_0041511b: SPEED toward the target, snapping within it. The
+            /* FUN_0041511b: SPEED toward the target, snapping within it, then
+               FUN_00416ecf: arrived when both axes are within 6. The
                200-update timeout mirrors FUN_00416ff8's s9 > 200 check. */
             dx = (int32_t)visual->target_x - visual->x;
             dy = (int32_t)visual->target_y - visual->y;
             distance = sqrt((double)dx * dx + (double)dy * dy);
-            if (distance <= (double)def->speed || ++visual->ticks > 200U) {
-                visual->active = 0;
+            if (distance <= (double)def->speed) {
+                visual->x = visual->target_x;
+                visual->y = visual->target_y;
             } else {
                 visual->x = (uint16_t)((int32_t)visual->x +
                     cast_round_to_even((double)dx * def->speed / distance));
                 visual->y = (uint16_t)((int32_t)visual->y +
                     cast_round_to_even((double)dy * def->speed / distance));
             }
+            dx = (int32_t)visual->target_x - visual->x;
+            dy = (int32_t)visual->target_y - visual->y;
+            if ((dx < 0 ? -dx : dx) < 6 && (dy < 0 ? -dy : dy) < 6)
+                finish_attack_visual(session, visual);
+            else if (++visual->ticks > 200U)
+                visual->active = 0;
         } else if (visual->frame > last) {
             /* ONESHOT ends; CAST chains into its CHAIN def (FUN_00416ff8). */
             if (def->type == FLOATER_EFFECT_CAST && def->chain >= 0 &&
@@ -1596,21 +1638,24 @@ static void tick_attack_visuals(GameSession *session)
                     continue;
                 }
             }
-            visual->active = 0;
+            /* ONESHOT (flag 0x20) ends through the same arrival branch. */
+            finish_attack_visual(session, visual);
         }
     }
 }
 
 int game_session_attack_visual(const GameSession *session, unsigned int slot,
                                int *def, unsigned int *frame, uint16_t *x,
-                               uint16_t *y, uint8_t *island)
+                               uint16_t *y, uint8_t *island,
+                               int *impact_realm)
 {
     const struct GameAttackVisual *visual;
     if (session == NULL || def == NULL || frame == NULL || x == NULL ||
-        y == NULL || island == NULL || slot >= GAME_SESSION_MAX_CAST_EFFECTS)
-        return 0;
+        y == NULL || island == NULL || impact_realm == NULL ||
+        slot >= GAME_SESSION_MAX_CAST_EFFECTS) return 0;
     visual = &session->attack_visuals[slot];
     if (!visual->active) return 0;
+    *impact_realm = visual->impact_phase ? visual->impact_realm : -1;
     *def = visual->def;
     *frame = visual->frame;
     *x = visual->x;

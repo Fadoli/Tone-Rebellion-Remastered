@@ -226,3 +226,13 @@ Facts (REA, Ghidra output): `FUN_00454d1f` [ev_ad17f928] parses `fltinf.txt`; `a
 Remake: `floater_catalog_load_effect_defs` parses effects.txt and resolves each row's atteff; `game_session_spawn_attack_visual`/`game_session_attack_visual` run ONESHOT, BULLET and CAST+CHAIN instances (the realm IMPACT is hidden when path A applies). Interpretations: level = attacker level nibble (`FUN_0041ff2e` unread), arrival ends a bullet (the original finish/hit handler `FUN_004206fc` is unread), world anchor as for casts. LIGHTNING (`STORMER`, reached via LTNGCAST) is not drawn: its end condition is unknown. Path B's random +/-7 position is not reproduced (impact stays on the target).
 
 Still unknown: the slot blitter, `FUN_0041ff2e`, `FUN_004206fc`, `FUN_00416e7d` callers' roles.
+
+### Slot finish and impact (pass 6)
+
+Facts (REA, Ghidra output): `FUN_00416ff8` [ev_04c78e7b] decides "arrived" through `FUN_00416ecf` [ev_a9a4a60a]: BULLET when both axes to the target are within 6 (timeout s9 > 200), LIGHTNING when frame > 19, ONESHOT/IMPACT/CAST at the end-of-frames flag. On arrival a slot without flag 0x8 is freed; without 0x10 a CAST switches to its CHAIN def; with 0x10 (bullet hit, also ONESHOT) the hit value (`FUN_004200d2`/`FUN_004533a8`/`FUN_00420188`) decides: zero frees the slot, positive turns the same slot into the realm IMPACT (level = value / 2). `FUN_004206fc` [ev_da7c2d7a] only unlinks the record's slot reference (no damage). `FUN_0041ff2e` [ev_bfd78831] returns the low nibble of the object's short at `+0x0a`.
+
+Remake: an arrived atteff visual now becomes the realm IMPACT in place when the strike-time damage was positive (`finish_attack_visual`), at the effect's own position. Damage itself is still resolved at the strike, not at arrival. Consistent with the level choice above (attacker `+0x0a` nibble).
+
+Conflict, unverified: pass 5 reads path A as `FUN_004207c2() == 0`, pass 6 as `!= 0`. The remake keeps `== 0`; `FUN_004207c2` [ev_42b992f3] returns 0 for owner 4 or a charged nonzero subtype, so path A covers Leviathan units (vecc, verc, vnrb, vprb, vsrc) and charged specials. Re-read `FUN_0041e569` case 5/6 to settle it.
+
+Still unknown: the slot blitter (`FUN_00417f44` plays a positional sound at screen x = s5 - scroll + 0x140 but does not draw), LIGHTNING's draw use of `s6 = rand(0x8000)`, hit damage in `FUN_00420217`/`FUN_00450817`.

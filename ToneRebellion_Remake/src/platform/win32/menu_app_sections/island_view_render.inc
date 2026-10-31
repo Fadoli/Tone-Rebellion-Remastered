@@ -63,6 +63,18 @@ static const char *island_site_info_text(const GameRuntimeLocation *location,
     return g_site_texts[index][0] != '\0' ? g_site_texts[index] : NULL;
 }
 
+/* FUN_0042704b draws the optional body shape at fltinf "base first last"
+   frame first + FUN_0041ff2e (floater +0x0a & 0xf, the unit level), clamped
+   to [first, last]; no time animation. vbod holds base 2*(subtype-10) and
+   2*(subtype-10)+1 per Leviathan item. FUN_0041ff2e is a thiscall whose ECX
+   is not visible in the decompiled output; the floater is an interpretation. */
+static uint32_t island_leviathan_body_frame(const GameFloaterStart *floater)
+{
+    uint32_t level = floater->attack_level_flags & 0xfU;
+    return 2U * (uint32_t)(floater->source_subtype - 10U) +
+           (level > 1U ? 1U : level);
+}
+
 static uint32_t island_leviathan_legs_frame(const GameFloaterStart *floater,
                                              unsigned int sheet_index)
 {
@@ -175,9 +187,7 @@ static void draw_island_leviathan_floater(HDC dc,
     body_art = floater->facing_left
         ? &g_leviathan_body_art_flipped : &g_leviathan_body_art;
     if (body_art->frame_count >= 16U) {
-        uint32_t body_frame = 2U * (floater->source_subtype - 10U) +
-            (((g_game_session.simulation_tick + floater->animation_seed) / 8U) & 1U);
-        draw_sprite(dc, body_art, body_frame, x, y);
+        draw_sprite(dc, body_art, island_leviathan_body_frame(floater), x, y);
     }
 }
 
@@ -241,8 +251,7 @@ static int draw_island_leviathan_spawn_effect(
     if (floater->source_subtype >= 10U && floater->source_subtype <= 17U) {
         const SpriteSheet *body_art = floater->facing_left
             ? &g_leviathan_body_art_flipped : &g_leviathan_body_art;
-        uint32_t body_frame = 2U * (floater->source_subtype - 10U) +
-            (((g_game_session.simulation_tick + floater->animation_seed) / 8U) & 1U);
+        uint32_t body_frame = island_leviathan_body_frame(floater);
         draw_leviathan_sprite_revealed(dc, body_art, body_frame,
                                        output.x, output.y, mask_progress);
     }
@@ -655,9 +664,7 @@ static void render_island_view(HDC dc)
                         dc, floater,
                         floater->facing_left ? &g_leviathan_body_art_flipped
                                              : &g_leviathan_body_art,
-                        2U * (floater->source_subtype - 10U) +
-                            (((g_game_session.simulation_tick +
-                               floater->animation_seed) / 8U) & 1U),
+                        island_leviathan_body_frame(floater),
                         floater_x, floater_y);
                 }
                 continue;
@@ -747,6 +754,7 @@ static void render_island_view(HDC dc)
         for (projectile_index = 0; projectile_index < GAME_SESSION_MAX_CAST_EFFECTS;
              ++projectile_index) {
             int def_index;
+            int visual_realm;
             unsigned int effect_frame;
             uint16_t world_x;
             uint16_t world_y;
@@ -755,10 +763,14 @@ static void render_island_view(HDC dc)
             int x;
             if (!game_session_attack_visual(&g_game_session, projectile_index,
                     &def_index, &effect_frame, &world_x, &world_y,
-                    &effect_island)) continue;
-            if (effect_island != g_menu.selected_map_island ||
-                def_index < 0 || def_index >= FLOATER_EFFECT_MAX) continue;
-            effect_art = &g_attack_effect_art[def_index];
+                    &effect_island, &visual_realm)) continue;
+            if (effect_island != g_menu.selected_map_island) continue;
+            if (visual_realm >= 0) {
+                effect_art = &g_leviathan_impact_art[visual_realm & 3];
+            } else {
+                if (def_index < 0 || def_index >= FLOATER_EFFECT_MAX) continue;
+                effect_art = &g_attack_effect_art[def_index];
+            }
             if (effect_frame >= effect_art->frame_count) continue;
             x = (int)world_x - g_island_scroll_x;
             if (x < -64 || x >= LOGICAL_WIDTH + 64) continue;

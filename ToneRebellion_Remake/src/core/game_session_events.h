@@ -145,10 +145,13 @@ int game_session_cast_sound_id(uint8_t kind, uint8_t owner);
    interpretations (see docs/building-rendering.md). */
 enum { GAME_CAST_VISUAL_COUNT = 12 };
 /* fltinf atteff visual (FUN_00415fc6 path A): def index into
-   attack_effect_defs, absolute frame in that def's shape, world position. */
+   attack_effect_defs, absolute frame in that def's shape, world position.
+   After arrival the slot turns into the realm IMPACT: `impact_realm` is then
+   0..3 and `frame` indexes that realm's impact sheet (def is -1). */
 int game_session_attack_visual(const GameSession *session, unsigned int slot,
                                int *def, unsigned int *frame, uint16_t *x,
-                               uint16_t *y, uint8_t *island);
+                               uint16_t *y, uint8_t *island,
+                               int *impact_realm);
 /* Hit IMPACT of an active floater attack (realm 0..3 = PHY/SUP/ETH/NAT,
    absolute frame in that realm's impact sheet, world x/y). */
 int game_session_attack_effect_visual(const GameSession *session,

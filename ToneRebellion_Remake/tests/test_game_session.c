@@ -540,6 +540,7 @@ int main(void)
     test_cast_attack_visual_chains_into_a_bullet_that_reaches_its_target();
     test_bullet_visual_applies_attxy_mirroring_and_timeout();
     test_lightning_and_missing_effects_are_not_spawned();
+    test_arrived_bullet_turns_into_the_realm_impact_when_the_hit_landed();
     (void)puts("game session unit tests passed");
     return 0;
 }

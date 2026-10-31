@@ -215,6 +215,12 @@ typedef struct GameSession {
         int16_t target_floater; /* -1: fixed destination */
         uint16_t target_x, target_y;
         uint8_t island_index;
+        /* FUN_00416ff8: on arrival the same slot becomes the realm IMPACT
+           when the hit value is positive (level = value / 2). */
+        int16_t impact_damage;
+        int8_t impact_realm;     /* -1: none */
+        uint8_t impact_phase;
+        uint8_t impact_frames_left;
     } attack_visuals[GAME_SESSION_MAX_CAST_EFFECTS];
     /* Tower bolts reuse the source effect's per-frame target pursuit and
        impact damage path; the platform resolves the source EFFECTS SHP art. */

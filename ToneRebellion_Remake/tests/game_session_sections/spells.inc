@@ -672,24 +672,25 @@ static void test_oneshot_attack_visual_plays_once_at_the_attacker(void)
     uint16_t x = 0;
     uint16_t y = 0;
     uint8_t island = 9;
+    int impact = 0;
     unsigned int tick;
 
     setup_attack_visual_session(&session, 1, 1, 0); /* BHOOD */
     attacker = spell_caster(&session, 0, 0, 0, 1);  /* level 1: frames 16..30 */
     attacker->type_index = 1;
     attacker->source_subtype = 1;
-    assert(game_session_spawn_attack_visual(&session, attacker, 6, 50, 50));
-    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island));
+    assert(game_session_spawn_attack_visual(&session, attacker, 6, 50, 50, 0));
+    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
     assert(def == 0 && frame == 15 && x == 1000 && y == 1000 && island == 0);
     for (tick = 0; tick < 14; ++tick) game_session_tick_combat_effects(&session, 1);
-    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island));
+    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
     assert(frame == 29);
     game_session_tick_combat_effects(&session, 1);
-    assert(!game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island));
+    assert(!game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
     /* Even ticks never step. */
-    assert(game_session_spawn_attack_visual(&session, attacker, 6, 50, 50));
+    assert(game_session_spawn_attack_visual(&session, attacker, 6, 50, 50, 0));
     game_session_tick_combat_effects(&session, 2);
-    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island));
+    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
     assert(frame == 15);
 }
 
@@ -702,6 +703,7 @@ static void test_cast_attack_visual_chains_into_a_bullet_that_reaches_its_target
     uint16_t x = 0;
     uint16_t y = 0;
     uint8_t island = 0;
+    int impact = 0;
     unsigned int tick;
 
     setup_attack_visual_session(&session, 1, 2, 1); /* GAZECAST -> GAZER */
@@ -710,24 +712,24 @@ static void test_cast_attack_visual_chains_into_a_bullet_that_reaches_its_target
     attacker->source_subtype = 2;
     attacker->order_target_floater = 1;
     add_test_worker(&session, 1, 0, 1100, 1000, 4);
-    assert(game_session_spawn_attack_visual(&session, attacker, 6, 1100, 1000));
-    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island));
+    assert(game_session_spawn_attack_visual(&session, attacker, 6, 1100, 1000, 0));
+    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
     assert(def == 1 && x == 1000); /* cast stays on the attacker, no attxy */
     for (tick = 0; tick < 3; ++tick) game_session_tick_combat_effects(&session, 1);
-    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island));
+    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
     assert(def == 2 && frame == 0 && x == 1000); /* chained into GAZER */
     game_session_tick_combat_effects(&session, 1);
-    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island));
+    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
     assert(x == 1005 && y == 1000 && frame == 1); /* SPEED 5 toward the target */
     session.floaters[1].x = 1200; /* the bullet pursues a moving target */
     game_session_tick_combat_effects(&session, 1);
-    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island));
+    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
     assert(x == 1010);
     for (tick = 0; tick < 100 &&
-         game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island);
+         game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact);
          ++tick)
         game_session_tick_combat_effects(&session, 1);
-    assert(!game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island));
+    assert(!game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
     assert(tick > 30 && tick < 60); /* ~190 px at 5 px per odd update */
 }
 
@@ -740,23 +742,24 @@ static void test_bullet_visual_applies_attxy_mirroring_and_timeout(void)
     uint16_t x;
     uint16_t y;
     uint8_t island;
+    int impact;
     unsigned int tick;
 
     setup_attack_visual_session(&session, 1, 2, 2); /* GAZER bullet */
     attacker = spell_caster(&session, 0, 0, 0, 0);
     attacker->type_index = 1;
     attacker->source_subtype = 2;
-    assert(game_session_spawn_attack_visual(&session, attacker, 7, 60000, 1000));
-    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island));
+    assert(game_session_spawn_attack_visual(&session, attacker, 7, 60000, 1000, 0));
+    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
     assert(x == 1010 && y == 996);
     session.attack_visuals[0].active = 0;
     attacker->facing_left = 1;
-    assert(game_session_spawn_attack_visual(&session, attacker, 7, 60000, 1000));
-    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island));
+    assert(game_session_spawn_attack_visual(&session, attacker, 7, 60000, 1000, 0));
+    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
     assert(x == 990 && y == 1004); /* offsets negate when mirrored */
     /* A far destination ends through the 200-update timeout. */
     for (tick = 0; tick < 300 &&
-         game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island);
+         game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact);
          ++tick)
         game_session_tick_combat_effects(&session, 1);
     assert(tick == 201);
@@ -771,8 +774,59 @@ static void test_lightning_and_missing_effects_are_not_spawned(void)
     attacker = spell_caster(&session, 0, 0, 0, 0);
     attacker->type_index = 1;
     attacker->source_subtype = 3;
-    assert(!game_session_spawn_attack_visual(&session, attacker, 6, 1, 1));
+    assert(!game_session_spawn_attack_visual(&session, attacker, 6, 1, 1, 0));
     attacker->source_subtype = 4; /* row without atteff */
-    assert(!game_session_spawn_attack_visual(&session, attacker, 6, 1, 1));
-    assert(!game_session_spawn_attack_visual(NULL, attacker, 6, 1, 1));
+    assert(!game_session_spawn_attack_visual(&session, attacker, 6, 1, 1, 0));
+    assert(!game_session_spawn_attack_visual(NULL, attacker, 6, 1, 1, 0));
+}
+
+static void test_arrived_bullet_turns_into_the_realm_impact_when_the_hit_landed(void)
+{
+    static GameSession session;
+    GameFloaterStart *attacker;
+    int def;
+    int impact = -1;
+    unsigned int frame;
+    uint16_t x;
+    uint16_t y;
+    uint8_t island;
+    unsigned int tick;
+
+    setup_attack_visual_session(&session, 1, 2, 2); /* GAZER bullet */
+    session.effect_impact_frame_starts[1][1] = 20;
+    session.effect_impact_frame_counts[1][1] = 3;
+    attacker = spell_caster(&session, 0, 0, 0, 0);
+    attacker->type_index = 1;
+    attacker->source_subtype = 2;
+    attacker->attack_realm = 1; /* SUP */
+    attacker->order_target_floater = -1;
+    /* damage 3 -> level 1; target 40 px away at SPEED 5, arrival within 6 */
+    assert(game_session_spawn_attack_visual(&session, attacker, 7, 1050, 1000, 3));
+    for (tick = 0; tick < 20; ++tick) {
+        game_session_tick_combat_effects(&session, 1);
+        assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y,
+                                          &island, &impact));
+        if (impact >= 0) break;
+    }
+    assert(impact == 1 && def == -1);
+    assert(frame == 20);
+    assert(x >= 1044 && x <= 1050);
+    assert(y >= 996 && y <= 1000); /* arrival is within 6 px, not exact */
+    game_session_tick_combat_effects(&session, 1);
+    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
+    assert(frame == 21);
+    game_session_tick_combat_effects(&session, 1);
+    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
+    assert(frame == 22);
+    game_session_tick_combat_effects(&session, 1);
+    assert(!game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
+
+    /* A miss (damage 0) just frees the slot on arrival. */
+    assert(game_session_spawn_attack_visual(&session, attacker, 7, 1050, 1000, 0));
+    for (tick = 0; tick < 40 && game_session_attack_visual(&session, 0, &def,
+             &frame, &x, &y, &island, &impact); ++tick) {
+        assert(impact < 0);
+        game_session_tick_combat_effects(&session, 1);
+    }
+    assert(!game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
 }
