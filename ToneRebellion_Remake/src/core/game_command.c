@@ -59,8 +59,36 @@ int game_command_apply(GameSession *session, const GameCommandContext *context,
         expected.payload_0e = (int16_t)a[8];
         expected.action_type = (int16_t)a[9];
         expected.payload_12 = (int16_t)a[10];
-        return game_session_dispatch_task_command(session, (uint8_t)a[0], (uint8_t)a[1],
-                                                  &expected);
+        {
+            /* FUN_00465793 calls FUN_0045fb6f on a player cancel: a training
+               SUPPLY task linked from +0x52 / +0x54 also clears TrnStkC /
+               TrnStkM (+0x58 / +0x5c). The tick's own cancel keeps them. */
+            GameRuntimeLocation *supply = NULL;
+            const uint8_t slot = (uint8_t)a[0];
+            int result;
+            if (a[1] == 12 && slot < GAME_SESSION_MAX_PENDING_EVENTS) {
+                const GamePendingEvent *event = &session->pending_events[slot];
+                if (event->active != 0 && event->action_type == 4 &&
+                    (event->payload_12 == 2 || event->payload_12 == 3) &&
+                    event->payload_0a >= 0 &&
+                    event->payload_0a < session->island_count &&
+                    event->payload_0e >= 0 &&
+                    (uint16_t)event->payload_0e <
+                        session->islands[event->payload_0a].location_count) {
+                    supply = &session->islands[event->payload_0a]
+                                  .locations[(uint16_t)event->payload_0e];
+                    if (supply->source_task_slot[event->payload_12 - 1] !=
+                        (int16_t)slot) supply = NULL;
+                }
+            }
+            result = game_session_dispatch_task_command(session, slot,
+                                                        (uint8_t)a[1], &expected);
+            if (result && supply != NULL) {
+                if (expected.payload_12 == 2) supply->training_stock_crystal = 0;
+                else supply->training_stock_magic = 0;
+            }
+            return result;
+        }
     }
     case GAME_COMMAND_QUEUE_CAST_ACTION:
         return game_session_queue_cast_action_at(session, (uint8_t)a[0], (uint8_t)a[1],

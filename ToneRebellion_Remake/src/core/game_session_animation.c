@@ -1136,6 +1136,23 @@ static void update_training_supply(GameSession *session,
                 (int16_t)(channel + 1U))) {
             source->source_task_slot[channel] = handle = -1;
         }
+        if (handle < 0) {
+            /* Remake guard: re-adopt an unlinked SUPPLY task for this site
+               (a native save load does not restore the link), otherwise it
+               is never retired or credited and its workers loop forever. */
+            unsigned int slot;
+            for (slot = 0; slot < GAME_SESSION_MAX_PENDING_EVENTS; ++slot) {
+                const GamePendingEvent *event = &session->pending_events[slot];
+                if (event->active != 0 && event->action_type == 4 &&
+                    event->player_id == (int16_t)source->owner_id &&
+                    event->payload_0a == (int16_t)island_index &&
+                    event->payload_0e == (int16_t)location_index &&
+                    event->payload_12 == (int16_t)(channel + 1U)) {
+                    source->source_task_slot[channel] = handle = (int16_t)slot;
+                    break;
+                }
+            }
+        }
         if (handle >= 0) {
             if (!wanted_flag || threshold <= (int32_t)pool) {
                 GamePendingEvent expected = session->pending_events[(uint8_t)handle];

@@ -1916,20 +1916,28 @@ static void draw_location_action_panel(HDC dc)
                     (uint8_t)selection_island(),
                     (uint16_t)g_selected_location, (int)index)) continue;
             /* NSTATES 2: frame = SHAPEFRAME + state; the state is the
-               building's +0x58 / +0x5c flag (FUN_004421f1). */
+               building's +0x58 / +0x5c flag (FUN_004421f1). FUN_0042a55d
+               draws the frame and the highlight into the pane-sized control
+               surface at the PANE extras (+0x6c/+0x6e; TrnStkC "-4 0"). */
+            const int draw_x = control->pane.left +
+                (control->has_pane_extras ? control->pane_extras[0] : 0);
+            const int draw_y = control->pane.top +
+                (control->has_pane_extras ? control->pane_extras[1] : 0);
+            const int saved_dc = SaveDC(dc);
+            (void)IntersectClipRect(dc, control->pane.left, control->pane.top,
+                                    control->pane.right, control->pane.bottom);
             frame = (uint32_t)control->shape_frame +
                 (uint32_t)game_session_training_stock_state(&g_game_session,
                     (uint8_t)selection_island(),
                     (uint16_t)g_selected_location, (int)index);
             if (frame < g_hall_stock_art.frame_count)
-                draw_sprite(dc, &g_hall_stock_art, frame,
-                            control->pane.left, control->pane.top);
+                draw_sprite(dc, &g_hall_stock_art, frame, draw_x, draw_y);
             if (g_hovered_training_stock == (int)index + 1 &&
                 control->has_hilite_frame && control->hilite_frame >= 0 &&
                 (uint32_t)control->hilite_frame < g_hall_stock_art.frame_count)
                 draw_sprite(dc, &g_hall_stock_art,
-                            (uint32_t)control->hilite_frame,
-                            control->pane.left, control->pane.top);
+                            (uint32_t)control->hilite_frame, draw_x, draw_y);
+            if (saved_dc != 0) RestoreDC(dc, saved_dc);
         }
     }
     if (g_game_session_valid && g_menu.selected_tribe >= 0 &&

@@ -648,7 +648,9 @@ static int training_stock_control_at(int x, int y)
         g_menu.selected_tribe < 0 ||
         g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
         selection_island() < 0 || g_selected_location < 0) return 0;
-    for (index = 0; index < 2U; ++index) {
+    /* The TrnStkC pane (192..243) covers TrnStkM (215..247); TrnStkM is
+       drawn over it, so test it first. */
+    for (index = 2U; index-- > 0U;) {
         const WindowTemplate *control = window_catalog_find(
             &g_window_catalog, names[index], 3);
         if (control != NULL && x >= control->pane.left &&

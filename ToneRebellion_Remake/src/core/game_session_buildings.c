@@ -211,6 +211,13 @@ int game_session_place_building(GameSession *session,
         if (source_record_index >= 0) {
             runtime->source_location_slot_18 = source_record_index;
             runtime->source_category_slot_60 = source_category_slot;
+            /* FUN_0045ee26 -> FUN_0045c3fe: the new row clears the supply
+               links +0x52/+0x54, sets TrnStkC (+0x58) and sets TrnStkM
+               (+0x5c) only for item 0x2f. */
+            runtime->source_task_slot[1] = -1;
+            runtime->source_task_slot[2] = -1;
+            runtime->training_stock_crystal = 1;
+            runtime->training_stock_magic = base_item_id == 0x2f;
         }
     } else {
         runtime->source_location_slot_18 = -1;
