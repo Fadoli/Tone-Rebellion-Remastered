@@ -74,6 +74,16 @@ uint32_t net_lockstep_turns_ready(const NetLockstep *lockstep)
     return lockstep->latest_bundle_turn - turn;
 }
 
+unsigned net_lockstep_frame_ticks(const NetLockstep *lockstep)
+{
+    uint32_t ready = net_lockstep_turns_ready(lockstep);
+    uint32_t lag;
+    if (lockstep == NULL || lockstep->is_host || ready <= (uint32_t)lockstep->delay + 1U)
+        return 1;
+    lag = ready - lockstep->delay;
+    return lag >= 4U ? 3U : 2U;
+}
+
 const NetTurnBundle *net_lockstep_turn_commands(const NetLockstep *lockstep)
 {
     uint32_t turn;
@@ -122,6 +132,7 @@ size_t net_lockstep_finish_tick(NetLockstep *lockstep, uint32_t session_hash,
         memset(bundle, 0, sizeof(*bundle));
         bundle->valid = 1;
         bundle->turn = lockstep->latest_bundle_turn++;
+        bundle->delay = lockstep->delay;
         if (created == 0U) {
             bundle->has_hash = 1;
             bundle->hash_turn = turn;
@@ -143,8 +154,10 @@ int net_lockstep_receive_bundle(NetLockstep *lockstep, const NetTurnBundle *bund
         bundle->turn < net_lockstep_turn(lockstep) ||
         bundle->turn >= net_lockstep_turn(lockstep) + NET_TURN_WINDOW) return 0;
     lockstep->bundles[bundle->turn % NET_TURN_WINDOW] = *bundle;
-    if (bundle->turn + 1U > lockstep->latest_bundle_turn)
+    if (bundle->turn + 1U > lockstep->latest_bundle_turn) {
         lockstep->latest_bundle_turn = bundle->turn + 1U;
+        lockstep->delay = bundle->delay;
+    }
     if (bundle->has_hash) {
         unsigned index = bundle->hash_turn % NET_TURN_WINDOW;
         lockstep->remote_hashes[index] = bundle->hash;
@@ -167,16 +180,16 @@ void net_lockstep_drop_peer(NetLockstep *lockstep, uint8_t slot)
     lockstep->peer_mask &= (uint8_t)~(1U << slot);
 }
 
-/* Payload: turn, hash turn, hash (LE dwords), has_hash, count, commands. */
+/* Payload: turn, hash turn, hash (LE dwords), has_hash, count, delay, commands. */
 size_t net_lockstep_encode_bundle(const NetTurnBundle *bundle, uint8_t *payload, size_t capacity)
 {
-    size_t offset = 14;
+    size_t offset = 15;
     unsigned i;
     const uint32_t words[3] = {bundle != NULL ? bundle->turn : 0,
                                bundle != NULL ? bundle->hash_turn : 0,
                                bundle != NULL ? bundle->hash : 0};
     if (bundle == NULL || payload == NULL ||
-        capacity < 14U + (size_t)bundle->command_count * GAME_COMMAND_ENCODED_SIZE) return 0;
+        capacity < 15U + (size_t)bundle->command_count * GAME_COMMAND_ENCODED_SIZE) return 0;
     for (i = 0; i < 3U; ++i) {
         payload[4 * i] = (uint8_t)(words[i] & 0xffU);
         payload[4 * i + 1] = (uint8_t)((words[i] >> 8) & 0xffU);
@@ -185,6 +198,7 @@ size_t net_lockstep_encode_bundle(const NetTurnBundle *bundle, uint8_t *payload,
     }
     payload[12] = bundle->has_hash;
     payload[13] = bundle->command_count;
+    payload[14] = bundle->delay;
     for (i = 0; i < bundle->command_count; ++i)
         offset += game_command_encode(&bundle->commands[i], payload + offset, capacity - offset);
     return offset;
@@ -199,10 +213,10 @@ static uint32_t read_u32(const uint8_t *bytes)
 int net_lockstep_decode_bundle(const uint8_t *payload, size_t length, NetTurnBundle *bundle)
 {
     unsigned i;
-    size_t offset = 14;
-    if (payload == NULL || bundle == NULL || length < 14U ||
+    size_t offset = 15;
+    if (payload == NULL || bundle == NULL || length < 15U ||
         payload[13] > NET_TURN_MAX_COMMANDS ||
-        length != 14U + (size_t)payload[13] * GAME_COMMAND_ENCODED_SIZE) return 0;
+        length != 15U + (size_t)payload[13] * GAME_COMMAND_ENCODED_SIZE) return 0;
     memset(bundle, 0, sizeof(*bundle));
     bundle->valid = 1;
     bundle->turn = read_u32(payload);
@@ -210,6 +224,7 @@ int net_lockstep_decode_bundle(const uint8_t *payload, size_t length, NetTurnBun
     bundle->hash = read_u32(payload + 8);
     bundle->has_hash = payload[12] != 0U;
     bundle->command_count = payload[13];
+    bundle->delay = payload[14];
     for (i = 0; i < bundle->command_count; ++i) {
         if (!game_command_decode(payload + offset, length - offset, &bundle->commands[i]))
             return 0;

@@ -69,6 +69,120 @@ static void simulate_session_tick(uint32_t source_tick)
     }
 }
 
+/* One 50 ms UI frame (frame_limit 20): timers, animations and the
+   simulation steps of that frame. */
+static void run_ui_frame(HWND window, WPARAM wparam)
+{
+    if (wparam == 1) {
+        e2e_write_state();
+        if (net_poll(window)) InvalidateRect(window, NULL, FALSE);
+    }
+    if (wparam == 2) {
+        keep_background_tune_playing();
+        return;
+    }
+    if (wparam == 1 && g_menu.screen == SCREEN_END_GAME) {
+        end_game_screen_tick();
+        InvalidateRect(window, NULL, FALSE);
+        return;
+    }
+    if (wparam == 1 && g_menu.screen == SCREEN_LOGO) {
+        /* FUN_0041c46f: logo fade-in, fade-out, then the title state and
+           the `start` tune (requested after the logo). */
+        ++g_logo_tick;
+        if (logo_splash_finished()) {
+            free(g_logo_pixels);
+            g_logo_pixels = NULL;
+            g_menu.screen = SCREEN_MAIN_MENU;
+            set_background_tune_once("start");
+        }
+        InvalidateRect(window, NULL, FALSE);
+        return;
+    }
+    if (wparam == 1 && (g_menu.screen == SCREEN_NEW_GAME ||
+                        g_menu.screen == SCREEN_WORLD_MAP ||
+                        g_menu.screen == SCREEN_ISLAND)) {
+        /* FUN_0041c46f runs the tick DAT_004bf110 times per frame; keys 8/9
+           change it from 1 to 3 (FUN_0046a5b7). */
+        unsigned sim_steps = g_menu.screen == SCREEN_ISLAND ? g_sim_speed : 1U;
+        slide_panel_tick();
+        /* The SlideWindow pause flag (DAT_004bf124) stops the game loop. */
+        if (g_paused && g_menu.screen == SCREEN_ISLAND) sim_steps = 0;
+        /* A network game advances by turns on every screen; the loop
+           below then only drives the UI animation clock. */
+        if (g_net_in_game) {
+            sim_steps = 1U;
+            net_run_frame(window);
+        }
+        /* FUN_0045eaa7 sets the end-sequence flag when the solo tribe has
+           no floaters left; FUN_00464e4d then queues SetState(2) 100 ticks
+           into S3 and SetState(0) (title) about 1,560 ticks after the flag
+           (S1 100, S3 1,300, S5 160). The flag is also set when the gross
+           capacity P+0x3c (source_maintenance_capacity) is below 1; the
+           L == 0 end-screen branch is not modelled. */
+        if (g_game_session_valid && g_menu.screen != SCREEN_NEW_GAME &&
+            g_menu.selected_tribe >= 0 &&
+            g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
+            if (game_session_count_player_floaters(&g_game_session,
+                    (uint8_t)g_menu.selected_tribe) == 0U ||
+                g_game_session.economy[g_menu.selected_tribe]
+                    .source_maintenance_capacity < 1) {
+                ++g_defeat_ticks;
+                if (g_defeat_ticks == 200U &&
+                    g_menu.screen == SCREEN_ISLAND) {
+                    g_menu.screen = SCREEN_WORLD_MAP;
+                    g_hovered_location = -1;
+                }
+                if (g_defeat_ticks >= 1563U) {
+                    g_defeat_ticks = 0;
+                    g_game_session_valid = 0;
+                    g_menu.screen = SCREEN_MAIN_MENU;
+                }
+            } else {
+                g_defeat_ticks = 0;
+            }
+        }
+        while (sim_steps-- != 0U) {
+        ++g_menu.animation_ticks;
+        if (g_menu.screen == SCREEN_WORLD_MAP && g_mouse_inside) {
+            /* Islands orbit under a stationary pointer. Re-hit-test each
+               animation tick so the hover frame follows the moving art. */
+            (void)update_world_map_hover(g_mouse_x, g_mouse_y);
+        }
+        if (g_menu.screen == SCREEN_ISLAND && g_game_session_valid &&
+            !g_net_in_game)
+            simulate_session_tick(g_menu.animation_ticks);
+        }
+        /* Redraw the full animated screen at every 20 Hz frame,
+           including while the Tasks panel is open. */
+        InvalidateRect(window, NULL, FALSE);
+    }
+}
+
+/* WM_TIMER fires on the system tick (15.6 ms by default), so a 50 ms
+   SetTimer really ran every 62.5 ms (16 frames/s). A 10 ms timer with
+   1 ms resolution now polls this QueryPerformanceCounter clock, which
+   releases one frame per elapsed 50 ms; a late timer runs the missed
+   frames (at most four, then the clock resynchronises). */
+static unsigned frame_clock_due(void)
+{
+    static LARGE_INTEGER frequency;
+    static LARGE_INTEGER next;
+    LARGE_INTEGER now;
+    LONGLONG period;
+    unsigned due = 0;
+    if (frequency.QuadPart == 0) QueryPerformanceFrequency(&frequency);
+    period = frequency.QuadPart / 20;
+    QueryPerformanceCounter(&now);
+    if (next.QuadPart == 0) next.QuadPart = now.QuadPart;
+    while (now.QuadPart >= next.QuadPart && due < 4U) {
+        next.QuadPart += period;
+        ++due;
+    }
+    if (now.QuadPart >= next.QuadPart) next.QuadPart = now.QuadPart + period;
+    return due;
+}
+
 static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                                           WPARAM wparam, LPARAM lparam)
 {
@@ -86,88 +200,10 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         return 1;
     case WM_TIMER:
         if (wparam == 1) {
-            e2e_write_state();
-            if (net_poll(window)) InvalidateRect(window, NULL, FALSE);
-        }
-        if (wparam == 2) {
-            keep_background_tune_playing();
-            return 0;
-        }
-        if (wparam == 1 && g_menu.screen == SCREEN_END_GAME) {
-            end_game_screen_tick();
-            InvalidateRect(window, NULL, FALSE);
-            return 0;
-        }
-        if (wparam == 1 && g_menu.screen == SCREEN_LOGO) {
-            /* FUN_0041c46f: logo fade-in, fade-out, then the title state and
-               the `start` tune (requested after the logo). */
-            ++g_logo_tick;
-            if (logo_splash_finished()) {
-                free(g_logo_pixels);
-                g_logo_pixels = NULL;
-                g_menu.screen = SCREEN_MAIN_MENU;
-                set_background_tune_once("start");
-            }
-            InvalidateRect(window, NULL, FALSE);
-            return 0;
-        }
-        if (wparam == 1 && (g_menu.screen == SCREEN_NEW_GAME ||
-                            g_menu.screen == SCREEN_WORLD_MAP ||
-                            g_menu.screen == SCREEN_ISLAND)) {
-            /* FUN_0041c46f runs the tick DAT_004bf110 times per frame; keys 8/9
-               change it from 1 to 3 (FUN_0046a5b7). */
-            unsigned sim_steps = g_menu.screen == SCREEN_ISLAND ? g_sim_speed : 1U;
-            slide_panel_tick();
-            /* The SlideWindow pause flag (DAT_004bf124) stops the game loop. */
-            if (g_paused && g_menu.screen == SCREEN_ISLAND) sim_steps = 0;
-            /* A network game advances by turns on every screen; the loop
-               below then only drives the UI animation clock. */
-            if (g_net_in_game) {
-                sim_steps = 1U;
-                net_run_frame(window);
-            }
-            /* FUN_0045eaa7 sets the end-sequence flag when the solo tribe has
-               no floaters left; FUN_00464e4d then queues SetState(2) 100 ticks
-               into S3 and SetState(0) (title) about 1,560 ticks after the flag
-               (S1 100, S3 1,300, S5 160). The flag is also set when the gross
-               capacity P+0x3c (source_maintenance_capacity) is below 1; the
-               L == 0 end-screen branch is not modelled. */
-            if (g_game_session_valid && g_menu.screen != SCREEN_NEW_GAME &&
-                g_menu.selected_tribe >= 0 &&
-                g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
-                if (game_session_count_player_floaters(&g_game_session,
-                        (uint8_t)g_menu.selected_tribe) == 0U ||
-                    g_game_session.economy[g_menu.selected_tribe]
-                        .source_maintenance_capacity < 1) {
-                    ++g_defeat_ticks;
-                    if (g_defeat_ticks == 200U &&
-                        g_menu.screen == SCREEN_ISLAND) {
-                        g_menu.screen = SCREEN_WORLD_MAP;
-                        g_hovered_location = -1;
-                    }
-                    if (g_defeat_ticks >= 1563U) {
-                        g_defeat_ticks = 0;
-                        g_game_session_valid = 0;
-                        g_menu.screen = SCREEN_MAIN_MENU;
-                    }
-                } else {
-                    g_defeat_ticks = 0;
-                }
-            }
-            while (sim_steps-- != 0U) {
-            ++g_menu.animation_ticks;
-            if (g_menu.screen == SCREEN_WORLD_MAP && g_mouse_inside) {
-                /* Islands orbit under a stationary pointer. Re-hit-test each
-                   animation tick so the hover frame follows the moving art. */
-                (void)update_world_map_hover(g_mouse_x, g_mouse_y);
-            }
-            if (g_menu.screen == SCREEN_ISLAND && g_game_session_valid &&
-                !g_net_in_game)
-                simulate_session_tick(g_menu.animation_ticks);
-            }
-            /* Redraw the full animated screen at every 20 Hz frame,
-               including while the Tasks panel is open. */
-            InvalidateRect(window, NULL, FALSE);
+            unsigned due = frame_clock_due();
+            while (due-- != 0U) run_ui_frame(window, wparam);
+        } else {
+            run_ui_frame(window, wparam);
         }
         return 0;
     case WM_MOUSEMOVE: {

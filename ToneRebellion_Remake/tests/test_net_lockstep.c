@@ -129,9 +129,20 @@ int main(void)
                   sizeof(host_toy.applied_at_tick)) == 0);
     assert(host_toy.state == guest_toy.state && !guest.desync);
 
+    /* A guest holding more than delay + 1 turns runs extra ticks. */
+    assert(net_lockstep_frame_ticks(&host) == 1U);
+    assert(guest.delay == 1U && net_lockstep_frame_ticks(&guest) == 1U);
+    run_tick(&host, &host_toy);
+    run_tick(&host, &host_toy);
+    assert(net_lockstep_turns_ready(&guest) == 3U && net_lockstep_frame_ticks(&guest) == 2U);
+    run_tick(&host, &host_toy);
+    run_tick(&host, &host_toy);
+    assert(net_lockstep_frame_ticks(&guest) == 3U);
+    run_both_to(24);
+
     /* The host stops once the guest lags NET_TURN_HOST_LEAD turns. */
     while (net_lockstep_can_tick(&host)) run_tick(&host, &host_toy);
-    assert(net_lockstep_turn(&host) == 20U + NET_TURN_HOST_LEAD);
+    assert(net_lockstep_turn(&host) == 24U + NET_TURN_HOST_LEAD);
     assert(net_lockstep_turns_ready(&guest) == NET_TURN_HOST_LEAD + 1U);
     net_lockstep_drop_peer(&host, 1);
     assert(net_lockstep_can_tick(&host));
@@ -139,7 +150,7 @@ int main(void)
     /* A diverging guest state is reported at the first compared turn. */
     guest_toy.state ^= 1U;
     while (!guest.desync && net_lockstep_can_tick(&guest)) run_tick(&guest, &guest_toy);
-    assert(guest.desync && guest.desync_turn == 20U);
+    assert(guest.desync && guest.desync_turn == 24U);
     assert(!net_lockstep_can_tick(&guest));
     return 0;
 }

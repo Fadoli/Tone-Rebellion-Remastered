@@ -673,7 +673,10 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
         g_menu.screen = SCREEN_LOGO;
     else
         set_background_tune_once("start");
-    (void)SetTimer(window, 1, 50, NULL); /* frame_limit 20, one tick per frame */
+    /* frame_limit 20: frame_clock_due releases one frame per 50 ms; the
+       10 ms timer and 1 ms timer resolution only keep it punctual. */
+    (void)timeBeginPeriod(1);
+    (void)SetTimer(window, 1, 10, NULL);
     (void)SetTimer(window, 2, 1000, NULL);
     ShowWindow(window, show_command);
     UpdateWindow(window);
@@ -681,6 +684,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
         TranslateMessage(&message);
         DispatchMessageA(&message);
     }
+    (void)timeEndPeriod(1);
     if (g_original_cursor_module != NULL) {
         for (cursor_index = 0; cursor_index < GAME_CURSOR_SLOT_COUNT;
              ++cursor_index) {

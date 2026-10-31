@@ -524,8 +524,7 @@ static int issue_command(GameCommandKind kind, size_t count, const int32_t *args
                   (int32_t[]){__VA_ARGS__})
 
 /* Runs the turns this frame may take: one tick per 50 ms frame like solo,
-   up to three when a guest holds bundles well ahead (FUN_00413b68's
-   catch-up). Commands of a turn run before its first tick. The host pings
+   up to three while a guest lags the host (net_lockstep_frame_ticks). Commands of a turn run before its first tick. The host pings
    every guest once a second; the slowest round trip sets the input delay
    (native: the period the host sends on channel 4, type 1). */
 static void net_run_frame(HWND window)
@@ -544,8 +543,7 @@ static void net_run_frame(HWND window)
         g_net_ping_frames = 0;
         net_host_broadcast(bytes, length);
     }
-    if (g_net_mode == NET_MODE_CLIENT &&
-        net_lockstep_turns_ready(&g_net_lockstep) > 4U) budget = 3;
+    budget = net_lockstep_frame_ticks(&g_net_lockstep);
     while (budget-- != 0U && net_lockstep_can_tick(&g_net_lockstep)) {
         const NetTurnBundle *bundle = net_lockstep_turn_commands(&g_net_lockstep);
         NetTurnBundle created[NET_TURN_MAX_DELAY + 1];

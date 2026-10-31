@@ -41,6 +41,7 @@ typedef struct NetTurnBundle {
     uint8_t valid;
     uint8_t has_hash;
     uint8_t command_count;
+    uint8_t delay;               /* host delay when the bundle was made */
     uint32_t turn;
     uint32_t hash_turn;          /* turn whose end state `hash` describes */
     uint32_t hash;
@@ -51,7 +52,8 @@ typedef struct NetLockstep {
     uint8_t is_host;
     uint8_t peer_mask;           /* host: guest slots that must acknowledge */
     uint8_t desync;
-    uint8_t delay;               /* host: turns between bundling and running */
+    uint8_t delay;               /* host: turns between bundling and running;
+                                    guest: the delay of the latest bundle */
     uint32_t desync_turn;
     uint32_t tick;               /* ticks simulated since the start */
     uint32_t latest_bundle_turn; /* highest bundle turn held, plus one */
@@ -78,8 +80,13 @@ int net_lockstep_queue_command(NetLockstep *lockstep, const GameCommand *command
 /* 1 when the next tick may run (its turn's bundle is held and, for the host,
    no guest lags NET_TURN_HOST_LEAD turns or more). */
 int net_lockstep_can_tick(const NetLockstep *lockstep);
-/* Turns the guest could still run without waiting (catch-up hint). */
+/* Turns the guest could still run without waiting. */
 uint32_t net_lockstep_turns_ready(const NetLockstep *lockstep);
+/* Ticks to run this frame (1..3). A guest holding more than delay + 1
+   turns lags the host (a frame that fired just before a bundle arrived
+   stalled) and runs extra ticks until it is back within one turn, as
+   FUN_00413b68 raises DAT_004bf114 for a lagging machine. */
+unsigned net_lockstep_frame_ticks(const NetLockstep *lockstep);
 /* Commands to apply before the next tick, or NULL (not a turn start). */
 const NetTurnBundle *net_lockstep_turn_commands(const NetLockstep *lockstep);
 /* After one simulated tick. Returns the number of bundles the host created

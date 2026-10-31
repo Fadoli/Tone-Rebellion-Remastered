@@ -138,7 +138,7 @@ vers `0x5e1730` (indices < 4); les 5 fonctions « non décodées » n'ont aucune
 RÉSOLU (3e passe, ev_8c1a4a9e…, asm 0x4126b1): `DAT_004bf110` = `GAMEENV(0x4befe0)+0x130`, écrit par `FUN_004121b7` cas 0xb
 (valeur = charge utile; touches 8/9 envoient ±1 borné 1..3 par `FUN_004140dd`/`FUN_004133f2` type 2, consommé par `FUN_00413e8a`).
 Valeur initiale posée aux cas 9 (début de partie, envoyé par `FUN_00448e5a` cas 0x34) et 0xc: 1, ou 2 si `DAT_004befe0 != 0`
-(réseau). Solo: N = 1, soit 1 tick par image de 50 ms (20/s). Minuteur du port passé de 33 à 50 ms (logo en ticks réduits).
+(réseau). Solo: N = 1, soit 1 tick par image de 50 ms (20/s). Minuteur du port passé de 33 à 50 ms; comme `WM_TIMER` suit le tick système (15,6 ms), il tombait en fait toutes les 62,5 ms (16 images/s): une horloge `QueryPerformanceCounter` libère maintenant une image par 50 ms écoulées (minuterie de 10 ms, résolution 1 ms par `timeBeginPeriod`, au plus 4 images de rattrapage), mesuré à 20,0 images/s (logo en ticks réduits).
 
 
 ### `draw_method` et `multispeed` (REA, ev_2f74d0d0, ev_350fca36, ev_fbabbb86, ev_5c792cde, ev_e9e94c75)
