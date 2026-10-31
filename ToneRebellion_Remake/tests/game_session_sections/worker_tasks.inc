@@ -184,23 +184,17 @@ static void make_workers_idle(GameSession *session)
     session->pending_events[1].assigned_floater_count = 0;
 }
 
-static void test_idle_workers_spread_evenly_over_tasks(void)
+static void test_idle_workers_take_the_first_task_in_slot_order(void)
 {
     GameSession session;
     int slot_a = setup_two_delivery_tasks(&session, 6, 3);
 
+    /* FUN_0042219e: an idle worker claims the first row that accepts it in
+       slot order; spreading only happens later through the count rule. */
     make_workers_idle(&session);
     game_session_assign_local_resource_tasks(&session, NULL);
-    assert(workers_on_slot(&session, slot_a) == 3);
-    assert(workers_on_slot(&session, slot_a + 1) == 3);
-
-    setup_two_delivery_tasks(&session, 5, 3);
-    make_workers_idle(&session);
-    game_session_assign_local_resource_tasks(&session, NULL);
-    assert(workers_on_slot(&session, slot_a) +
-           workers_on_slot(&session, slot_a + 1) == 5);
-    assert(workers_on_slot(&session, slot_a) >= 2 &&
-           workers_on_slot(&session, slot_a + 1) >= 2);
+    assert(workers_on_slot(&session, slot_a) == 6);
+    assert(workers_on_slot(&session, slot_a + 1) == 0);
 }
 
 static void test_three_three_split_never_swaps_workers(void)
@@ -212,12 +206,16 @@ static void test_three_three_split_never_swaps_workers(void)
     unsigned int tick;
 
     make_workers_idle(&session);
-    game_session_assign_local_resource_tasks(&session, NULL);
+    for (tick = 0; tick < 6U * GAME_SESSION_TASK_COMMIT_TICKS; ++tick) {
+        session.simulation_tick = tick;
+        game_session_assign_local_resource_tasks(&session, NULL);
+    }
+    assert(workers_on_slot(&session, slot_a) == 3);
+    assert(workers_on_slot(&session, slot_a + 1) == 3);
     for (index = 0; index < 6; ++index)
         before[index] = session.floaters[index].linked_task_slot;
-    assert(workers_on_slot(&session, slot_a) == 3);
     /* Long run, far past every commitment window: nobody moves A <-> B. */
-    for (tick = 1; tick < 20U * GAME_SESSION_TASK_COMMIT_TICKS; ++tick) {
+    for (; tick < 26U * GAME_SESSION_TASK_COMMIT_TICKS; ++tick) {
         session.simulation_tick = tick;
         game_session_assign_local_resource_tasks(&session, NULL);
         for (index = 0; index < 6; ++index)
@@ -446,7 +444,7 @@ static void test_worker_tasks_and_panic(void)
     test_fresh_assignment_is_stable_for_the_commit_window();
     test_reallocated_worker_gets_a_new_commit_window();
     test_balanced_workers_never_change_task();
-    test_idle_workers_spread_evenly_over_tasks();
+    test_idle_workers_take_the_first_task_in_slot_order();
     test_three_three_split_never_swaps_workers();
     test_worker_at_build_site_is_never_reallocated();
     test_combat_and_handoff_workers_are_not_reallocated();

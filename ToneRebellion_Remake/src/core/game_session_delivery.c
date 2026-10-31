@@ -754,15 +754,11 @@ static void assign_resource_tasks(GameSession *session,
             current_slot = floater->linked_task_slot;
         }
 
-        /* FUN_0042219e checks the first eligible row in slot order. Keep the
-           task type's worker guards, but arbitrate CONSTR/CHARGE/delivery in
-           that shared order instead of giving one type a fixed priority. */
-        /* Remake: try rows from the least to the most staffed (slot order on
-           ties) so workers spread evenly instead of piling on the first row. */
+        /* FUN_0042219e scans the task table in slot order and the first row
+           that passes the count rule and the task guards takes the worker. */
         for (visited = 0;;) {
             GamePendingEvent *event;
             unsigned int candidate;
-            int best_count = INT_MAX;
 
             slot = GAME_SESSION_MAX_PENDING_EVENTS;
             for (candidate = 0; candidate < GAME_SESSION_MAX_PENDING_EVENTS;
@@ -770,10 +766,8 @@ static void assign_resource_tasks(GameSession *session,
                 const GamePendingEvent *row = &session->pending_events[candidate];
                 if ((visited >> candidate & 1U) != 0 || row->active == 0 ||
                     (int)candidate == current_slot) continue;
-                if (row->assigned_floater_count < best_count) {
-                    best_count = row->assigned_floater_count;
-                    slot = candidate;
-                }
+                slot = candidate;
+                break;
             }
             if (slot == GAME_SESSION_MAX_PENDING_EVENTS) break;
             visited |= (uint64_t)1 << slot;
