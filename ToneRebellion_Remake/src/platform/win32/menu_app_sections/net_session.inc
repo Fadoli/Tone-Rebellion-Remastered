@@ -41,9 +41,18 @@ static uint32_t g_net_issue_ms, g_net_issue_tick, g_net_apply_ms, g_net_apply_ti
 static void simulate_session_tick(uint32_t source_tick);
 static void enter_net_setup_screen(void);
 
+static void queue_island_message(const char *text, int16_t selector);
+
 static void net_set_status(const char *text)
 {
     (void)snprintf(g_net_status, sizeof(g_net_status), "%s", text);
+}
+
+/* The lobby status line is not drawn in game: repeat it on the island
+   message line so players see who left. */
+static void net_notify_in_game(void)
+{
+    if (g_net_in_game) queue_island_message(g_net_status, 1);
 }
 
 static void net_close_socket(SOCKET *socket_handle)
@@ -165,6 +174,7 @@ static void net_drop_peer(unsigned slot)
             net_lockstep_drop_peer(&g_net_lockstep, (uint8_t)slot);
             (void)snprintf(g_net_status, sizeof(g_net_status), "%s a quitte la partie",
                            g_net_lobby.players[slot].name);
+            net_notify_in_game();
         } else if (g_net_lobby.players[slot].connected) {
             (void)snprintf(g_net_status, sizeof(g_net_status), "%s a quitte le lobby",
                            g_net_lobby.players[slot].name);
@@ -179,6 +189,7 @@ static void net_drop_peer(unsigned slot)
         }
         net_shutdown();
         net_set_status("Connexion avec l'hote perdue, partie poursuivie en solo");
+        net_notify_in_game();
     }
 }
 
@@ -603,6 +614,7 @@ static void net_run_frame(HWND window)
             (void)snprintf(g_net_status, sizeof(g_net_status),
                            "Desynchronisation au tour %lu",
                            (unsigned long)g_net_lockstep.desync_turn);
+            net_notify_in_game();
             break;
         }
     }
