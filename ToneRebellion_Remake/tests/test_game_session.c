@@ -442,6 +442,7 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
 
 #include "game_session_sections/worker_tasks.inc"
 #include "game_session_sections/audio.inc"
+#include "game_session_sections/spells.inc"
 
 int main(void)
 {
@@ -511,6 +512,27 @@ int main(void)
     test_initial_worker_accepts_coordinate_move_order();
     test_workstr_counts_subtype_zero_and_truncates_percentage();
     test_location_panel_level_uses_original_low_nibble_plus_one();
+    test_cast_kind_table_follows_owner_and_action_subtype();
+    test_cast_kind_costs_follow_spells_txt();
+    test_cast_sound_ids_match_effect_names();
+    test_cast_dispatch_debits_both_tones_only_when_both_suffice();
+    test_cast_glyph_eight_discounts_magic_only();
+    test_cast_dispatch_needs_caster_level_and_free_worker();
+    test_cast_queue_rejects_foreign_or_malformed_requests();
+    test_kill_beast_cast_requires_a_leviathan_target();
+    test_mass_heal_restores_owner_workers_up_to_the_level_cap();
+    test_speed_cast_sets_owner_timer_by_level();
+    test_timed_site_spells_store_level_scaled_timers();
+    test_blast_cast_damages_by_distance_and_consumes_the_caster();
+    test_blast_cast_radius_and_damage_grow_with_level();
+    test_fixed_area_cast_hits_floaters_within_250_without_dying_itself();
+    test_fixed_area_cast_kills_a_weak_floater();
+    test_site_damage_drains_hp_then_destroys_or_clears();
+    test_pool_drain_spell_needs_a_filled_pool_and_clears_when_empty();
+    test_destroy_support_spell_targets_leviathan_spawner_sites();
+    test_leviathan_spawner_freeze_hits_every_spawner_on_the_island();
+    test_leviathan_reevaluation_cast_starts_the_island_timer();
+    test_cast_steps_reject_invalid_callers();
     (void)puts("game session unit tests passed");
     return 0;
 }
