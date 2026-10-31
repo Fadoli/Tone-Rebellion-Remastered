@@ -92,6 +92,10 @@ typedef struct GamePlayerEconomy {
     int32_t source_maintenance_capacity;
     /* FUN_0045eaa7's per-player +0x8c recruiter delay, in island updates. */
     uint32_t floater_birth_timer;
+    /* FUN_0045eaa7's +0x90 defeat latch: set once (0x45eb1c) when the player
+       has no floaters or +0x3c < 1, with world event 0xb (p << 16 | 3);
+       nothing in that function clears it and recruitment stops while set. */
+    uint8_t defeat_latched;
     /* FUN_0043d59b enumerates player-owned inventory counts for item IDs 5..33.
        The UI count table is distinct from resources and island placements. */
     uint16_t inventory_count[GAME_INVENTORY_ITEM_COUNT];

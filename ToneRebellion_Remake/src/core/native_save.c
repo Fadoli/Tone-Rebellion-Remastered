@@ -25,6 +25,7 @@ enum {
     PLAYER_COUNT_TABLE = 0x44, /* DAT_006191fc: u16 per item id */
     PLAYER_GLYPH_WORD = 0x8a,  /* DAT_00619242 */
     PLAYER_BIRTH_TIMER = 0x8c,
+    PLAYER_DEFEAT_LATCH = 0x90,
     ROW_BASE = 0xf8,           /* DAT_006192b0: 48 rows of 100 bytes */
     ROW_SIZE = 100,
     PLAYER_POLICY_ROW = 0xd8,    /* DAT_00619290 */
@@ -248,6 +249,7 @@ static void apply_player_record(GamePlayerEconomy *economy, PlayerMasks *economy
             economy_masks->recipient |= (uint8_t)(1U << item);
     }
     economy->floater_birth_timer = u32_at(player + PLAYER_BIRTH_TIMER);
+    economy->defeat_latched = u32_at(player + PLAYER_DEFEAT_LATCH) != 0;
     for (item = 0; item < GAME_RESOURCE_TYPE_COUNT; ++item) {
         uint16_t mode = u16_at(player + PLAYER_STOCK_MODES + item * 2U);
         economy->stock_mode[item] = mode > 2U ? 1U : (uint8_t)mode;

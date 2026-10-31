@@ -281,6 +281,12 @@ int game_session_tick_floater_handoff(GameSession *session,
         uint8_t resume_state = floater->handoff_resume_state;
         floater->order_timer = 0;
         floater->handoff_departure_location = -1;
+        /* FUN_0041e569 case 0x10 epilogue (0x41f935..0x41f958): a subtype-8
+           floater whose action is not FA_Cast leaves the bridge on action 9
+           while no end sequence runs (DAT_006191b4 == 0). */
+        if (floater->source_subtype == 8U && resume_action != 0x13 &&
+            session->world_sequence_state == 0)
+            resume_action = 9;
         if ((resume_action == 4 || resume_action == 0x12) &&
             (resume_state == 3 || resume_state == 4)) {
             uint8_t destination_island = resume_state == 3

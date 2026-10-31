@@ -66,19 +66,14 @@ Contrôle des guerriers (REA, `FUN_00435826`, `FUN_0042f8f7`, `FUN_0042fa0f` 300
 
 Combat des soldats (REA `FUN_004633a7`, `FUN_004211bb`, `FUN_0042219e`, `FUN_00421d82`, `FUN_0041e569` case 8; simulation avec `floater.txt`/`fltinf.txt`) : la charge d'entraînement vient de la ligne +8 (points d'attaque max, colonne 5) et non de la force; DefendArea (action 9) n'avance d'étape qu'à la fin de l'état courant (les défenseurs ne frappaient jamais); le point de l'état 9 est tiré une fois et l'état s'arrête dès qu'un ennemi est près de l'ancre (tous les 8 ticks); l'ordre du bâtiment est recopié sauf pendant une frappe (état 6/7, pas l'action), y compris sur un floater qui attaque ou défend une zone; un floater tenu en mêlée riposte (`FUN_00421d82`, soldats et Léviathans). Un soldat lié sous un tiers de ses PV (ou à court de charge en combat) rentre se soigner / recharger dans son bâtiment sur le stock +0x2a (action 2, état 2 : `FUN_0042219e`, `FUN_004211bb` case 1, `FUN_0041e569` case 1, `FUN_0045ddb8`), puis reprend l'ordre du bâtiment.
 
+Corrigés le 2026-10-31 (REA `ev_7393f2a9`, `ev_9994f35e`, `ev_3cb7946b`, `ev_1bc6136e`, `ev_427930b7`) : tirage `FUN_00467260(3)` dès qu'une cible floater existe (0x42244c); Hall de départ = premier site classe 0 type 0 au Chebyshev strictement minimal, sans préférence de pad; recharge Build Tone sans priorité Hall (le Hall n'est qu'un candidat de `FUN_00452ceb` tiré par `FUN_0041e28e`; la « priorité » était un ajout du port); latch `+0x90` (plus de floater ou `+0x3c < 1`) qui arrête le recruteur et rend la défaite définitive; sortie de pont d'un sous-type 8 sur l'action 9 (0x41f935..0x41f958). Déjà portés, lignes périmées retirées : riposte `FUN_00421d82` des Léviathans tenus, sélection inter-îles `FUN_0042f8f7`.
+
 Écarts confirmés, non corrigés :
 
-
-- Contre-attaque des Léviathans tenus en mêlée (`FUN_0042219e` -> `FUN_00421d82`, flag 0x10) absente.
-- Tirage `FUN_00467260(3)` de `FUN_0042219e` fait dès qu'une cible floater existe; le port ne tire qu'avec une cible lieu aussi (séquence RNG décalée).
-- Traversée de pont : le port force l'action 9 au départ et l'état 9 à l'arrivée; le natif garde l'action et finit en état 0 (`FUN_004210a9`, cas 0x10).
+- Traversée de pont : le port garde l'ordre dans `handoff_resume_action` et force `+0x3c = 9` pendant la traversée, puis l'état 9 pour l'action 9 (et l'action 0); le natif n'écrit jamais `+0x3c` (`FUN_004210a9`) et finit en état 0 (0x41f928) en laissant `FUN_004211bb` relancer l'action. Bloc sous-type 4 (0x41fa33..0x41fa44, `+0x3c = 9` après 0x4023bf) non tracé.
+- Latch `+0x90` : en multijoueur (`DAT_004befe0 != 0`) le natif appelle 0x401d9d sans latch; le cœur du port n'a pas ce drapeau et verrouille toujours. Évènement 0xb (texte/son via 0x4013c0) non résolu.
 - Presse-papiers : enregistrement automatique de tous les bâtiments d'entraînement (natif : seulement le bâtiment sélectionné).
 - `IWFltInfo` affiché seulement en modes général/lieu (natif : tout mode après 0x3f); masquage d'un floater mourant (0x8, timer >= 40) non testé au rendu.
-
-- Hall de départ : le port préfère un pad typé; `FUN_0046466f` prend le site classe 0 vide le plus proche (`ev_3cb7946b`).
-- Source de recharge Build Tone : priorité Hall absente de `FUN_00420a55`/`FUN_00420dbd` (`game_session_delivery.c` `construction_refill_source`).
-- Sélection d'un floater lié à un bâtiment d'une autre île : `FUN_0042f8f7` le sélectionne, le port l'ignore (`ev_aa63a0e6`).
-- Alerte/latch de recrutement `+0x90` de `FUN_0045eaa7` absents (`ev_427930b7`).
 
 Doutes à trancher : sites « hidden pad » exclus du hit-test (commit `4452b0a`, sans preuve), gardes CONSTR supplémentaires (`payload_12`, taille, réservation), `renderer_class != 0` refusant une tâche CONSTR, cas 1..0xd et 0x10..0x14 de `FUN_0041e569` non relus.
 

@@ -386,7 +386,10 @@ int game_session_assign_category4_autonomous_order(
         session, floater_index, floater->x, floater->y, search_distance);
     target_location = action9_find_category4_site(
         session, floater, search_distance);
-    if (target_location >= 0 && target_floater >= 0 &&
+    /* FUN_0042219e rolls FUN_00467260(3) whenever a floater target exists,
+       even without a site target, so the shared RNG advances on every such
+       poll (ev_787dc785). */
+    if (target_floater >= 0 &&
         tone_rng_bounded(&session->random_state, 3U) == 0) {
         target_location = -1;
     }

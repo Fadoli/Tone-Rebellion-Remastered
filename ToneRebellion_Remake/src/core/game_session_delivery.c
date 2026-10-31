@@ -22,27 +22,15 @@ static int location_is_player_hall(const GameRuntimeLocation *location)
         location->record_value_10 == 0x2a + location->owner_id * 16;
 }
 
+/* FUN_00420dbd has no Hall priority: the owning Hall with positive stock is
+   one FUN_00452ceb candidate among the ten nearest, sampled by inverse
+   distance (FUN_00420a55 / FUN_0041e28e, ev_1bc6136e, ev_9536f417). */
 static int construction_refill_source(GameSession *session,
                                       const GameFloaterStart *floater,
                                       uint8_t *source_island)
 {
-    const GamePlayerEconomy *economy;
     if (session == NULL || floater == NULL || source_island == NULL ||
         floater->owner_slot >= GAME_START_PLAYER_COUNT) return -1;
-    economy = &session->economy[floater->owner_slot];
-    if (economy->hall_island_index < session->island_count &&
-        economy->hall_island_index == floater->island_index &&
-        economy->hall_location_index <
-            session->islands[economy->hall_island_index].location_count) {
-        const GameRuntimeLocation *hall = &session->islands[
-            economy->hall_island_index].locations[economy->hall_location_index];
-        if (location_is_player_hall(hall) &&
-            game_session_hall_resource_source_available(session,
-                floater->owner_slot, 1) && hall->resource_stock[0] != 0) {
-            *source_island = economy->hall_island_index;
-            return (int)economy->hall_location_index;
-        }
-    }
     return refill_source(session, floater, 1, source_island);
 }
 

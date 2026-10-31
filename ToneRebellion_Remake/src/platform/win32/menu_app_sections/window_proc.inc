@@ -136,7 +136,10 @@ static void run_ui_frame(HWND window, WPARAM wparam)
             g_game_session.world_sequence_state == 0 &&
             g_menu.selected_tribe >= 0 &&
             g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
-            if (game_session_count_player_floaters(&g_game_session,
+            /* The +0x90 latch never clears, so the defeat runs to the end
+               even if a floater or capacity comes back meanwhile. */
+            if (g_game_session.economy[g_menu.selected_tribe].defeat_latched ||
+                game_session_count_player_floaters(&g_game_session,
                     (uint8_t)g_menu.selected_tribe) == 0U ||
                 g_game_session.economy[g_menu.selected_tribe]
                     .source_maintenance_capacity < 1) {

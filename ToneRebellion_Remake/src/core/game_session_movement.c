@@ -1157,15 +1157,15 @@ static void game_session_tick_floater_recruitment(
     unsigned int player_slot;
 
     for (player_slot = 0; player_slot < GAME_START_PLAYER_COUNT; ++player_slot) {
-        const GamePlayerEconomy *economy = &session->economy[player_slot];
+        GamePlayerEconomy *economy = &session->economy[player_slot];
         uint8_t island_index = economy->hall_island_index;
         unsigned int floater_index;
         unsigned int owned_count = 0;
         unsigned int worker_count = 0;
         int birth_location;
 
-        if (economy->source_maintenance_capacity < 1 ||
-            island_index >= session->island_count) continue;
+        /* FUN_0045eaa7 runs the recruiter only while +0x90 is clear. */
+        if (economy->defeat_latched) continue;
         for (floater_index = 0; floater_index < session->floater_count;
              ++floater_index) {
             const GameFloaterStart *floater = &session->floaters[floater_index];
@@ -1177,7 +1177,14 @@ static void game_session_tick_floater_recruitment(
         /* FUN_0045eaa7 gates on positive total count, then compares subtype-0
            count with floor(gross capacity / 2), not half the current unit
            count. A class-1 recruiter marker must also be available. */
-        if (owned_count == 0) continue;
+        /* 0x45eaf5..0x45eb1c: no floaters or +0x3c < 1 sets the +0x90 latch
+           (solo path, DAT_004befe0 == 0; the remake core has no multiplayer
+           flag and latches in both modes). */
+        if (owned_count == 0 || economy->source_maintenance_capacity < 1) {
+            economy->defeat_latched = 1;
+            continue;
+        }
+        if (island_index >= session->island_count) continue;
         birth_location = game_session_find_birth_location(
             session, (uint8_t)player_slot, island_index);
         if (birth_location < 0) continue;
