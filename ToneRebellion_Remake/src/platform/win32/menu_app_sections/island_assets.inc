@@ -691,7 +691,9 @@ static int load_island_surface(int island_id, int map_island_index,
     memcpy(g_island_palette, palette, sizeof(g_island_palette));
     rebuild_island_palette_lookup();
     g_island_surface_id = island_id;
-    g_island_scroll_x = 0;
+    g_island_scroll_x =
+        map_island_index >= 0 && map_island_index < WORLD_MAP_MAX_ISLANDS
+        ? g_island_scroll_by_island[map_island_index] : 0;
     g_selected_location = -1;
     g_hovered_location = -1;
     g_island_panel_mode = WINDOW_ISLAND_PANEL_GENERAL;

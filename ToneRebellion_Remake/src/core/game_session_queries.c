@@ -2,7 +2,11 @@
 
 #include <string.h>
 
-/* Read-only session queries used by island selection and status panels. */
+/* FUN_00435581 floater pass: first floater in island-list order whose raw
+   +0x1c flag bit 0x1 is clear and whose Chebyshev distance to the click is
+   < 20. No owner, type, subtype, death-flag or explored-cell test is made, so
+   Leviathans (type 4) and dying floaters stay pickable
+   (ev_fd65e30cf8e5016cd62c94f95aa773e60aa16693a519b2f4d4e9c34963c9d2ae). */
 int game_session_floater_at(const GameSession *session,
                             uint8_t island_index,
                             uint16_t x,
@@ -14,10 +18,9 @@ int game_session_floater_at(const GameSession *session,
     for (i = 0; i < session->floater_count; ++i) {
         const GameFloaterStart *floater = &session->floaters[i];
         int32_t dx;
-        if (!game_session_floater_is_active(floater) ||
-            (floater->source_runtime_flags & 0x008U) != 0) continue;
         int32_t dy;
-
+        if (!game_session_floater_is_active(floater) ||
+            (floater->source_runtime_flags & 0x001U) != 0) continue;
         if (floater->island_index != island_index) continue;
         dx = (int32_t)x - floater->x;
         dy = (int32_t)y - floater->y;

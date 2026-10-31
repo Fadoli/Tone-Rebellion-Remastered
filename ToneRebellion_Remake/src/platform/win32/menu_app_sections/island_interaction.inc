@@ -71,6 +71,7 @@ static int open_island_view(HWND window, int map_island_index)
         return 0;
     }
     g_menu.selected_map_island = map_island_index;
+    g_island_scroll_x = island_clamp_scroll(g_island_scroll_x);
     g_selected_floater = -1;
     g_menu.screen = SCREEN_ISLAND;
     {
@@ -91,6 +92,49 @@ static int island_pad_group(const IslandLocation *location);
 static int island_site_buildable_by_player(int location_index,
                                            int32_t *out_items,
                                            size_t *out_count);
+
+/* FUN_00435826 + FUN_0042fa0f (0x32 path, bridge branch, ev_52232fe9...):
+   clicking a constructed class-2 bridge marker switches to its partner island
+   (message 0x4d) and scrolls to the partner marker, x = partner.x - 0x140
+   (message 0x3d -> 0x35). No mode switch runs, so the open panel survives.
+   The partner is the destination island's class-2 marker whose neighbour is
+   the current island (FUN_00466c08). */
+static int enter_bridge_destination(HWND window, int location_index)
+{
+    const GameRuntimeIsland *island;
+    const GameRuntimeLocation *bridge;
+    const GameRuntimeIsland *target;
+    unsigned int i;
+    int origin = g_menu.selected_map_island;
+    int partner_x = -1;
+    int saved_panel_mode = g_island_panel_mode;
+    int saved_hovered_hall = g_hovered_hall_command;
+    int saved_scroll_target;
+    if (!g_game_session_valid || origin < 0 ||
+        origin >= g_game_session.island_count || location_index < 0) return 0;
+    island = &g_game_session.islands[origin];
+    if ((unsigned int)location_index >= island->location_count) return 0;
+    bridge = &island->locations[location_index];
+    if (bridge->renderer_class != 2 || !bridge->bridge_constructed ||
+        bridge->bridge_neighbor_island < 0 ||
+        bridge->bridge_neighbor_island >= g_game_session.island_count) return 0;
+    target = &g_game_session.islands[bridge->bridge_neighbor_island];
+    for (i = 0; i < target->location_count; ++i) {
+        if (target->locations[i].renderer_class == 2 &&
+            target->locations[i].bridge_neighbor_island == origin) {
+            partner_x = target->locations[i].x;
+            break;
+        }
+    }
+    if (!open_island_view(window, bridge->bridge_neighbor_island)) return 0;
+    g_island_panel_mode = saved_panel_mode;
+    g_hovered_hall_command = saved_hovered_hall;
+    if (partner_x >= 0) {
+        saved_scroll_target = partner_x - 0x140;
+        g_island_scroll_x = island_clamp_scroll(saved_scroll_target);
+    }
+    return 1;
+}
 
 /* An empty construction site the local tribe cannot build on is neither drawn
    nor clickable: it behaves like bare ground. */
@@ -114,42 +158,75 @@ static int island_site_is_hidden_pad(int location_index)
     return !island_site_buildable_by_player(location_index, NULL, NULL);
 }
 
-/* Remake: loose PIT_Object items stay selectable outside the explored x
-   extent (the Obtain button list of FUN_0045302a has no range test). */
-static int island_location_is_ground_object(int location_index)
+/* FUN_00435581 location pass: a site is pickable when its class (+4) or item
+   (+0x10) is nonzero, or the active player's bit is set in the visibility
+   byte (+0x22); there is no explored-cell test
+   (ev_fd65e30cf8e5016cd62c94f95aa773e60aa16693a519b2f4d4e9c34963c9d2ae). */
+static int island_location_pickable(int location_index)
 {
     const GameRuntimeIsland *island;
     const GameRuntimeLocation *location;
-    int32_t item_id;
-    if (!g_game_session_valid || g_menu.selected_map_island < 0 ||
-        g_menu.selected_map_island >= g_game_session.island_count ||
-        location_index < 0) return 0;
+    if (!g_game_session_valid || g_menu.selected_tribe < 0 ||
+        g_menu.selected_tribe >= GAME_START_PLAYER_COUNT) return 1;
+    if (g_menu.selected_map_island < 0 ||
+        g_menu.selected_map_island >= g_game_session.island_count) return 1;
     island = &g_game_session.islands[g_menu.selected_map_island];
-    if (location_index >= (int)island->location_count) return 0;
+    if (location_index < 0 || (unsigned int)location_index >= island->location_count)
+        return 1;
     location = &island->locations[location_index];
-    item_id = location->record_value_10 == 1 ? location->record_value_24 : 0;
-    return location->renderer_class == 0 && location->owner_id == -1 &&
-        item_id >= GAME_INVENTORY_ITEM_FIRST_ID &&
-        item_id < GAME_INVENTORY_ITEM_FIRST_ID + GAME_INVENTORY_ITEM_COUNT;
+    return location->renderer_class != 0 || location->record_value_10 != 0 ||
+        (location->tribe_visibility_mask >> g_menu.selected_tribe & 1U) != 0;
+}
+
+/* FUN_00435581 location zone: |dx| < W and -W/2 < dy < W/2 around the site,
+   W from DAT_0049f560 = {20, 30, 40}: class != 0 uses 40, an empty class-0
+   site its subtype index, a built item the pad row's size. The native extra
+   upward reach (byte of FUN_00456a87's shape entry, meaning unknown) is not
+   modelled (ev_fd65e30cf8e5016cd62c94f95aa773e60aa16693a519b2f4d4e9c34963c9d2ae,
+   ev_817a8f60...). */
+static int island_location_hit_width(int location_index)
+{
+    static const int widths[3] = {20, 30, 40};
+    const IslandLocation *location =
+        &g_island_surface_data.locations[location_index];
+    const GameRuntimeIsland *island;
+    const GameRuntimeLocation *runtime = NULL;
+    int index = location->renderer_subtype;
+    if (location->renderer_class != 0) return widths[2];
+    if (g_game_session_valid && g_menu.selected_map_island >= 0 &&
+        g_menu.selected_map_island < g_game_session.island_count) {
+        island = &g_game_session.islands[g_menu.selected_map_island];
+        if ((unsigned int)location_index < island->location_count) {
+            runtime = &island->locations[location_index];
+        }
+    }
+    if (runtime != NULL && runtime->renderer_class != 0) return widths[2];
+    if (runtime != NULL && runtime->record_value_10 > 0 &&
+        (unsigned int)runtime->record_value_10 < g_pad_catalog.item_count) {
+        int size = g_pad_catalog.items[runtime->record_value_10].size;
+        if (size >= 0 && size <= 2) index = size;
+    }
+    if (index < 0 || index > 2) index = 2;
+    return widths[index];
 }
 
 static int island_location_at(int x, int y)
 {
     int map_x = x + g_island_scroll_x;
     int map_y = y;
-    int index = (int)g_island_surface_data.location_count - 1;
+    int index;
     if (x < 0 || x >= LOGICAL_WIDTH || map_y < 0 || map_y >= 320) return -1;
-    for (; index >= 0; --index) {
+    /* The native loop returns the first match in record order. */
+    for (index = 0; index < (int)g_island_surface_data.location_count; ++index) {
         const IslandLocation *location = &g_island_surface_data.locations[index];
         int dx = map_x - location->x;
         int dy = map_y - location->y;
-        if (dx * dx + dy * dy <= 100 && !island_site_is_hidden_pad(index) &&
-            (!g_game_session_valid || g_menu.selected_tribe < 0 ||
-             island_location_is_ground_object(index) ||
-             game_session_island_x_explored(&g_game_session,
-                 (uint8_t)g_menu.selected_map_island,
-                 (uint8_t)g_menu.selected_tribe, location->x)))
-            return index;
+        int width;
+        if (dx < 0) dx = -dx;
+        if (dx >= 101 || island_site_is_hidden_pad(index) ||
+            !island_location_pickable(index)) continue;
+        width = island_location_hit_width(index);
+        if (dx < width && dy > -(width / 2) && dy < width / 2) return index;
     }
     return -1;
 }

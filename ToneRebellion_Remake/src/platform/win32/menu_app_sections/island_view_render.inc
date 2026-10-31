@@ -657,6 +657,10 @@ static void render_island_view(HDC dc)
     }
 
     g_island_scroll_x = island_clamp_scroll(g_island_scroll_x);
+    if (g_menu.selected_map_island >= 0 &&
+        g_menu.selected_map_island < WORLD_MAP_MAX_ISLANDS) {
+        g_island_scroll_by_island[g_menu.selected_map_island] = g_island_scroll_x;
+    }
     fill_rect(dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
     if (g_island_height_data == NULL ||
         g_island_height_length != ISLAND_HAZE_FILE_BYTES) {
@@ -1103,6 +1107,90 @@ static void render_island_view(HDC dc)
                IWLocInfo. Initial workers are class 0, level 0, and have the
                four tribe-specific *work rows: 3 hit points and 0 strength.
                FUN_00466fe4 initializes current hits to FUN_00420f28's max. */
+            if (selected_floater->source_link_0c != -1) {
+                /* FUN_0044338b, linked branch (FUN_004207f2 non-null,
+                   ev_347b34f6...): BLDNAME centred y=3, then LEVEL 18,
+                   EXP 28, CHARGE 38, HITS 48, STRENGTH 58 at x=4. */
+                static const int16_t exp_t1[18] = {
+                    0, 0, 0, 25, 100, 0, 30, 120, 0, 40, -1, 0, 25, 100, 0,
+                    25, 100, 0};
+                const GameRuntimeLocation *linked = NULL;
+                char row[48];
+                int16_t current_charge = 0;
+                int16_t maximum_charge = 0;
+                unsigned int level = selected_floater->attack_level_flags & 0x0fU;
+                int exp_cap = 0;
+                int row_y = info->pane.top + 18;
+                if (runtime_island != NULL &&
+                    selected_floater->charge_source_island ==
+                        g_menu.selected_map_island &&
+                    selected_floater->charge_source_location <
+                        runtime_island->location_count) {
+                    linked = &runtime_island->locations[
+                        selected_floater->charge_source_location];
+                }
+                if (linked != NULL) {
+                    uint16_t catalog_item;
+                    size_t name_index;
+                    int owner = linked->owner_id >= 0 && linked->owner_id < 4
+                        ? linked->owner_id : 0;
+                    if (island_panel_info_construction_task_indices(
+                            (int16_t)(linked->record_value_10 - owner * 16),
+                            (uint8_t)owner, &catalog_item, &name_index) &&
+                        name_index < BUILDING_NAME_COUNT &&
+                        g_building_names[name_index][0] != '\0') {
+                        int w = measure_bitmap_text(NULL,
+                            g_building_names[name_index],
+                            strlen(g_building_names[name_index]));
+                        draw_bitmap_label(dc, g_building_names[name_index],
+                            info->pane.left +
+                                ((info->pane.right - info->pane.left + 1) - w) / 2,
+                            info->pane.top + 3, RGB(230, 238, 255));
+                    }
+                }
+                (void)snprintf(row, sizeof(row), "%s %u", g_unit_label_text[2],
+                               level + 1U);
+                draw_bitmap_label(dc, row, info->pane.left + 5, row_y,
+                                  RGB(230, 238, 255));
+                row_y += 10;
+                if (level < 2 && selected_floater->source_subtype < 6) {
+                    /* DAT_004a424a[L + 3 * subtype]; the blend with
+                       DAT_004a4282 uses DAT_004bf11c (0 in the image). */
+                    exp_cap = exp_t1[level + 3U * selected_floater->source_subtype];
+                }
+                if (exp_cap >= 1) {
+                    (void)snprintf(row, sizeof(row), "EXP %u/%d",
+                        (unsigned int)selected_floater->source_progress_08,
+                        exp_cap);
+                } else {
+                    (void)snprintf(row, sizeof(row), "EXP %u",
+                        (unsigned int)selected_floater->source_progress_08);
+                }
+                draw_bitmap_label(dc, row, info->pane.left + 5, row_y,
+                                  RGB(230, 238, 255));
+                row_y += 10;
+                if (game_session_floater_charge_values(selected_floater,
+                        &g_floater_catalog, &current_charge, &maximum_charge)) {
+                    (void)snprintf(row, sizeof(row), "%s %d/%d",
+                        g_unit_label_text[5], (int)current_charge,
+                        (int)maximum_charge);
+                    draw_bitmap_label(dc, row, info->pane.left + 5, row_y,
+                                      RGB(230, 238, 255));
+                }
+                row_y += 10;
+                (void)snprintf(row, sizeof(row), "%s %u/%u",
+                    g_unit_label_text[3],
+                    (unsigned int)selected_floater->current_hit_points,
+                    (unsigned int)selected_floater->max_hit_points);
+                draw_bitmap_label(dc, row, info->pane.left + 5, row_y,
+                                  RGB(230, 238, 255));
+                row_y += 10;
+                (void)snprintf(row, sizeof(row), "%s %u",
+                    g_unit_label_text[4],
+                    (unsigned int)selected_floater->attack_strength);
+                draw_bitmap_label(dc, row, info->pane.left + 5, row_y,
+                                  RGB(230, 238, 255));
+            } else {
             {
                 /* Name row: "%s %s" of the names.txt tribe slot and the
                    gamey.txt WORKER label (FUN_0044338b, class 0). */
@@ -1151,6 +1239,8 @@ static void render_island_view(HDC dc)
                                       info->pane.top + 43,
                                       RGB(230, 238, 255));
                 }
+            }
+
             }
 
             /* FUN_0044338b places the selected unit sprite to the right of

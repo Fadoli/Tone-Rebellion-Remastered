@@ -38,6 +38,7 @@ static int load_game_session_for_selected_world(char *error, size_t error_capaci
     GameSession session;
     unsigned int island_index;
 
+    memset(g_island_scroll_by_island, 0, sizeof(g_island_scroll_by_island));
     if (g_menu.world_index < 0 || g_menu.world_index >= g_menu.world_map.world_count) {
         (void)snprintf(error, error_capacity, "selected world is out of range");
         return 0;

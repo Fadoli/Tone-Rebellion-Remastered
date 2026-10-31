@@ -709,9 +709,10 @@ static void draw_sprite_scaled(HDC target, const SpriteSheet *sheet, uint32_t fr
 
 /* FUN_004109a6: every destination pixel under the frame's opaque RLE spans is
    replaced by table[destination]; the sprite's own colors are ignored. */
-static void recolor_under_sprite(HDC target, const SpriteSheet *sheet,
-                                 uint32_t frame_index, int x, int y,
-                                 int selector, int level)
+static void recolor_under_sprite_clipped(HDC target, const SpriteSheet *sheet,
+                                         uint32_t frame_index, int x, int y,
+                                         int selector, int level,
+                                         const RECT *clip)
 {
     const SpriteFrame *frame;
     DIBSECTION dib;
@@ -732,11 +733,23 @@ static void recolor_under_sprite(HDC target, const SpriteSheet *sheet,
             DWORD *pixel;
             if ((mask[column] >> 24) == 0U || destination_x < 0 ||
                 destination_x >= LOGICAL_WIDTH) continue;
+            if (clip != NULL &&
+                (destination_x < clip->left || destination_x > clip->right ||
+                 destination_y < clip->top || destination_y > clip->bottom))
+                continue;
             pixel = &g_paint_buffer_pixels[(size_t)destination_y * LOGICAL_WIDTH +
                                            (size_t)destination_x];
             *pixel = hazed_island_pixel(*pixel, selector, level);
         }
     }
+}
+
+static void recolor_under_sprite(HDC target, const SpriteSheet *sheet,
+                                 uint32_t frame_index, int x, int y,
+                                 int selector, int level)
+{
+    recolor_under_sprite_clipped(target, sheet, frame_index, x, y, selector,
+                                 level, NULL);
 }
 
 static void draw_sprite_region(HDC target, const SpriteSheet *sheet, uint32_t frame_index,

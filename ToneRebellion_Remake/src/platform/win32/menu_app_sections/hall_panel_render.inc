@@ -563,6 +563,35 @@ static void draw_hall_panel(HDC dc, int hall_player)
             &g_game_session.economy[(unsigned int)hall_player];
         unsigned int resource;
         unsigned int target;
+        {
+            /* FUN_0043edac shades the column heads (x 40+38c..68+38c, y 22..102)
+               and the three rows (x 40..190, y 37+24r, h 14) through
+               FUN_004109a6 with FUN_004106dd(1,0): destination pixels under
+               the pane background form's opaque spans are replaced by the
+               haze table (ev_0d583e26...). The island haze stands in for the
+               runtime-filled table. */
+            unsigned int shade_index;
+            for (shade_index = 0; shade_index < GAME_TRADE_TARGET_COUNT;
+                 ++shade_index) {
+                RECT head = {panel->pane.left + 40 + (int)shade_index * 38,
+                             panel->pane.top + 22,
+                             panel->pane.left + 68 + (int)shade_index * 38,
+                             panel->pane.top + 102};
+                recolor_under_sprite_clipped(dc, &g_temp_hole_art,
+                    (uint32_t)panel->shape_frame, panel->pane.left,
+                    panel->pane.top, 1, 0, &head);
+            }
+            for (shade_index = 0; shade_index < GAME_RESOURCE_TYPE_COUNT;
+                 ++shade_index) {
+                RECT row = {panel->pane.left + 40,
+                            panel->pane.top + 37 + (int)shade_index * 24,
+                            panel->pane.left + 190,
+                            panel->pane.top + 51 + (int)shade_index * 24};
+                recolor_under_sprite_clipped(dc, &g_temp_hole_art,
+                    (uint32_t)panel->shape_frame, panel->pane.left,
+                    panel->pane.top, 1, 0, &row);
+            }
+        }
         for (target = 0; target < GAME_TRADE_TARGET_COUNT; ++target) {
             /* FUN_0043edac: FUN_00428191(class, 0, x = 55 + 38c, y = 12) with
                class c, or c + 1 once c reaches the local player. */

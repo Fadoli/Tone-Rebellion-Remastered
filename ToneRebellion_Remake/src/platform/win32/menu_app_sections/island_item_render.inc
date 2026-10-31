@@ -25,6 +25,21 @@ static void draw_iw_construct(HDC dc)
         int center_x = window->pane.left + pane_width / 8 +
                        (pane_width >> 2) * (int)column;
         if (item_index >= g_iw_construct_item_count) break;
+        /* FUN_0043aee8 draws the hover frame before the building object. */
+        if ((int)column == g_iw_construct.hovered_column) {
+            /* FUN_0043aee8 frames x in [cx - W/8 + 5, cx + W/8 - 5] and
+               y in [top + 0x1a, bottom - 10], centred on the column. */
+            RECT highlight = {
+                center_x - pane_width / 8 + 5,
+                window->pane.top + 0x1a,
+                center_x + pane_width / 8 - 5,
+                window->pane.bottom - 10
+            };
+            /* FUN_0042dd0f(1) = DAT_0049e140[1]: palette index 1. */
+            HBRUSH brush = CreateSolidBrush(g_island_palette[1]);
+            FrameRect(dc, &highlight, brush);
+            DeleteObject(brush);
+        }
         {
             uint16_t item_id = (uint16_t)(g_iw_construct_items[item_index] +
                 (int32_t)g_game_session.config.selected_tribe * 16);
@@ -46,20 +61,6 @@ static void draw_iw_construct(HDC dc)
                     }
                 }
             }
-        }
-        if ((int)column == g_iw_construct.hovered_column) {
-            /* FUN_0043aee8 frames x in [cx - W/8 + 5, cx + W/8 - 5] and
-               y in [top + 0x1a, bottom - 10], centred on the column. */
-            RECT highlight = {
-                center_x - pane_width / 8 + 5,
-                window->pane.top + 0x1a,
-                center_x + pane_width / 8 - 5,
-                window->pane.bottom - 10
-            };
-            /* FUN_0042dd0f(1) = DAT_0049e140[1]: palette index 1. */
-            HBRUSH brush = CreateSolidBrush(g_island_palette[1]);
-            FrameRect(dc, &highlight, brush);
-            DeleteObject(brush);
         }
     }
     if (g_iw_construct.cycle_button_visible && cycle_window != NULL) {

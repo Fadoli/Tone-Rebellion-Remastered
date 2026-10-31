@@ -83,3 +83,8 @@ l'inventaire), avant l'objet de la colonne. La description passe par `FUN_00428b
 Port: découpe en colonnes par `(x - gauche) / (W >> 2)` (colonne 5 sans survol), cadre en indice de palette 1, description en
 `x = 6`, largeur 167, première ligne `haut + 0x58 + h + 1`, pas `h + 1` (`draw_wrapped_bitmap_label_pitch`).
 Écarts restants: le cadre est dessiné après l'objet (natif avant), couleur de texte de la description non décodée.
+
+## Ordre de dessin et coordonnées (revue REA, sous-agent, non relue)
+
+Observations (`FUN_0043aee8` `ev_14b842bd…`, `FUN_0043b369` `ev_9c8b9462…`) : bandeau — par colonne visible, cadre de survol (palette 1) puis objet (`FUN_0040d3e1`, échelle 0x8000, y = H−0x23) puis icône de coût (frame min(coût−1, 0x31), y = H−0x0f), sans nombre ni description. Détail — fond, puis (si un objet est survolé) objet (W−0x37, 0x55, échelle 1,0), icône de coût (45, 75), nombre `"%d"` à (37, 45), description à partir de (10, 0x58) avec rappel `0x40196a` (non résolu). Avant survol seul le fond est dessiné. Le port suit cet ordre (le cadre était dessiné après l'objet; corrigé).
+Rappel résolu (REA, sous-agent): `0x40196a` est `JMP 0x0043b333` (`ev_adbc8f3c…`, `ev_9859df50…`), donc `FUN_0043b369` utilise bien `FUN_0043b333` : x=6, borne droite 0xad (largeur 167), première ligne y = 0x58 + 1 + h, pas h+1 (`FUN_00428baa` `ev_4fa53e73…`); le port concorde. Inconnues : RGB de la palette système 0..6, police du panneau (smfont supposée), couleur du nombre.

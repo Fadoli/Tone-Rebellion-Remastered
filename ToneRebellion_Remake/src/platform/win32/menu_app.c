@@ -228,6 +228,9 @@ static unsigned char *g_island_height_data;
 static size_t g_island_height_length;
 static int g_island_surface_id = -1;
 static int g_island_scroll_x;
+/* DAT_005dbee0: the native camera x is kept per island and survives leaving
+   and re-entering it (FUN_004337d9 case 1 only clamps it). */
+static int g_island_scroll_by_island[WORLD_MAP_MAX_ISLANDS];
 /* Remake: left button held on the IWLilMap pane scrolls the island view. */
 static int g_lilmap_drag;
 static int g_hovered_location = -1;

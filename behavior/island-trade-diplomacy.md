@@ -107,3 +107,8 @@ passe des coordonnées moins l'origine). Conclusion retenue: pane-relatif, comme
 Origine, suite (REA, ev_5935c354…, ev_4d46b37e…, ev_e60ae5e3…): `FUN_0042d28f` renvoie `&DAT_005c30a0` et n'y écrit que `+4 = 639`, `+8 = 479` (étendues plein écran);
 `FUN_00404770` ajoute `surface+4/+8` à x,y puis borne contre `+4..+0x10`, ce qui est incompatible avec une origine nulle: la mise en page de la structure (ou le typage du
 décompilateur) reste non résolue. Aucun positionneur d'origine par fenêtre trouvé. Décision inchangée: emblème pane-relatif comme les autres éléments, à contrôler visuellement.
+
+## Ombrage Commerce et lecture Diplomatie (revue REA, sous-agent, non relue)
+
+Observations (`FUN_0043edac` `ev_0d583e26…`, `FUN_0043e5aa` `ev_8f64bfc2…`, `FUN_004109a6` `ev_e1a8ee2b…`) : le Commerce remappe par `FUN_004109a6` + `FUN_004106dd(1,0)` les rectangles d'en-tête `x 40+38c..68+38c, y 22..102` et de ligne `x 40..190, y 37+24r..51+24r` sous les spans opaques de la forme de fond du panneau (masque, pas de couleur de forme; aucune alternance). Emblèmes en `(55+38c, 12)`, classe `c` ou `c+1` (le joueur local est sauté), sans surbrillance; la trame du corps dépend d'un octet `obj+0x14` non écrit (inconnu). Diplomatie : positions déjà au port; légende `TRDIPHI`/`TRCOMHI` à (pane_w/2+15, 7) avec l'objet police `DAT_005c30b8` (smfont), remplis à l'exécution (indice de palette non lisible statiquement).
+Port : l'ombrage du Commerce est porté (`recolor_under_sprite_clipped`, voile île de substitution, niveau 0, sélecteur 1) avant emblèmes, icônes et chiffres; l'ordre natif entre ombrage et emblèmes n'est pas établi. Inconnues : table de voile native (remplie à l'exécution), trame de bannière, palette de la légende Diplomatie.

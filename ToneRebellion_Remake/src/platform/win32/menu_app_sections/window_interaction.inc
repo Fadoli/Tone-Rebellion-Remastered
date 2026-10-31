@@ -636,10 +636,8 @@ static void handle_click(HWND window, int x, int y)
                 select_floater_source_building(clicked_roster_floater);
                 g_hovered_location = -1;
             } else {
-                int clicked_floater = g_game_session_valid &&
-                    game_session_island_x_explored(&g_game_session,
-                        (uint8_t)g_menu.selected_map_island,
-                        (uint8_t)g_menu.selected_tribe, x + g_island_scroll_x)
+                /* FUN_00435581 has no explored-cell gate on the floater pass. */
+                int clicked_floater = g_game_session_valid
                     ? game_session_floater_at(&g_game_session,
                         (uint8_t)g_menu.selected_map_island,
                         (uint16_t)(x + g_island_scroll_x), (uint16_t)y)
@@ -758,6 +756,9 @@ static void handle_click(HWND window, int x, int y)
                                 &g_hovered_inventory_item,
                                 &g_hovered_hall_command);
                             update_interaction_cursor();
+                        } else if (enter_bridge_destination(window,
+                                                            clicked_location)) {
+                            /* island changed; selection already reset */
                         } else {
                             g_selected_location = clicked_location;
                             (void)open_iw_construct(clicked_location);
