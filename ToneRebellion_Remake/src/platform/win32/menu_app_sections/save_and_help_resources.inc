@@ -83,7 +83,7 @@ static void read_slot_details(int slot, const char *path)
 }
 
 /* A slot shows the remake save of that number when there is one, otherwise
-   the original game's save (listed for reference, not loadable). */
+   the original game's save, loaded through core/native_save.c. */
 static void scan_load_slots(void)
 {
     char directory[MAX_PATH];
@@ -93,6 +93,7 @@ static void scan_load_slots(void)
         char path[MAX_PATH];
         g_load_slot_valid[slot] = 0;
         g_load_slot_native[slot] = 0;
+        g_load_slot_native_path[slot][0] = '\0';
         if (have_directory) {
             (void)snprintf(path, sizeof(path), "%s\\%02d.sav", directory, slot);
             if (save_header_is_valid(path) && save_file_is_remake(path)) {
@@ -119,6 +120,8 @@ static void scan_load_slots(void)
         }
         g_load_slot_valid[slot] = 1;
         g_load_slot_native[slot] = 1;
+        (void)snprintf(g_load_slot_native_path[slot],
+                       sizeof(g_load_slot_native_path[slot]), "%s", path);
         read_slot_details(slot, path);
     }
 }

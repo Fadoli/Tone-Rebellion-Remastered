@@ -330,8 +330,11 @@ static size_t g_iw_construct_item_count;
 static int g_iw_construct_open;
 static int g_resume_available;
 static unsigned char g_load_slot_valid[8];
-/* 1 = the slot is an original-game save (listed, not loadable). */
+/* 1 = the slot is an original-game save. */
 static unsigned char g_load_slot_native[8];
+/* Where scan_load_slots found each original-game save (Program Files or its
+   VirtualStore copy). */
+static char g_load_slot_native_path[8][MAX_PATH];
 /* The Load/Save screen is shared: 1 = Save (state 5), 0 = Load (state 4). */
 static int g_load_save_mode;
 static int g_save_return_screen;

@@ -18,7 +18,7 @@ cmake -S . -B build/ucrt64 -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build/ucrt64
 ```
 
-This builds 64-bit `remake_menu` and, when CMake finds SDL3, `remake_sdl` with `SDL3.dll` copied beside it. Both executables need only system DLLs otherwise. The 32-bit MinGW.org build keeps working; 32-bit GCC builds use SSE math (`-msse2 -mfpmath=sse`) so every build places float-computed pixels identically. Remake saves go to `saves` beside each executable.
+This builds 64-bit `remake_menu` and, when CMake finds SDL3, `remake_sdl` with `SDL3.dll` copied beside it. Each build also refreshes the ready-to-launch copies in `ToneRebellion_Remake/`: `ToneRebellion_Remake.exe` (`remake_menu`), and `ToneRebellion_Remake_sdl.exe` with `SDL3.dll` (`remake_sdl`). Both executables need only system DLLs otherwise. The 32-bit MinGW.org build keeps working; 32-bit GCC builds use SSE math (`-msse2 -mfpmath=sse`) so every build places float-computed pixels identically. Remake saves go to `saves` beside each executable.
 
 ## Build status
 

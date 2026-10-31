@@ -310,7 +310,12 @@ if(WIN32)
         add_custom_command(TARGET remake_sdl POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 $<TARGET_RUNTIME_DLLS:remake_sdl> $<TARGET_FILE_DIR:remake_sdl>
-            COMMENT "Copying SDL3.dll next to remake_sdl"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:remake_sdl>"
+                "${CMAKE_CURRENT_SOURCE_DIR}/ToneRebellion_Remake_sdl.exe"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_RUNTIME_DLLS:remake_sdl> "${CMAKE_CURRENT_SOURCE_DIR}"
+            COMMENT "Updating the ready-to-launch ToneRebellion_Remake_sdl.exe and SDL3.dll"
             COMMAND_EXPAND_LISTS
         )
     endif()

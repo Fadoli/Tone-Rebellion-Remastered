@@ -816,9 +816,10 @@ static void handle_click(HWND window, int x, int y)
             } else if (slot >= 0 && slot < 8 && g_load_slot_valid[slot] &&
                        g_load_slot_native[slot]) {
                 char error[160];
-                { char native_name[16]; (void)snprintf(native_name, sizeof(native_name), "%02d.SAV", slot);
-        (void)snprintf(path, sizeof(path), "%s", game_file_path(native_name)); }
-                if (read_native_save_file(window, path, error, sizeof(error))) {
+                /* The scan's path: a manifested or 64-bit process is not
+                   redirected to the VirtualStore copy. */
+                if (read_native_save_file(window, g_load_slot_native_path[slot],
+                                          error, sizeof(error))) {
                     g_load_save_mode = 0;
                     g_load_from_game = 0;
                 } else {
