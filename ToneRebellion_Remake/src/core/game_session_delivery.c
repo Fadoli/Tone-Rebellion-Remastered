@@ -851,9 +851,14 @@ static void assign_resource_tasks(GameSession *session,
             *floater = saved_floater;
             memcpy(session->pending_events, saved_events, sizeof(saved_events));
         }
-        if (assigned_task)
+        if (assigned_task) {
+            /* FUN_0042219e assigns through FUN_00421ec1, which always clears
+               mask 0x65 (ev_16b5390f): a former attacker drops 0x40, so its
+               melee target is no longer held in place. */
+            floater->source_runtime_flags &= ~0x065U;
             floater->task_commit_tick =
                 session->simulation_tick + GAME_SESSION_TASK_COMMIT_TICKS;
+        }
     }
 }
 

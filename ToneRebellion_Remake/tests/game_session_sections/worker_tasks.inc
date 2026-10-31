@@ -437,6 +437,28 @@ static void test_orphaned_order_without_claim_is_released(void)
     assert(session.floaters[0].has_move_order == 1);
 }
 
+static void test_task_assignment_drops_a_stale_melee_hold(void)
+{
+    /* FUN_00421ec1 clears mask 0x65 on every assignment: a worker that held a
+       floater in melee (its own 0x40) frees that target once it takes a task. */
+    GameSession session;
+    int slot_a = setup_two_delivery_tasks(&session, 2, 3);
+    GameFloaterStart *worker = &session.floaters[0];
+    GameFloaterStart *held = &session.floaters[1];
+
+    make_workers_idle(&session);
+    held->linked_task_slot = 7; /* busy elsewhere: not assigned here */
+    held->source_link_0c = 0;
+    held->source_runtime_flags = 0x010U;
+    worker->order_target_floater = 1;
+    worker->source_runtime_flags = 0x040U;
+    game_session_assign_local_resource_tasks(&session, NULL);
+    assert(worker->linked_task_slot == slot_a);
+    assert((worker->source_runtime_flags & 0x065U) == 0);
+    game_session_tick_floater_moves(&session, 1, NULL);
+    assert((held->source_runtime_flags & 0x010U) == 0);
+}
+
 static void test_worker_tasks_and_panic(void)
 {
     test_reallocation_does_not_wait_for_the_ten_tick_phase();
@@ -458,4 +480,5 @@ static void test_worker_tasks_and_panic(void)
     test_cancelled_task_workers_take_the_remaining_task();
     test_home_wander_fallback_worker_is_idle();
     test_orphaned_order_without_claim_is_released();
+    test_task_assignment_drops_a_stale_melee_hold();
 }
