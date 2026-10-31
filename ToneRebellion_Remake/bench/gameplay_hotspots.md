@@ -21,7 +21,8 @@ Scenarios (`--bench-scenario`), the "fake environment":
 
 `--bench-paced` waits for the game's 50 ms frame clock instead of running
 flat out. `--bench-screen title|newgame|map` measures another screen over
-the same session; `--bench-dump FILE` writes the last composed frame as a
+the same session; `--bench-client WxH` sets the window client size;
+`--bench-dump FILE` writes the last composed frame as a
 640x480 BMP (used to compare renderers pixel for pixel). `--bench-profile` adds a sampling profiler: a thread suspends the
 main thread about every 2 ms and stores its EBP-chain call stack. Use a build
 with frame pointers and less inlining, then resolve the samples:
@@ -59,7 +60,10 @@ of the time was in GDI system calls:
 ## Changes
 
 - `present_back_buffer` scales with `COLORONCOLOR` (nearest pixel) instead
-  of `HALFTONE`: the enlarged frame is sharp instead of smoothed.
+  of `HALFTONE`. A non-integer nearest scale gives uneven pixel sizes (the
+  mini-map dots show it): F12 or the window menu switches between fill
+  sharp (default), whole multiples of 640x480 with black bars, and fill
+  smoothed (`HALFTONE`) (`logical_viewport`, `savesideo.cfg`).
 - `soft_blit_frame` / `soft_fill_rect` (`sprite_primitives.inc`) write the
   back buffer DIB directly for `draw_sprite`, `draw_sprite_region`,
   `draw_sprite_scaled[_plain]`, `fill_rect` and `lilmap_fill`, with the same

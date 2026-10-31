@@ -226,10 +226,60 @@ static unsigned frame_clock_due(void)
     return due;
 }
 
+/* Window (system) menu entries for the scaling modes; system command IDs
+   keep their low four bits clear and stay below 0xF000. */
+enum { SYSCOMMAND_SCALE_FIRST = 0x0100 };
+static const char *const g_scale_mode_labels[SCALE_MODE_COUNT] = {
+    "Scale: whole multiples (sharp, even pixels)",
+    "Scale: fill window (sharp)",
+    "Scale: fill window (smooth)"
+};
+
+static void update_scale_menu(HWND window)
+{
+    HMENU menu = GetSystemMenu(window, FALSE);
+    if (menu == NULL) return;
+    (void)CheckMenuRadioItem(menu, SYSCOMMAND_SCALE_FIRST,
+                             SYSCOMMAND_SCALE_FIRST + 0x10 * (SCALE_MODE_COUNT - 1),
+                             SYSCOMMAND_SCALE_FIRST + 0x10 * (UINT)g_scale_mode,
+                             MF_BYCOMMAND);
+}
+
+static void add_scale_menu(HWND window)
+{
+    HMENU menu = GetSystemMenu(window, FALSE);
+    int mode;
+    if (menu == NULL) return;
+    (void)AppendMenuA(menu, MF_SEPARATOR, 0, NULL);
+    for (mode = 0; mode < SCALE_MODE_COUNT; ++mode)
+        (void)AppendMenuA(menu, MF_STRING,
+                          SYSCOMMAND_SCALE_FIRST + 0x10 * (UINT)mode,
+                          g_scale_mode_labels[mode]);
+    update_scale_menu(window);
+}
+
+static void set_scale_mode(HWND window, int mode)
+{
+    if (mode < 0 || mode >= SCALE_MODE_COUNT) return;
+    g_scale_mode = mode;
+    save_video_settings();
+    update_scale_menu(window);
+    /* The bars change size: repaint the whole client. */
+    InvalidateRect(window, NULL, FALSE);
+}
+
 static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                                           WPARAM wparam, LPARAM lparam)
 {
     switch (message) {
+    case WM_SYSCOMMAND:
+        if ((wparam & 0xFFF0U) >= SYSCOMMAND_SCALE_FIRST &&
+            (wparam & 0xFFF0U) < SYSCOMMAND_SCALE_FIRST + 0x10 * SCALE_MODE_COUNT) {
+            set_scale_mode(window,
+                (int)(((wparam & 0xFFF0U) - SYSCOMMAND_SCALE_FIRST) / 0x10));
+            return 0;
+        }
+        break;
     case WM_SETCURSOR:
         if (LOWORD(lparam) == HTCLIENT) {
             update_interaction_cursor();
@@ -555,6 +605,11 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         }
         return 0;
     case WM_KEYDOWN:
+        /* Port-only: F12 cycles the scaling mode on every screen. */
+        if (wparam == VK_F12) {
+            set_scale_mode(window, (g_scale_mode + 1) % SCALE_MODE_COUNT);
+            return 0;
+        }
         /* The original logo loop polls no input. */
         if (g_menu.screen == SCREEN_LOGO) return 0;
         if (g_menu.screen == SCREEN_NET_SETUP) {
@@ -878,6 +933,9 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         PostQuitMessage(0);
         return 0;
     default:
-        return DefWindowProcA(window, message, wparam, lparam);
+        break;
     }
+    /* Cases that `break` (other system commands such as move, size and
+       close; cursors outside the client area) get the default handling. */
+    return DefWindowProcA(window, message, wparam, lparam);
 }

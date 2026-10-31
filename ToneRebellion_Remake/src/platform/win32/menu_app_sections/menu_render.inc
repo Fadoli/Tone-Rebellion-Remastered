@@ -3,9 +3,64 @@ static unsigned game_random(void)
     return tone_rng_next15(&g_random_state);
 }
 
+/* Port choice: how the 640x480 frame fills the window. INTEGER keeps every
+   game pixel the same size (largest whole multiple, black bars); FIT_SHARP
+   and FIT_SMOOTH fill the window keeping the aspect ratio, with nearest
+   pixel (uneven pixel sizes) or HALFTONE filtering (blurred, about 5 ms of
+   CPU per frame, bench/gameplay_hotspots.md). F12 and the window menu cycle
+   it; saves\video.cfg keeps it. */
+enum { SCALE_INTEGER, SCALE_FIT_SHARP, SCALE_FIT_SMOOTH, SCALE_MODE_COUNT };
+static int g_scale_mode = SCALE_FIT_SHARP;
+
+static int video_settings_path(char *path, size_t capacity)
+{
+    char directory[MAX_PATH];
+    if (!save_directory(directory, sizeof(directory))) return 0;
+    (void)snprintf(path, capacity, "%s\\video.cfg", directory);
+    return 1;
+}
+
+static void save_video_settings(void)
+{
+    char path[MAX_PATH];
+    FILE *file;
+    if (!video_settings_path(path, sizeof(path))) return;
+    file = fopen(path, "w");
+    if (file == NULL) return;
+    (void)fprintf(file, "scale %d\n", g_scale_mode);
+    (void)fclose(file);
+}
+
+static void load_video_settings(void)
+{
+    char path[MAX_PATH];
+    FILE *file;
+    int mode;
+    if (!video_settings_path(path, sizeof(path))) return;
+    file = fopen(path, "r");
+    if (file == NULL) return;
+    if (fscanf(file, "scale %d", &mode) == 1 && mode >= 0 &&
+        mode < SCALE_MODE_COUNT)
+        g_scale_mode = mode;
+    (void)fclose(file);
+}
+
 static int logical_viewport(int client_width, int client_height, RECT *viewport)
 {
     if (client_width <= 0 || client_height <= 0 || viewport == NULL) return 0;
+    if (g_scale_mode == SCALE_INTEGER) {
+        int factor_x = client_width / LOGICAL_WIDTH;
+        int factor_y = client_height / LOGICAL_HEIGHT;
+        int factor = factor_x < factor_y ? factor_x : factor_y;
+        /* Below 640x480 there is no whole multiple: fall back to fitting. */
+        if (factor >= 1) {
+            viewport->left = (client_width - factor * LOGICAL_WIDTH) / 2;
+            viewport->top = (client_height - factor * LOGICAL_HEIGHT) / 2;
+            viewport->right = viewport->left + factor * LOGICAL_WIDTH;
+            viewport->bottom = viewport->top + factor * LOGICAL_HEIGHT;
+            return 1;
+        }
+    }
     if ((int64_t)client_width * LOGICAL_HEIGHT <=
         (int64_t)client_height * LOGICAL_WIDTH) {
         viewport->left = 0;

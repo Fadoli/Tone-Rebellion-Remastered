@@ -297,9 +297,10 @@ static void present_back_buffer(HDC screen, const RECT *client)
         RECT bar = {viewport.right, viewport.top, client->right, viewport.bottom};
         FillRect(screen, &bar, (HBRUSH)GetStockObject(BLACK_BRUSH));
     }
-    /* Nearest pixel: HALFTONE filtered the whole frame on the CPU, about
-       5 ms per frame at 1024x781 (bench/gameplay_hotspots.md). */
-    SetStretchBltMode(screen, COLORONCOLOR);
+    /* Nearest pixel unless smoothing was chosen: HALFTONE filters the whole
+       frame on the CPU, about 5 ms per frame at 1024x781. */
+    SetStretchBltMode(screen, g_scale_mode == SCALE_FIT_SMOOTH
+                                  ? HALFTONE : COLORONCOLOR);
     StretchBlt(screen, viewport.left, viewport.top,
                viewport.right - viewport.left, viewport.bottom - viewport.top,
                g_paint_buffer_dc, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, SRCCOPY);

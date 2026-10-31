@@ -683,6 +683,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     g_resume_available = resume_header_is_valid();
     scan_load_slots();
     load_audio_settings();
+    load_video_settings();
     g_menu.world_index = 0;
     g_menu.difficulty = 0;
     g_menu.selected_tribe = 0;
@@ -713,6 +714,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
                     "Tone Rebellion remake", MB_OK | MB_ICONERROR);
         return 1;
     }
+    add_scale_menu(window);
     g_net_window = window;
     {
         char net_value[128];

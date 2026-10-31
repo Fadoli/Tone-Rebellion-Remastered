@@ -9,7 +9,7 @@
    (wait for the 50 ms frame clock like the game), --bench-out FILE
    (default bench_report.txt next to the executable), --bench-profile,
    --bench-dump FILE (the last composed frame as a 640x480 BMP),
-   --bench-screen title|newgame|map. */
+   --bench-screen title|newgame|map, --bench-client WxH. */
 
 enum { BENCH_PHASE_IDLE, BENCH_PHASE_SIM, BENCH_PHASE_RENDER,
        BENCH_PHASE_PRESENT, BENCH_PHASE_COUNT };
@@ -437,6 +437,23 @@ static int bench_run(HWND window, const char *command_line)
         if (game_session_floater_is_active(&g_game_session.floaters[frame]))
             ++active;
 
+    {
+        /* --bench-client WxH: the client size to present into. */
+        char size[32];
+        unsigned width;
+        unsigned height;
+        if (command_line_value(command_line, "--bench-client", size,
+                               sizeof(size)) &&
+            sscanf(size, "%ux%u", &width, &height) == 2 &&
+            width > 0U && height > 0U) {
+            RECT frame = {0, 0, (LONG)width, (LONG)height};
+            (void)AdjustWindowRect(&frame, WS_OVERLAPPEDWINDOW, FALSE);
+            SetWindowPos(window, NULL, 0, 0, frame.right - frame.left,
+                         frame.bottom - frame.top,
+                         SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+            bench_pump_messages();
+        }
+    }
     GetClientRect(window, &client);
     screen = GetDC(window);
     if (!ensure_paint_buffer(screen)) {
