@@ -71,7 +71,7 @@ file refuse, écart assumé), largeur et lignes du renvoi de la description non 
 ### Stock Build Tone sur un pad vide (REA, ev_e0431074…, ev_6c3c4063…, ev_e47de0c0…, ev_acac67a2…)
 
 Observation: `FUN_0040bf98` et ses appelants (`FUN_0040b2e6`, `FUN_0040d43d`, `FUN_0040b09a`) ne lisent jamais `+0x28`. Les lecteurs de `+0x28` qui dessinent exigent un site `+0x10 == 0x2a` (Hall) : `FUN_004459e6` (liste des tâches : icône `bildtone` + jauge `+0x28 / (+0x4a*0x32+0x96)`) et `FUN_00440567` (panneau, nombres); `FUN_0045858a` lit un enregistrement de stride 0x80 non identifié. Le `bildtone` de `FUN_0040bf98` est le marqueur PROD par objet, pas un stock.
-Interprétation: `+0x28` est le stock du Hall; aucun affichage natif de Build Tone déposé sur un pad n'est établi. Le port ne dessine donc plus l'icône + nombre sur le pad (placeholder retiré).
+Correction (REA `ev_2383b2e1…`, `ev_a294ffae…`): le rendu de pad `FUN_0040ae4d` dessine l'anneau PADS puis un tas `bildtone` frame `min(+0x28 − 1, 0x31)` quand `+0x10 == 1` et `+0x24 == 1`; `FUN_004503bd` pose cet état au premier dépôt de Build Tone sur un pad vide de classe 0. Le port dessine ce tas (voir `docs/graphics/pool-and-sites.md`).
 Limites: balayage partiel (comparaisons, disp32/SIB, ~20 candidats non lus, appelants de `0x440567`/`0x4459e6` non vérifiés); `FUN_00465793` non lu.
 
 ### Survol, couleur du cadre et description (REA, ev_c2f8746e…, ev_d9ec1bc8…, ev_14b842bd…, ev_24aea2d9…, ev_ddd2a7e7…, ev_342f06e5…)

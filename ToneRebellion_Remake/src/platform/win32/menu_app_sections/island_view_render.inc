@@ -851,35 +851,22 @@ static void render_island_view(HDC dc)
                 g_pad_catalog.items[runtime_item_id].tribe == PAD_TRIBE_LEVIATHAN;
             int is_item_render_site = is_construction_site ||
                 is_leviathan_building_on_tone;
+            /* FUN_0040ae4d keeps the PADS ring under a resource pile
+               (+0x10 == 1, +0x24 1..3); only trigger codes 5.. replace it. */
+            int resource_pile = runtime_location != NULL &&
+                runtime_location->record_value_10 == 1 &&
+                runtime_location->record_value_24 >= 1 &&
+                runtime_location->record_value_24 <= 3;
             int occupied = is_item_render_site && runtime_location != NULL &&
-                runtime_location->record_value_10 > 0;
-            int has_runtime_item = is_item_render_site
+                runtime_location->record_value_10 > 0 && !resource_pile;
+            int has_runtime_item = is_item_render_site && !resource_pile
                 ? draw_runtime_item(dc, runtime_location, x, y) : 0;
             if (occupied && !has_runtime_item &&
                 !draw_ground_item_icon(dc, runtime_location, x, y)) {
                 draw_ground_item_fallback(dc, runtime_location, x, y);
             }
             if (has_runtime_item || occupied) drew_location = 1;
-            else if (is_construction_site && g_game_session_valid &&
-                     g_tone_field_art.frame_count == 40 &&
-                     game_session_construction_task_slot(&g_game_session,
-                         (int16_t)g_game_session.config.selected_tribe,
-                         (uint16_t)g_menu.selected_map_island,
-                         (uint16_t)location_index) >= 0) {
-                /* Remake addition: no native marker for a pending CONSTR
-                   task was found (FUN_0040bf98/FUN_0040ab42 do not read the
-                   task table). The active tribe's pending build shows the
-                   POOL tone art in place of the PADS ring; a click opens
-                   the task (island_interaction). */
-                draw_sprite(dc, &g_tone_field_art,
-                            ISLAND_TONE_POOL_BASE_FRAME, x, y);
-                draw_sprite(dc, &g_tone_field_art,
-                            island_tone_pool_frame(
-                                ISLAND_TONE_POOL_ITEM_DEFAULT,
-                                g_menu.animation_ticks),
-                            x, y);
-                drew_location = 1;
-            } else if (island_site_should_draw_pad(pad_group, occupied) &&
+            else if (island_site_should_draw_pad(pad_group, occupied) &&
                                           g_pad_art.frame_count == 27) {
                 uint32_t frame = island_pad_frame(g_menu.animation_ticks,
                                                   location->x,
@@ -888,10 +875,27 @@ static void render_island_view(HDC dc)
                 draw_sprite(dc, &g_pad_art, frame, x, y);
                 drew_location = 1;
             }
-            /* No native overlay shows Build Tone deposited on an empty pad:
-               the object painter FUN_0040bf98 never reads site +0x28, and the
-               readers found (FUN_004459e6, FUN_00440567) gate on hall sites
-               (+0x10 == 0x2a). The former icon + count was invented. */
+            /* FUN_0040ae4d draws the PADS ring, then the pad's resource pile:
+               FUN_004502dc gives +0x24 when +0x10 == 1, and code 1 selects
+               bildtone frame min(+0x28 - 1, 0x31) at the site point
+               (ev_2383b2e1, ev_c3e3a1fb). FUN_004503bd turns an empty
+               class-0 pad into that state on the first Build Tone deposit
+               (ev_a294ffae); the port keeps +0x10 at 0 and stores the
+               deposit in resource_stock[0], so both states draw the pile. */
+            if (is_construction_site && runtime_location != NULL &&
+                (runtime_location->record_value_10 == 0 ||
+                 (runtime_location->record_value_10 == 1 &&
+                  runtime_location->record_value_24 == 1)) &&
+                runtime_location->resource_stock[GAME_RESOURCE_BUILD_TONE] != 0 &&
+                g_bildtone_art.frame_count != 0) {
+                uint32_t frame = (uint32_t)runtime_location->resource_stock[
+                    GAME_RESOURCE_BUILD_TONE] - 1U;
+                if (frame > 0x31U) frame = 0x31U;
+                if (frame >= g_bildtone_art.frame_count)
+                    frame = g_bildtone_art.frame_count - 1U;
+                draw_sprite(dc, &g_bildtone_art, frame, x, y);
+                drew_location = 1;
+            }
         }
         if (drew_location) continue;
         }
