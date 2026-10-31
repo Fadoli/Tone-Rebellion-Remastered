@@ -1187,6 +1187,37 @@ static int continue_as_construction_finisher(GameSession *session,
     return 1;
 }
 
+/* Ends a state-4 delivery. FUN_004211bb reaches step +0x46 == -1 once the
+   cargo is handed over; for a type-4 order with item 5..33 (DARTIFACT) it
+   then calls FUN_00421ec1(-1) and FUN_00466533 on the task slot, so the
+   artifact task is retired instead of staying queued without cargo. */
+static void finish_delivery_order(GameSession *session,
+                                  GameFloaterStart *floater, int16_t code)
+{
+    int16_t slot = floater->linked_task_slot;
+    int close_task = code >= GAME_INVENTORY_ITEM_FIRST_ID &&
+        code < GAME_INVENTORY_ITEM_FIRST_ID + GAME_INVENTORY_ITEM_COUNT &&
+        floater->carried_resource_code == 0 &&
+        slot >= 0 && slot < GAME_SESSION_MAX_PENDING_EVENTS &&
+        session->pending_events[(uint8_t)slot].active != 0 &&
+        session->pending_events[(uint8_t)slot].action_type == 4 &&
+        session->pending_events[(uint8_t)slot].payload_12 == code;
+    GamePendingEvent expected;
+
+    if (close_task) expected = session->pending_events[(uint8_t)slot];
+    floater->source_runtime_flags &= ~1U;
+    floater->active_order_action = 0;
+    release_task_claim(session, floater);
+    floater->has_move_order = 0;
+    floater->movement_state = 0;
+    floater->order_timer = 0;
+    floater->has_wander_order = 1;
+    floater->wander_timer = 0;
+    if (close_task)
+        (void)game_session_dispatch_task_command(session, (uint8_t)slot, 12,
+                                                 &expected);
+}
+
 void game_session_advance_local_resource_task(GameSession *session,
                                        const PadCatalog *catalog,
                                        GameFloaterStart *floater)
@@ -1524,14 +1555,7 @@ void game_session_advance_local_resource_task(GameSession *session,
         credit_floater_delivery(session, floater, code);
         if (continue_as_construction_finisher(session, catalog, floater))
             return;
-        floater->source_runtime_flags &= ~1U;
-        floater->active_order_action = 0;
-        release_task_claim(session, floater);
-        floater->has_move_order = 0;
-        floater->movement_state = 0;
-        floater->order_timer = 0;
-        floater->has_wander_order = 1;
-        floater->wander_timer = 0;
+        finish_delivery_order(session, floater, code);
         return;
     }
 
@@ -1539,14 +1563,7 @@ void game_session_advance_local_resource_task(GameSession *session,
        receiver without the 20-tick Hall wait. */
     credit_floater_delivery(session, floater, code);
     if (continue_as_construction_finisher(session, catalog, floater)) return;
-    floater->active_order_action = 0;
-    release_task_claim(session, floater);
-    floater->has_move_order = 0;
-    floater->movement_state = 0;
-    floater->order_timer = 0;
-    floater->source_runtime_flags &= ~1U;
-    floater->has_wander_order = 1;
-    floater->wander_timer = 0;
+    finish_delivery_order(session, floater, code);
 }
 
 #include "game_session_delivery_internal.h"
