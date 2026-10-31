@@ -18,6 +18,14 @@ Contribuer à la décompilation statique de `C:\Program Files\Tone\FLOAT.EXE` en
 - Pour toute nouvelle analyse REA, déléguer la lecture ciblée des preuves à un sous-agent `haiku 5.5` (`claude-haiku-5-5`, sous Claude Code; `gpt-6-luna` sous Codex), effort `medium`. Lui demander un résultat bref avec Evidence IDs, faits directs et inconnues; garder la coordination et les échanges au minimum. Ne pas déléguer les modifications du remake sans besoin explicite.
 - Garder la documentation concise : ne répéter ni pseudocode ni faits déjà consignés. Ajouter les observations, Evidence IDs, interprétations et limites nécessaires à la décision; mettre le détail de fonction dans `functions/` et résumer les ports dans le guide et le TODO.
 
+## Autonomie d'investigation
+
+- Décider seul de poursuivre l'examen : ne jamais s'arrêter sur une inconnue, une fonction « non décompilée », un balayage incomplet ou une affirmation « non vérifiée » quand REA peut la lever. Décompiler la fonction, lire le corps complet, finir la pagination, vérifier l'ECX/les arguments avec `procedure_assembly`, puis relancer un sous-agent jusqu'à ce que la question soit tranchée ou prouvée irréductible par l'analyse statique.
+- Ne pas rendre la main à l'utilisateur pour demander « garder tracer ? » ou « heuristique ? » : choisir la piste la plus probable, l'exécuter, puis rapporter le résultat. Ne demander qu'un arbitrage réellement hors de portée du code et de REA (choix de produit, action irréversible).
+- Avant de livrer, relire sa propre liste d'inconnues : chaque ligne « non lu », « non décompilé », « à vérifier » doit être traitée dans le même tour ou justifiée par un blocage concret (outil indisponible, corps absent). Ne jamais présenter une lacune comme un point à confirmer plus tard.
+- Ne jamais porter une heuristique à la place d'une preuve tant que des pistes REA restent ouvertes ; si une heuristique est inévitable, la marquer comme interprétation avec la raison du blocage.
+- Corriger ses propres hypothèses dès qu'une observation les contredit (ex. un champ lu à la mauvaise structure) et chercher dans les notes existantes (`behavior/`, `functions/`) avant de relancer une analyse.
+
 ## Inventaire et décompilation
 
 - Conserver une entrée `index.jsonl` par procédure, avec adresse, nom actuel, classification (`internal`, `thunk`, `external`, `runtime` ou `unknown`), état, appels directs, chaînes référencées, Evidence ID(s), limites et motif si non décompilée.
