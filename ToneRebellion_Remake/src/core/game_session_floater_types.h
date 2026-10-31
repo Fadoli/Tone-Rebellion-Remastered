@@ -47,6 +47,8 @@ typedef struct GameFloaterStart {
     /* Draw state of that IMPACT instance: damage-derived level and the world
        position it was started at (the target's, an interpretation). */
     uint8_t attack_effect_level;
+    /* Set when a fltinf atteff effect replaces the realm IMPACT drawing. */
+    uint8_t attack_effect_hidden;
     uint16_t attack_effect_x;
     uint16_t attack_effect_y;
     /* Raw floater +0x24: death timer for flag 0x008 and pulse counter for
@@ -196,6 +198,24 @@ typedef struct GameSession {
         uint8_t visual_phase;
     } cast_effects[GAME_SESSION_MAX_CAST_EFFECTS];
     uint8_t active_cast_effect_count;
+    /* fltinf atteff per floater.txt row (FUN_00415fc6 path A): the effects.txt
+       defs plus each row's def index and attxy spawn offset. */
+    FloaterEffectDef attack_effect_defs[FLOATER_EFFECT_MAX];
+    int16_t attack_effect_row_def[FLOATER_CATALOG_ROW_COUNT];
+    int16_t attack_effect_row_offset_x[FLOATER_CATALOG_ROW_COUNT];
+    int16_t attack_effect_row_offset_y[FLOATER_CATALOG_ROW_COUNT];
+    /* Visual-only instances of those effects (ONESHOT, BULLET, CAST+CHAIN). */
+    struct GameAttackVisual {
+        uint8_t active;
+        int16_t def;
+        uint8_t level;
+        uint16_t frame;      /* 0-based absolute frame in the def's shape */
+        uint16_t ticks;      /* odd updates lived (BULLET timeout) */
+        uint16_t x, y;
+        int16_t target_floater; /* -1: fixed destination */
+        uint16_t target_x, target_y;
+        uint8_t island_index;
+    } attack_visuals[GAME_SESSION_MAX_CAST_EFFECTS];
     /* Tower bolts reuse the source effect's per-frame target pursuit and
        impact damage path; the platform resolves the source EFFECTS SHP art. */
     GameDefenseProjectile defense_projectiles[32];

@@ -125,6 +125,7 @@ static SpriteSheet g_diplomacy_art;
 static SpriteSheet g_leviathan_projectile_art[4];
 static SpriteSheet g_leviathan_impact_art[4];
 static SpriteSheet g_cast_effect_art[GAME_CAST_VISUAL_COUNT];
+static SpriteSheet g_attack_effect_art[FLOATER_EFFECT_MAX];
 static SpriteSheet g_building_art[PAD_CATALOG_MAX_ITEMS];
 static SpriteSheet g_initial_floater_bodies[4];
 static SpriteSheet g_initial_floater_legs[4];

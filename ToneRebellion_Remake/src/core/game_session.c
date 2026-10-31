@@ -57,6 +57,19 @@ int game_session_initialize(const WorldDefinition *world,
 
     memset(&next, 0, sizeof(next));
     next.config = *config;
+    {
+        unsigned int row;
+        memcpy(next.attack_effect_defs, floater_catalog->effects,
+               sizeof(next.attack_effect_defs));
+        for (row = 0; row < FLOATER_CATALOG_ROW_COUNT; ++row) {
+            next.attack_effect_row_def[row] =
+                floater_catalog->rows[row].attack_effect_def;
+            next.attack_effect_row_offset_x[row] =
+                floater_catalog->rows[row].attack_offset_x;
+            next.attack_effect_row_offset_y[row] =
+                floater_catalog->rows[row].attack_offset_y;
+        }
+    }
     memcpy(next.effect_impact_frame_counts, floater_catalog->impact_frame_counts,
            sizeof(next.effect_impact_frame_counts));
     memcpy(next.effect_impact_frame_starts, floater_catalog->impact_frame_starts,

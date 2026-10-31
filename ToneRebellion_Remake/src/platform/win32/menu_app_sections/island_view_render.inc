@@ -742,6 +742,28 @@ static void render_island_view(HDC dc)
             if (frame >= effect_art->frame_count) continue;
             draw_sprite(dc, effect_art, frame, x, y);
         }
+        /* fltinf atteff effects (FUN_00415fc6 path A): ONESHOT, BULLET and
+           CAST+CHAIN instances; world anchor is an interpretation. */
+        for (projectile_index = 0; projectile_index < GAME_SESSION_MAX_CAST_EFFECTS;
+             ++projectile_index) {
+            int def_index;
+            unsigned int effect_frame;
+            uint16_t world_x;
+            uint16_t world_y;
+            uint8_t effect_island;
+            const SpriteSheet *effect_art;
+            int x;
+            if (!game_session_attack_visual(&g_game_session, projectile_index,
+                    &def_index, &effect_frame, &world_x, &world_y,
+                    &effect_island)) continue;
+            if (effect_island != g_menu.selected_map_island ||
+                def_index < 0 || def_index >= FLOATER_EFFECT_MAX) continue;
+            effect_art = &g_attack_effect_art[def_index];
+            if (effect_frame >= effect_art->frame_count) continue;
+            x = (int)world_x - g_island_scroll_x;
+            if (x < -64 || x >= LOGICAL_WIDTH + 64) continue;
+            draw_sprite(dc, effect_art, effect_frame, x, image_top + (int)world_y);
+        }
         /* Floater attack hit: the realm IMPACT instance FUN_0041e569 starts
            when damage lands (frames per effects.txt). The target anchor is an
            interpretation, as for tower bolt impacts. */

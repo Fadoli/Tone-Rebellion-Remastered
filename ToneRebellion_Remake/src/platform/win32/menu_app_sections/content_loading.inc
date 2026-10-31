@@ -222,6 +222,8 @@ static int load_building_render_catalog(char *error, size_t error_capacity)
                                          &floaters, error, error_capacity) ||
         !floater_catalog_load_impact_effects(effects_bytes, effects_member->length,
                                              &floaters, error, error_capacity) ||
+        !floater_catalog_load_effect_defs(effects_bytes, effects_member->length,
+                                          &floaters, error, error_capacity) ||
         !building_render_catalog_load(animation_bytes, animation_member->length,
                                        &pads, &animations, error, error_capacity)) {
         goto done;
@@ -690,6 +692,8 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     }
     for (unsigned int effect_index = 0; effect_index < GAME_CAST_VISUAL_COUNT; ++effect_index)
         free_sprite_sheet(&g_cast_effect_art[effect_index]);
+    for (unsigned int effect_index = 0; effect_index < FLOATER_EFFECT_MAX; ++effect_index)
+        free_sprite_sheet(&g_attack_effect_art[effect_index]);
     free_sprite_sheet(&g_floater_info_art);
     free_sprite_sheet(&g_hall_command_art);
     free_sprite_sheet(&g_glyph_inventory_art);

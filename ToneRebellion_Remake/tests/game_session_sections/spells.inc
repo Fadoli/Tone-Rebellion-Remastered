@@ -598,3 +598,181 @@ static void test_attack_impact_visual_steps_one_frame_per_odd_update(void)
     assert(!game_session_attack_effect_visual(&session, 0, &realm, &frame, &x, &y));
     assert(session.active_attack_effect_count == 0);
 }
+
+static const char test_effects_text[] =
+    "// test\n"
+    "EFFECT BHOOD\nTYPE ONESHOT\nREALM PHY\nSHAPE PT1B\n"
+    "LEVELFRAMES 4 1,15 16,30 31,46 47,62\nSOUND BHOOD\n\n"
+    "EFFECT GAZECAST\nTYPE CAST\nREALM SUP\nSHAPE PT2CAST\n"
+    "LEVELFRAMES 1 1,3\nCHAIN GAZER\n\n"
+    "EFFECT GAZER\nTYPE BULLET\nREALM SUP\nSHAPE PT2B\n"
+    "LEVELFRAMES 4 1,7 8,14 15,21 22,28\n\n"
+    "EFFECT LTNG\nTYPE LIGHTNING\n;SHAPE IGNORED\nSHAPE M-FXTR2\n"
+    "LEVELFRAMES 1 1,6\nSPEED 13\n";
+
+static void test_effect_defs_parse_types_levels_chain_and_speed(void)
+{
+    static FloaterCatalog catalog;
+    char error[96] = "";
+
+    memset(&catalog, 0, sizeof(catalog));
+    strcpy(catalog.rows[1].attack_effect_name, "gazecast");
+    strcpy(catalog.rows[2].attack_effect_name, "BHOOD");
+    strcpy(catalog.rows[3].attack_effect_name, "nosuch");
+    assert(floater_catalog_load_effect_defs(
+        (const unsigned char *)test_effects_text, sizeof(test_effects_text) - 1U,
+        &catalog, error, sizeof(error)));
+    assert(catalog.effect_count == 4);
+    assert(catalog.effects[0].type == FLOATER_EFFECT_ONESHOT);
+    assert(catalog.effects[0].level_count == 4 && catalog.effects[0].speed == 5);
+    assert(catalog.effects[0].level_start[1] == 15 &&
+           catalog.effects[0].level_frames[1] == 15);
+    assert(catalog.effects[1].type == FLOATER_EFFECT_CAST &&
+           catalog.effects[1].chain == 2); /* GAZECAST -> GAZER */
+    assert(strcmp(catalog.effects[2].shape, "PT2B") == 0);
+    assert(catalog.effects[3].type == FLOATER_EFFECT_LIGHTNING &&
+           catalog.effects[3].speed == 13 &&
+           strcmp(catalog.effects[3].shape, "M-FXTR2") == 0);
+    assert(catalog.rows[1].attack_effect_def == 1); /* case-insensitive */
+    assert(catalog.rows[2].attack_effect_def == 0);
+    assert(catalog.rows[3].attack_effect_def == -1);
+    assert(catalog.rows[0].attack_effect_def == -1);
+    assert(!floater_catalog_load_effect_defs(
+        (const unsigned char *)"EFFECT X\nLEVELFRAMES 9 1,2\n", 27, &catalog,
+        error, sizeof(error)));
+    assert(!floater_catalog_load_effect_defs(NULL, 0, &catalog, error, sizeof(error)));
+}
+
+static void setup_attack_visual_session(GameSession *session, uint8_t type,
+                                        uint8_t subtype, int16_t def_index)
+{
+    static FloaterCatalog catalog;
+    int row;
+    memset(&catalog, 0, sizeof(catalog));
+    assert(floater_catalog_load_effect_defs(
+        (const unsigned char *)test_effects_text, sizeof(test_effects_text) - 1U,
+        &catalog, NULL, 0));
+    memset(session, 0, sizeof(*session));
+    session->island_count = 1;
+    for (row = 0; row < FLOATER_CATALOG_ROW_COUNT; ++row)
+        session->attack_effect_row_def[row] = -1;
+    memcpy(session->attack_effect_defs, catalog.effects, sizeof(catalog.effects));
+    row = type == 4 ? subtype + 27 : type * 9 + subtype;
+    session->attack_effect_row_def[row] = def_index;
+    session->attack_effect_row_offset_x[row] = 10;
+    session->attack_effect_row_offset_y[row] = -4;
+}
+
+static void test_oneshot_attack_visual_plays_once_at_the_attacker(void)
+{
+    static GameSession session;
+    GameFloaterStart *attacker;
+    int def = -1;
+    unsigned int frame = 0;
+    uint16_t x = 0;
+    uint16_t y = 0;
+    uint8_t island = 9;
+    unsigned int tick;
+
+    setup_attack_visual_session(&session, 1, 1, 0); /* BHOOD */
+    attacker = spell_caster(&session, 0, 0, 0, 1);  /* level 1: frames 16..30 */
+    attacker->type_index = 1;
+    attacker->source_subtype = 1;
+    assert(game_session_spawn_attack_visual(&session, attacker, 6, 50, 50));
+    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island));
+    assert(def == 0 && frame == 15 && x == 1000 && y == 1000 && island == 0);
+    for (tick = 0; tick < 14; ++tick) game_session_tick_combat_effects(&session, 1);
+    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island));
+    assert(frame == 29);
+    game_session_tick_combat_effects(&session, 1);
+    assert(!game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island));
+    /* Even ticks never step. */
+    assert(game_session_spawn_attack_visual(&session, attacker, 6, 50, 50));
+    game_session_tick_combat_effects(&session, 2);
+    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island));
+    assert(frame == 15);
+}
+
+static void test_cast_attack_visual_chains_into_a_bullet_that_reaches_its_target(void)
+{
+    static GameSession session;
+    GameFloaterStart *attacker;
+    int def = -1;
+    unsigned int frame = 0;
+    uint16_t x = 0;
+    uint16_t y = 0;
+    uint8_t island = 0;
+    unsigned int tick;
+
+    setup_attack_visual_session(&session, 1, 2, 1); /* GAZECAST -> GAZER */
+    attacker = spell_caster(&session, 0, 0, 0, 0);
+    attacker->type_index = 1;
+    attacker->source_subtype = 2;
+    attacker->order_target_floater = 1;
+    add_test_worker(&session, 1, 0, 1100, 1000, 4);
+    assert(game_session_spawn_attack_visual(&session, attacker, 6, 1100, 1000));
+    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island));
+    assert(def == 1 && x == 1000); /* cast stays on the attacker, no attxy */
+    for (tick = 0; tick < 3; ++tick) game_session_tick_combat_effects(&session, 1);
+    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island));
+    assert(def == 2 && frame == 0 && x == 1000); /* chained into GAZER */
+    game_session_tick_combat_effects(&session, 1);
+    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island));
+    assert(x == 1005 && y == 1000 && frame == 1); /* SPEED 5 toward the target */
+    session.floaters[1].x = 1200; /* the bullet pursues a moving target */
+    game_session_tick_combat_effects(&session, 1);
+    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island));
+    assert(x == 1010);
+    for (tick = 0; tick < 100 &&
+         game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island);
+         ++tick)
+        game_session_tick_combat_effects(&session, 1);
+    assert(!game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island));
+    assert(tick > 30 && tick < 60); /* ~190 px at 5 px per odd update */
+}
+
+static void test_bullet_visual_applies_attxy_mirroring_and_timeout(void)
+{
+    static GameSession session;
+    GameFloaterStart *attacker;
+    int def;
+    unsigned int frame;
+    uint16_t x;
+    uint16_t y;
+    uint8_t island;
+    unsigned int tick;
+
+    setup_attack_visual_session(&session, 1, 2, 2); /* GAZER bullet */
+    attacker = spell_caster(&session, 0, 0, 0, 0);
+    attacker->type_index = 1;
+    attacker->source_subtype = 2;
+    assert(game_session_spawn_attack_visual(&session, attacker, 7, 60000, 1000));
+    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island));
+    assert(x == 1010 && y == 996);
+    session.attack_visuals[0].active = 0;
+    attacker->facing_left = 1;
+    assert(game_session_spawn_attack_visual(&session, attacker, 7, 60000, 1000));
+    assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island));
+    assert(x == 990 && y == 1004); /* offsets negate when mirrored */
+    /* A far destination ends through the 200-update timeout. */
+    for (tick = 0; tick < 300 &&
+         game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island);
+         ++tick)
+        game_session_tick_combat_effects(&session, 1);
+    assert(tick == 201);
+}
+
+static void test_lightning_and_missing_effects_are_not_spawned(void)
+{
+    static GameSession session;
+    GameFloaterStart *attacker;
+
+    setup_attack_visual_session(&session, 1, 3, 3); /* LIGHTNING */
+    attacker = spell_caster(&session, 0, 0, 0, 0);
+    attacker->type_index = 1;
+    attacker->source_subtype = 3;
+    assert(!game_session_spawn_attack_visual(&session, attacker, 6, 1, 1));
+    attacker->source_subtype = 4; /* row without atteff */
+    assert(!game_session_spawn_attack_visual(&session, attacker, 6, 1, 1));
+    assert(!game_session_spawn_attack_visual(NULL, attacker, 6, 1, 1));
+}

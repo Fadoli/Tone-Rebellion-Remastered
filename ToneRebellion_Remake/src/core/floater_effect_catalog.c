@@ -173,3 +173,160 @@ int floater_catalog_load_impact_effects(const unsigned char *bytes,
            sizeof(parsed_starts));
     return 1;
 }
+
+static int effect_name_equal(const char *a, const char *b)
+{
+    while (*a != '\0' && *b != '\0') {
+        char ca = *a;
+        char cb = *b;
+        if (ca >= 'a' && ca <= 'z') ca = (char)(ca - 'a' + 'A');
+        if (cb >= 'a' && cb <= 'z') cb = (char)(cb - 'a' + 'A');
+        if (ca != cb) return 0;
+        ++a;
+        ++b;
+    }
+    return *a == *b;
+}
+
+static int effect_type_from_name(const char *name)
+{
+    static const char *const names[7] = {
+        "ONESHOT", "BULLET", "LIGHTNING", "IMPACT", "CAST", "SPECIAL",
+        "SOUNDONLY"
+    };
+    unsigned int i;
+    for (i = 0; i < 7; ++i)
+        if (effect_name_equal(name, names[i])) return (int)i;
+    return FLOATER_EFFECT_SOUNDONLY;
+}
+
+/* "<levels> a,b c,d ..." with 1-based inclusive frame ranges. */
+static int parse_effect_levels(char *text, FloaterEffectDef *def)
+{
+    char *cursor = skip_space(text);
+    char *end;
+    long levels = strtol(cursor, &end, 10);
+    long i;
+    if (end == cursor || levels < 1 || levels > FLOATER_IMPACT_LEVEL_COUNT)
+        return 0;
+    cursor = end;
+    for (i = 0; i < levels; ++i) {
+        long first;
+        long last;
+        cursor = skip_space(cursor);
+        first = strtol(cursor, &end, 10);
+        if (end == cursor || *end != ',') return 0;
+        cursor = end + 1;
+        last = strtol(cursor, &end, 10);
+        if (end == cursor || first < 1 || last < first || last > 255) return 0;
+        def->level_start[i] = (uint8_t)(first - 1);
+        def->level_frames[i] = (uint8_t)(last - first + 1);
+        cursor = end;
+    }
+    def->level_count = (uint8_t)levels;
+    return 1;
+}
+
+static int find_effect(const FloaterCatalog *catalog, const char *name)
+{
+    unsigned int i;
+    for (i = 0; i < catalog->effect_count; ++i)
+        if (effect_name_equal(catalog->effects[i].name, name)) return (int)i;
+    return -1;
+}
+
+int floater_catalog_load_effect_defs(const unsigned char *bytes, size_t length,
+                                     FloaterCatalog *catalog, char *error,
+                                     size_t error_capacity)
+{
+    char chain_names[FLOATER_EFFECT_MAX][FLOATER_EFFECT_NAME_CAPACITY];
+    FloaterEffectDef *current = NULL;
+    size_t position = 0;
+    size_t line_number = 0;
+    unsigned int index;
+
+    if (error != NULL && error_capacity != 0) error[0] = '\0';
+    if (bytes == NULL || catalog == NULL) {
+        set_error(error, error_capacity, "invalid effect catalog arguments", 0);
+        return 0;
+    }
+    memset(catalog->effects, 0, sizeof(catalog->effects));
+    memset(chain_names, 0, sizeof(chain_names));
+    catalog->effect_count = 0;
+    while (position < length) {
+        char line[EFFECT_LINE_CAPACITY];
+        size_t start = position;
+        size_t line_length;
+        char key[EFFECT_NAME_CAPACITY];
+        char value[EFFECT_NAME_CAPACITY];
+        char *comment;
+        char *content;
+        char *argument;
+
+        while (position < length && bytes[position] != '\n' &&
+               bytes[position] != 0x1a) ++position;
+        line_length = position - start;
+        if (position < length && bytes[position] == '\n') ++position;
+        else if (position < length && bytes[position] == 0x1a) position = length;
+        ++line_number;
+        if (line_length >= sizeof(line)) {
+            set_error(error, error_capacity, "line is too long", line_number);
+            return 0;
+        }
+        memcpy(line, bytes + start, line_length);
+        line[line_length] = '\0';
+        comment = strstr(line, "//");
+        if (comment != NULL) *comment = '\0';
+        content = skip_space(line);
+        if (*content == '\0' || *content == ';' ||
+            sscanf(content, "%31s %31s", key, value) != 2) continue;
+        argument = content;
+        while (*argument != '\0' && *argument != ' ' && *argument != '\t') ++argument;
+        argument = skip_space(argument);
+
+        if (strcmp(key, "EFFECT") == 0) {
+            if (catalog->effect_count >= FLOATER_EFFECT_MAX ||
+                strlen(value) >= FLOATER_EFFECT_NAME_CAPACITY) {
+                set_error(error, error_capacity, "too many or too long effects",
+                          line_number);
+                return 0;
+            }
+            current = &catalog->effects[catalog->effect_count++];
+            memcpy(current->name, value, strlen(value) + 1);
+            current->type = FLOATER_EFFECT_SOUNDONLY;
+            current->speed = 5; /* FUN_004153b8 default */
+            current->chain = -1;
+        } else if (current == NULL) {
+            continue;
+        } else if (strcmp(key, "TYPE") == 0) {
+            current->type = (uint8_t)effect_type_from_name(value);
+        } else if (strcmp(key, "SHAPE") == 0) {
+            if (strlen(value) >= FLOATER_EFFECT_NAME_CAPACITY) {
+                set_error(error, error_capacity, "shape name too long", line_number);
+                return 0;
+            }
+            memcpy(current->shape, value, strlen(value) + 1);
+        } else if (strcmp(key, "SPEED") == 0) {
+            current->speed = (int16_t)atoi(value);
+        } else if (strcmp(key, "CHAIN") == 0) {
+            memcpy(chain_names[current - catalog->effects], value,
+                   strlen(value) + 1);
+        } else if (strcmp(key, "LEVELFRAMES") == 0) {
+            if (!parse_effect_levels(argument, current)) {
+                set_error(error, error_capacity, "invalid LEVELFRAMES", line_number);
+                return 0;
+            }
+        }
+    }
+    for (index = 0; index < catalog->effect_count; ++index) {
+        if (chain_names[index][0] != '\0')
+            catalog->effects[index].chain =
+                (int16_t)find_effect(catalog, chain_names[index]);
+    }
+    for (index = 0; index < FLOATER_CATALOG_ROW_COUNT; ++index) {
+        FloaterStats *row = &catalog->rows[index];
+        row->attack_effect_def = row->attack_effect_name[0] != '\0'
+            ? (int16_t)find_effect(catalog, row->attack_effect_name) : -1;
+    }
+    return 1;
+}

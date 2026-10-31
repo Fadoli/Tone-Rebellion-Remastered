@@ -26,6 +26,11 @@ void game_session_clear_cast_site(GameSession *session,
                                   uint16_t location_index,
                                   GameRuntimeLocation *target);
 
+int game_session_spawn_attack_visual(GameSession *session,
+                                     const GameFloaterStart *attacker,
+                                     uint8_t state, uint16_t target_x,
+                                     uint16_t target_y);
+
 void game_session_start_attack_effect(GameSession *session,
                                      GameFloaterStart *attacker,
                                      int32_t damage,

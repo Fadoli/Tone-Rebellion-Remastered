@@ -501,6 +501,31 @@ static int load_island_surface(int island_id, int map_island_index,
         memset(&defense_impact_candidates[hall_index], 0,
                sizeof(defense_impact_candidates[hall_index]));
     }
+    /* fltinf atteff sheets (effects.txt SHAPE, data\<shape>.shp): best effort,
+       a missing sheet only hides that effect. */
+    {
+        unsigned int effect_index;
+        for (effect_index = 0; effect_index < FLOATER_EFFECT_MAX; ++effect_index)
+            free_sprite_sheet(&g_attack_effect_art[effect_index]);
+        for (effect_index = 0; effect_index < g_floater_catalog.effect_count;
+             ++effect_index) {
+            const FloaterEffectDef *effect = &g_floater_catalog.effects[effect_index];
+            char member[48];
+            char effect_error[96];
+            size_t c;
+            if (effect->type != FLOATER_EFFECT_ONESHOT &&
+                effect->type != FLOATER_EFFECT_BULLET &&
+                effect->type != FLOATER_EFFECT_CAST) continue;
+            (void)snprintf(member, sizeof(member), "data\%s.shp", effect->shape);
+            for (c = 0; member[c] != '\0'; ++c)
+                if (member[c] >= 'A' && member[c] <= 'Z')
+                    member[c] = (char)(member[c] - 'A' + 'a');
+            if (!load_sprite_sheet(&archive, member, palette,
+                    &g_attack_effect_art[effect_index], effect_error,
+                    sizeof(effect_error)))
+                free_sprite_sheet(&g_attack_effect_art[effect_index]);
+        }
+    }
     for (hall_index = 0; hall_index < GAME_CAST_VISUAL_COUNT; ++hall_index) {
         free_sprite_sheet(&g_cast_effect_art[hall_index]);
         g_cast_effect_art[hall_index] = cast_effect_candidates[hall_index];

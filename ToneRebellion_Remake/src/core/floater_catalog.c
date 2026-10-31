@@ -127,6 +127,9 @@ typedef struct FloaterAnimationEntry {
     int16_t ticks_per_frame;
     uint8_t attack_ping_pong;
     uint8_t has_attack;
+    char attack_effect[FLOATER_EFFECT_NAME_CAPACITY];
+    int16_t attack_offset_x;
+    int16_t attack_offset_y;
 } FloaterAnimationEntry;
 
 static int parse_attack_animation(const char *line, FloaterAnimationEntry *entry)
@@ -209,6 +212,24 @@ int floater_catalog_load_animations(const unsigned char *bytes, size_t length,
             }
             current_entry = (int)entry_count++;
             memcpy(entries[current_entry].item_name, name, strlen(name) + 1);
+        } else if (ascii_case_equal(tag, "atteff") && current_entry >= 0) {
+            token_status = next_token(&cursor, name, sizeof(name));
+            if (token_status != 1 ||
+                strlen(name) >= sizeof(entries[0].attack_effect)) {
+                set_error(error, error_capacity, "invalid floater atteff", line_number);
+                return 0;
+            }
+            memcpy(entries[current_entry].attack_effect, name, strlen(name) + 1);
+        } else if (ascii_case_equal(tag, "attxy") && current_entry >= 0) {
+            char first[FLOATER_TOKEN_CAPACITY];
+            char second[FLOATER_TOKEN_CAPACITY];
+            if (next_token(&cursor, first, sizeof(first)) != 1 ||
+                next_token(&cursor, second, sizeof(second)) != 1 ||
+                !parse_short(first, &entries[current_entry].attack_offset_x) ||
+                !parse_short(second, &entries[current_entry].attack_offset_y)) {
+                set_error(error, error_capacity, "invalid floater attxy", line_number);
+                return 0;
+            }
         } else if (ascii_case_equal(tag, "attack") && current_entry >= 0) {
             if (!parse_attack_animation(line, &entries[current_entry])) {
                 set_error(error, error_capacity, "invalid floater attack animation", line_number);
@@ -235,12 +256,20 @@ int floater_catalog_load_animations(const unsigned char *bytes, size_t length,
         row->attack_frame_ticks_per_frame = 0;
         row->attack_frame_duration = 0;
         row->attack_frame_ping_pong = 0;
+        row->attack_effect_name[0] = '\0';
+        row->attack_effect_def = -1;
+        row->attack_offset_x = 0;
+        row->attack_offset_y = 0;
         for (animation_index = 0; animation_index < entry_count; ++animation_index) {
             const FloaterAnimationEntry *entry = &entries[animation_index];
             int32_t period;
             int32_t frame_duration;
             if (!ascii_case_equal(row->draw_id, entry->item_name)) continue;
             row->shape_info_index = (int16_t)animation_index;
+            memcpy(row->attack_effect_name, entry->attack_effect,
+                   sizeof(row->attack_effect_name));
+            row->attack_offset_x = entry->attack_offset_x;
+            row->attack_offset_y = entry->attack_offset_y;
             if (!entry->has_attack) break;
             if (entry->attack_start < 0 ||
                 entry->attack_end < entry->attack_start) {

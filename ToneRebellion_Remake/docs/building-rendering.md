@@ -218,3 +218,11 @@ Local data fact: `fltinf.txt` carries a per-item `atteff` (e.g. `ptrain1 bhood`,
 Remake: the hit IMPACT of an attack is drawn at the target (`game_session_attack_effect_visual`, realm from the attacker, level from damage, one frame per odd update). The pre-hit `atteff` effect (ONESHOT/BULLET/LIGHTNING/CAST+CHAIN) is not drawn: spawn timing between `FUN_0041e569` cases 5 and 6, bullet flight and jitter are unverified.
 
 Still unknown: the 32-slot blitter, the effect manager global, `FUN_00416e7d`, and the bodies of `FUN_00450a71` callers.
+
+### atteff effects (pass 5)
+
+Facts (REA, Ghidra output): `FUN_00454d1f` [ev_ad17f928] parses `fltinf.txt`; `atteff <name>` resolves through `FUN_00415f1e` into shape record `+0x48` (default 0xFFFF), `attxy x y` into `+0x4e/+0x50`. `FUN_0041e569` [ev_8578fcc7] cases 5/6 fire once when the attack counter equals `FUN_0042520e`: path A (`FUN_004207c2() == 0` and `+0x48 != -1`) calls `FUN_00415fc6(this, 0, 0)` (the atteff def, at the attacker, bullets shifted by attxy, negated when mirrored); otherwise path B calls it with the realm IMPACT when the damage result is positive. `FUN_00415063`/`FUN_0041521a` step one frame per odd update; a BULLET moves by SPEED toward its target (`FUN_0041511b`, `FUN_00414fbf`) and times out at 200 [ev_04c78e7b]; a CAST finishing switches the slot to its CHAIN def (GAZECAST to GAZER, ...).
+
+Remake: `floater_catalog_load_effect_defs` parses effects.txt and resolves each row's atteff; `game_session_spawn_attack_visual`/`game_session_attack_visual` run ONESHOT, BULLET and CAST+CHAIN instances (the realm IMPACT is hidden when path A applies). Interpretations: level = attacker level nibble (`FUN_0041ff2e` unread), arrival ends a bullet (the original finish/hit handler `FUN_004206fc` is unread), world anchor as for casts. LIGHTNING (`STORMER`, reached via LTNGCAST) is not drawn: its end condition is unknown. Path B's random +/-7 position is not reproduced (impact stays on the target).
+
+Still unknown: the slot blitter, `FUN_0041ff2e`, `FUN_004206fc`, `FUN_00416e7d` callers' roles.

@@ -7,6 +7,7 @@
 
 #include <math.h>
 #include <stdint.h>
+#include <string.h>
 
 enum { GAME_FLOATER_STATE_ATTACK = 6, GAME_FLOATER_STATE_ATTACK_SITE = 7 };
 
@@ -66,6 +67,11 @@ void game_session_tick_floater_combat(GameSession *session,
         int32_t damage = 0;
         uint16_t impact_x = floater->x;
         uint16_t impact_y = floater->y;
+        /* FUN_0041e569 path A: FUN_004207c2() == 0 (category 4 or a charged
+           nonzero subtype) with an atteff def spawns that effect instead of
+           the realm IMPACT, whether or not the hit lands. */
+        int uses_atteff = floater->type_index == 4U ||
+            (floater->source_subtype != 0 && floater->charge_current > 0);
         if (state == GAME_FLOATER_STATE_ATTACK &&
             floater->order_target_floater >= 0 &&
             (unsigned int)floater->order_target_floater < session->floater_count) {
@@ -110,6 +116,11 @@ void game_session_tick_floater_combat(GameSession *session,
         if (damage > 0)
             game_session_start_attack_effect(session, floater, damage,
                                              impact_x, impact_y);
+        if (uses_atteff &&
+            game_session_spawn_attack_visual(session, floater, state, impact_x,
+                                             impact_y) &&
+            floater->attack_effect_active)
+            floater->attack_effect_hidden = 1;
     } else if (floater->attack_timer > floater->attack_period &&
                !floater->attack_effect_active) {
         floater->movement_state = 0;
@@ -1460,6 +1471,154 @@ void game_session_tick_cast_effects(GameSession *session,
 #include "game_session.h"
 #include "game_session_combat_internal.h"
 
+static int attack_effect_row(const GameFloaterStart *floater)
+{
+    int row = floater->type_index == 4U ? (int)floater->source_subtype + 27
+                                        : (int)floater->type_index * 9 +
+                                          (int)floater->source_subtype;
+    return row >= 0 && row < FLOATER_CATALOG_ROW_COUNT ? row : -1;
+}
+
+static uint8_t attack_visual_level(const FloaterEffectDef *def, uint8_t wanted)
+{
+    return def->level_count == 0 ? 0
+        : wanted < def->level_count ? wanted : (uint8_t)(def->level_count - 1U);
+}
+
+int game_session_spawn_attack_visual(GameSession *session,
+                                     const GameFloaterStart *attacker,
+                                     uint8_t state, uint16_t target_x,
+                                     uint16_t target_y)
+{
+    const FloaterEffectDef *def;
+    int row;
+    int def_index;
+    unsigned int slot;
+
+    if (session == NULL || attacker == NULL) return 0;
+    row = attack_effect_row(attacker);
+    if (row < 0) return 0;
+    def_index = session->attack_effect_row_def[row];
+    if (def_index < 0 || def_index >= FLOATER_EFFECT_MAX) return 0;
+    def = &session->attack_effect_defs[def_index];
+    /* LIGHTNING has no known end condition yet; IMPACT/SPECIAL are not
+       attack effects. */
+    if (def->type != FLOATER_EFFECT_ONESHOT &&
+        def->type != FLOATER_EFFECT_BULLET &&
+        def->type != FLOATER_EFFECT_CAST) return 0;
+    if (def->level_count == 0) return 0;
+    for (slot = 0; slot < GAME_SESSION_MAX_CAST_EFFECTS; ++slot) {
+        struct GameAttackVisual *visual = &session->attack_visuals[slot];
+        int32_t x = attacker->x;
+        int32_t y = attacker->y;
+        if (visual->active) continue;
+        if (def->type == FLOATER_EFFECT_BULLET) {
+            /* FUN_00415fc6 adds shape +0x4e/+0x50, negated when mirrored. */
+            int32_t sign = attacker->facing_left ? -1 : 1;
+            x += sign * session->attack_effect_row_offset_x[row];
+            y += sign * session->attack_effect_row_offset_y[row];
+        }
+        memset(visual, 0, sizeof(*visual));
+        visual->active = 1;
+        visual->def = (int16_t)def_index;
+        /* FUN_0041ff2e picks the level; the attacker's level nibble is an
+           interpretation. */
+        visual->level = attack_visual_level(def,
+            (uint8_t)(attacker->attack_level_flags & 0x0fU));
+        visual->frame = def->level_start[visual->level];
+        visual->x = (uint16_t)(x < 0 ? 0 : x);
+        visual->y = (uint16_t)(y < 0 ? 0 : y);
+        visual->island_index = attacker->island_index;
+        visual->target_floater = state == GAME_FLOATER_STATE_ATTACK
+            ? attacker->order_target_floater : -1;
+        visual->target_x = target_x;
+        visual->target_y = target_y;
+        return 1;
+    }
+    return 0;
+}
+
+static void tick_attack_visuals(GameSession *session)
+{
+    unsigned int slot;
+    for (slot = 0; slot < GAME_SESSION_MAX_CAST_EFFECTS; ++slot) {
+        struct GameAttackVisual *visual = &session->attack_visuals[slot];
+        const FloaterEffectDef *def;
+        unsigned int last;
+        if (!visual->active) continue;
+        if (visual->def < 0 || visual->def >= FLOATER_EFFECT_MAX) {
+            visual->active = 0;
+            continue;
+        }
+        def = &session->attack_effect_defs[visual->def];
+        last = (unsigned int)def->level_start[visual->level] +
+               def->level_frames[visual->level] - 1U;
+        /* FUN_00415063/FUN_0041521a advance one frame per odd update. */
+        ++visual->frame;
+        if (def->type == FLOATER_EFFECT_BULLET) {
+            int32_t dx;
+            int32_t dy;
+            double distance;
+            if (visual->frame > last) visual->frame = def->level_start[visual->level];
+            if (visual->target_floater >= 0 &&
+                (unsigned int)visual->target_floater < session->floater_count &&
+                game_session_floater_is_active(
+                    &session->floaters[visual->target_floater])) {
+                visual->target_x = session->floaters[visual->target_floater].x;
+                visual->target_y = session->floaters[visual->target_floater].y;
+            }
+            /* FUN_0041511b: SPEED toward the target, snapping within it. The
+               200-update timeout mirrors FUN_00416ff8's s9 > 200 check. */
+            dx = (int32_t)visual->target_x - visual->x;
+            dy = (int32_t)visual->target_y - visual->y;
+            distance = sqrt((double)dx * dx + (double)dy * dy);
+            if (distance <= (double)def->speed || ++visual->ticks > 200U) {
+                visual->active = 0;
+            } else {
+                visual->x = (uint16_t)((int32_t)visual->x +
+                    cast_round_to_even((double)dx * def->speed / distance));
+                visual->y = (uint16_t)((int32_t)visual->y +
+                    cast_round_to_even((double)dy * def->speed / distance));
+            }
+        } else if (visual->frame > last) {
+            /* ONESHOT ends; CAST chains into its CHAIN def (FUN_00416ff8). */
+            if (def->type == FLOATER_EFFECT_CAST && def->chain >= 0 &&
+                def->chain < FLOATER_EFFECT_MAX) {
+                const FloaterEffectDef *next =
+                    &session->attack_effect_defs[def->chain];
+                if ((next->type == FLOATER_EFFECT_BULLET ||
+                     next->type == FLOATER_EFFECT_ONESHOT) &&
+                    next->level_count != 0) {
+                    visual->def = def->chain;
+                    visual->level = attack_visual_level(next, visual->level);
+                    visual->frame = next->level_start[visual->level];
+                    visual->ticks = 0;
+                    continue;
+                }
+            }
+            visual->active = 0;
+        }
+    }
+}
+
+int game_session_attack_visual(const GameSession *session, unsigned int slot,
+                               int *def, unsigned int *frame, uint16_t *x,
+                               uint16_t *y, uint8_t *island)
+{
+    const struct GameAttackVisual *visual;
+    if (session == NULL || def == NULL || frame == NULL || x == NULL ||
+        y == NULL || island == NULL || slot >= GAME_SESSION_MAX_CAST_EFFECTS)
+        return 0;
+    visual = &session->attack_visuals[slot];
+    if (!visual->active) return 0;
+    *def = visual->def;
+    *frame = visual->frame;
+    *x = visual->x;
+    *y = visual->y;
+    *island = visual->island_index;
+    return 1;
+}
+
 void game_session_start_attack_effect(GameSession *session,
                                      GameFloaterStart *attacker,
                                      int32_t damage,
@@ -1477,6 +1636,7 @@ void game_session_start_attack_effect(GameSession *session,
     frame_count = attacker->attack_impact_frame_counts[level];
     if (frame_count == 0) return;
     attacker->attack_effect_active = 1;
+    attacker->attack_effect_hidden = 0;
     attacker->attack_effect_level = (uint8_t)level;
     attacker->attack_effect_x = target_x;
     attacker->attack_effect_y = target_y;
@@ -1491,6 +1651,7 @@ void game_session_tick_combat_effects(GameSession *session,
     unsigned int i;
 
     if (session == NULL || (source_tick & 1U) == 0) return;
+    tick_attack_visuals(session);
     for (i = 0; i < session->floater_count; ++i) {
         GameFloaterStart *floater = &session->floaters[i];
         if (!game_session_floater_is_active(floater) ||
@@ -1521,8 +1682,8 @@ int game_session_attack_effect_visual(const GameSession *session,
         y == NULL || floater_index >= session->floater_count) return 0;
     floater = &session->floaters[floater_index];
     if (!game_session_floater_is_active(floater) ||
-        !floater->attack_effect_active || floater->attack_effect_level > 3U)
-        return 0;
+        !floater->attack_effect_active || floater->attack_effect_hidden ||
+        floater->attack_effect_level > 3U) return 0;
     level = floater->attack_effect_level;
     frame_count = floater->attack_impact_frame_counts[level];
     if (frame_count == 0 || floater->attack_realm < 0) return 0;
