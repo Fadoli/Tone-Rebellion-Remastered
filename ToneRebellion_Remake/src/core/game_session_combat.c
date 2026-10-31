@@ -35,16 +35,28 @@ static void record_floater_death(GameSession *session,
     }
 }
 
-static int attack_calls_charge_helper(const GameFloaterStart *attacker)
+/* FUN_004204bc: an already dying floater (flag 0x8) is left alone; otherwise
+   the amount is subtracted and a result below 1 starts the death state with
+   its sound and tallies (ev_2016a3eb). Hit points are kept at 0 rather than
+   negative, as in game_session_damage_floater. */
+void game_session_apply_floater_damage(GameSession *session,
+                                       GameFloaterStart *floater,
+                                       int32_t amount,
+                                       int32_t killer_faction)
 {
-    /* FUN_004207c2 returns nonzero unless this is category 4 or a charged
-       nonzero subtype. FUN_0041e569 still calls FUN_004200d2 for those cases
-       when the resolved max-attack-points field is -1. */
-    if (attacker->type_index == 4U ||
-        (attacker->source_subtype != 0 && attacker->charge_current > 0)) {
-        return attacker->max_attack_points == -1;
+    int32_t hit_points;
+
+    if (session == NULL || floater == NULL ||
+        (floater->source_runtime_flags & 0x008U) != 0) return;
+    hit_points = (int32_t)floater->current_hit_points - amount;
+    if (hit_points >= 1) {
+        floater->current_hit_points = (int16_t)hit_points;
+        return;
     }
-    return 1;
+    floater->current_hit_points = 0;
+    floater->source_runtime_flags |= 0x008U;
+    floater->source_death_timer = 0;
+    record_floater_death(session, floater, killer_faction);
 }
 
 int32_t game_session_resolve_attack_hit(GameSession *session,
@@ -57,39 +69,29 @@ int32_t game_session_resolve_attack_hit(GameSession *session,
 
     if (session == NULL || floater_index >= session->floater_count) return 0;
     floater = &session->floaters[floater_index];
+    /* FUN_0041e569 calls FUN_004200d2 / FUN_00420188 with ECX = the attacker
+       and the target as argument (call site 0x41ec64, ev_89fd8492); both
+       bump the attacker's +0x08 on a positive hit and consume one attacker
+       charge (+0x22) per attempt (ev_7eebf882, ev_8a27f55e). */
     if (state == GAME_FLOATER_STATE_ATTACK && target_floater >= 0 &&
         (unsigned int)target_floater < session->floater_count) {
-        GameFloaterStart *target = &session->floaters[(unsigned int)target_floater];
         damage = game_session_damage_floater(session, floater_index,
                                              (unsigned int)target_floater);
-        /* FUN_004200d2 reads +0x22 on the indexed target floater and
-           consumes one charge after resolving this attack attempt. */
-        if (attack_calls_charge_helper(floater)) {
-            if (damage > 0) ++target->source_progress_08;
-            if (target->charge_current > 0) --target->charge_current;
-        }
     } else if (state == GAME_FLOATER_STATE_ATTACK_SITE &&
                floater->island_index < session->island_count &&
                target_location >= 0 &&
                (uint16_t)target_location <
                    session->islands[floater->island_index].location_count) {
-        if (attack_calls_charge_helper(floater)) {
-            GameRuntimeLocation *target =
-                &session->islands[floater->island_index].locations[
-                    (uint16_t)target_location];
-            damage = game_session_damage_site(session, floater_index,
-                floater->island_index, (uint16_t)target_location, target);
-            if (damage > 0) ++target->source_progress_08;
-            /* FUN_00420188 decrements raw +0x22 after every state-7 site
-               attack, even though its low byte also backs the remake's
-               visibility mirror. */
-            if (target->source_value_22 > 0) {
-                --target->source_value_22;
-                target->tribe_visibility_mask =
-                    (uint8_t)target->source_value_22;
-            }
-        }
+        GameRuntimeLocation *target =
+            &session->islands[floater->island_index].locations[
+                (uint16_t)target_location];
+        damage = game_session_damage_site(session, floater_index,
+            floater->island_index, (uint16_t)target_location, target);
+    } else {
+        return 0;
     }
+    if (damage > 0) ++floater->source_progress_08;
+    if (floater->charge_current > 0) --floater->charge_current;
     return damage;
 }
 

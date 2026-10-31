@@ -8,6 +8,10 @@
 int32_t game_session_damage_floater(GameSession *session,
                                     unsigned int attacker_index,
                                     unsigned int target_index);
+void game_session_apply_floater_damage(GameSession *session,
+                                       GameFloaterStart *floater,
+                                       int32_t amount,
+                                       int32_t killer_faction);
 int32_t game_session_damage_floater_from_power(GameSession *session,
                                                unsigned int target_index,
                                                int32_t attack_power);

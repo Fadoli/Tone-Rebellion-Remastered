@@ -153,9 +153,9 @@ static int game_session_advance_category4_subtype9_order(
     }
 
     if ((target->source_flags & 0x200U) != 0) {
-        floater->current_hit_points = 0;
-        floater->source_runtime_flags |= 0x008U;
-        floater->source_death_timer = 0;
+        /* FUN_0041e569 case 0: FUN_004204bc(current hit points, -1). */
+        game_session_apply_floater_damage(session, floater,
+                                          floater->current_hit_points, -1);
         return 0;
     }
 
@@ -571,14 +571,18 @@ int game_session_unlink_floater_charge(GameSession *session,
     return 1;
 }
 
+/* DAT_0049d218: FA_Cast target mode per spell kind (bit 1 site, bit 2
+   floater, bit 4 random point around the caster). */
+static const uint8_t cast_target_modes[23] = {
+    0x01, 0x01, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01,
+    0x04, 0x05, 0x06, 0x01, 0x01, 0x01, 0x00, 0x01,
+    0x05, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01
+};
+
 static int game_session_resolve_cast_destination(
     GameSession *session, GameFloaterStart *floater)
 {
-    static const uint8_t target_modes[23] = {
-        0x01, 0x01, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01,
-        0x04, 0x05, 0x06, 0x01, 0x01, 0x01, 0x00, 0x01,
-        0x05, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01
-    };
+    const uint8_t *target_modes = cast_target_modes;
     int32_t target_x = floater->x;
     int32_t target_y = floater->y;
     int32_t facing_x;
@@ -960,6 +964,38 @@ static int game_session_floater_has_site_speed_bonus(
                ((glyph_mask & 0x0020U) != 0 && base_item_id == 0x2d) ||
                ((glyph_mask & 0x0200U) != 0 && base_item_id == 0x2e);
     }
+}
+
+/* One FUN_00422d27 step toward the stored destination for states without a
+   state-specific speed override (FUN_0041e569 skips it under flags 0x411). */
+static void game_session_step_floater_to_destination(
+    GameSession *session, GameFloaterStart *floater, uint32_t source_tick)
+{
+    FloaterPosition position;
+    FloaterPosition destination;
+    FloaterMotionSpeedContext speed_context;
+
+    if ((floater->source_runtime_flags & 0x411U) != 0) return;
+    position.x = floater->x;
+    position.y = floater->y;
+    destination.x = floater->destination_x;
+    destination.y = floater->destination_y;
+    speed_context.unit_speed = floater->movement_speed;
+    speed_context.owner_slot = floater->owner_slot;
+    speed_context.floater_subtype = floater->source_subtype;
+    speed_context.state = floater->movement_state;
+    speed_context.owner_speed_modifier =
+        floater->owner_slot < GAME_START_PLAYER_COUNT
+            ? session->economy[floater->owner_slot]
+                .floater_speed_boost_timer : 0;
+    speed_context.near_target_override = 0;
+    speed_context.site_speed_bonus =
+        (uint8_t)game_session_floater_has_site_speed_bonus(session, floater);
+    (void)floater_motion_step(&position, destination,
+                              floater_motion_effective_speed(&speed_context),
+                              source_tick);
+    floater->x = (uint16_t)position.x;
+    floater->y = (uint16_t)position.y;
 }
 
 static int game_session_find_birth_location(const GameSession *session,
@@ -1394,19 +1430,45 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
                 -1, -1, 20, 300, -1, -1, 30
             };
             int16_t range = cast_ranges[floater->cast_spell_kind];
+            /* FUN_00423068 resolves the cast destination once through
+               FUN_0042361d when the order starts; a rejected point ends it. */
+            if (floater->order_progress == UINT8_MAX) {
+                if (!game_session_resolve_cast_destination(session, floater)) {
+                    game_session_cancel_cast_order(floater);
+                    continue;
+                }
+                floater->order_progress = 0;
+            }
+            /* FUN_0041e569 steps state 0x13 through FUN_00422d27 (call site
+               0x41e8a4: only states 0/6/7/0xf/0x10 and flags 0x411 skip it)
+               before FUN_0042383d checks the range, so an out-of-range
+               caster walks to its destination (ev_89fd8492). */
+            game_session_step_floater_to_destination(session, floater,
+                                                     source_tick);
             if ((floater->source_runtime_flags & 0x200U) != 0) {
+                /* FUN_0042383d: a finished cast adds 5 to +0x08 and ends. */
+                floater->source_progress_08 =
+                    (uint16_t)(floater->source_progress_08 + 5U);
                 game_session_cancel_cast_order(floater);
-            } else if (!game_session_resolve_cast_destination(session, floater)) {
-                game_session_cancel_cast_order(floater);
-            } else if (range == -1 ||
+            } else if (range != -1 &&
                        game_session_source_chebyshev_distance(
                            floater->x, floater->y,
                            floater->destination_x,
-                           floater->destination_y) <= range) {
-                /* FUN_0042383d uses -1 for unlimited range, then starts
-                   FUN_0041660b on the tenth in-range tick. Kind 4 applies its
-                   selected-site flag and timer after the same cast wait. */
-                if (floater->order_timer < 400U) ++floater->order_timer;
+                           floater->destination_y) > range) {
+                /* Out of range: only mode bit 2 (floater targets) refreshes
+                   the destination; FUN_0042383d ignores the result. */
+                if ((cast_target_modes[floater->cast_spell_kind] & 2U) != 0)
+                    (void)game_session_resolve_cast_destination(session,
+                                                                floater);
+            } else {
+                /* In range FUN_0042383d parks the destination on the caster,
+                   counts +0x34, starts FUN_0041660b on tick 10 and raises
+                   flag 0x200 once the counter passes 399 (ev_0c23a222). Kind
+                   4 applies its selected-site flag and timer after the same
+                   cast wait. */
+                floater->destination_x = floater->x;
+                floater->destination_y = floater->y;
+                ++floater->order_timer;
                 if (floater->order_timer == 10U) {
                     /* FUN_0041660b spawns the effect here; its SOUND plays on
                        the effect's first tick for the viewing player. */
@@ -1420,8 +1482,8 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
                         floater->order_target_location,
                         floater->cast_spell_kind == 0x16 ? 0 : 1);
                 }
-                if (floater->order_timer >= 400U)
-                    game_session_cancel_cast_order(floater);
+                else if (floater->order_timer > 399U)
+                    floater->source_runtime_flags |= 0x200U;
             }
             continue;
         }

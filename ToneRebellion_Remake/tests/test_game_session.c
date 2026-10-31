@@ -546,6 +546,9 @@ int main(void)
     test_deferred_hit_is_deterministic_for_a_given_seed();
     test_dead_attacker_effect_deals_no_damage_and_frees_the_slot();
     test_weak_attackers_still_hit_at_the_strike();
+    test_attack_bookkeeping_goes_to_the_attacker();
+    test_out_of_range_caster_walks_then_casts();
+    test_spore_deaths_go_through_the_native_damage_guard();
     (void)puts("game session unit tests passed");
     return 0;
 }

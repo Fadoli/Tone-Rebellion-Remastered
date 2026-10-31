@@ -4,6 +4,7 @@
 #include "floater_motion.h"
 #include "game_session_delivery.h"
 #include "game_session_delivery_internal.h"
+#include "game_session_combat_internal.h"
 
 #include <string.h>
 
@@ -302,13 +303,9 @@ int game_session_assign_category4_subtype9_order(
     floater->active_order_action = 0;
     floater->order_target_location = -1;
     floater->order_target_floater = -1;
-    if ((source_tick & 0x7fU) == 0 && floater->current_hit_points != 0) {
-        --floater->current_hit_points;
-        if (floater->current_hit_points == 0) {
-            floater->source_runtime_flags |= 0x008U;
-            floater->source_death_timer = 0;
-        }
-    }
+    /* FUN_0042219e: FUN_004204bc(1, -1) every 128 ticks without a target. */
+    if ((source_tick & 0x7fU) == 0)
+        game_session_apply_floater_damage(session, floater, 1, -1);
     return 0;
 }
 

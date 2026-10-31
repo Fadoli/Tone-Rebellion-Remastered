@@ -1052,3 +1052,175 @@ static void test_weak_attackers_still_hit_at_the_strike(void)
     }
     assert(hits > 0);
 }
+
+static void test_attack_bookkeeping_goes_to_the_attacker(void)
+{
+    /* FUN_004200d2 / FUN_00420188 run with ECX = attacker (call site
+       0x41ec64): a positive hit bumps the attacker's +0x08 and every attempt
+       consumes one attacker charge (+0x22). The target is left alone. */
+    static GameSession session;
+    GameRuntimeLocation *site;
+    uint32_t seed;
+    unsigned int hits = 0;
+    unsigned int misses = 0;
+
+    for (seed = 1; seed <= 60; ++seed) {
+        int32_t damage;
+        memset(&session, 0, sizeof(session));
+        session.island_count = 1;
+        /* Spread the seeds: nearby seeds give nearby first draws. */
+        session.random_state = seed * 0x9e3779b1U;
+        add_test_worker(&session, 0, 0, 1000, 1000, 0);
+        add_test_worker(&session, 1, 0, 1010, 1000, 1);
+        session.floaters[0].attack_level_flags = 3;
+        session.floaters[0].charge_current = 3;
+        session.floaters[0].source_link_0c = -1;
+        session.floaters[1].charge_current = 2;
+        session.floaters[1].source_link_0c = -1;
+        damage = game_session_resolve_attack_hit(&session, 0, 6, 1, -1);
+        assert(session.floaters[0].charge_current == 2);
+        assert(session.floaters[0].source_progress_08 == (damage > 0 ? 1U : 0U));
+        assert(session.floaters[1].charge_current == 2);
+        assert(session.floaters[1].source_progress_08 == 0);
+        if (damage > 0) ++hits; else ++misses;
+    }
+    assert(hits > 0 && misses > 0);
+
+    /* A plain uncharged worker damages a site; the site's +0x22 visibility
+       byte is not consumed. */
+    memset(&session, 0, sizeof(session));
+    session.island_count = 1;
+    session.islands[0].location_count = 1;
+    site = &session.islands[0].locations[0];
+    site->record_value_10 = 12;
+    site->owner_id = -1;
+    site->source_value_14 = -1;
+    site->source_value_34 = 100;
+    site->source_value_22 = 0x03;
+    site->tribe_visibility_mask = 0x03;
+    add_test_worker(&session, 0, 0, 1000, 1000, 0);
+    session.floaters[0].attack_level_flags = 3;
+    session.floaters[0].source_link_0c = -1;
+    assert(game_session_resolve_attack_hit(&session, 0, 7, -1, 0) > 0);
+    assert(site->source_value_34 < 100);
+    assert(site->source_value_22 == 0x03);
+    assert(site->tribe_visibility_mask == 0x03);
+    assert(site->source_progress_08 == 0);
+    assert(session.floaters[0].source_progress_08 == 1);
+}
+
+static void test_out_of_range_caster_walks_then_casts(void)
+{
+    /* FUN_0041e569 steps state 0x13 through FUN_00422d27 before
+       FUN_0042383d: out of range the +0x34 counter does not move; in range
+       the destination is parked on the caster, the counter runs and the
+       finished cast (flag 0x200) adds 5 to +0x08. */
+    static GameSession session;
+    PadCatalog catalog;
+    GameFloaterStart *caster;
+    GameRuntimeLocation *site;
+    uint32_t tick;
+    int reached = 0;
+
+    make_pad_catalog(&catalog);
+    memset(&session, 0, sizeof(session));
+    session.island_count = 1;
+    session.islands[0].location_count = 1;
+    session.islands[0].floater_max_x[0] = 0x9ff;
+    site = &session.islands[0].locations[0];
+    site->x = 1600;
+    site->y = 200;
+    site->owner_id = -1;
+    site->source_value_14 = -1;
+    caster = spell_caster(&session, 0, 0, 0, 0); /* range 300 */
+    caster->x = 1000;
+    caster->y = 200;
+    caster->movement_speed = 4;
+    caster->active_order_action = 0x13;
+    caster->movement_state = 0x13;
+    caster->order_target_location = 0;
+    caster->order_target_floater = -1;
+    caster->order_progress = UINT8_MAX;
+
+    game_session_tick_floater_moves(&session, 1, &catalog);
+    assert(caster->active_order_action == 0x13);
+    assert(caster->x > 1000);
+    assert(caster->order_timer == 0);
+    for (tick = 2; tick < 2000 && caster->active_order_action == 0x13; ++tick) {
+        if (!reached && caster->order_timer != 0) {
+            reached = 1;
+            assert(caster->x >= 1600 - 300);
+            assert(caster->destination_x == caster->x);
+            assert(caster->destination_y == caster->y);
+        }
+        game_session_tick_floater_moves(&session, tick, &catalog);
+    }
+    assert(reached);
+    assert(caster->active_order_action == 0);
+    assert(caster->source_progress_08 == 5);
+}
+
+static void test_spore_deaths_go_through_the_native_damage_guard(void)
+{
+    /* FUN_004204bc: flag 0x8 blocks it; otherwise the amount is subtracted
+       and a result below 1 starts the death with its sound and tallies. */
+    static GameSession session;
+    GameSessionAudioEvent event;
+    GameFloaterStart *spore;
+    GameRuntimeLocation *site;
+    PadCatalog catalog;
+
+    memset(&session, 0, sizeof(session));
+    session.island_count = 1;
+    add_test_worker(&session, 0, 0, 1000, 200, 1);
+    session.floaters[0].current_hit_points = 3;
+    game_session_apply_floater_damage(&session, &session.floaters[0], 1, -1);
+    assert(session.floaters[0].current_hit_points == 2);
+    assert((session.floaters[0].source_runtime_flags & 0x008U) == 0);
+    assert(!game_session_pop_audio_event(&session, &event));
+
+    /* Zero hit points without the flag still dies (the port used to skip). */
+    session.floaters[0].current_hit_points = 0;
+    game_session_apply_floater_damage(&session, &session.floaters[0], 1, -1);
+    assert((session.floaters[0].source_runtime_flags & 0x008U) != 0);
+    assert(session.floaters[0].source_death_timer == 0);
+    assert(session.economy[0].floater_losses == 1);
+    assert(game_session_pop_audio_event(&session, &event));
+    assert(event.kind == GAME_SESSION_AUDIO_FLOATER_DEATH);
+
+    /* An already dying floater keeps its death timer and makes no sound. */
+    session.floaters[0].source_death_timer = 7;
+    game_session_apply_floater_damage(&session, &session.floaters[0], 50, -1);
+    assert(session.floaters[0].source_death_timer == 7);
+    assert(session.economy[0].floater_losses == 1);
+    assert(!game_session_pop_audio_event(&session, &event));
+
+    /* FUN_0041e569 case 0: a Spore reaching a site flagged 0x200 dies through
+       FUN_004204bc(current hit points, -1). */
+    make_pad_catalog(&catalog);
+    memset(&session, 0, sizeof(session));
+    session.island_count = 1;
+    session.islands[0].location_count = 1;
+    site = &session.islands[0].locations[0];
+    site->x = 1000;
+    site->y = 200;
+    site->owner_id = -1;
+    site->source_value_14 = -1;
+    site->source_flags = 0x200U;
+    site->source_effect_timer_38 = 10; /* timed flag survives this tick */
+    add_test_worker(&session, 0, 0, 1000, 200, 4);
+    spore = &session.floaters[0];
+    spore->type_index = 4;
+    spore->source_subtype = 9;
+    spore->current_hit_points = 6;
+    spore->source_link_0c = -1;
+    spore->active_order_action = 1;
+    spore->movement_state = 1;
+    spore->order_target_location = 0;
+    spore->order_target_floater = -1;
+    game_session_tick_floater_moves(&session, 1, &catalog);
+    assert((spore->source_runtime_flags & 0x008U) != 0);
+    assert(spore->current_hit_points == 0);
+    assert(game_session_pop_audio_event(&session, &event));
+    assert(event.kind == GAME_SESSION_AUDIO_FLOATER_DEATH);
+}
