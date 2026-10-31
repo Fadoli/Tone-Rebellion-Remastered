@@ -2405,6 +2405,11 @@ int game_session_start_floater_ground_pickup(GameSession *session,
         floater->island_index != island_index) return 0;
     target = &session->islands[island_index].locations[location_index];
 
+    /* A worker sent to fetch an object drops the Tone it was carrying. */
+    if (floater->carried_resource_code > 0 &&
+        floater->carried_resource_code < 5)
+        floater->carried_resource_code = 0;
+
     /* FUN_004211bb case 0xc (action 0xd, worker on the task's island and not
        carrying the wanted item) sets state 0xd with +0x32 = task location. */
     floater->active_order_action = 0x0d;

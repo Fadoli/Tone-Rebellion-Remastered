@@ -260,6 +260,18 @@ static void test_obtain_task_crosses_bridge_to_ground_artifact(void)
     assert(object->record_value_10 == 0 && object->record_value_24 == 0);
 }
 
+static void test_obtain_worker_drops_its_tone_cargo(void)
+{
+    static GameSession session;
+    GameFloaterStart *floater = setup_obtain_island(&session, 300);
+
+    floater->carried_resource_code = 1;
+    assert(game_session_queue_obtain_task(&session, 2, 0, 0));
+    game_session_tick_floater_moves(&session, 1, NULL);
+    assert(floater->movement_state == 13);
+    assert(floater->carried_resource_code == 0);
+}
+
 static void test_artifact_delivery_walks_at_unit_speed(void)
 {
     static GameSession session;

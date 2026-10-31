@@ -218,6 +218,10 @@ static int assign_obtain_task_for_floater(GameSession *session,
         event->payload_0e < 0) return 0;
     if (game_session_ground_object_item(session, (uint8_t)event->payload_0a,
             (uint16_t)event->payload_0e) == 0) return 0;
+    if (event->payload_0a != floater->island_index &&
+        floater->carried_resource_code > 0 &&
+        floater->carried_resource_code < 5)
+        floater->carried_resource_code = 0;
     if (event->payload_0a == floater->island_index) {
         if (!game_session_start_floater_ground_pickup(session, floater_index,
                 floater->island_index, (uint16_t)event->payload_0e)) return 0;
