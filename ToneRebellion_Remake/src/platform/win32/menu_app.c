@@ -466,6 +466,33 @@ static void select_location_anywhere(int island, int location)
         location < 0 || island == g_menu.selected_map_island ? -1 : island;
 }
 
+/* A floater's +0x0c link names its source building, kept here as
+   charge_source_island / charge_source_location (FUN_0042f8f7 path). */
+static int floater_belongs_to_selected_building(const GameFloaterStart *floater)
+{
+    return g_selected_location >= 0 && floater->source_link_0c != -1 &&
+        (int)floater->charge_source_island == selection_island() &&
+        (int)floater->charge_source_location == g_selected_location;
+}
+
+/* Port-only: selecting a building also selects its first linked warrior of
+   the viewing player, so the floater panel and orders have a target. */
+static void select_building_warrior(void)
+{
+    unsigned int n;
+    g_selected_floater = -1;
+    if (!g_game_session_valid || g_menu.selected_tribe < 0) return;
+    for (n = 0; n < g_game_session.floater_count; ++n) {
+        const GameFloaterStart *floater = &g_game_session.floaters[n];
+        if (game_session_floater_is_active(floater) &&
+            floater->owner_slot == (uint8_t)g_menu.selected_tribe &&
+            floater_belongs_to_selected_building(floater)) {
+            g_selected_floater = (int)n;
+            return;
+        }
+    }
+}
+
 #include "menu_app_sections/island_assets.inc"
 
 #include "menu_app_sections/newgame_text_interaction.inc"

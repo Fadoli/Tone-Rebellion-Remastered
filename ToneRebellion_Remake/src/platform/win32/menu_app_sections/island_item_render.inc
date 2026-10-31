@@ -259,12 +259,13 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
     }
 
     /* Flag 0x010 (set by FUN_004528ca at placement, cleared at +0x48 == 100)
-       is the native placement ramp. Below tick 84 the solidpad frame recolors
-       the ground under its silhouette through a haze table, then every later
-       layer is shifted down by a decaying offset; later layers are blitted
-       through the same table, whose level follows FUN_0040bf98's +0x48 rule.
-       The type-1 "pool" variant, the +0x58 stipple levels and flag 0x100 are
-       not ported. */
+       is the native placement ramp. Below tick 84 a ground mark is drawn at
+       the unshifted anchor, then every later layer is shifted down by a
+       decaying offset; later layers are blitted through the haze table whose
+       level follows FUN_0040bf98's +0x48 rule. Class 2.. sites recolor the
+       ground under solidpad frame +0x0c (the site's pad-size subtype from
+       FUN_00461b3b); class 1 blits the "pool" sheet frames 0 and 0x25 through
+       the table instead (FUN_00404c5a, ev_5e71afc9...). */
     if ((runtime_location->source_flags & 0x010U) != 0 &&
         scale_16_16 == 0x10000U) {
         int pose_ticks = runtime_location->source_value_48;
@@ -273,13 +274,26 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
                        : pose_ticks > 84 ? (100 - pose_ticks) / 2 : 7;
         if (pose_ticks >= 0 && pose_ticks <= 100) {
             if (pose_ticks < 84) {
-                const PadCatalogItem *pose_pad = pad_catalog_find(
-                    &g_pad_catalog, (uint16_t)raw_id);
-                uint32_t pad_frame = pose_pad != NULL && pose_pad->size >= 0
-                    ? (uint32_t)pose_pad->size : 0U;
                 int remaining = 84 - pose_ticks;
-                recolor_under_sprite(dc, &g_solidpad_art, pad_frame, x, y,
-                                     pose_selector, pose_level);
+                if (runtime_location->renderer_class == 1) {
+                    g_sprite_haze_selector = pose_selector;
+                    g_sprite_haze_level = pose_level;
+                    draw_sprite_scaled(dc, &g_tone_field_art, 0, x, y, 0x10000U);
+                    draw_sprite_scaled(dc, &g_tone_field_art, 0x25, x, y,
+                                       0x10000U);
+                } else {
+                    uint32_t pad_frame;
+                    if (runtime_location->construction_site_size != UINT8_MAX) {
+                        pad_frame = runtime_location->construction_site_size;
+                    } else {
+                        const PadCatalogItem *pose_pad = pad_catalog_find(
+                            &g_pad_catalog, (uint16_t)raw_id);
+                        pad_frame = pose_pad != NULL && pose_pad->size >= 0
+                            ? (uint32_t)pose_pad->size : 0U;
+                    }
+                    recolor_under_sprite(dc, &g_solidpad_art, pad_frame, x, y,
+                                         pose_selector, pose_level);
+                }
                 y += remaining < 8 ? (remaining * remaining) / 8
                                    : 2 * remaining - 8;
             }
@@ -398,10 +412,15 @@ static int draw_runtime_item_scaled(HDC dc, const GameRuntimeLocation *runtime_l
                 ? &g_tone_crys_art : resource_code == 3
                 ? &g_magctone_art : NULL;
             if (resource_art != NULL && resource_art->frame_count != 0) {
+                /* The marker goes through FUN_00410bd2 at the stipple level
+                   only, never through the placement haze table. */
+                int haze_level = g_sprite_haze_level;
                 BuildingRenderPoint effect_position =
                     building_render_prod_threshold_position(item, x, y);
-                draw_sprite_scaled(dc, resource_art, 0, effect_position.x,
-                                   effect_position.y, scale_16_16);
+                g_sprite_haze_level = -1;
+                draw_item_layer(dc, resource_art, 0, effect_position.x,
+                                effect_position.y, scale_16_16);
+                g_sprite_haze_level = haze_level;
                 drew = 1;
             }
         }

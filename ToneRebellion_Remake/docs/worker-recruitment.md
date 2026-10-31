@@ -33,6 +33,24 @@ The class-1 tick runs 100 ticks, then releases the worker at `(x, y - 0x28)`
 (`FUN_00450a71` cases 0/1, `../functions/0015_batch_0011/details-04-02.md`).
 The remake follows this through `leviathan_spawned_floater`.
 
+Birth visual (static reading of conserved pseudocode; REA session closed):
+the world floater loop `FUN_00435f4d` skips any floater with `+0x1c & 1`
+(`ev_9466be6d877d3a7686cb6bcf7838301774c412a8e560a476b938307aac8b32ad`, `../functions/0012_batch_0008/details-06-02.md`), so the held
+newborn is not drawn as a floater. `FUN_0040bf98` gives class-1 items 0/5 the
+POOL shape `DAT_004a4b70`, which has no PROD row in `bldinf.txt`. The class-1
+site drawer `FUN_0040b09a` (dispatched through thunk `0x401780` from
+`FUN_0040d5bf`; `ev_c454d7fb5d524fdd5ec56d6a1fef42e234a6ed8e81d3e14ffb9b0592edacc8a7`)
+draws the white birth: for items outside 6..9 with flag 2, frame 0 of the
+linked floater's body and legs at `(x, y - 0x28)`, unmirrored, through the
+`FUN_004106dd(1, level)` white table. While `+0x42 < 17` `FUN_004109a6`
+recolors only the ground under the silhouette (level `+0x42 / 2`); then
+`FUN_00404c3b`/`FUN_00404c5a` draw the sprite through the table at level
+`(100 - +0x42) / 2`, clamped 0..7, so it stays white and fades to its colors
+before release. The remake now skips held floaters (bit 0x001) in the island
+loop, which also removes the duplicate held Leviathan, and draws this birth in
+`draw_island_worker_birth`. Interpretation: frame 0 of the remake's tribe body
+and legs sheets equals native shape frame 0.
+
 Evidence: `FUN_0045eaa7` (`ev_d0241191e19be6e3ec7ab4c4a16172c22e772b518c82aeef201ad3125475226d`),
 `FUN_004532e2` (`ev_f568b5a3b8f15baa665610518ba92d8599e54715db51c26ef29d327af6893104`),
 and `FUN_00466fe4` (`ev_0ca802ac15043c61c073f6d68546619fc924a4ba10fd4d9f04e203668dc62ed7`).

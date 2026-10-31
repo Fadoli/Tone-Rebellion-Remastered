@@ -124,6 +124,7 @@ static void handle_click(HWND window, int x, int y)
                         &clip_location) != 0) {
                     select_location_anywhere((int)clip_island,
                                              (int)clip_location);
+                    select_building_warrior();
                     g_island_panel_mode = WINDOW_ISLAND_PANEL_LOCATION;
                 }
                 InvalidateRect(window, NULL, FALSE);
@@ -774,6 +775,7 @@ static void handle_click(HWND window, int x, int y)
                             /* island changed; selection already reset */
                         } else {
                             select_location_on_view(clicked_location);
+                            select_building_warrior();
                             (void)open_iw_construct(clicked_location);
                         }
                         InvalidateRect(window, NULL, FALSE);

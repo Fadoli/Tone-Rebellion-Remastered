@@ -50,6 +50,17 @@ static uint32_t island_floater_legs_frame(const GameFloaterStart *floater)
             floater->attack_frame_ticks_per_frame,
             floater->attack_frame_ping_pong, floater->attack_timer);
     }
+    /* FUN_0042704b also plays the fltinf attack range in state 0x13
+       (FA_Cast) while 0 < +0x34 <= FUN_004251a2(0x13), which returns the
+       same attack duration as states 6/7 (ev_4a090340). The port keeps the
+       cast's +0x34 counter in order_timer. */
+    if (floater->movement_state == 0x13 && floater->order_timer != 0 &&
+        floater->order_timer <= floater->attack_frame_duration) {
+        return island_worker_attack_legs_frame(
+            floater->attack_frame_first, floater->attack_frame_last,
+            floater->attack_frame_ticks_per_frame,
+            floater->attack_frame_ping_pong, floater->order_timer);
+    }
     if (island_floater_is_ascended(floater))
     {
         /* hover 0..28, speed div 2; clamp to the shipped sheet. */
@@ -364,6 +375,53 @@ static int draw_island_leviathan_spawn_effect(
     return 1;
 }
 
+/* FUN_0040b09a (class-1 sites outside items 6..9) shows the floater a site
+   holds at +0x2e while flag 0x002 runs: frame 0 of its body then legs shape,
+   unmirrored at (x, y - 0x28), through the FUN_004106dd(1, level) white
+   table. Below +0x42 == 17 FUN_004109a6 only recolors the ground under the
+   silhouette (level +0x42 / 2); afterwards FUN_00404c5a blits the sprite
+   itself through the table, level (100 - +0x42) / 2, both clamped to 0..7. */
+static void draw_island_worker_birth(HDC dc,
+                                     const GameRuntimeLocation *location,
+                                     int x, int y)
+{
+    const GameFloaterStart *floater;
+    const SpriteSheet *shapes[2];
+    int progress;
+    int level;
+    unsigned int shape;
+
+    if (location == NULL || !g_game_session_valid ||
+        location->renderer_class != 1 ||
+        (location->record_value_10 >= 6 && location->record_value_10 <= 9) ||
+        (location->source_flags & 0x002U) == 0 ||
+        location->leviathan_spawned_floater < 0 ||
+        (unsigned int)location->leviathan_spawned_floater >=
+            g_game_session.floater_count) return;
+    floater = &g_game_session.floaters[
+        (unsigned int)location->leviathan_spawned_floater];
+    if (!game_session_floater_is_active(floater) || floater->type_index >= 4U)
+        return;
+    shapes[0] = &g_initial_floater_bodies[floater->type_index];
+    shapes[1] = &g_initial_floater_legs[floater->type_index];
+    progress = (int)location->production_progress;
+    level = progress < 0x11 ? progress / 2 : (100 - progress) / 2;
+    if (level < 0) level = 0;
+    if (level > 7) level = 7;
+    for (shape = 0; shape < 2U; ++shape) {
+        if (shapes[shape]->frame_count == 0) continue;
+        if (progress < 0x11) {
+            recolor_under_sprite(dc, shapes[shape], 0, x, y - 0x28,
+                                 ISLAND_HAZE_WHITE_BANK, level);
+        } else {
+            g_sprite_haze_selector = ISLAND_HAZE_WHITE_BANK;
+            g_sprite_haze_level = level;
+            draw_sprite_scaled(dc, shapes[shape], 0, x, y - 0x28, 0x10000U);
+            g_sprite_haze_level = -1;
+        }
+    }
+}
+
 /* FUN_0044034e fills six panel slots from the selected site's eight floater
    links (+4..+0x12): kind 0 fills slots 0..2, kind 1 slots 3..4, kind 2 slot 5
    (no per-kind cap in the source), where the kind is the low nibble of the
@@ -556,7 +614,10 @@ static void draw_island_lilmap_dots(HDC dc, const WindowTemplate *mini_map,
                 fl->island_index != g_menu.selected_map_island) continue;
             if (own && fl->source_link_0c != -1)
                 slot = fl->source_subtype == 4 ? 4 : 2;
-            if (own && (int)n == g_selected_floater) slot = 5;
+            /* Port-only: the warriors linked to the selected building are
+               drawn like the selected floater. */
+            if (own && ((int)n == g_selected_floater ||
+                        floater_belongs_to_selected_building(fl))) slot = 5;
             px = (int)fl->x / 10 + mini_map->pane.left;
             py = (int)fl->y / 10 + mini_map->pane.top;
             if (px < mini_map->pane.left) px = mini_map->pane.left;
@@ -770,6 +831,7 @@ static void render_island_view(HDC dc)
                top. bldinf.txt stores BASE 1 1, hence frame zero in decoded SHP. */
             draw_sprite(dc, &g_tone_field_art, ISLAND_TONE_POOL_BASE_FRAME, x, y);
             draw_sprite(dc, &g_tone_field_art, frame, x, y);
+            draw_island_worker_birth(dc, runtime_location, x, y);
             drew_location = 1;
         }
         }
@@ -821,7 +883,10 @@ static void render_island_view(HDC dc)
     }
     /* FUN_0046466f creates four idle type-0 floaters for each player at the
        selected hall marker. FUN_0042704b draws tribe-specific legs and body
-       separately, switching from hover to carry legs when cargo is present. */
+       separately, switching from hover to carry legs when cargo is present.
+       FUN_00435f4d skips floaters with +0x1c bit 0x001: a newborn held at its
+       site (0x801, FUN_004532e2) stays hidden until release, and only the
+       Leviathan sites 6/8/9 draw it themselves. */
     if (runtime_island != NULL && g_game_session_valid) {
         unsigned floater_index;
         for (floater_index = 0; floater_index < g_game_session.floater_count;
@@ -835,7 +900,8 @@ static void render_island_view(HDC dc)
             const SpriteSheet *leg_art;
             if (!game_session_floater_is_active(floater) ||
                 floater->island_index != g_menu.selected_map_island ||
-                floater->type_index > 4) continue;
+                floater->type_index > 4 ||
+                (floater->source_runtime_flags & 0x001U) != 0) continue;
             floater_x = (int)floater->x - g_island_scroll_x;
             if (floater_x < -64 || floater_x >= LOGICAL_WIDTH + 64) continue;
             floater_y = image_top + (int)floater->y;

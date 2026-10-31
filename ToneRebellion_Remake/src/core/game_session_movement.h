@@ -54,8 +54,9 @@ int game_session_order_floater_to_defend(GameSession *session,
                                          unsigned int target_floater_index);
 /* Building order buttons BC_AttackFlt (genre 6), BC_AttackLoc (7),
    BC_DefendFlt (8) and BC_DefendArea (9) (cat 1 sub 0x10..0x13 ->
-   FUN_0045d867/FUN_0045d8b2): writes the building's order record for an owned,
-   built 0x2c..0x2e site. `target` is a floater index (6, 8), a location index
+   FUN_0045d867/FUN_0045d8b2): writes the building's order record for an owned
+   site with a staff record (game_session_building_takes_orders, so the 0x2f
+   spell-caster hall too). `target` is a floater index (6, 8), a location index
    (7) or a pixel x with `target_y` (9) on `target_island`, which may differ
    from the building's island (FUN_0045d867 stores the target floater's
    island, FUN_0045d8b2 the packet island). Linked floaters adopt it on their
@@ -89,6 +90,15 @@ int game_session_toggle_training_stock(GameSession *session,
 int game_session_training_stock_state(const GameSession *session,
                                       uint8_t island_index,
                                       uint16_t location_index, int magic);
+/* True when the site accepts a group order: owner == player and a staff
+   record (+0x18 != -1), with no item test. This is the gate of the right-click
+   path (FUN_00435826 -> msg 0x65 sub 0x10..0x13 in FUN_0042fa0f ->
+   FUN_0043530b) and of FUN_00465793 (FUN_00450385), so the spell-caster hall
+   0x2f takes orders by right click although it shows no order buttons. */
+int game_session_building_takes_orders(const GameSession *session,
+                                       uint8_t player_slot,
+                                       uint8_t island_index,
+                                       uint16_t location_index);
 /* True when the building order buttons are offered for the site (FUN_0045d5ba rule R5:
    owner == player, built, base item 0x2c..0x2e). */
 int game_session_building_has_defend_area(const GameSession *session,

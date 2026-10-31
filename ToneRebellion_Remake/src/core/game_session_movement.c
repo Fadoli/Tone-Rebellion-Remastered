@@ -1198,6 +1198,21 @@ int game_session_building_has_defend_area(const GameSession *session,
            item >= 0x2c && item <= 0x2e;
 }
 
+int game_session_building_takes_orders(const GameSession *session,
+                                       uint8_t player_slot,
+                                       uint8_t island_index,
+                                       uint16_t location_index)
+{
+    const GameRuntimeLocation *location;
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count)
+        return 0;
+    location = &session->islands[island_index].locations[location_index];
+    return location->owner_id == (int32_t)player_slot &&
+           location->source_location_slot_18 != -1;
+}
+
 int game_session_training_stock_visible(const GameSession *session,
                                         uint8_t player_slot,
                                         uint8_t island_index,
@@ -1257,8 +1272,8 @@ int game_session_set_building_order(GameSession *session, uint8_t player_slot,
                                     unsigned int target_y)
 {
     GameRuntimeLocation *location;
-    if (!game_session_building_has_defend_area(session, player_slot,
-                                               island_index, location_index) ||
+    if (!game_session_building_takes_orders(session, player_slot,
+                                            island_index, location_index) ||
         genre < 6 || genre > 9 || target_island >= session->island_count)
         return 0;
     if ((genre == 6 || genre == 8) &&

@@ -45,6 +45,18 @@ message/task lookup `ev_ed75141a79f1bac30a4ad39dcad68e710e351330bcd3044aa3cb304e
 tick/state dispatch `ev_6c3ec9c58f2e2ec6ef837d8737ba3dfece6d35c11a918338523e688a6746c25a`,
 and action consumer `ev_96f90fdc7951d5fe26fcf0b495de08970ec0e6984d64572c67ff099abac40957`.
 
+## Building group orders and the spell-caster hall
+
+Observation: `FUN_0045d5ba` lists the order buttons 0x10..0x13 and recall 0xf
+only for items 0x2c..0x2e; items 0x2f/0x30 get spell buttons 0x15..0x1c
+(`ev_03503d5f`). The right-click path has no item test: `FUN_00435826` needs an
+owned `+0x16c` site with `+0x18 != -1` (`ev_9fac3ab3`), `FUN_0042fa0f` msg 0x65
+sub 0x10..0x13 calls `FUN_0043530b`, and `FUN_00465793` only needs
+`FUN_00450385` (staff row present). Port: `game_session_building_takes_orders`
+(owner + staff record) gates right-click orders and the command, so spell
+casters of a 0x2f hall take move/attack orders; the buttons keep the
+0x2c..0x2e rule.
+
 ## More evidence
 
 See [task table state](MOVEMENT_ORDER_TABLE_STATE.md).

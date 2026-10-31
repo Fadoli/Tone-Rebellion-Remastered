@@ -891,7 +891,7 @@ static void island_right_click(int clicked_floater, int x, int y)
     int clicked_location = clicked_floater >= 0 ? -1 : island_location_at(x, y);
     int ordering = g_selected_location >= 0 && building_island >= 0 &&
         building_island < g_game_session.island_count &&
-        game_session_building_has_defend_area(&g_game_session, player,
+        game_session_building_takes_orders(&g_game_session, player,
             (uint8_t)building_island, (uint16_t)g_selected_location);
 
     if (ordering) {
@@ -938,8 +938,8 @@ static void island_right_click(int clicked_floater, int x, int y)
         g_hovered_location = -1;
     } else if (!ordering && clicked_location >= 0) {
         /* msg 0x32: the site becomes +0x16c. */
-        g_selected_floater = -1;
         select_location_on_view(clicked_location);
+        select_building_warrior();
     } else if (!ordering) {
         /* msg 0x4b then 0x33: FUN_0042f303(0). */
         g_selected_floater = -1;
