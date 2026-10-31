@@ -56,11 +56,10 @@ Plusieurs items sont « portés, non vérifiés en jeu » (ordre des panneaux Ha
 
 ## Audit REA du 2026-10-27
 
-Corrigés (preuve en commentaire dans le code) : bilan d'attaque appliqué à l'attaquant (`FUN_004200d2`/`FUN_00420188`, ECX = attaquant à `0x41ec64`) et dégâts de site débloqués; FA_Cast hors portée avance vers sa cible, destination résolue une seule fois, fin via drapeau 0x200 et +5 en `+0x08` (`FUN_0042383d`); morts Spore via `FUN_004204bc` (garde 0x8, son, compteurs).
+Corrigés (preuve en commentaire dans le code) : bilan d'attaque appliqué à l'attaquant (`FUN_004200d2`/`FUN_00420188`, ECX = attaquant à `0x41ec64`) et dégâts de site débloqués; FA_Cast hors portée avance vers sa cible, destination résolue une seule fois, fin via drapeau 0x200 et +5 en `+0x08` (`FUN_0042383d`); morts Spore via `FUN_004204bc` (garde 0x8, son, compteurs). Ensuite : l'entraînement (`FUN_0045cd75`) rafraîchit portée, royaume, vitesse, force et PV depuis la ligne du nouveau sous-type (une unité à distance entraînée gardait la portée 0 de l'ouvrier et immobilisait sa cible comme en mêlée); royaume de combat via `FUN_0042003c` (±1 selon 0x10000/0x20000 du bâtiment lié, ligne du sous-type 0 pour un attaquant non chargé).
 
 Écarts confirmés, non corrigés :
 
-- Royaume de combat statique : `FUN_0042003c` applique ±1 selon les drapeaux 0x10000/0x20000 du bâtiment lié et prend la ligne du sous-type 0 pour un attaquant non chargé (`ev_d094e67f`, `ev_7eebf882`).
 - Hall de départ : le port préfère un pad typé; `FUN_0046466f` prend le site classe 0 vide le plus proche (`ev_3cb7946b`).
 - Source de recharge Build Tone : priorité Hall absente de `FUN_00420a55`/`FUN_00420dbd` (`game_session_delivery.c` `construction_refill_source`).
 - Sélection d'un floater lié à un bâtiment d'une autre île : `FUN_0042f8f7` le sélectionne, le port l'ignore (`ev_aa63a0e6`).

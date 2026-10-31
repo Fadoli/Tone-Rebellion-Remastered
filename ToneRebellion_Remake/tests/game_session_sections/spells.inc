@@ -1224,3 +1224,60 @@ static void test_spore_deaths_go_through_the_native_damage_guard(void)
     assert(game_session_pop_audio_event(&session, &event));
     assert(event.kind == GAME_SESSION_AUDIO_FLOATER_DEATH);
 }
+
+static void test_training_refreshes_the_new_subtype_combat_row(void)
+{
+    /* FUN_0045cd75 only stores subtype, level, +0x22 and +0x20; range, realm
+       and speed are read live from FUN_00464242(type, subtype). A worker
+       trained into a ranged subtype must stop using its worker range 0. */
+    static GameSession session;
+    static FloaterCatalog floaters;
+    PadCatalog pads;
+    BuildingRenderCatalog buildings = {0};
+    GameRuntimeLocation *school;
+    GameFloaterStart *worker;
+    FloaterStats *trained;
+    unsigned int slot;
+
+    make_pad_catalog(&pads);
+    make_floater_catalog(&floaters);
+    trained = &floaters.rows[1]; /* type 0, subtype 1 */
+    trained->attack_range = 120;
+    trained->attack_realm = 2;
+    trained->hit_points = 9;
+    trained->max_attack_points = 4;
+    trained->attack_strength = 6;
+    trained->movement_speed = 7;
+    assert(floater_catalog_find(&floaters, 0, 1) == trained);
+
+    memset(&session, 0, sizeof(session));
+    session.island_count = 1;
+    session.islands[0].location_count = 1;
+    school = &session.islands[0].locations[0];
+    school->renderer_class = 0;
+    school->owner_id = 0;
+    school->source_value_14 = 0;
+    school->record_value_10 = 0x2c;
+    school->source_value_32 = 251;
+    school->source_location_slot_18 = -1;
+    school->charge_recent_floater = -1;
+    school->charge_staff_task_handle = -1;
+    for (slot = 0; slot < 8; ++slot) school->charge_floater_slots[slot] = -1;
+    school->charge_floater_slots[0] = 0;
+    add_test_worker(&session, 0, 0, 1000, 200, 0);
+    worker = &session.floaters[0];
+    worker->source_link_0c = -1;
+    worker->source_runtime_flags = 0x20U;
+    worker->movement_speed = 3;
+
+    game_session_tick_item_animations_with_floaters(&session, &buildings,
+                                                    &floaters, &pads);
+    assert(worker->source_subtype == 1);
+    assert(worker->attack_range == 120);
+    assert(worker->attack_realm == 2);
+    assert(worker->movement_speed == 7);
+    assert(worker->charge_current == 6);
+    assert(worker->max_hit_points == 9); /* level 0: (0 + 2) * 9 / 2 */
+    assert(worker->current_hit_points == worker->max_hit_points);
+    assert(worker->max_attack_points == 4);
+}

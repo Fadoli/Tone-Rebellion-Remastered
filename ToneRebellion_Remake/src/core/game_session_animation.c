@@ -1137,6 +1137,44 @@ static void update_training_supply(GameSession *session,
     }
 }
 
+/* FUN_0045cd75 stores only the new subtype, level, +0x22 charge and +0x20
+   (= FUN_00420f28) on training; every other combat value (range, realm,
+   speed, attack row, shape timing) is read live through
+   FUN_00464242(type, subtype) (ev_90928339). The port caches those values
+   per floater, so refresh them from the new row, otherwise a trained ranged
+   unit keeps its worker range 0 and fights as melee. */
+static void apply_trained_floater_stats(GameSession *session,
+                                        const FloaterCatalog *catalog,
+                                        GameFloaterStart *floater,
+                                        const FloaterStats *stats)
+{
+    floater->attack_strength = (uint8_t)stats->attack_strength;
+    floater->base_max_attack_points = stats->max_attack_points;
+    floater->attack_realm = stats->attack_realm;
+    floater->attack_range = stats->attack_range;
+    floater->attack_period = stats->attack_period;
+    floater->attack_frame_first = stats->attack_frame_first;
+    floater->attack_frame_last = stats->attack_frame_last;
+    floater->attack_frame_ticks_per_frame = stats->attack_frame_ticks_per_frame;
+    floater->attack_frame_duration = stats->attack_frame_duration;
+    floater->attack_frame_ping_pong = stats->attack_frame_ping_pong;
+    floater->movement_speed = (uint16_t)stats->movement_speed;
+    if (stats->attack_realm >= 0 && stats->attack_realm < 4) {
+        memcpy(floater->attack_impact_frame_counts,
+               catalog->impact_frame_counts[stats->attack_realm],
+               sizeof(floater->attack_impact_frame_counts));
+    }
+    /* +0x20 = FUN_00420f28: the hit-point column scaled like the attack
+       points (see native_save.c), refilled to that maximum. */
+    floater->base_max_attack_points = stats->hit_points;
+    game_session_recalculate_floater_attack_points(session, floater);
+    floater->max_hit_points = floater->max_attack_points > 0
+        ? floater->max_attack_points : stats->hit_points;
+    floater->current_hit_points = floater->max_hit_points;
+    floater->base_max_attack_points = stats->max_attack_points;
+    game_session_recalculate_floater_attack_points(session, floater);
+}
+
 static void tick_source_staff_cycle(GameSession *session,
                                     GameRuntimeLocation *source,
                                     const FloaterCatalog *floater_catalog,
@@ -1256,7 +1294,8 @@ static void tick_source_staff_cycle(GameSession *session,
                                      floater->source_subtype);
         if (stats != NULL) {
             floater->charge_current = stats->attack_strength;
-            game_session_recalculate_floater_attack_points(session, floater);
+            apply_trained_floater_stats(session, floater_catalog, floater,
+                                        stats);
             level = (uint16_t)(floater->attack_level_flags & 0x0fU);
             if (level > 0 && level <= 3U)
                 --need_by_level[level - 1U];

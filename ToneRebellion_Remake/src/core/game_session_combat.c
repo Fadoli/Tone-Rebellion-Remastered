@@ -257,13 +257,43 @@ static int32_t native_hit_chance(uint8_t difficulty, int32_t attack_power,
     return (int32_t)((60.0 * score) / 14.0) + 10;
 }
 
+/* FUN_0042003c(subtype): the realm column (+2) of FUN_00464242(type,
+   subtype), then +1 (wrapping 3 -> 0) when the linked source has flag
+   0x10000, else -1 (wrapping 0 -> 3) with flag 0x20000 (ev_d094e67f).
+   FUN_004200d2 passes subtype 0 for an attacker FUN_004207c2 accepts, i.e.
+   anything but category 4 or a charged nonzero subtype (ev_7eebf882). */
+static int32_t floater_combat_realm(const GameSession *session,
+                                    const GameFloaterStart *floater,
+                                    int attacker_rule)
+{
+    int32_t realm = floater->attack_realm;
+
+    if (attacker_rule && floater->type_index < GAME_START_PLAYER_COUNT &&
+        !(floater->source_subtype != 0 && floater->charge_current > 0))
+        realm = session->worker_birth_stats[floater->type_index].attack_realm;
+    if (floater->source_link_0c >= 0 &&
+        floater->charge_source_island < session->island_count &&
+        floater->charge_source_location <
+            session->islands[floater->charge_source_island].location_count) {
+        const GameRuntimeLocation *source = &session->islands[
+            floater->charge_source_island].locations[
+                floater->charge_source_location];
+        if ((source->source_flags & 0x10000U) != 0) {
+            if (++realm > 3) realm = 0;
+        } else if ((source->source_flags & 0x20000U) != 0) {
+            if (--realm < 0) realm = 3;
+        }
+    }
+    return realm & 3;
+}
+
 static int floater_attack_hits(GameSession *session,
                                const GameFloaterStart *attacker,
                                const GameFloaterStart *target,
                                int32_t attack_power)
 {
-    int32_t attack_realm = attacker->attack_realm & 3;
-    int32_t target_realm = target->attack_realm & 3;
+    int32_t attack_realm = floater_combat_realm(session, attacker, 1);
+    int32_t target_realm = floater_combat_realm(session, target, 0);
     int32_t defense_power = (target->source_subtype == 0 ||
                              target->source_subtype == 9)
         ? 0 : floater_attack_power(session, target);
