@@ -638,6 +638,52 @@ static void draw_sprite(HDC target, const SpriteSheet *sheet, uint32_t frame_ind
     SelectObject(source, previous);
 }
 
+static int read_sprite_frame_pixels(const SpriteFrame *frame, DIBSECTION *dib);
+
+/* FUN_00405265 scales by sampling the source pixel under each destination
+   pixel (16.16 step), so a reduced sprite stays opaque and sharp. AlphaBlend's
+   own stretch filter blends transparent pixels in, which made half-size
+   building previews look ghostly, like unfinished buildings. Returns a new
+   DIB of the scaled frame, or NULL. */
+static HBITMAP nearest_scaled_frame(const SpriteFrame *frame, int width,
+                                    int height, uint32_t scale_16_16)
+{
+    DIBSECTION dib;
+    BITMAPINFO info;
+    void *bits = NULL;
+    HBITMAP bitmap;
+    int row;
+    if (!read_sprite_frame_pixels(frame, &dib)) return NULL;
+    ZeroMemory(&info, sizeof(info));
+    info.bmiHeader.biSize = sizeof(info.bmiHeader);
+    info.bmiHeader.biWidth = width;
+    info.bmiHeader.biHeight = -height;
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+    bitmap = CreateDIBSection(NULL, &info, DIB_RGB_COLORS, &bits, NULL, 0);
+    if (bitmap == NULL || bits == NULL) {
+        if (bitmap != NULL) DeleteObject(bitmap);
+        return NULL;
+    }
+    for (row = 0; row < height; ++row) {
+        int source_row = (int)(((uint64_t)(unsigned)row << 16) / scale_16_16);
+        const DWORD *in;
+        DWORD *out = (DWORD *)bits + (size_t)row * (size_t)width;
+        int column;
+        if (source_row >= frame->height) source_row = frame->height - 1;
+        in = (const DWORD *)((const unsigned char *)dib.dsBm.bmBits +
+                             (size_t)source_row * (size_t)dib.dsBm.bmWidthBytes);
+        for (column = 0; column < width; ++column) {
+            int source_column =
+                (int)(((uint64_t)(unsigned)column << 16) / scale_16_16);
+            if (source_column >= frame->width) source_column = frame->width - 1;
+            out[column] = in[source_column];
+        }
+    }
+    return bitmap;
+}
+
 static void draw_sprite_scaled_plain(HDC target, const SpriteSheet *sheet,
                                      uint32_t frame_index, int x, int y,
                                      uint32_t scale_16_16)
@@ -660,6 +706,17 @@ static void draw_sprite_scaled_plain(HDC target, const SpriteSheet *sheet,
     offset_y = (int)(((int64_t)frame->y_offset * scale_16_16) >> 16);
     source = get_sprite_source_dc(target);
     if (source == NULL) return;
+    if (scale_16_16 != 0x10000U) {
+        HBITMAP scaled = nearest_scaled_frame(frame, width, height, scale_16_16);
+        if (scaled != NULL) {
+            previous = SelectObject(source, scaled);
+            (void)AlphaBlend(target, x + offset_x, y + offset_y, width, height,
+                             source, 0, 0, width, height, blend);
+            SelectObject(source, previous);
+            DeleteObject(scaled);
+            return;
+        }
+    }
     previous = SelectObject(source, frame->bitmap);
     (void)AlphaBlend(target, x + offset_x, y + offset_y, width, height,
                      source, 0, 0, frame->width, frame->height, blend);
