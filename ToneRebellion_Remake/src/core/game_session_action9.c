@@ -401,10 +401,12 @@ void game_session_advance_category4_autonomous_order(
                   .source_runtime_flags & 0x008U) != 0)) {
             floater->order_progress = 2;
         } else if (floater->active_order_action == 7 &&
-                   (floater->island_index >= session->island_count ||
-                    floater->order_target_location < 0 ||
-                    (uint16_t)floater->order_target_location >=
-                        session->islands[floater->island_index].location_count)) {
+                   (floater->order_target_location < 0 ||
+                    !game_session_attack_site_alive(session,
+                        floater->island_index,
+                        (uint16_t)floater->order_target_location))) {
+            /* Remake guard: no strike on a site destroyed during the
+               approach (FUN_00420188 would reject the hit anyway). */
             floater->order_progress = 2;
         } else {
             floater->movement_state = floater->active_order_action;
@@ -737,6 +739,22 @@ void game_session_apply_panic_orders(GameSession *session)
    not striking (state 6/7), not subtype 0 or 9, and not subtype 4 casting
    (action 0x13) attacks the first floater of its island that targets it
    (+0x32) with flag 0x40, unless it already attacks that one. */
+int game_session_attack_site_alive(const GameSession *session,
+                                   uint8_t island_index, uint16_t location_index)
+{
+    const GameRuntimeLocation *site;
+    int32_t item_id;
+
+    if (session == NULL || island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count)
+        return 0;
+    site = &session->islands[island_index].locations[location_index];
+    item_id = game_session_base_item_id(site);
+    return site->renderer_class <= 1U && item_id != 0 &&
+        !(item_id >= 0x17 && item_id <= 0x24) &&
+        (site->source_flags & 0x290U) == 0;
+}
+
 void game_session_counter_attack_holder(GameSession *session,
                                         unsigned int floater_index)
 {

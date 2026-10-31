@@ -85,6 +85,20 @@ static void game_session_remove_floater(GameSession *session,
         other->has_wander_order = 1;
         other->wander_timer = 0;
     }
+    /* Remake: a building order naming this floater (genre 6/8) is retired
+       now, before the slot can be reused by a newly spawned floater. */
+    for (index = 0; index < session->island_count; ++index) {
+        GameRuntimeIsland *island = &session->islands[index];
+        unsigned int location_index;
+        for (location_index = 0; location_index < island->location_count;
+             ++location_index) {
+            GameRuntimeLocation *location = &island->locations[location_index];
+            if ((location->building_order_genre == 6 ||
+                 location->building_order_genre == 8) &&
+                location->building_order_coordinate == floater_index)
+                location->building_order_genre = 0;
+        }
+    }
     for (effect_slot = 0; effect_slot < 32; ++effect_slot) {
         GameDefenseProjectile *projectile =
             &session->defense_projectiles[effect_slot];
@@ -1496,7 +1510,7 @@ static void game_session_adopt_building_order(GameSession *session,
                                               unsigned int floater_index)
 {
     GameFloaterStart *floater = &session->floaters[floater_index];
-    const GameRuntimeLocation *building;
+    GameRuntimeLocation *building;
     uint16_t coordinate;
     /* FUN_0042219e returns while a strike runs (+0x2c state 6/7, not the
        +0x3c action: an attacking floater still takes a new building order)
@@ -1526,6 +1540,27 @@ static void game_session_adopt_building_order(GameSession *session,
         building->owner_id != (int32_t)floater->owner_slot ||
         building->source_location_slot_18 != floater->source_link_0c) return;
     if (building->building_order_genre != 9) {
+        /* Remake interpretation (player request): FUN_0042219e re-copies the
+           record whenever the floater's order differs and no native writer
+           retires it when the target dies (only FUN_0045d867/d8b2/dcf4 write
+           +0x2c), so soldiers would strike a dead target forever. Drop a
+           genre 6/7/8 order whose target is gone. */
+        unsigned int target = building->building_order_coordinate;
+        int target_alive;
+        if (building->building_order_genre == 7) {
+            target_alive = game_session_attack_site_alive(session,
+                building->building_order_island, (uint16_t)target);
+        } else {
+            target_alive = target < session->floater_count &&
+                game_session_floater_is_active(&session->floaters[target]) &&
+                (session->floaters[target].source_runtime_flags & 0x008U) == 0 &&
+                session->floaters[target].island_index ==
+                    building->building_order_island;
+        }
+        if (!target_alive) {
+            building->building_order_genre = 0;
+            return;
+        }
         game_session_adopt_building_attack_order(session, floater_index,
             building->building_order_genre, building->building_order_island,
             building->building_order_coordinate);

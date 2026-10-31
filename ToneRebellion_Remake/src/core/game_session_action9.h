@@ -32,6 +32,11 @@ int game_session_assign_category4_subtype9_order(
    FUN_0045d8b2) into a linked floater: 6 attacks a floater, 7 a location,
    8 defends a floater. `target` is the floater or location index on
    `target_island`. */
+/* Nonzero while a site can still take a strike: the FUN_00450817 /
+   FUN_00450847 filter (class 0/1, nonzero item outside 0x17..0x24, no flag
+   0x290). A destroyed (0x80) or cleared site fails it. */
+int game_session_attack_site_alive(const GameSession *session,
+                                   uint8_t island_index, uint16_t location_index);
 void game_session_counter_attack_holder(GameSession *session,
                                         unsigned int floater_index);
 void game_session_adopt_building_attack_order(GameSession *session,
