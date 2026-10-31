@@ -55,6 +55,8 @@ add_library(tone_core STATIC
     src/core/floater_motion.c
     src/core/tone_rng.c
     src/core/net_lobby.c
+    src/core/game_command.c
+    src/core/net_lockstep.c
 )
 target_include_directories(tone_core PUBLIC src/core src/data)
 target_compile_features(tone_core PUBLIC c_std_11)
@@ -233,6 +235,12 @@ if(BUILD_TESTING)
     target_compile_features(test_net_lobby PRIVATE c_std_11)
     enable_test_assertions(test_net_lobby)
     add_test(NAME net_lobby_unit COMMAND test_net_lobby)
+
+    add_executable(test_net_lockstep tests/test_net_lockstep.c)
+    target_link_libraries(test_net_lockstep PRIVATE tone_core)
+    target_compile_features(test_net_lockstep PRIVATE c_std_11)
+    enable_test_assertions(test_net_lockstep)
+    add_test(NAME net_lockstep_unit COMMAND test_net_lockstep)
 
     add_executable(test_island_corpus tests/test_island_corpus.c)
     target_link_libraries(test_island_corpus PRIVATE tone_core)

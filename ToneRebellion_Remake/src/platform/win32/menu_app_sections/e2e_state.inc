@@ -33,6 +33,13 @@ static void e2e_write_state(void)
             g_net_mode, g_net_mode != NET_MODE_NONE ? (int)g_net_lobby.local_slot : -1,
             g_net_mode != NET_MODE_NONE ? net_lobby_player_count(&g_net_lobby) : 0U,
             g_menu.world_index);
+    if (g_net_in_game && g_game_session_valid)
+        fprintf(file, "net_tick %lu\nnet_desync %d\nnet_stock_mode %d\nsync_hash %08lx\n",
+                (unsigned long)g_net_lockstep.tick, (int)g_net_lockstep.desync,
+                g_menu.selected_tribe >= 0 && g_menu.selected_tribe < GAME_START_PLAYER_COUNT
+                    ? (int)g_game_session.economy[g_menu.selected_tribe]
+                          .stock_mode[GAME_RESOURCE_BUILD_TONE] : -1,
+                (unsigned long)game_session_sync_hash(&g_game_session));
     fprintf(file, "selection_island %d\n", selection_island());
     if (g_game_session_valid && g_menu.selected_tribe >= 0 &&
         g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {

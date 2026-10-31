@@ -219,6 +219,10 @@ static int slide_panel_press(HWND window, int x, int y)
         if (g_slide_drag != 0) SetCapture(window);
     }
     hit = slide_panel_hit(x, y);
+    /* FUN_004578df only sends Save/Load (SetState 5/4) when DAT_004befe0 ==
+       0; pause would also stop one machine's turns, so a network game
+       ignores those three hits. */
+    if (g_net_in_game && hit >= 0 && hit <= 2) hit = -1;
     if (hit == 0) {
         slide_panel_close_now();
         enter_save_screen();

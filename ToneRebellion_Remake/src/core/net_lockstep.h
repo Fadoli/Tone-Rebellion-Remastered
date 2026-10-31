@@ -1,0 +1,82 @@
+#ifndef TONE_REBELLION_NET_LOCKSTEP_H
+#define TONE_REBELLION_NET_LOCKSTEP_H
+
+#include "game_command.h"
+
+#include <stddef.h>
+#include <stdint.h>
+
+/* In-game synchronisation (behavior/multiplayer.md). Native model: every
+   command is queued with a common future execution tick (FUN_004133f2), the
+   host only validates the next period once each guest reported progress
+   (FUN_00413088, channel 4 types 2/6) and a guest that lags runs extra ticks
+   (FUN_00413b68, DAT_004bf114). The remake keeps that shape with fixed turns:
+   the host gathers every player's commands into one bundle per turn, sends it
+   NET_TURN_DELAY turns ahead, and nobody simulates a turn before holding its
+   bundle. Bundles carry the host's state hash of an earlier turn so guests
+   detect a desynchronisation. Pure state machine; the platform moves bytes. */
+
+enum {
+    NET_TURN_TICKS = 2,          /* 2 ticks of 50 ms per turn */
+    NET_TURN_DELAY = 3,          /* commands run 3 turns after the host bundles them */
+    NET_TURN_HOST_LEAD = 6,      /* host stops when a guest is this many turns behind */
+    NET_TURN_WINDOW = 16,
+    NET_TURN_MAX_COMMANDS = 48,
+    NET_LOCKSTEP_MAX_PLAYERS = 4
+};
+
+enum {
+    NET_RECORD_COMMAND = 0x50,   /* guest -> host: one GameCommand */
+    NET_RECORD_TURN = 0x51,      /* host -> guests: bundle for one turn */
+    NET_RECORD_TURN_ACK = 0x52   /* guest -> host: turns completed */
+};
+
+typedef struct NetTurnBundle {
+    uint8_t valid;
+    uint8_t has_hash;
+    uint8_t command_count;
+    uint32_t turn;
+    uint32_t hash_turn;          /* turn whose end state `hash` describes */
+    uint32_t hash;
+    GameCommand commands[NET_TURN_MAX_COMMANDS];
+} NetTurnBundle;
+
+typedef struct NetLockstep {
+    uint8_t is_host;
+    uint8_t peer_mask;           /* host: guest slots that must acknowledge */
+    uint8_t desync;
+    uint32_t desync_turn;
+    uint32_t tick;               /* ticks simulated since the start */
+    uint32_t latest_bundle_turn; /* highest bundle turn held, plus one */
+    uint32_t acked[NET_LOCKSTEP_MAX_PLAYERS];   /* host: turns completed per guest */
+    uint32_t local_hashes[NET_TURN_WINDOW];
+    uint32_t local_hash_turns[NET_TURN_WINDOW];
+    uint8_t local_hash_valid[NET_TURN_WINDOW];
+    NetTurnBundle bundles[NET_TURN_WINDOW];
+    uint8_t pending_count;       /* host: commands for the next bundle */
+    GameCommand pending[NET_TURN_MAX_COMMANDS];
+} NetLockstep;
+
+void net_lockstep_init(NetLockstep *lockstep, int is_host, uint8_t peer_mask);
+uint32_t net_lockstep_turn(const NetLockstep *lockstep);
+/* Host: adds a command to the next bundle; 0 if the bundle is full. */
+int net_lockstep_queue_command(NetLockstep *lockstep, const GameCommand *command);
+/* 1 when the next tick may run (its turn's bundle is held and, for the host,
+   no guest lags NET_TURN_HOST_LEAD turns or more). */
+int net_lockstep_can_tick(const NetLockstep *lockstep);
+/* Turns the guest could still run without waiting (catch-up hint). */
+uint32_t net_lockstep_turns_ready(const NetLockstep *lockstep);
+/* Commands to apply before the next tick, or NULL (not a turn start). */
+const NetTurnBundle *net_lockstep_turn_commands(const NetLockstep *lockstep);
+/* After one simulated tick. Returns 1 when that tick completed a turn; the
+   host then fills `out_bundle` with the new bundle to broadcast. */
+int net_lockstep_finish_tick(NetLockstep *lockstep, uint32_t session_hash,
+                             NetTurnBundle *out_bundle);
+int net_lockstep_receive_bundle(NetLockstep *lockstep, const NetTurnBundle *bundle);
+void net_lockstep_receive_ack(NetLockstep *lockstep, uint8_t slot, uint32_t turns_done);
+void net_lockstep_drop_peer(NetLockstep *lockstep, uint8_t slot);
+
+size_t net_lockstep_encode_bundle(const NetTurnBundle *bundle, uint8_t *payload, size_t capacity);
+int net_lockstep_decode_bundle(const uint8_t *payload, size_t length, NetTurnBundle *bundle);
+
+#endif

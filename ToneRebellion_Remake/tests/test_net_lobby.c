@@ -57,11 +57,13 @@ int main(void)
     assert(strcmp(client.players[0].name, "Host") == 0);
     assert(client.players[1].tribe == 1);
 
-    /* Tribe requests: a held tribe is refused, a free one is taken. */
+    /* Tribe requests: a shared tribe is allowed (cooperation). */
     length = net_lobby_encode_tribe(bytes, sizeof(bytes), 1, 0);
     deliver(&reader, bytes, length, &frame);
     assert(frame.type == NET_RECORD_TRIBE && frame.sender == 1);
-    assert(!net_lobby_set_tribe(&host, frame.sender, frame.payload[0]));
+    assert(net_lobby_set_tribe(&host, frame.sender, frame.payload[0]));
+    assert(net_lobby_can_start(&host));
+    assert(!net_lobby_set_tribe(&host, 1, 4));
     assert(net_lobby_set_tribe(&host, 1, 3));
     assert(net_lobby_can_start(&host));
 

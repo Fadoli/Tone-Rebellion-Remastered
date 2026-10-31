@@ -61,6 +61,7 @@ static void reset_players(NetLobby *lobby)
     }
 }
 
+/* A joining player starts on the first tribe nobody holds. */
 static uint8_t first_free_tribe(const NetLobby *lobby)
 {
     uint8_t tribe;
@@ -125,12 +126,8 @@ void net_lobby_remove_player(NetLobby *lobby, uint8_t slot)
 
 int net_lobby_set_tribe(NetLobby *lobby, uint8_t slot, uint8_t tribe)
 {
-    unsigned other;
     if (lobby == NULL || slot >= NET_LOBBY_MAX_PLAYERS || tribe >= NET_LOBBY_MAX_PLAYERS ||
         !lobby->players[slot].connected || lobby->started) return 0;
-    for (other = 0; other < NET_LOBBY_MAX_PLAYERS; ++other)
-        if (other != slot && lobby->players[other].connected &&
-            lobby->players[other].tribe == tribe) return 0;
     lobby->players[slot].tribe = tribe;
     return 1;
 }
@@ -155,16 +152,11 @@ unsigned net_lobby_player_count(const NetLobby *lobby)
 int net_lobby_can_start(const NetLobby *lobby)
 {
     unsigned slot;
-    unsigned other;
     if (lobby == NULL || !lobby->is_host || lobby->started ||
         net_lobby_player_count(lobby) < 2U) return 0;
-    for (slot = 0; slot < NET_LOBBY_MAX_PLAYERS; ++slot) {
-        if (!lobby->players[slot].connected) continue;
-        if (lobby->players[slot].tribe >= NET_LOBBY_MAX_PLAYERS) return 0;
-        for (other = slot + 1U; other < NET_LOBBY_MAX_PLAYERS; ++other)
-            if (lobby->players[other].connected &&
-                lobby->players[other].tribe == lobby->players[slot].tribe) return 0;
-    }
+    for (slot = 0; slot < NET_LOBBY_MAX_PLAYERS; ++slot)
+        if (lobby->players[slot].connected &&
+            lobby->players[slot].tribe >= NET_LOBBY_MAX_PLAYERS) return 0;
     return 1;
 }
 

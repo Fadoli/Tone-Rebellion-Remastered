@@ -4,7 +4,8 @@
    so it carries the core NetLobby records over a plain TCP connection: one
    host socket accepts up to three guests, guests talk only to the host (the
    native send path FUN_00412d70 also routes non-host records to the host).
-   Sockets are non-blocking and polled by the 50 ms UI timer. */
+   Sockets are non-blocking and polled by the 50 ms UI timer. After the
+   start, the same connections carry the NetLockstep turns. */
 
 enum { NET_MODE_NONE, NET_MODE_HOST, NET_MODE_CLIENT };
 
@@ -20,6 +21,14 @@ static char g_net_name[NET_LOBBY_NAME_CAPACITY];
 static char g_net_status[128];
 static char g_net_join_address[128] = "127.0.0.1";
 static unsigned short g_net_port = NET_LOBBY_DEFAULT_PORT;
+static int g_net_in_game;
+static NetLockstep g_net_lockstep;
+/* Draws that only pick local presentation (realm music) must not advance
+   the shared session generator during a network game. */
+static ToneRng g_net_local_rng;
+static GameSession g_net_predicted_session;
+
+static void simulate_session_tick(uint32_t source_tick);
 
 static void net_set_status(const char *text)
 {
@@ -44,6 +53,7 @@ static void net_shutdown(void)
     }
     g_net_mode = NET_MODE_NONE;
     g_net_connecting = 0;
+    g_net_in_game = 0;
     if (g_net_wsa_started) {
         (void)WSACleanup();
         g_net_wsa_started = 0;
@@ -126,11 +136,18 @@ static void net_drop_peer(unsigned slot)
     net_close_socket(&g_net_peers[slot]);
     memset(&g_net_readers[slot], 0, sizeof(g_net_readers[slot]));
     if (g_net_mode == NET_MODE_HOST) {
+        if (g_net_in_game) {
+            /* The departed player's tribe stays in the world, idle. */
+            net_lockstep_drop_peer(&g_net_lockstep, (uint8_t)slot);
+            (void)snprintf(g_net_status, sizeof(g_net_status), "%s a quitte la partie",
+                           g_net_lobby.players[slot].name);
+        }
         net_lobby_remove_player(&g_net_lobby, (uint8_t)slot);
-        net_host_broadcast_state();
+        if (!g_net_in_game) net_host_broadcast_state();
     } else {
-        g_net_mode = NET_MODE_NONE;
-        net_set_status("Connexion avec l'hote perdue");
+        /* Without the host no turn can be validated: continue alone. */
+        net_shutdown();
+        net_set_status("Connexion avec l'hote perdue, partie poursuivie en solo");
     }
 }
 
@@ -223,14 +240,36 @@ static void net_apply_game_start(HWND window, const NetGameStart *start)
     g_menu.difficulty = start->difficulty;
     g_menu.selected_tribe = tribe;
     g_random_state = start->seed;
-    if (begin_new_game(window))
-        net_set_status("Partie lancee (synchronisation en jeu non portee)");
+    if (begin_new_game(window)) {
+        uint8_t peers = 0;
+        unsigned slot;
+        if (g_net_mode == NET_MODE_HOST)
+            for (slot = 1; slot < NET_LOBBY_MAX_PLAYERS; ++slot)
+                if (g_net_lobby.players[slot].connected) peers |= (uint8_t)(1U << slot);
+        net_lockstep_init(&g_net_lockstep, g_net_mode == NET_MODE_HOST, peers);
+        tone_rng_seed(&g_net_local_rng, start->seed ^ (uint32_t)GetTickCount());
+        g_net_in_game = 1;
+        net_set_status("Partie en reseau");
+    }
 }
 
 static void net_host_handle_frame(unsigned slot, const NetFrame *frame)
 {
     uint8_t bytes[NET_FRAME_MAX_SIZE];
     size_t length;
+    if (g_net_in_game) {
+        GameCommand command;
+        if (frame->type == NET_RECORD_COMMAND &&
+            game_command_decode(frame->payload, frame->length, &command)) {
+            if (!net_lockstep_queue_command(&g_net_lockstep, &command))
+                net_set_status("File de commandes pleine: commande perdue");
+        } else if (frame->type == NET_RECORD_TURN_ACK && frame->length == 4U) {
+            net_lockstep_receive_ack(&g_net_lockstep, (uint8_t)slot,
+                (uint32_t)frame->payload[0] | ((uint32_t)frame->payload[1] << 8) |
+                ((uint32_t)frame->payload[2] << 16) | ((uint32_t)frame->payload[3] << 24));
+        }
+        return;
+    }
     if (frame->type == NET_RECORD_HELLO && g_net_lobby.players[slot].connected == 0) {
         /* The socket index is the player slot. */
         int assigned = net_lobby_host_add_player(&g_net_lobby, (uint8_t)slot, frame);
@@ -278,6 +317,11 @@ static void net_poll_peer(HWND window, unsigned slot)
                 net_host_handle_frame(slot, &frame);
                 /* A refused HELLO closes the socket. */
                 if (g_net_peers[slot] != before) return;
+            } else if (frame.type == NET_RECORD_TURN) {
+                NetTurnBundle bundle;
+                if (g_net_in_game &&
+                    net_lockstep_decode_bundle(frame.payload, frame.length, &bundle))
+                    (void)net_lockstep_receive_bundle(&g_net_lockstep, &bundle);
             } else {
                 NetGameStart start;
                 uint8_t reason = 0;
@@ -407,6 +451,90 @@ static int net_newgame_message(HWND window, int message)
         return 1;
     }
     return 1;
+}
+
+/* Every session change from the UI goes through here. Solo applies it at
+   once. In a network game the command is bundled by the host and runs on
+   every machine at the same turn; the caller gets the result predicted on a
+   copy of the current state, since its own effect arrives a few turns later. */
+static int issue_command(GameCommandKind kind, size_t count, const int32_t *args)
+{
+    GameCommand command = game_command_make(kind, count, args);
+    GameCommandContext context;
+    int predicted;
+    context.pads = &g_pad_catalog;
+    if (!g_net_in_game) return game_command_apply(&g_game_session, &context, &command);
+    g_net_predicted_session = g_game_session;
+    predicted = game_command_apply(&g_net_predicted_session, &context, &command);
+    if (g_net_mode == NET_MODE_HOST) {
+        if (!net_lockstep_queue_command(&g_net_lockstep, &command))
+            net_set_status("File de commandes pleine: commande perdue");
+    } else {
+        uint8_t payload[GAME_COMMAND_ENCODED_SIZE];
+        uint8_t bytes[NET_FRAME_MAX_SIZE];
+        size_t length = game_command_encode(&command, payload, sizeof(payload));
+        length = net_frame_encode(bytes, sizeof(bytes), NET_RECORD_COMMAND,
+                                  g_net_lobby.local_slot, payload, length);
+        if (!net_send(0, bytes, length)) net_drop_peer(0);
+    }
+    return predicted;
+}
+
+#define ISSUE_COMMAND(kind, ...) \
+    issue_command((kind), sizeof((int32_t[]){__VA_ARGS__}) / sizeof(int32_t), \
+                  (int32_t[]){__VA_ARGS__})
+
+/* Runs the turns this frame may take: one tick per 50 ms frame like solo,
+   up to three when a guest holds bundles well ahead (FUN_00413b68's
+   catch-up). Commands of a turn run before its first tick. */
+static void net_run_frame(HWND window)
+{
+    unsigned budget = 1;
+    GameCommandContext context;
+    (void)window;
+    if (!g_net_in_game || !g_game_session_valid) return;
+    context.pads = &g_pad_catalog;
+    if (g_net_mode == NET_MODE_CLIENT &&
+        net_lockstep_turns_ready(&g_net_lockstep) > NET_TURN_DELAY + 1U) budget = 3;
+    while (budget-- != 0U && net_lockstep_can_tick(&g_net_lockstep)) {
+        const NetTurnBundle *bundle = net_lockstep_turn_commands(&g_net_lockstep);
+        NetTurnBundle created;
+        unsigned i;
+        if (bundle != NULL)
+            for (i = 0; i < bundle->command_count; ++i)
+                (void)game_command_apply(&g_game_session, &context, &bundle->commands[i]);
+        simulate_session_tick(g_game_session.simulation_tick);
+        if (net_lockstep_finish_tick(&g_net_lockstep, game_session_sync_hash(&g_game_session),
+                                     &created)) {
+            uint8_t payload[NET_FRAME_MAX_PAYLOAD];
+            uint8_t bytes[NET_FRAME_MAX_SIZE];
+            size_t length;
+            if (g_net_mode == NET_MODE_HOST) {
+                length = net_lockstep_encode_bundle(&created, payload, sizeof(payload));
+                length = net_frame_encode(bytes, sizeof(bytes), NET_RECORD_TURN, 0,
+                                          payload, length);
+                if (length != 0U) net_host_broadcast(bytes, length);
+            } else {
+                uint32_t done = net_lockstep_turn(&g_net_lockstep);
+                payload[0] = (uint8_t)(done & 0xffU);
+                payload[1] = (uint8_t)((done >> 8) & 0xffU);
+                payload[2] = (uint8_t)((done >> 16) & 0xffU);
+                payload[3] = (uint8_t)(done >> 24);
+                length = net_frame_encode(bytes, sizeof(bytes), NET_RECORD_TURN_ACK,
+                                          g_net_lobby.local_slot, payload, 4);
+                if (!net_send(0, bytes, length)) {
+                    net_drop_peer(0);
+                    return;
+                }
+            }
+        }
+        if (g_net_lockstep.desync) {
+            (void)snprintf(g_net_status, sizeof(g_net_status),
+                           "Desynchronisation au tour %lu",
+                           (unsigned long)g_net_lockstep.desync_turn);
+            break;
+        }
+    }
 }
 
 static void net_leave_lobby(void)

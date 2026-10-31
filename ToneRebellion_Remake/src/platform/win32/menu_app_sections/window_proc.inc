@@ -1,3 +1,74 @@
+/* One tick of the shared session: queued requests, animations, moves,
+   AI, then the world/audio events it produced. Solo runs it on the island
+   screen with the UI clock; a network game runs it on every screen with
+   the session clock (net_run_frame) so every machine steps alike. */
+static void simulate_session_tick(uint32_t source_tick)
+{
+    GameSessionAudioEvent audio_event;
+    GameSessionWorldEvent world_event;
+    game_session_dispatch_island_events(&g_game_session);
+    (void)game_session_dispatch_trade_requests(&g_game_session);
+    (void)game_session_dispatch_build_selections(&g_game_session);
+    (void)game_session_dispatch_glyph_actions(&g_game_session);
+    (void)game_session_dispatch_cast_actions(&g_game_session);
+    (void)game_session_dispatch_onoff_actions(&g_game_session,
+                                              &g_pad_catalog);
+    game_session_tick_item_animations_with_floaters(
+        &g_game_session, &g_building_render_catalog,
+        &g_floater_catalog, &g_pad_catalog);
+    game_session_update_construction_tasks(&g_game_session,
+                                           &g_pad_catalog);
+    game_session_tick_floater_moves(&g_game_session, source_tick,
+                                    &g_pad_catalog);
+    (void)game_session_update_resource_requests(&g_game_session);
+    game_session_tick_leviathan_ai(&g_game_session);
+    while (game_session_pop_world_event(&g_game_session,
+                                        &world_event)) {
+        if (world_event.kind ==
+            GAME_SESSION_WORLD_EVENT_ISLAND_REACHED) {
+            g_island_access_notice_level = world_event.payload;
+            g_island_access_notice_until =
+                g_menu.animation_ticks + 90U;
+        } else if (world_event.kind ==
+            GAME_SESSION_WORLD_EVENT_BUILDING_DESTROYED) {
+            g_building_destroyed_notice_until =
+                g_menu.animation_ticks + 90U;
+        }
+    }
+    /* Drain the whole queue each frame (a backlog played one
+       event per frame lands long after the death); PlaySound
+       keeps a single voice, so only the first audible event of
+       the frame plays. */
+    int audio_played = 0;
+    while (game_session_pop_audio_event(&g_game_session, &audio_event)) {
+        const unsigned char *sound = NULL;
+        if (audio_played ||
+            !game_session_audio_event_is_audible(&audio_event,
+                g_menu.screen == SCREEN_ISLAND,
+                g_menu.selected_map_island)) continue;
+        if (audio_event.kind == GAME_SESSION_AUDIO_BUILD) {
+            sound = audio_event.owner_id == 4
+                ? g_levbuild_sound : g_fltbuild_sound;
+        } else if (audio_event.kind == GAME_SESSION_AUDIO_FLOATER_DEATH) {
+            sound = audio_event.owner_id == 4
+                ? g_levdeath_sound : g_fltdeath_sound;
+        } else if (audio_event.kind == GAME_SESSION_AUDIO_BRIDGE) {
+            sound = g_bridge_sound;
+        } else if (audio_event.kind == GAME_SESSION_AUDIO_FLOATER_BIRTH) {
+            sound = audio_event.owner_id == 4
+                ? g_levbirth_sound : g_fltbirth_sound;
+        } else if (audio_event.kind == GAME_SESSION_AUDIO_CAST &&
+                   audio_event.sound < 10U) {
+            sound = g_cast_sounds[audio_event.sound];
+        }
+        if (sound != NULL) {
+            (void)PlaySoundA((LPCSTR)sound, NULL,
+                SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
+            audio_played = 1;
+        }
+    }
+}
+
 static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                                           WPARAM wparam, LPARAM lparam)
 {
@@ -49,6 +120,12 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             slide_panel_tick();
             /* The SlideWindow pause flag (DAT_004bf124) stops the game loop. */
             if (g_paused && g_menu.screen == SCREEN_ISLAND) sim_steps = 0;
+            /* A network game advances by turns on every screen; the loop
+               below then only drives the UI animation clock. */
+            if (g_net_in_game) {
+                sim_steps = 1U;
+                net_run_frame(window);
+            }
             /* FUN_0045eaa7 sets the end-sequence flag when the solo tribe has
                no floaters left; FUN_00464e4d then queues SetState(2) 100 ticks
                into S3 and SetState(0) (title) about 1,560 ticks after the flag
@@ -84,72 +161,9 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                    animation tick so the hover frame follows the moving art. */
                 (void)update_world_map_hover(g_mouse_x, g_mouse_y);
             }
-            if (g_menu.screen == SCREEN_ISLAND && g_game_session_valid) {
-                GameSessionAudioEvent audio_event;
-                GameSessionWorldEvent world_event;
-                game_session_dispatch_island_events(&g_game_session);
-                (void)game_session_dispatch_trade_requests(&g_game_session);
-                (void)game_session_dispatch_build_selections(&g_game_session);
-                (void)game_session_dispatch_glyph_actions(&g_game_session);
-                (void)game_session_dispatch_cast_actions(&g_game_session);
-                (void)game_session_dispatch_onoff_actions(&g_game_session,
-                                                          &g_pad_catalog);
-                game_session_tick_item_animations_with_floaters(
-                    &g_game_session, &g_building_render_catalog,
-                    &g_floater_catalog, &g_pad_catalog);
-                game_session_update_construction_tasks(&g_game_session,
-                                                       &g_pad_catalog);
-                game_session_tick_floater_moves(&g_game_session,
-                                                g_menu.animation_ticks,
-                                                &g_pad_catalog);
-                (void)game_session_update_resource_requests(&g_game_session);
-                game_session_tick_leviathan_ai(&g_game_session);
-                while (game_session_pop_world_event(&g_game_session,
-                                                    &world_event)) {
-                    if (world_event.kind ==
-                        GAME_SESSION_WORLD_EVENT_ISLAND_REACHED) {
-                        g_island_access_notice_level = world_event.payload;
-                        g_island_access_notice_until =
-                            g_menu.animation_ticks + 90U;
-                    } else if (world_event.kind ==
-                        GAME_SESSION_WORLD_EVENT_BUILDING_DESTROYED) {
-                        g_building_destroyed_notice_until =
-                            g_menu.animation_ticks + 90U;
-                    }
-                }
-                /* Drain the whole queue each frame (a backlog played one
-                   event per frame lands long after the death); PlaySound
-                   keeps a single voice, so only the first audible event of
-                   the frame plays. */
-                int audio_played = 0;
-                while (game_session_pop_audio_event(&g_game_session, &audio_event)) {
-                    const unsigned char *sound = NULL;
-                    if (audio_played ||
-                        !game_session_audio_event_is_audible(&audio_event,
-                            g_menu.screen == SCREEN_ISLAND,
-                            g_menu.selected_map_island)) continue;
-                    if (audio_event.kind == GAME_SESSION_AUDIO_BUILD) {
-                        sound = audio_event.owner_id == 4
-                            ? g_levbuild_sound : g_fltbuild_sound;
-                    } else if (audio_event.kind == GAME_SESSION_AUDIO_FLOATER_DEATH) {
-                        sound = audio_event.owner_id == 4
-                            ? g_levdeath_sound : g_fltdeath_sound;
-                    } else if (audio_event.kind == GAME_SESSION_AUDIO_BRIDGE) {
-                        sound = g_bridge_sound;
-                    } else if (audio_event.kind == GAME_SESSION_AUDIO_FLOATER_BIRTH) {
-                        sound = audio_event.owner_id == 4
-                            ? g_levbirth_sound : g_fltbirth_sound;
-                    } else if (audio_event.kind == GAME_SESSION_AUDIO_CAST &&
-                               audio_event.sound < 10U) {
-                        sound = g_cast_sounds[audio_event.sound];
-                    }
-                    if (sound != NULL) {
-                        (void)PlaySoundA((LPCSTR)sound, NULL,
-                            SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
-                        audio_played = 1;
-                    }
-                }
-            }
+            if (g_menu.screen == SCREEN_ISLAND && g_game_session_valid &&
+                !g_net_in_game)
+                simulate_session_tick(g_menu.animation_ticks);
             }
             /* Redraw the full animated screen at every 20 Hz frame,
                including while the Tasks panel is open. */
@@ -441,8 +455,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                     g_menu.selected_tribe) {
                 /* Remake shortcut kept from the earlier port (FA_MergeWith);
                    FUN_00435826 has no modifier branch. */
-                (void)game_session_order_floater_to_merge(&g_game_session,
-                    g_menu.selected_tribe, (uint8_t)g_menu.selected_map_island,
+                (void)ISSUE_COMMAND(GAME_COMMAND_ORDER_FLOATER_TO_MERGE, g_menu.selected_tribe, (uint8_t)g_menu.selected_map_island,
                     (unsigned int)g_selected_floater,
                     (unsigned int)clicked_floater);
             } else {
@@ -464,17 +477,17 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
     case WM_KEYDOWN:
         /* The original logo loop polls no input. */
         if (g_menu.screen == SCREEN_LOGO) return 0;
-        if (g_menu.screen == SCREEN_ISLAND &&
+        if (g_menu.screen == SCREEN_ISLAND && !g_net_in_game &&
             (wparam == '8' || wparam == VK_SUBTRACT)) {
             if (g_sim_speed > 1U) --g_sim_speed;   /* FUN_0046a5b7: min 1 */
             return 0;
         }
-        if (g_menu.screen == SCREEN_ISLAND &&
+        if (g_menu.screen == SCREEN_ISLAND && !g_net_in_game &&
             (wparam == '9' || wparam == VK_ADD)) {
             if (g_sim_speed < 3U) ++g_sim_speed;   /* FUN_0046a5b7: max 3 */
             return 0;
         }
-        if (wparam == VK_F5 && (g_menu.screen == SCREEN_WORLD_MAP ||
+        if (wparam == VK_F5 && !g_net_in_game && (g_menu.screen == SCREEN_WORLD_MAP ||
                                 g_menu.screen == SCREEN_ISLAND)) {
             /* Port shortcut for the Save screen (state 5); the native entry
                point is not established. */
@@ -493,6 +506,15 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             InvalidateRect(window, NULL, FALSE);
             return 0;
         }
+        if (wparam == 'C' && e2e_enabled() && g_game_session_valid &&
+            g_menu.selected_tribe >= 0 &&
+            g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
+            /* Test aid (only with TONE_REBELLION_E2E_STATE): the Hall
+               build-tone stock button, sent as a command like a click. */
+            (void)ISSUE_COMMAND(GAME_COMMAND_CYCLE_RESOURCE_STOCK,
+                g_menu.selected_tribe, GAME_RESOURCE_BUILD_TONE);
+            return 0;
+        }
         if (wparam == 'R' && g_menu.screen == SCREEN_WORLD_MAP &&
             e2e_enabled() && g_menu.selected_map_island >= 0) {
             /* Test aid (only with TONE_REBELLION_E2E_STATE): reopen the last
@@ -501,7 +523,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             InvalidateRect(window, NULL, FALSE);
             return 0;
         }
-        if (wparam == VK_F9 && g_menu.screen == SCREEN_ISLAND &&
+        if (wparam == VK_F9 && g_menu.screen == SCREEN_ISLAND && !g_net_in_game &&
             g_game_session_valid && g_menu.selected_tribe >= 0 &&
             g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
             /* Port-only test aid: place the first training building
@@ -557,7 +579,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             InvalidateRect(window, NULL, FALSE);
             return 0;
         }
-        if (wparam == VK_F7 && g_menu.screen == SCREEN_ISLAND &&
+        if (wparam == VK_F7 && g_menu.screen == SCREEN_ISLAND && !g_net_in_game &&
             g_game_session_valid && g_menu.selected_tribe >= 0 &&
             g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
             /* Port-only test aid: remove every floater of the tribe so the
@@ -571,7 +593,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             }
             return 0;
         }
-        if (wparam == VK_F6 && g_menu.screen == SCREEN_ISLAND &&
+        if (wparam == VK_F6 && g_menu.screen == SCREEN_ISLAND && !g_net_in_game &&
             g_game_session_valid && g_menu.selected_tribe >= 0 &&
             g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
             /* Port-only test aid: place a producer (0x25..0x27) on a free site
@@ -616,7 +638,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             InvalidateRect(window, NULL, FALSE);
             return 0;
         }
-        if (wparam == VK_F8 && g_menu.screen == SCREEN_ISLAND &&
+        if (wparam == VK_F8 && g_menu.screen == SCREEN_ISLAND && !g_net_in_game &&
             g_game_session_valid && g_menu.selected_tribe >= 0 &&
             g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
             /* Port-only test aid: give the next tribe a base-0x28 block on a
@@ -674,8 +696,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 InvalidateRect(window, NULL, FALSE);
             } else if (g_menu.screen == SCREEN_ISLAND) {
                 if (g_game_session.location_move_active) {
-                    (void)game_session_cancel_location_move(&g_game_session,
-                                                            &g_pad_catalog);
+                    (void)issue_command(GAME_COMMAND_CANCEL_LOCATION_MOVE, 0, NULL);
                 }
                 g_menu.screen = SCREEN_WORLD_MAP;
                 g_hovered_location = -1;

@@ -20,7 +20,7 @@ enum {
     NET_LOBBY_NO_SLOT = 0xff,
     NET_LOBBY_VERSION = 1,
     NET_FRAME_HEADER_SIZE = 4,
-    NET_FRAME_MAX_PAYLOAD = 256,
+    NET_FRAME_MAX_PAYLOAD = 2304,
     NET_FRAME_MAX_SIZE = NET_FRAME_HEADER_SIZE + NET_FRAME_MAX_PAYLOAD,
     NET_LOBBY_DEFAULT_PORT = 28610
 };
@@ -104,11 +104,13 @@ void net_lobby_client_init(NetLobby *lobby);
    -reason; the slot must be a free guest slot (1..3). */
 int net_lobby_host_add_player(NetLobby *lobby, uint8_t slot, const NetFrame *hello);
 void net_lobby_remove_player(NetLobby *lobby, uint8_t slot);
-/* Host: a tribe already held by another connected player is refused. */
+/* Host: any tribe. Several players may share one tribe and play it in
+   cooperation (remake extension; the native type-6 record refuses a tribe
+   another player holds). */
 int net_lobby_set_tribe(NetLobby *lobby, uint8_t slot, uint8_t tribe);
 void net_lobby_set_world(NetLobby *lobby, uint8_t world_index, uint8_t difficulty);
 unsigned net_lobby_player_count(const NetLobby *lobby);
-/* Host: at least two players, every connected player has a distinct tribe. */
+/* Host: at least two players, each with a tribe. */
 int net_lobby_can_start(const NetLobby *lobby);
 int net_lobby_game_start(const NetLobby *lobby, NetGameStart *start);
 

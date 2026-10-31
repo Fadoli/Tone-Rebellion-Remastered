@@ -81,16 +81,14 @@ static void handle_click(HWND window, int x, int y)
         }
     } else if (g_menu.screen == SCREEN_ISLAND) {
         if (obtain_button_at(x, y)) {
-            (void)game_session_queue_obtain_task(&g_game_session,
-                (uint8_t)g_menu.selected_tribe,
+            (void)ISSUE_COMMAND(GAME_COMMAND_QUEUE_OBTAIN_TASK, (uint8_t)g_menu.selected_tribe,
                 (uint8_t)selection_island(),
                 (uint16_t)g_selected_location);
             InvalidateRect(window, NULL, FALSE);
             return;
         }
         if (upgspread_button_at(x, y)) {
-            (void)game_session_toggle_upgspread(&g_game_session,
-                (uint8_t)g_menu.selected_tribe,
+            (void)ISSUE_COMMAND(GAME_COMMAND_TOGGLE_UPGSPREAD, (uint8_t)g_menu.selected_tribe,
                 (uint8_t)selection_island(),
                 (uint16_t)g_selected_location);
             InvalidateRect(window, NULL, FALSE);
@@ -160,8 +158,7 @@ static void handle_click(HWND window, int x, int y)
         {
             int training_control = training_stock_control_at(x, y);
             if (training_control != 0) {
-                (void)game_session_toggle_training_stock(&g_game_session,
-                    (uint8_t)g_menu.selected_tribe,
+                (void)ISSUE_COMMAND(GAME_COMMAND_TOGGLE_TRAINING_STOCK, (uint8_t)g_menu.selected_tribe,
                     (uint8_t)selection_island(),
                     (uint16_t)g_selected_location, training_control - 1);
                 InvalidateRect(window, NULL, FALSE);
@@ -174,8 +171,7 @@ static void handle_click(HWND window, int x, int y)
                 /* FUN_0045dcf4: genre 9 at the building's own packed tile. */
                 const GameRuntimeLocation *own = &g_game_session.islands[
                     selection_island()].locations[g_selected_location];
-                (void)game_session_set_building_order(&g_game_session,
-                    (uint8_t)g_menu.selected_tribe,
+                (void)ISSUE_COMMAND(GAME_COMMAND_SET_BUILDING_ORDER, (uint8_t)g_menu.selected_tribe,
                     (uint8_t)selection_island(),
                     (uint16_t)g_selected_location, 9,
                     (uint8_t)selection_island(), own->x, own->y);
@@ -208,8 +204,7 @@ static void handle_click(HWND window, int x, int y)
                     (uint8_t)g_menu.selected_map_island,
                     (uint16_t)(x + g_island_scroll_x), (uint16_t)y);
             }
-            if (target >= 0 && game_session_set_building_order(&g_game_session,
-                    (uint8_t)g_menu.selected_tribe,
+            if (target >= 0 && ISSUE_COMMAND(GAME_COMMAND_SET_BUILDING_ORDER, (uint8_t)g_menu.selected_tribe,
                     (uint8_t)selection_island(),
                     (uint16_t)g_selected_location,
                     (unsigned int)g_defend_area_armed,
@@ -224,8 +219,7 @@ static void handle_click(HWND window, int x, int y)
         if (g_game_session.location_move_active && x >= 0 &&
             x < LOGICAL_WIDTH && y >= 0 && y < 320) {
             int target_location = island_location_at(x, y);
-            if (target_location >= 0 && game_session_finish_location_move(
-                    &g_game_session, (uint8_t)g_menu.selected_tribe,
+            if (target_location >= 0 && ISSUE_COMMAND(GAME_COMMAND_FINISH_LOCATION_MOVE, (uint8_t)g_menu.selected_tribe,
                     (uint8_t)g_menu.selected_map_island,
                     (uint16_t)target_location)) {
                 select_location_on_view(target_location);
@@ -272,8 +266,12 @@ static void handle_click(HWND window, int x, int y)
                         g_game_session.pending_events[slot];
                     const uint8_t subtype = task_option->send_message[0] == 4003
                         ? 12 : (uint8_t)(12 + task_option->send_message[1]);
-                    if (game_session_dispatch_task_command(&g_game_session,
-                            slot, subtype, &expected)) {
+                    if (ISSUE_COMMAND(GAME_COMMAND_DISPATCH_TASK_COMMAND,
+                            slot, subtype, (int32_t)expected.active,
+                            expected.assigned_floater_count, expected.priority,
+                            expected.player_id, expected.payload_0a,
+                            expected.payload_0c, expected.payload_0e,
+                            expected.action_type, expected.payload_12)) {
                         if (subtype == 12) g_selected_task_slot = -1;
                         InvalidateRect(window, NULL, FALSE);
                     }
@@ -367,8 +365,7 @@ static void handle_click(HWND window, int x, int y)
                 selection_island()].location_count) {
             int cast_action = selected_cast_action_at(x, y);
             if (cast_action >= 0) {
-                (void)game_session_queue_cast_action_target(&g_game_session,
-                    (uint8_t)g_menu.selected_tribe,
+                (void)ISSUE_COMMAND(GAME_COMMAND_QUEUE_CAST_ACTION, (uint8_t)g_menu.selected_tribe,
                     (uint8_t)selection_island(),
                     (uint16_t)g_selected_location, (uint8_t)cast_action,
                     (int16_t)g_selected_floater);
@@ -384,8 +381,7 @@ static void handle_click(HWND window, int x, int y)
             if (onoff_control != NULL) {
                 /* Message 101/index 0 reaches type-1/subtype-0; the island
                    tick applies the observed bit-0x400 toggle and budget gate. */
-                (void)game_session_queue_onoff_action(&g_game_session,
-                    (uint8_t)g_menu.selected_tribe,
+                (void)ISSUE_COMMAND(GAME_COMMAND_QUEUE_ONOFF_ACTION, (uint8_t)g_menu.selected_tribe,
                     (uint8_t)selection_island(),
                     (uint16_t)g_selected_location);
                 InvalidateRect(window, NULL, FALSE);
@@ -402,13 +398,11 @@ static void handle_click(HWND window, int x, int y)
                 int32_t base_item_id = location->record_value_10 -
                     (int32_t)g_menu.selected_tribe * 16;
                 if (base_item_id >= 0x2c && base_item_id <= 0x2f) {
-                    (void)game_session_toggle_staff_upgrade_request(
-                        &g_game_session, (uint8_t)g_menu.selected_tribe,
+                    (void)ISSUE_COMMAND(GAME_COMMAND_TOGGLE_STAFF_UPGRADE, (uint8_t)g_menu.selected_tribe,
                         (uint8_t)selection_island(),
                         (uint16_t)g_selected_location);
                 } else {
-                    (void)game_session_cycle_source_capacity(&g_game_session,
-                        (uint8_t)selection_island(),
+                    (void)ISSUE_COMMAND(GAME_COMMAND_CYCLE_SOURCE_CAPACITY, (uint8_t)selection_island(),
                         (uint16_t)g_selected_location);
                 }
                 InvalidateRect(window, NULL, FALSE);
@@ -422,8 +416,7 @@ static void handle_click(HWND window, int x, int y)
             if (repair_control != NULL) {
                 /* FUN_004337d9 and FUN_004459e6 use +0x0a for island and
                    +0x0e for location on repair task records. */
-                (void)game_session_pending_event_add(&g_game_session,
-                    (int16_t)g_menu.selected_tribe,
+                (void)ISSUE_COMMAND(GAME_COMMAND_PENDING_EVENT_ADD, (int16_t)g_menu.selected_tribe,
                     (int16_t)selection_island(),
                     0x12, 0, (int16_t)g_selected_location, 0);
                 return;
@@ -447,11 +440,9 @@ static void handle_click(HWND window, int x, int y)
                        own move model. The hit never falls through to the
                        location deselect. */
                     if (g_game_session.location_move_active) {
-                        (void)game_session_cancel_location_move(&g_game_session,
-                                                                &g_pad_catalog);
+                        (void)issue_command(GAME_COMMAND_CANCEL_LOCATION_MOVE, 0, NULL);
                     } else if (selected_location_can_be_grabbed()) {
-                        (void)game_session_begin_location_move(&g_game_session,
-                            &g_pad_catalog, (uint8_t)g_menu.selected_tribe,
+                        (void)ISSUE_COMMAND(GAME_COMMAND_BEGIN_LOCATION_MOVE, (uint8_t)g_menu.selected_tribe,
                             (uint8_t)selection_island(),
                             (uint16_t)g_selected_location);
                     }
@@ -540,21 +531,18 @@ static void handle_click(HWND window, int x, int y)
                 /* FUN_0043e296 sends subtype 10 from the active local Hall. */
             } else if (trade_control != NULL) {
                 if (strcmp(trade_control->name, "TradeZERO") == 0) {
-                    (void)game_session_clear_trade_offers(
-                        &g_game_session, (uint8_t)hall_player);
+                    (void)ISSUE_COMMAND(GAME_COMMAND_CLEAR_TRADE_OFFERS, (uint8_t)hall_player);
                 } else {
                     /* FUN_0042fa0f(4011) queues type-0xb messages for each
                        recipient with a nonzero row, then clears the table.
                        The local tick applies those transfers through the
                        observed FUN_00465793 receiver path. */
-                    (void)game_session_commit_trade_offers(
-                        &g_game_session, (uint8_t)hall_player);
+                    (void)ISSUE_COMMAND(GAME_COMMAND_COMMIT_TRADE_OFFERS, (uint8_t)hall_player);
                 }
             } else if (button_index >= 0) {
                 if (button_index == WINDOW_ISLAND_BUTTON_MAP) {
                     if (g_game_session.location_move_active) {
-                        (void)game_session_cancel_location_move(&g_game_session,
-                                                                &g_pad_catalog);
+                        (void)issue_command(GAME_COMMAND_CANCEL_LOCATION_MOVE, 0, NULL);
                     }
                     g_menu.screen = SCREEN_WORLD_MAP;
                     g_selected_floater = -1;
@@ -583,8 +571,7 @@ static void handle_click(HWND window, int x, int y)
                         g_menu.selected_tribe < GAME_START_PLAYER_COUNT &&
                         g_menu.selected_map_island >= 0 &&
                         g_menu.selected_map_island < g_game_session.island_count) {
-                        (void)game_session_queue_island_event3_subtype0(
-                            &g_game_session, g_menu.selected_tribe,
+                        (void)ISSUE_COMMAND(GAME_COMMAND_QUEUE_ISLAND_EVENT3, g_menu.selected_tribe,
                             (uint8_t)g_menu.selected_map_island);
                     }
                 }
@@ -624,8 +611,7 @@ static void handle_click(HWND window, int x, int y)
                 if (hall_panel_mode == WINDOW_ISLAND_PANEL_TRADE &&
                     selected_hall_player() >= 0) {
                     /* FUN_0043eab5 message 1 zeroes the nine offers on open. */
-                    (void)game_session_clear_trade_offers(
-                        &g_game_session, (uint8_t)selected_hall_player());
+                    (void)ISSUE_COMMAND(GAME_COMMAND_CLEAR_TRADE_OFFERS, (uint8_t)selected_hall_player());
                 }
                 if (hall_panel_mode == WINDOW_ISLAND_PANEL_INVENTORY) {
                     g_inventory_page = 0;
@@ -645,8 +631,7 @@ static void handle_click(HWND window, int x, int y)
                         NULL, 0));
                 g_hovered_inventory_item = -1;
             } else if (stock_control >= 0) {
-                (void)game_session_cycle_resource_stock_mode(
-                    &g_game_session, (uint8_t)hall_player,
+                (void)ISSUE_COMMAND(GAME_COMMAND_CYCLE_RESOURCE_STOCK, (uint8_t)hall_player,
                     (GameResourceType)stock_control);
             } else if (clicked_roster_floater >= 0) {
                 IslandPanelSelection selection = {
@@ -710,8 +695,7 @@ static void handle_click(HWND window, int x, int y)
                                with the clicked island/location and selected
                                glyph. The receiver's raw record filter (+0
                                player, +4 == 8) and runtime order are not modelled. */
-                            (void)game_session_queue_glyph_action(
-                                &g_game_session, g_menu.selected_tribe,
+                            (void)ISSUE_COMMAND(GAME_COMMAND_QUEUE_GLYPH_ACTION, g_menu.selected_tribe,
                                 (uint8_t)g_menu.selected_map_island,
                                 (uint16_t)clicked_location,
                                 (uint8_t)g_selected_glyph);
@@ -767,8 +751,7 @@ static void handle_click(HWND window, int x, int y)
                                         target_location = clicked_location;
                                 }
                             }
-                            (void)game_session_queue_inventory_action(
-                                &g_game_session, g_menu.selected_tribe,
+                            (void)ISSUE_COMMAND(GAME_COMMAND_QUEUE_INVENTORY_ACTION, g_menu.selected_tribe,
                                 (uint8_t)g_menu.selected_map_island,
                                 (uint16_t)target_location,
                                 (uint8_t)g_selected_inventory_item);

@@ -78,7 +78,8 @@ static int open_island_view(HWND window, int map_island_index)
         char tune_id[16];
         if (game_music_enter_realm(&g_game_music, (uint8_t)island_id,
                                    (uint8_t)g_game_session.config.selected_tribe,
-                                   &g_game_session.random_state,
+                                   g_net_in_game ? &g_net_local_rng
+                                                 : &g_game_session.random_state,
                                    tune_id, sizeof(tune_id))) {
             if (tune_id[0] != '\0') set_background_tune(tune_id);
         }
@@ -922,7 +923,7 @@ static void island_right_click(int clicked_floater, int x, int y)
                 target_y = 0;
             }
         }
-        (void)game_session_set_building_order(&g_game_session, player,
+        (void)ISSUE_COMMAND(GAME_COMMAND_SET_BUILDING_ORDER, player,
             (uint8_t)building_island, (uint16_t)g_selected_location, genre,
             viewed, target, target_y);
         g_defend_area_armed = 0;
@@ -1117,8 +1118,7 @@ static int adjust_trade_cell(int x, int y, int direction)
     if (panel == NULL ||
         !game_trade_cell_at(x - panel->pane.left, y - panel->pane.top,
                             &resource_row, &target_column)) return 0;
-    return game_session_adjust_trade_offer(&g_game_session,
-        (uint8_t)hall_player, resource_row, target_column, direction);
+    return ISSUE_COMMAND(GAME_COMMAND_ADJUST_TRADE_OFFER, (uint8_t)hall_player, resource_row, target_column, direction);
 }
 
 static int update_diplomacy_hover(int x, int y)
@@ -1163,8 +1163,7 @@ static int click_diplomacy_action(int x, int y, int player_slot)
                                       hit.displayed_column, &target_player)) {
         return 0;
     }
-    (void)game_session_toggle_diplomacy(&g_game_session,
-        (uint8_t)player_slot, target_player, hit.action);
+    (void)ISSUE_COMMAND(GAME_COMMAND_TOGGLE_DIPLOMACY, (uint8_t)player_slot, target_player, hit.action);
     return 1;
 }
 
@@ -1292,8 +1291,7 @@ static int select_iw_construct_item(void)
                 /* FUN_0042fa0f turns this selection message into the observed
                    category-0/type-5 request. Its consumer is unknown, so the
                    UI queues the packet and does not place the item here. */
-                build_queued = game_session_queue_build_selection(
-                    &g_game_session, g_game_session.config.selected_tribe,
+                build_queued = ISSUE_COMMAND(GAME_COMMAND_QUEUE_BUILD_SELECTION, g_game_session.config.selected_tribe,
                     (uint8_t)g_menu.selected_map_island,
                     (uint16_t)view_selected_location(),
                     (uint16_t)message->value);

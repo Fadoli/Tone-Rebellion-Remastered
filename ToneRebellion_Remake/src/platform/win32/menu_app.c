@@ -29,6 +29,7 @@
 #include "world_map.h"
 #include "tone_rng.h"
 #include "net_lobby.h"
+#include "net_lockstep.h"
 
 #include <math.h>
 #include <limits.h>
@@ -473,6 +474,8 @@ static void select_location_anywhere(int island, int location)
 
 #include "menu_app_sections/world_map_render.inc"
 
+#include "menu_app_sections/net_session.inc"
+
 #include "menu_app_sections/island_interaction.inc"
 
 #include "menu_app_sections/save_game.inc"
@@ -498,8 +501,6 @@ static void select_location_anywhere(int island, int location)
 
 #include "menu_app_sections/logo_splash.inc"
 #include "menu_app_sections/end_game_screen.inc"
-
-#include "menu_app_sections/net_session.inc"
 
 #include "menu_app_sections/render_dispatch.inc"
 
