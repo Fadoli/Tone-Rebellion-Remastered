@@ -679,7 +679,7 @@ static void test_oneshot_attack_visual_plays_once_at_the_attacker(void)
     attacker = spell_caster(&session, 0, 0, 0, 1);  /* level 1: frames 16..30 */
     attacker->type_index = 1;
     attacker->source_subtype = 1;
-    assert(game_session_spawn_attack_visual(&session, attacker, 6, 50, 50, 0));
+    assert(game_session_spawn_attack_visual(&session, attacker, -1, 6, 50, 50, 0));
     assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
     assert(def == 0 && frame == 15 && x == 1000 && y == 1000 && island == 0);
     for (tick = 0; tick < 14; ++tick) game_session_tick_combat_effects(&session, 1);
@@ -688,7 +688,7 @@ static void test_oneshot_attack_visual_plays_once_at_the_attacker(void)
     game_session_tick_combat_effects(&session, 1);
     assert(!game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
     /* Even ticks never step. */
-    assert(game_session_spawn_attack_visual(&session, attacker, 6, 50, 50, 0));
+    assert(game_session_spawn_attack_visual(&session, attacker, -1, 6, 50, 50, 0));
     game_session_tick_combat_effects(&session, 2);
     assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
     assert(frame == 15);
@@ -712,7 +712,7 @@ static void test_cast_attack_visual_chains_into_a_bullet_that_reaches_its_target
     attacker->source_subtype = 2;
     attacker->order_target_floater = 1;
     add_test_worker(&session, 1, 0, 1100, 1000, 4);
-    assert(game_session_spawn_attack_visual(&session, attacker, 6, 1100, 1000, 0));
+    assert(game_session_spawn_attack_visual(&session, attacker, -1, 6, 1100, 1000, 0));
     assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
     assert(def == 1 && x == 1000); /* cast stays on the attacker, no attxy */
     for (tick = 0; tick < 3; ++tick) game_session_tick_combat_effects(&session, 1);
@@ -749,12 +749,12 @@ static void test_bullet_visual_applies_attxy_mirroring_and_timeout(void)
     attacker = spell_caster(&session, 0, 0, 0, 0);
     attacker->type_index = 1;
     attacker->source_subtype = 2;
-    assert(game_session_spawn_attack_visual(&session, attacker, 7, 60000, 1000, 0));
+    assert(game_session_spawn_attack_visual(&session, attacker, -1, 7, 60000, 1000, 0));
     assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
     assert(x == 1010 && y == 996);
     session.attack_visuals[0].active = 0;
     attacker->facing_left = 1;
-    assert(game_session_spawn_attack_visual(&session, attacker, 7, 60000, 1000, 0));
+    assert(game_session_spawn_attack_visual(&session, attacker, -1, 7, 60000, 1000, 0));
     assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
     assert(x == 990 && y == 1004); /* offsets negate when mirrored */
     /* A far destination ends through the 200-update timeout. */
@@ -782,7 +782,7 @@ static void test_lightning_visual_grows_toward_the_target_then_ends(void)
     attacker = spell_caster(&session, 0, 0, 0, 0);
     attacker->type_index = 1;
     attacker->source_subtype = 3;
-    assert(game_session_spawn_attack_visual(&session, attacker, 7, 700, 1000, 0));
+    assert(game_session_spawn_attack_visual(&session, attacker, -1, 7, 700, 1000, 0));
     /* The bolt is anchored on the target. */
     assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island,
                                       &impact));
@@ -831,8 +831,8 @@ static void test_missing_atteff_rows_are_not_spawned(void)
     attacker = spell_caster(&session, 0, 0, 0, 0);
     attacker->type_index = 1;
     attacker->source_subtype = 4; /* row without atteff */
-    assert(!game_session_spawn_attack_visual(&session, attacker, 6, 1, 1, 0));
-    assert(!game_session_spawn_attack_visual(NULL, attacker, 6, 1, 1, 0));
+    assert(!game_session_spawn_attack_visual(&session, attacker, -1, 6, 1, 1, 0));
+    assert(!game_session_spawn_attack_visual(NULL, attacker, -1, 6, 1, 1, 0));
 }
 
 static void test_arrived_bullet_turns_into_the_realm_impact_when_the_hit_landed(void)
@@ -856,7 +856,7 @@ static void test_arrived_bullet_turns_into_the_realm_impact_when_the_hit_landed(
     attacker->attack_realm = 1; /* SUP */
     attacker->order_target_floater = -1;
     /* damage 3 -> level 1; target 40 px away at SPEED 5, arrival within 6 */
-    assert(game_session_spawn_attack_visual(&session, attacker, 7, 1050, 1000, 3));
+    assert(game_session_spawn_attack_visual(&session, attacker, -1, 7, 1050, 1000, 3));
     for (tick = 0; tick < 20; ++tick) {
         game_session_tick_combat_effects(&session, 1);
         assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y,
@@ -877,11 +877,178 @@ static void test_arrived_bullet_turns_into_the_realm_impact_when_the_hit_landed(
     assert(!game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
 
     /* A miss (damage 0) just frees the slot on arrival. */
-    assert(game_session_spawn_attack_visual(&session, attacker, 7, 1050, 1000, 0));
+    assert(game_session_spawn_attack_visual(&session, attacker, -1, 7, 1050, 1000, 0));
     for (tick = 0; tick < 40 && game_session_attack_visual(&session, 0, &def,
              &frame, &x, &y, &island, &impact); ++tick) {
         assert(impact < 0);
         game_session_tick_combat_effects(&session, 1);
     }
     assert(!game_session_attack_visual(&session, 0, &def, &frame, &x, &y, &island, &impact));
+}
+
+/* Leviathan unit (type 4, atteff GAZER bullet) at (1000,1000) striking a
+   worker 100 px away; the attack state fires on the first combat tick. */
+static void setup_deferred_strike(GameSession *session, uint32_t seed)
+{
+    GameFloaterStart *attacker;
+    setup_attack_visual_session(session, 4, 0, 2);
+    session->random_state = seed;
+    session->effect_impact_frame_starts[1][1] = 20;
+    session->effect_impact_frame_counts[1][1] = 3;
+    session->effect_impact_frame_starts[1][2] = 30;
+    session->effect_impact_frame_counts[1][2] = 3;
+    session->effect_impact_frame_starts[1][3] = 40;
+    session->effect_impact_frame_counts[1][3] = 3;
+    session->effect_impact_frame_starts[1][0] = 10;
+    session->effect_impact_frame_counts[1][0] = 3;
+    attacker = spell_caster(session, 0, 4, 0, 0);
+    attacker->type_index = 4;
+    attacker->source_subtype = 0;
+    attacker->attack_strength = 2; /* low hit chance: both outcomes occur */
+    attacker->attack_realm = 1;
+    attacker->movement_state = 6;
+    attacker->attack_period = 0;
+    attacker->attack_timer = 0;
+    attacker->order_target_floater = 1;
+    attacker->source_runtime_flags |= 0x040U;
+    add_test_worker(session, 1, 0, 1100, 1000, 0);
+}
+
+static void test_atteff_bullet_hit_is_resolved_on_arrival_not_at_the_strike(void)
+{
+    static GameSession session;
+    uint32_t seed;
+    unsigned int hits = 0;
+    unsigned int misses = 0;
+
+    for (seed = 1; seed <= 40; ++seed) {
+        int def;
+        int impact = -1;
+        unsigned int frame;
+        uint16_t x;
+        uint16_t y;
+        uint8_t island;
+        unsigned int tick;
+        int16_t hp_before;
+        int arrived_tick = -1;
+
+        setup_deferred_strike(&session, seed * 2654435761U); /* spread seeds */
+        session.floaters[0].attack_strength = (uint8_t)(seed % 7U); /* mixed hit chances */
+        hp_before = session.floaters[1].current_hit_points;
+        game_session_tick_floater_combat(&session, 0);
+        /* The strike spawns the bullet but deals nothing yet. */
+        assert(session.attack_visuals[0].active && session.attack_visuals[0].pending_hit);
+        assert(session.floaters[1].current_hit_points == hp_before);
+        assert(session.floaters[0].attack_effect_active &&
+               session.floaters[0].attack_effect_waits_visual &&
+               session.floaters[0].attack_effect_hidden);
+        assert(!game_session_attack_effect_visual(&session, 0, &(unsigned int){0},
+            &(unsigned int){0}, &(uint16_t){0}, &(uint16_t){0}));
+        for (tick = 0; tick < 100; ++tick) {
+            game_session_tick_combat_effects(&session, 1);
+            if (arrived_tick < 0 && !session.attack_visuals[0].pending_hit) {
+                arrived_tick = (int)tick;
+                break;
+            }
+            /* In flight: no damage, attacker still attacking. */
+            assert(session.floaters[1].current_hit_points == hp_before);
+            assert(session.floaters[0].attack_effect_waits_visual);
+        }
+        assert(arrived_tick >= 15 && arrived_tick <= 25); /* ~95 px at 5 */
+        if (session.floaters[1].current_hit_points < hp_before) {
+            ++hits;
+            /* A landed hit turns the same slot into the realm impact. */
+            assert(game_session_attack_visual(&session, 0, &def, &frame, &x, &y,
+                                              &island, &impact));
+            assert(impact == 1 && x >= 1094);
+            assert(session.floaters[0].attack_effect_waits_visual);
+        } else {
+            ++misses;
+            assert(!session.attack_visuals[0].active);
+        }
+        /* Once the slot is gone the attacker is released. */
+        for (tick = 0; tick < 20; ++tick) game_session_tick_combat_effects(&session, 1);
+        assert(!session.attack_visuals[0].active);
+        assert(!session.floaters[0].attack_effect_active &&
+               !session.floaters[0].attack_effect_waits_visual);
+        assert(session.active_attack_effect_count == 0);
+        game_session_tick_floater_combat(&session, 0);
+        game_session_tick_floater_combat(&session, 0);
+        assert(session.floaters[0].movement_state == 0);
+    }
+    assert(hits > 0 && misses > 0); /* both outcomes exercised across seeds */
+}
+
+static void test_deferred_hit_is_deterministic_for_a_given_seed(void)
+{
+    static GameSession first;
+    static GameSession second;
+    unsigned int tick;
+
+    setup_deferred_strike(&first, 7);
+    setup_deferred_strike(&second, 7);
+    game_session_tick_floater_combat(&first, 0);
+    game_session_tick_floater_combat(&second, 0);
+    for (tick = 0; tick < 60; ++tick) {
+        game_session_tick_combat_effects(&first, 1);
+        game_session_tick_combat_effects(&second, 1);
+    }
+    assert(first.floaters[1].current_hit_points ==
+           second.floaters[1].current_hit_points);
+    assert(first.random_state == second.random_state);
+    /* The cosmetic visual stream never feeds the simulation RNG: draw-only
+       lightning ticks leave random_state untouched. */
+    setup_attack_visual_session(&first, 1, 3, 3);
+    first.random_state = 1234;
+    {
+        GameFloaterStart *attacker = spell_caster(&first, 0, 0, 0, 0);
+        attacker->type_index = 1;
+        attacker->source_subtype = 3;
+        assert(game_session_spawn_attack_visual(&first, attacker, -1, 7, 1, 1, 0));
+    }
+    for (tick = 0; tick < 25; ++tick) game_session_tick_combat_effects(&first, 1);
+    assert(first.random_state == 1234);
+}
+
+static void test_dead_attacker_effect_deals_no_damage_and_frees_the_slot(void)
+{
+    static GameSession session;
+    unsigned int tick;
+    int16_t hp;
+
+    setup_deferred_strike(&session, 3);
+    hp = session.floaters[1].current_hit_points;
+    game_session_tick_floater_combat(&session, 0);
+    session.floaters[0].is_active = 0; /* attacker dies mid-flight */
+    for (tick = 0; tick < 60; ++tick) game_session_tick_combat_effects(&session, 1);
+    assert(session.floaters[1].current_hit_points == hp);
+    assert(!session.attack_visuals[0].active);
+    assert(!session.floaters[0].attack_effect_waits_visual);
+    assert(session.active_attack_effect_count == 0);
+}
+
+static void test_weak_attackers_still_hit_at_the_strike(void)
+{
+    /* Path B (no atteff): damage lands at the strike, impact right away. */
+    static GameSession session;
+    uint32_t seed;
+    unsigned int hits = 0;
+
+    for (seed = 1; seed <= 40 && hits == 0; ++seed) {
+        setup_deferred_strike(&session, seed);
+        session.floaters[0].type_index = 0; /* a plain worker: no atteff row */
+        session.floaters[0].attack_strength = 3;
+        session.floaters[0].attack_impact_frame_counts[0] = 3;
+        session.floaters[0].attack_impact_frame_counts[1] = 3;
+        session.floaters[0].attack_impact_frame_counts[2] = 3;
+        session.floaters[0].attack_impact_frame_counts[3] = 3;
+        game_session_tick_floater_combat(&session, 0);
+        assert(!session.attack_visuals[0].active);
+        assert(!session.floaters[0].attack_effect_waits_visual);
+        if (session.floaters[1].current_hit_points < 200) {
+            ++hits;
+            assert(session.floaters[0].attack_effect_active); /* impact timer */
+        }
+    }
+    assert(hits > 0);
 }

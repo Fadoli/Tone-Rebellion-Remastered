@@ -26,10 +26,19 @@ void game_session_clear_cast_site(GameSession *session,
                                   uint16_t location_index,
                                   GameRuntimeLocation *target);
 
+/* attacker_index >= 0 defers the hit to the visual's arrival; -1 keeps the
+   visual cosmetic with `damage` as its impact level source. */
 int game_session_spawn_attack_visual(GameSession *session,
                                      const GameFloaterStart *attacker,
-                                     uint8_t state, uint16_t target_x,
-                                     uint16_t target_y, int32_t damage);
+                                     int attacker_index, uint8_t state,
+                                     uint16_t target_x, uint16_t target_y,
+                                     int32_t damage);
+/* Strike-time or arrival-time hit of FUN_004200d2 / FUN_00420188 with the
+   targets named explicitly; returns the damage dealt. */
+int32_t game_session_resolve_attack_hit(GameSession *session,
+                                        unsigned int floater_index,
+                                        uint8_t state, int target_floater,
+                                        int target_location);
 
 void game_session_start_attack_effect(GameSession *session,
                                      GameFloaterStart *attacker,

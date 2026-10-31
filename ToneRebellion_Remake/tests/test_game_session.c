@@ -542,6 +542,10 @@ int main(void)
     test_lightning_visual_grows_toward_the_target_then_ends();
     test_missing_atteff_rows_are_not_spawned();
     test_arrived_bullet_turns_into_the_realm_impact_when_the_hit_landed();
+    test_atteff_bullet_hit_is_resolved_on_arrival_not_at_the_strike();
+    test_deferred_hit_is_deterministic_for_a_given_seed();
+    test_dead_attacker_effect_deals_no_damage_and_frees_the_slot();
+    test_weak_attackers_still_hit_at_the_strike();
     (void)puts("game session unit tests passed");
     return 0;
 }

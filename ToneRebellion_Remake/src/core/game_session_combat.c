@@ -47,6 +47,52 @@ static int attack_calls_charge_helper(const GameFloaterStart *attacker)
     return 1;
 }
 
+int32_t game_session_resolve_attack_hit(GameSession *session,
+                                        unsigned int floater_index,
+                                        uint8_t state, int target_floater,
+                                        int target_location)
+{
+    GameFloaterStart *floater;
+    int32_t damage = 0;
+
+    if (session == NULL || floater_index >= session->floater_count) return 0;
+    floater = &session->floaters[floater_index];
+    if (state == GAME_FLOATER_STATE_ATTACK && target_floater >= 0 &&
+        (unsigned int)target_floater < session->floater_count) {
+        GameFloaterStart *target = &session->floaters[(unsigned int)target_floater];
+        damage = game_session_damage_floater(session, floater_index,
+                                             (unsigned int)target_floater);
+        /* FUN_004200d2 reads +0x22 on the indexed target floater and
+           consumes one charge after resolving this attack attempt. */
+        if (attack_calls_charge_helper(floater)) {
+            if (damage > 0) ++target->source_progress_08;
+            if (target->charge_current > 0) --target->charge_current;
+        }
+    } else if (state == GAME_FLOATER_STATE_ATTACK_SITE &&
+               floater->island_index < session->island_count &&
+               target_location >= 0 &&
+               (uint16_t)target_location <
+                   session->islands[floater->island_index].location_count) {
+        if (attack_calls_charge_helper(floater)) {
+            GameRuntimeLocation *target =
+                &session->islands[floater->island_index].locations[
+                    (uint16_t)target_location];
+            damage = game_session_damage_site(session, floater_index,
+                floater->island_index, (uint16_t)target_location, target);
+            if (damage > 0) ++target->source_progress_08;
+            /* FUN_00420188 decrements raw +0x22 after every state-7 site
+               attack, even though its low byte also backs the remake's
+               visibility mirror. */
+            if (target->source_value_22 > 0) {
+                --target->source_value_22;
+                target->tribe_visibility_mask =
+                    (uint8_t)target->source_value_22;
+            }
+        }
+    }
+    return damage;
+}
+
 void game_session_tick_floater_combat(GameSession *session,
                                       unsigned int floater_index)
 {
@@ -67,6 +113,8 @@ void game_session_tick_floater_combat(GameSession *session,
         int32_t damage = 0;
         uint16_t impact_x = floater->x;
         uint16_t impact_y = floater->y;
+        int target_floater = -1;
+        int target_site = -1;
         /* FUN_0041e569 path A: FUN_004207c2() == 0 (category 4 or a charged
            nonzero subtype) with an atteff def spawns that effect instead of
            the realm IMPACT, whether or not the hit lands. */
@@ -75,52 +123,38 @@ void game_session_tick_floater_combat(GameSession *session,
         if (state == GAME_FLOATER_STATE_ATTACK &&
             floater->order_target_floater >= 0 &&
             (unsigned int)floater->order_target_floater < session->floater_count) {
-            GameFloaterStart *target =
-                &session->floaters[(unsigned int)floater->order_target_floater];
-            damage = game_session_damage_floater(
-                session, floater_index,
-                (unsigned int)floater->order_target_floater);
-            impact_x = target->x;
-            impact_y = target->y;
-            /* FUN_004200d2 reads +0x22 on the indexed target floater and
-               consumes one charge after resolving this attack attempt. */
-            if (attack_calls_charge_helper(floater)) {
-                if (damage > 0) ++target->source_progress_08;
-                if (target->charge_current > 0) --target->charge_current;
-            }
+            target_floater = floater->order_target_floater;
+            impact_x = session->floaters[target_floater].x;
+            impact_y = session->floaters[target_floater].y;
         } else if (state == GAME_FLOATER_STATE_ATTACK_SITE &&
                    floater->island_index < session->island_count &&
                    floater->order_target_location >= 0 &&
                    (uint16_t)floater->order_target_location <
                        session->islands[floater->island_index].location_count) {
-            if (attack_calls_charge_helper(floater)) {
-                GameRuntimeLocation *target =
-                    &session->islands[floater->island_index].locations[
-                        (uint16_t)floater->order_target_location];
-                damage = game_session_damage_site(session, floater_index,
-                    floater->island_index,
-                    (uint16_t)floater->order_target_location, target);
-                impact_x = target->x;
-                impact_y = target->y;
-                if (damage > 0) ++target->source_progress_08;
-                /* FUN_00420188 decrements raw +0x22 after every state-7
-                   site attack, even though its low byte also backs the
-                   remake's visibility mirror. */
-                if (target->source_value_22 > 0) {
-                    --target->source_value_22;
-                    target->tribe_visibility_mask =
-                        (uint8_t)target->source_value_22;
-                }
-            }
+            const GameRuntimeLocation *site = &session->islands[
+                floater->island_index].locations[
+                    (uint16_t)floater->order_target_location];
+            target_site = floater->order_target_location;
+            impact_x = site->x;
+            impact_y = site->y;
         }
-        if (damage > 0)
-            game_session_start_attack_effect(session, floater, damage,
-                                             impact_x, impact_y);
-        if (uses_atteff &&
-            game_session_spawn_attack_visual(session, floater, state, impact_x,
-                                             impact_y, damage) &&
-            floater->attack_effect_active)
+        if (uses_atteff && (target_floater >= 0 || target_site >= 0) &&
+            !floater->attack_effect_active &&
+            game_session_spawn_attack_visual(session, floater,
+                (int)floater_index, state, impact_x, impact_y, 0)) {
+            /* FUN_00416ff8 resolves the hit when the effect arrives; the
+               attacker keeps its attack state until the slot is gone. */
+            floater->attack_effect_active = 1;
             floater->attack_effect_hidden = 1;
+            floater->attack_effect_waits_visual = 1;
+            ++session->active_attack_effect_count;
+        } else {
+            damage = game_session_resolve_attack_hit(session, floater_index,
+                state, target_floater, target_site);
+            if (damage > 0)
+                game_session_start_attack_effect(session, floater, damage,
+                                                 impact_x, impact_y);
+        }
     } else if (floater->attack_timer > floater->attack_period &&
                !floater->attack_effect_active) {
         floater->movement_state = 0;
@@ -1510,8 +1544,9 @@ static uint8_t attack_visual_level(const FloaterEffectDef *def, uint8_t wanted)
 
 int game_session_spawn_attack_visual(GameSession *session,
                                      const GameFloaterStart *attacker,
-                                     uint8_t state, uint16_t target_x,
-                                     uint16_t target_y, int32_t damage)
+                                     int attacker_index, uint8_t state,
+                                     uint16_t target_x, uint16_t target_y,
+                                     int32_t damage)
 {
     const FloaterEffectDef *def;
     int row;
@@ -1561,6 +1596,10 @@ int game_session_spawn_attack_visual(GameSession *session,
         visual->impact_realm = attacker->attack_realm >= 0 &&
                                attacker->attack_realm < 4
             ? (int8_t)attacker->attack_realm : (int8_t)-1;
+        visual->attacker = (int16_t)attacker_index;
+        visual->strike_state = state;
+        visual->target_location = (int16_t)attacker->order_target_location;
+        visual->pending_hit = attacker_index >= 0 ? 1U : 0U;
         if (def->type == FLOATER_EFFECT_LIGHTNING)
             init_lightning_visual(session, visual);
         return 1;
@@ -1575,6 +1614,22 @@ static void finish_attack_visual(GameSession *session,
 {
     unsigned int level;
     unsigned int realm;
+    if (visual->pending_hit) {
+        /* FUN_00416ff8 arrival branch: FUN_004200d2 / FUN_00420188 now. A
+           dead attacker's effects are gone, so no hit lands. */
+        visual->pending_hit = 0;
+        visual->impact_damage = 0;
+        if (visual->attacker >= 0 &&
+            (unsigned int)visual->attacker < session->floater_count &&
+            game_session_floater_is_active(&session->floaters[visual->attacker]) &&
+            (session->floaters[visual->attacker].source_runtime_flags & 0x008U) == 0) {
+            int32_t damage = game_session_resolve_attack_hit(session,
+                (unsigned int)visual->attacker, visual->strike_state,
+                visual->target_floater, visual->target_location);
+            visual->impact_damage = (int16_t)(damage > INT16_MAX ? INT16_MAX
+                                                                  : damage);
+        }
+    }
     if (visual->impact_damage <= 0 || visual->impact_realm < 0) {
         visual->active = 0;
         return;
@@ -1799,6 +1854,24 @@ void game_session_tick_combat_effects(GameSession *session,
     tick_attack_visuals(session);
     for (i = 0; i < session->floater_count; ++i) {
         GameFloaterStart *floater = &session->floaters[i];
+        if (floater->attack_effect_waits_visual) {
+            unsigned int slot;
+            int alive = 0;
+            for (slot = 0; slot < GAME_SESSION_MAX_CAST_EFFECTS; ++slot) {
+                if (session->attack_visuals[slot].active &&
+                    session->attack_visuals[slot].attacker == (int16_t)i) {
+                    alive = 1;
+                    break;
+                }
+            }
+            if (!alive) {
+                floater->attack_effect_waits_visual = 0;
+                floater->attack_effect_active = 0;
+                if (session->active_attack_effect_count > 0)
+                    --session->active_attack_effect_count;
+            }
+            continue;
+        }
         if (!game_session_floater_is_active(floater) ||
             !floater->attack_effect_active) continue;
         if (floater->attack_effect_odd_updates_remaining > 0)

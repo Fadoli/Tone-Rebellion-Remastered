@@ -49,6 +49,9 @@ typedef struct GameFloaterStart {
     uint8_t attack_effect_level;
     /* Set when a fltinf atteff effect replaces the realm IMPACT drawing. */
     uint8_t attack_effect_hidden;
+    /* The attacker stays in its attack state while its atteff slot lives
+       (FUN_004206fc unlinks the slot id stored in the record at +0x48). */
+    uint8_t attack_effect_waits_visual;
     uint16_t attack_effect_x;
     uint16_t attack_effect_y;
     /* Raw floater +0x24: death timer for flag 0x008 and pulse counter for
@@ -225,6 +228,12 @@ typedef struct GameSession {
         uint8_t impact_phase;
         uint8_t impact_frames_left;
         uint8_t mirrored; /* slot flag 0x1: horizontal flip (FUN_004182c8) */
+        /* Deferred hit (FUN_00416ff8 resolves it on arrival): the attacker,
+           the strike state and the targets captured at the strike. */
+        uint8_t pending_hit;
+        uint8_t strike_state;
+        int16_t attacker;
+        int16_t target_location;
         /* LIGHTNING slot words s5/s6: segment pattern and per-tick frame bits
            (random values drawn from visual_random_state). */
         uint16_t bolt_seed;
