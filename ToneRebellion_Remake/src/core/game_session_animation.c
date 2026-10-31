@@ -2,6 +2,7 @@
 
 #include "building_render.h"
 #include "game_session_combat_internal.h"
+#include "game_session_delivery_internal.h"
 #include "game_session_internal.h"
 #include "island_render_rules.h"
 #include "game_session_world.h"
@@ -1346,7 +1347,9 @@ static void tick_source_staff_cycle(GameSession *session,
                 --need_by_level[level - 1U];
         }
         /* FUN_0045c82f clears the current worker, then FUN_00421ec1(-1)
-           ends its active source action and clears runtime mask 0x65. */
+           ends its active source action (releasing its task claim) and
+           clears runtime mask 0x65. */
+        release_task_claim(session, floater);
         floater->source_runtime_flags &= ~0x65U;
         floater->movement_state = 0;
         floater->active_order_action = 0;

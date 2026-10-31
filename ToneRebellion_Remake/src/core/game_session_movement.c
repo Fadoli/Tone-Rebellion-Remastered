@@ -447,7 +447,10 @@ static int game_session_tick_floater_charge(GameSession *session,
     }
 
     if (succeeded) {
-        if (floater->movement_state == 11) floater->linked_task_slot = -1;
+        /* FUN_0041e569 state 11 links through FUN_0045c470 without calling
+           FUN_00421ec1 (ev_8578fcc7): the trainee keeps its CHARGE claim, so
+           its death (FUN_00467101 -> FUN_00421ec1) frees the task for the
+           next worker instead of leaving it counted as staffed forever. */
         floater->order_timer = 1;
     } else {
         release_task_claim(session, floater);

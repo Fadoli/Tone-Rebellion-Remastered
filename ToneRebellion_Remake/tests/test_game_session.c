@@ -571,6 +571,7 @@ int main(void)
     test_moving_spore_retargets_only_on_its_cadence_once_claimed();
     test_targetless_spore_loses_one_hp_every_128_ticks();
     test_training_refreshes_the_new_subtype_combat_row();
+    test_trainee_death_frees_the_charge_task();
     test_building_order_keeps_the_target_island();
     test_soldiers_fight_through_building_orders();
     test_building_order_crosses_a_bridge_and_keeps_the_link();

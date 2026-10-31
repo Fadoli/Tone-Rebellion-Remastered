@@ -1496,6 +1496,64 @@ static void test_training_refreshes_the_new_subtype_combat_row(void)
     assert(worker->has_wander_order == 1 && worker->wander_timer == 0);
 }
 
+static void test_trainee_death_frees_the_charge_task(void)
+{
+    /* FUN_0041e569 state 11 links the trainee without FUN_00421ec1: it keeps
+       its CHARGE claim, and its death releases the task for another worker. */
+    static GameSession session;
+    FloaterCatalog floaters;
+    PadCatalog pads;
+    BuildingRenderCatalog buildings = {0};
+    GameRuntimeLocation *school;
+    int16_t handle;
+    unsigned int slot;
+    unsigned int tick;
+
+    make_pad_catalog(&pads);
+    make_floater_catalog(&floaters);
+    memset(&session, 0, sizeof(session));
+    session.island_count = 1;
+    session.islands[0].location_count = 1;
+    session.islands[0].floater_max_x[0] = 0x9ff;
+    school = &session.islands[0].locations[0];
+    school->renderer_class = 0;
+    school->owner_id = 0;
+    school->source_value_14 = 0;
+    school->record_value_10 = 0x2c;
+    school->source_value_32 = 1;
+    school->source_location_slot_18 = 0;
+    school->resource_stock[1] = 50;
+    school->charge_recent_floater = -1;
+    school->charge_staff_task_handle = -1;
+    school->x = 1000;
+    school->y = 200;
+    for (slot = 0; slot < 8; ++slot) school->charge_floater_slots[slot] = -1;
+    add_test_worker(&session, 0, 0, 1000, 200, 0);
+    add_test_worker(&session, 1, 0, 1000, 200, 0);
+    for (slot = 0; slot < 2; ++slot) {
+        session.floaters[slot].source_link_0c = -1;
+        session.floaters[slot].linked_task_slot = -1;
+        session.floaters[slot].movement_speed = 3;
+    }
+
+    game_session_tick_item_animations_with_floaters(&session, &buildings,
+                                                    &floaters, &pads);
+    handle = school->charge_staff_task_handle;
+    assert(handle >= 0);
+    game_session_assign_local_resource_tasks(&session, &pads);
+    assert(session.floaters[0].linked_task_slot == handle);
+    for (tick = 1; tick < 5; ++tick)
+        game_session_tick_floater_moves(&session, tick, &pads);
+    assert(session.floaters[0].source_link_0c != -1); /* linked */
+    assert(session.floaters[0].linked_task_slot == handle);
+
+    game_session_retire_floater(&session, 0);
+    assert(session.pending_events[(uint8_t)handle].active != 0);
+    assert(session.pending_events[(uint8_t)handle].assigned_floater_count == 0);
+    game_session_assign_local_resource_tasks(&session, &pads);
+    assert(session.floaters[1].linked_task_slot == handle);
+}
+
 static void test_building_order_keeps_the_target_island(void)
 {
     /* FUN_0045d867 stores the target floater's island and FUN_0045d8b2 the
