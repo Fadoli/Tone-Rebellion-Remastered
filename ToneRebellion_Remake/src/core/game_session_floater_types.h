@@ -185,6 +185,12 @@ typedef struct GameSession {
     int32_t realm_cycle_b;
     int16_t realm_step_a;
     int16_t realm_step_b;
+    /* World +0x2cf9c / +0x2cf9e (DAT_006191b4 / DAT_006191b6): end-of-game
+       sequence state and its tick, run by FUN_00464e4d. The port drives the
+       victory branch only (state 2 from FUN_00460460, local L == 0); the
+       no-floater defeat branch stays in the window loop. */
+    int16_t world_sequence_state;
+    int16_t world_sequence_tick;
     uint8_t island_count;
     GameStartSetup player_starts;
     GameStartToneDistribution tone_placements;

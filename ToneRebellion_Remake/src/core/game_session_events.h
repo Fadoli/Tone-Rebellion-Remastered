@@ -231,6 +231,10 @@ int game_session_island_x_explored(const GameSession *session,
                                    int x);
 void game_session_recalculate_leviathan_island(GameSession *session,
                                                uint8_t island_index);
+/* FUN_00464e4d victory branch (local L == 0): one world tick of sequence
+   states 2..5. Returns the queued window state (2 = world view at tick 100
+   of state 3, 7 = end screen at tick 100 of state 5) or -1. */
+int game_session_tick_world_sequence(GameSession *session);
 void game_session_tick_leviathan_ai(GameSession *session);
 /* Queue/pop source event IDs 2 (build), 3 (bridge), and the modeled floater
    birth event for the platform audio adapter. */

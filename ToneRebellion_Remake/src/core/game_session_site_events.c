@@ -489,6 +489,22 @@ void game_session_recalculate_leviathan_island(GameSession *session,
             floater->source_subtype != 9) ++floater_count;
     }
 
+    /* FUN_00460460: with the end sequence idle, the last island holding no
+       raw +0x10 in 0x17..0x24 (every seal destroyed) starts sequence state 2,
+       the victory branch of FUN_00464e4d. */
+    if (session->world_sequence_state == 0 &&
+        island_index + 1U == session->island_count) {
+        int seal_left = 0;
+        for (index = 0; index < island->location_count; ++index) {
+            if (game_session_is_leviathan_seal(
+                    island->locations[index].record_value_10)) {
+                seal_left = 1;
+                break;
+            }
+        }
+        if (!seal_left) session->world_sequence_state = 2;
+    }
+
     island->leviathan_marker_count = (int16_t)marker_count;
     island->leviathan_remaining_markers = (int16_t)(marker_limit - marker_count);
     island->leviathan_site_budget = marker_count != 0
@@ -521,6 +537,44 @@ void game_session_recalculate_leviathan_island(GameSession *session,
             }
         }
     }
+}
+
+/* FUN_00464e4d with L == 0: state 2 ends at tick 1000, state 3 queues
+   SetState(2) at 100 and moves to 4 above 599, state 4 moves to 5 at 350,
+   state 5 queues SetState(7) at 100 and stops in 6 from 200. The tick
+   advances while the state holds and restarts at 0 on a change. Not
+   modelled: state 2's tick-0/40 Leviathan kills and floater pairing, the
+   palette fades, world events 0xb, and DAT_004bf120 = 0 (the caller stops
+   the game instead). */
+int game_session_tick_world_sequence(GameSession *session)
+{
+    int16_t state;
+    int16_t tick;
+    int request = -1;
+
+    if (session == NULL) return -1;
+    state = session->world_sequence_state;
+    tick = session->world_sequence_tick;
+    if (state < 2 || state > 5) return -1;
+    switch (state) {
+    case 2:
+        if (tick == 1000) session->world_sequence_state = 3;
+        break;
+    case 3:
+        if (tick == 100) request = 2;
+        else if (tick > 599) session->world_sequence_state = 4;
+        break;
+    case 4:
+        if (tick == 350) session->world_sequence_state = 5;
+        break;
+    default:
+        if (tick == 100) request = 7;
+        else if (tick >= 200) session->world_sequence_state = 6;
+        break;
+    }
+    session->world_sequence_tick = state == session->world_sequence_state
+        ? (int16_t)(tick + 1) : 0;
+    return request;
 }
 
 static void tick_leviathan_attack_rank(GameSession *session,

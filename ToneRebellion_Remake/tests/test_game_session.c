@@ -468,6 +468,7 @@ int main(void)
     test_location_resource_consumption_matches_source_guards();
     test_location_move_costs_use_pad_tuple_and_runtime_multiplier();
     test_source_capacity_cycle_uses_base_item_id_for_each_player();
+    test_last_island_seals_start_victory_sequence();
     test_cast_action_accepts_owner_variant_ids();
     test_cast_kind_one_applies_area_and_expires_site_state();
     test_pending_event_table_matches_source_slots_and_deduplication();

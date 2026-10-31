@@ -114,6 +114,34 @@ int game_session_initialize(const WorldDefinition *world,
     next.realm_cycle_b = 4000;
     next.realm_step_a = tone_rng_bounded(&rng, 2) != 0 ? 1 : -1;
     next.realm_step_b = tone_rng_bounded(&rng, 2) != 0 ? 1 : -1;
+    /* FUN_00464b9e first places one seal per other island on the last
+       island: rand(record count) until a class-0 record with size +0x0c 0,
+       then +0x10 = 0x17 + island, +0x14 = 4 and +0x34 = 30000. It neither
+       tests that the record is free (a repeated pick overwrites the earlier
+       seal) nor runs FUN_004528ca. The native loop never ends without a
+       candidate; the port skips placement then. */
+    if (world->island_count > 1) {
+        const IslandData *layout = &runtime_layouts[world->island_count - 1];
+        GameRuntimeIsland *last = &next.islands[world->island_count - 1];
+        unsigned int candidates = 0;
+        unsigned int seal;
+        for (seal = 0; seal < layout->location_count; ++seal) {
+            if (layout->locations[seal].renderer_class == 0 &&
+                layout->locations[seal].renderer_subtype == 0) ++candidates;
+        }
+        for (seal = 0; candidates != 0 &&
+                 seal + 1U < (unsigned int)world->island_count; ++seal) {
+            int32_t pick;
+            do {
+                pick = tone_rng_bounded(&rng, (int32_t)layout->location_count);
+            } while (layout->locations[pick].renderer_class != 0 ||
+                     layout->locations[pick].renderer_subtype != 0);
+            last->locations[pick].record_value_10 = (int32_t)(0x17U + seal);
+            last->locations[pick].owner_id = 4;
+            last->locations[pick].source_value_14 = 4;
+            last->locations[pick].source_value_34 = 30000;
+        }
+    }
     if (!game_start_distribute_tones(runtime_layouts, shape_ids,
                                      world->island_count, config->home_island_index,
                                      config->mode, &rng, &next.tone_placements,
@@ -187,6 +215,7 @@ int game_session_initialize(const WorldDefinition *world,
             }
             if (state->owner_id >= 0 &&
                 state->record_value_10 > 0 &&
+                !game_session_is_leviathan_seal(state->record_value_10) &&
                 !game_session_source_value_34_max(pad_catalog, state, &state->source_value_34)) {
                 set_error(error, error_capacity,
                           "runtime item has no pad record for source field +0x34");

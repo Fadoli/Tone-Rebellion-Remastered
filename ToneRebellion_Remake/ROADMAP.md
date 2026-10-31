@@ -31,7 +31,7 @@ Ordre choisi : chaque étape débloque la suivante.
 
 ## Phase 3 — Fin de partie
 
-- Déclencheur natif de l'état 7 (branche de l'écran de fin, `TODO_INTERFACE` l.24) : condition de victoire/défaite.
+- Déclencheur natif de l'état 7 : porté (destruction des sceaux `PIT_LeviShield` de la dernière île → séquence `FUN_00464e4d` L = 0, voir `behavior/end-game.md`). Reste : évènements/jumelage de l'état 2, fondus, chemin multijoueur 0x15, vérification en jeu, relecture REA de `0x4239e9`/`0x46a92a`.
 - Sauvegarde/chargement : presse-papiers, mode Sauvegarde de l'écran de chargement, aller-retour `native_save` après les nouveaux champs d'ordre.
 
 ## Phase 4 — Parité d'interface

@@ -123,9 +123,12 @@ static void run_ui_frame(HWND window, WPARAM wparam)
            no floaters left; FUN_00464e4d then queues SetState(2) 100 ticks
            into S3 and SetState(0) (title) about 1,560 ticks after the flag
            (S1 100, S3 1,300, S5 160). The flag is also set when the gross
-           capacity P+0x3c (source_maintenance_capacity) is below 1; the
-           L == 0 end-screen branch is not modelled. */
+           capacity P+0x3c (source_maintenance_capacity) is below 1. The
+           L == 0 end-screen branch (all seals broken) runs below through
+           game_session_tick_world_sequence; FUN_00466ce2 only starts the
+           defeat while the sequence state is 0. */
         if (g_game_session_valid && g_menu.screen != SCREEN_NEW_GAME &&
+            g_game_session.world_sequence_state == 0 &&
             g_menu.selected_tribe >= 0 &&
             g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
             if (game_session_count_player_floaters(&g_game_session,
@@ -157,6 +160,23 @@ static void run_ui_frame(HWND window, WPARAM wparam)
         if (g_menu.screen == SCREEN_ISLAND && g_game_session_valid &&
             !g_net_in_game)
             simulate_session_tick(g_menu.animation_ticks);
+        /* FUN_00464e4d runs once per world tick on every game screen. The
+           seal victory reaches SetState(2) 1,102 ticks after state 2 and
+           SetState(7) 2,054 ticks after it; DAT_004bf120 = 0 then stops the
+           game, so the session ends with the end screen. */
+        if (g_game_session_valid && !g_net_in_game &&
+            g_game_session.world_sequence_state >= 2) {
+            int request = game_session_tick_world_sequence(&g_game_session);
+            if (request == 2 && g_menu.screen == SCREEN_ISLAND) {
+                g_menu.screen = SCREEN_WORLD_MAP;
+                g_hovered_location = -1;
+            } else if (request == 7) {
+                g_game_session_valid = 0;
+                if (!enter_end_game_screen())
+                    g_menu.screen = SCREEN_MAIN_MENU;
+                break;
+            }
+        }
         }
         /* Redraw the full animated screen at every 20 Hz frame,
            including while the Tasks panel is open. */

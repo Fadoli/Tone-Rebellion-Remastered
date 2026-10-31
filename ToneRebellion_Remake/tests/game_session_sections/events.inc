@@ -38,6 +38,42 @@ static void test_source_capacity_cycle_uses_base_item_id_for_each_player(void)
     }
 }
 
+static void test_last_island_seals_start_victory_sequence(void)
+{
+    GameSession session = {0};
+    unsigned int tick;
+    int request;
+
+    session.island_count = 2;
+    session.islands[1].location_count = 2;
+    session.islands[1].locations[1].record_value_10 = 0x17;
+    session.islands[1].locations[1].owner_id = 4;
+    session.islands[1].locations[1].source_value_14 = 4;
+    game_session_recalculate_leviathan_island(&session, 0);
+    game_session_recalculate_leviathan_island(&session, 1);
+    assert(session.world_sequence_state == 0);
+
+    session.islands[1].locations[1].record_value_10 = 0;
+    game_session_recalculate_leviathan_island(&session, 0);
+    assert(session.world_sequence_state == 0);
+    game_session_recalculate_leviathan_island(&session, 1);
+    assert(session.world_sequence_state == 2);
+
+    for (tick = 1; tick <= 1102U; ++tick) {
+        request = game_session_tick_world_sequence(&session);
+        assert(request == (tick == 1102U ? 2 : -1));
+    }
+    for (; tick <= 2054U; ++tick) {
+        request = game_session_tick_world_sequence(&session);
+        assert(request == (tick == 2054U ? 7 : -1));
+    }
+    assert(session.world_sequence_state == 5);
+    for (; tick <= 2154U; ++tick)
+        assert(game_session_tick_world_sequence(&session) == -1);
+    assert(session.world_sequence_state == 6);
+    assert(game_session_tick_world_sequence(&session) == -1);
+}
+
 static void test_cast_action_accepts_owner_variant_ids(void)
 {
     GameSession session = {0};

@@ -36,6 +36,13 @@ static inline int32_t game_session_base_item_id(
     return item_id;
 }
 
+/* pad.txt IDs 0x17..0x24 are PIT_LeviShield0..13: the "SEAL_%02d" sites
+   (FUN_00439673) that FUN_00464b9e places on the last island. */
+static inline int game_session_is_leviathan_seal(int32_t item_id)
+{
+    return item_id >= 0x17 && item_id <= 0x24;
+}
+
 void game_session_recalculate_floater_attack_points(
     const GameSession *session, GameFloaterStart *floater);
 void game_session_refresh_player_attack_points(GameSession *session,

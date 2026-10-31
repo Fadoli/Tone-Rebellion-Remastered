@@ -1383,10 +1383,13 @@ unsigned int game_session_resolve_cast_effect_step(
     target = &session->islands[caster->island_index]
                   .locations[(uint16_t)target_location_index];
     if (step == 0x16) {
-        /* FUN_004239e9 compares item-0x17 with DAT_0061a634[player]. All four
-           loaded player entries are zero; runtime writers remain unknown. */
+        /* FUN_004239e9 compares item-0x17 with DAT_0061a634[owner], the
+           word P+0x147c = 0x146c + 2 * 8: FUN_004204bc's kill counter for
+           subtype 8, so seal k breaks only after k such kills. */
         caster->source_runtime_flags |= 0x200U;
-        if (target->record_value_10 != 0x17) return 0;
+        if (caster->type_index >= GAME_START_PLAYER_COUNT ||
+            target->record_value_10 - 0x17 != (int32_t)session->economy[
+                caster->type_index].leviathan_kills_by_subtype[8]) return 0;
         return game_session_apply_cast_site_effect(
             session, caster->island_index, (uint16_t)target_location_index,
             30000) != 0 ? 1U : 0U;
