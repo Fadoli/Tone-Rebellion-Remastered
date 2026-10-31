@@ -1021,9 +1021,11 @@ static void draw_spell_cost_bars(HDC dc, const WindowTemplate *info,
         magic > (int)location->resource_stock[2] ? 2 : 4);
 }
 
-/* Non-summary variant (P+0x18 != -1): bldgage frame 0 at (W/2-18, 0), 36x8,
-   inset 2, filled by +0x34 over FUN_00450978's maximum unless the item is
-   0x2a or the owner is 4; tonecrys frame 4 at (11,17); for item 0x2f also
+/* Every class-0 building panel with item >= 2 (ev_f4ff8997, 0x440660..
+   0x4407e0): bldgage frame 0 at (W/2-18, 0), 36x8, inset 2, filled by +0x34
+   over FUN_00450978's maximum at any HP, unless the item is 0x2a or the owner
+   is 4. The +0x18 test comes after the gauge; only the non-summary variant
+   (P+0x18 != -1) adds tonecrys frame 4 at (11,17) and, for item 0x2f,
    magctone frame 4 at (38,17), each with its taskicon stock bar. */
 static void draw_building_info_extras(HDC dc, const WindowTemplate *info,
                                       const GameRuntimeLocation *location,
@@ -1035,7 +1037,6 @@ static void draw_building_info_extras(HDC dc, const WindowTemplate *info,
     int32_t item = location_base_item_id(location);
     int base = (info->pane.right - info->pane.left) / 2;
 
-    if (location->source_location_slot_18 == -1) return;
     if (item != 0x2a && location->owner_id != 4 &&
         g_building_gauge_art.frame_count != 0 &&
         game_session_repair_location_values(&g_game_session, &g_pad_catalog,
@@ -1054,6 +1055,7 @@ static void draw_building_info_extras(HDC dc, const WindowTemplate *info,
                       g_island_palette[0]);
         }
     }
+    if (location->source_location_slot_18 == -1) return;
     /* BILDICON dots: N = source +0x60 (the 0..9 instance id FUN_0045ee26
        assigns among same-item rows, ev_a4a51711), frame clamp(owner+4,4,7),
        x0 = W/2-40, y = 5, step 8, five per row. Reading N as a count of
