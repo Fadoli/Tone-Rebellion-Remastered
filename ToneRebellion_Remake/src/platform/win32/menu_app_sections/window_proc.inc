@@ -77,6 +77,11 @@ static void run_ui_frame(HWND window, WPARAM wparam)
         e2e_write_state();
         if (net_poll(window)) InvalidateRect(window, NULL, FALSE);
     }
+    if (wparam == 1 && g_menu.screen == SCREEN_NET_SETUP) {
+        /* Caret blink. */
+        InvalidateRect(window, NULL, FALSE);
+        return;
+    }
     if (wparam == 2) {
         keep_background_tune_playing();
         return;
@@ -300,7 +305,8 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             update_inventory_hover(g_mouse_x, g_mouse_y) |
             update_glyph_hover(g_mouse_x, g_mouse_y) |
             update_diplomacy_hover(g_mouse_x, g_mouse_y) |
-            update_iw_construct_hover(g_mouse_x, g_mouse_y)) {
+            update_iw_construct_hover(g_mouse_x, g_mouse_y) |
+            update_net_setup_hover(g_mouse_x, g_mouse_y)) {
             InvalidateRect(window, NULL, FALSE);
         }
         return 0;
@@ -513,6 +519,13 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
     case WM_KEYDOWN:
         /* The original logo loop polls no input. */
         if (g_menu.screen == SCREEN_LOGO) return 0;
+        if (g_menu.screen == SCREEN_NET_SETUP) {
+            /* Typed text arrives as WM_CHAR; keys here only navigate. */
+            net_setup_key(window, wparam);
+            update_window_title(window);
+            InvalidateRect(window, NULL, FALSE);
+            return 0;
+        }
         if (g_menu.screen == SCREEN_ISLAND && !g_net_in_game &&
             (wparam == '8' || wparam == VK_SUBTRACT)) {
             if (g_sim_speed > 1U) --g_sim_speed;   /* FUN_0046a5b7: min 1 */
@@ -741,9 +754,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             } else if (g_menu.screen == SCREEN_WORLD_MAP) {
                 /* No native Esc on the world map. */
             } else if (g_menu.screen == SCREEN_NEW_GAME) {
-                net_leave_lobby();
-                g_menu.screen = SCREEN_MAIN_MENU;
-                g_menu.setup_accepted = 0;
+                leave_new_game_screen();
                 InvalidateRect(window, NULL, FALSE);
             } else {
                 PostMessageA(window, WM_CLOSE, 0, 0);
@@ -769,6 +780,10 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 g_menu.screen = SCREEN_NEW_GAME;
                 g_menu.setup_accepted = 0;
             }
+            InvalidateRect(window, NULL, FALSE);
+        } else if (g_menu.screen == SCREEN_MAIN_MENU && wparam == 'M') {
+            enter_net_setup_screen();
+            g_net_setup_swallow_char = 1;
             InvalidateRect(window, NULL, FALSE);
         } else if (g_menu.screen == SCREEN_MAIN_MENU && wparam == 'L') {
             g_menu.screen = SCREEN_LOAD_GAME;
@@ -805,6 +820,13 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         }
         update_window_title(window);
         update_interaction_cursor();
+        return 0;
+    case WM_CHAR:
+        if (g_menu.screen == SCREEN_NET_SETUP && net_setup_char(wparam))
+            InvalidateRect(window, NULL, FALSE);
+        return 0;
+    case WM_KEYUP:
+        if (wparam == 'M') g_net_setup_swallow_char = 0;
         return 0;
     case WM_NET_SOCKET:
         if (net_poll(window)) InvalidateRect(window, NULL, FALSE);

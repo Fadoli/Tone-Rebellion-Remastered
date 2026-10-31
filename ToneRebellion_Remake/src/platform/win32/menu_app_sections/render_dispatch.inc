@@ -261,6 +261,7 @@ static void paint_window(HWND window)
         back = g_paint_buffer_dc;
         if (g_menu.screen == SCREEN_MAIN_MENU) {
             render_main_menu(back);
+            render_net_setup_title_button(back);
             render_net_lobby(back);
         } else if (g_menu.screen == SCREEN_NEW_GAME) {
             render_new_game(back);
@@ -273,6 +274,8 @@ static void paint_window(HWND window)
             render_logo(back);
         } else if (g_menu.screen == SCREEN_END_GAME) {
             render_end_game(back);
+        } else if (g_menu.screen == SCREEN_NET_SETUP) {
+            render_net_setup(back);
         } else {
             render_load_game(back);
         }

@@ -711,6 +711,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     g_net_window = window;
     {
         char net_value[128];
+        net_setup_load_config();
         if (command_line_value(command_line, "--name", net_value, sizeof(net_value)))
             (void)snprintf(g_net_name, sizeof(g_net_name), "%s", net_value);
         if (command_line_value(command_line, "--port", net_value, sizeof(net_value)) &&

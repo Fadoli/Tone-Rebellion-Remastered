@@ -39,6 +39,7 @@ static unsigned g_net_ping_frames;
 static uint32_t g_net_issue_ms, g_net_issue_tick, g_net_apply_ms, g_net_apply_tick;
 
 static void simulate_session_tick(uint32_t source_tick);
+static void enter_net_setup_screen(void);
 
 static void net_set_status(const char *text)
 {
@@ -68,6 +69,15 @@ static void net_shutdown(void)
         (void)WSACleanup();
         g_net_wsa_started = 0;
     }
+}
+
+/* A lobby that fails before the game starts returns to the setup screen,
+   which shows the status line. */
+static void net_lobby_failed(const char *status)
+{
+    net_shutdown();
+    net_set_status(status);
+    if (g_menu.screen == SCREEN_NEW_GAME) enter_net_setup_screen();
 }
 
 static int net_startup(void)
@@ -155,11 +165,18 @@ static void net_drop_peer(unsigned slot)
             net_lockstep_drop_peer(&g_net_lockstep, (uint8_t)slot);
             (void)snprintf(g_net_status, sizeof(g_net_status), "%s a quitte la partie",
                            g_net_lobby.players[slot].name);
+        } else if (g_net_lobby.players[slot].connected) {
+            (void)snprintf(g_net_status, sizeof(g_net_status), "%s a quitte le lobby",
+                           g_net_lobby.players[slot].name);
         }
         net_lobby_remove_player(&g_net_lobby, (uint8_t)slot);
         if (!g_net_in_game) net_host_broadcast_state();
     } else {
         /* Without the host no turn can be validated: continue alone. */
+        if (!g_net_in_game) {
+            net_lobby_failed("Connexion avec l'hote perdue");
+            return;
+        }
         net_shutdown();
         net_set_status("Connexion avec l'hote perdue, partie poursuivie en solo");
     }
@@ -364,10 +381,9 @@ static void net_poll_peer(HWND window, unsigned slot)
                 uint8_t reason = 0;
                 int events = net_lobby_client_handle(&g_net_lobby, &frame, &start, &reason);
                 if (events & NET_LOBBY_EVENT_REJECT) {
-                    net_shutdown();
-                    net_set_status(reason == NET_REJECT_FULL ? "Partie complete"
-                                   : reason == NET_REJECT_STARTED ? "Partie deja lancee"
-                                   : "Version incompatible");
+                    net_lobby_failed(reason == NET_REJECT_FULL ? "Partie complete"
+                                     : reason == NET_REJECT_STARTED ? "Partie deja lancee"
+                                     : "Version incompatible");
                     return;
                 }
                 if (events & NET_LOBBY_EVENT_WELCOME)
@@ -422,8 +438,7 @@ static int net_poll(HWND window)
         FD_SET(g_net_peers[0], &failed);
         if (select(0, NULL, &writable, &failed, &no_wait) > 0) {
             if (FD_ISSET(g_net_peers[0], &failed)) {
-                net_shutdown();
-                net_set_status("Connexion refusee");
+                net_lobby_failed("Connexion refusee");
                 return 1;
             }
             if (FD_ISSET(g_net_peers[0], &writable)) {

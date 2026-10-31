@@ -46,7 +46,7 @@ enum { LOGICAL_WIDTH = 640, LOGICAL_HEIGHT = 480, ISLAND_NAME_COUNT = 15,
 enum { SITE_TEXT_POOL, SITE_TEXT_POOL_INFECT, SITE_TEXT_PRIME_POOL,
        SITE_TEXT_BRIDGE, SITE_TEXT_SUPPLY0 };
 enum { SCREEN_MAIN_MENU, SCREEN_NEW_GAME, SCREEN_WORLD_MAP, SCREEN_ISLAND, SCREEN_LOAD_GAME,
-       SCREEN_LOGO, SCREEN_END_GAME };
+       SCREEN_LOGO, SCREEN_END_GAME, SCREEN_NET_SETUP };
 enum { HELP_MAIN_NEWGAME, HELP_MAIN_RESUME, HELP_MAIN_LOAD, HELP_MAIN_EXIT,
        HELP_NEW_EXIT, HELP_NEW_WORLD, HELP_NEW_TRIBE0,
        HELP_NEW_TRIBE1, HELP_NEW_TRIBE2, HELP_NEW_TRIBE3, HELP_NEW_DIFFICULTY,
@@ -515,6 +515,8 @@ static void select_building_warrior(void)
 #include "menu_app_sections/world_map_render.inc"
 
 #include "menu_app_sections/net_session.inc"
+
+#include "menu_app_sections/net_setup_screen.inc"
 
 #include "menu_app_sections/island_interaction.inc"
 

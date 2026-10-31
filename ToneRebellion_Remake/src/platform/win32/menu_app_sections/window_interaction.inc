@@ -28,7 +28,11 @@ static void handle_click(HWND window, int x, int y)
         (void)PlaySoundA((LPCSTR)g_button_sound, NULL,
                         SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
     }
-    if (g_menu.screen == SCREEN_MAIN_MENU) {
+    if (g_menu.screen == SCREEN_NET_SETUP) {
+        net_setup_click(window, x, y);
+    } else if (g_menu.screen == SCREEN_MAIN_MENU && net_setup_title_click(x, y)) {
+        /* Remake-only Multijoueur button over the title art. */
+    } else if (g_menu.screen == SCREEN_MAIN_MENU) {
         control = window_catalog_hit_test(&g_window_catalog, 0, x, y);
         if (control != NULL && strcmp(control->message_destination, "WINMGR") == 0) {
             if (control->send_message[0] == 5) {
@@ -63,9 +67,7 @@ static void handle_click(HWND window, int x, int y)
         control = window_catalog_hit_test(&g_window_catalog, 1, x, y);
         if (control != NULL && strcmp(control->message_destination, "WINMGR") == 0 &&
             control->send_message[0] == 1 && control->send_message[1] == 0) {
-            net_leave_lobby();
-            g_menu.screen = SCREEN_MAIN_MENU;
-            g_menu.setup_accepted = 0;
+            leave_new_game_screen();
         } else if (control != NULL && strcmp(control->message_destination, "MASTER") == 0) {
             dispatch_newgame_master_message(window, control->send_message[0]);
         }
