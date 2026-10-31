@@ -1687,7 +1687,11 @@ static int local_refill_source_on_island(GameSession *session,
         }
         distance = game_session_source_chebyshev_distance(
             floater->x, floater->y, location->x, location->y);
-        if (distance == 0) continue;
+        /* FUN_00420a55 keeps a source at distance 0 (ev_2d5d4353); a lone
+           candidate is still returned by FUN_0041e28e, whose last threshold is
+           forced to 1000 (ev_2f27ef00). Count it as 1 to avoid the native
+           division by zero instead of dropping the source underfoot. */
+        if (distance == 0) distance = 1;
         if (candidate_count < 10) {
             candidate_indices[candidate_count] = (uint16_t)location_index;
             candidate_distances[candidate_count] = distance;
