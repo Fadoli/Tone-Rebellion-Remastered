@@ -2,15 +2,10 @@
    directory is read-only (AGENTS.md). */
 static int save_directory(char *out, size_t capacity)
 {
-    DWORD length = GetModuleFileNameA(NULL, out, (DWORD)capacity);
-    char *slash;
-    if (length == 0 || length >= capacity) return 0;
-    slash = strrchr(out, '\\');
-    if (slash == NULL) return 0;
-    *slash = '\0';
-    if (strlen(out) + 7U >= capacity) return 0;
+    if (!platform_executable_directory(out, capacity) ||
+        strlen(out) + 7U >= capacity) return 0;
     (void)strcat(out, "\\saves");
-    (void)CreateDirectoryA(out, NULL);
+    platform_create_directory(out);
     return 1;
 }
 
@@ -56,7 +51,7 @@ static int save_header_is_valid(const char *path)
 static void read_slot_details(int slot, const char *path)
 {
     FILE *file = fopen(path, "rb");
-    WIN32_FILE_ATTRIBUTE_DATA attributes;
+    PlatformDateTime time;
     g_load_slot_date[slot][0] = '\0';
     if (file != NULL) {
         (void)fread(g_load_slot_header[slot], 1,
@@ -65,20 +60,17 @@ static void read_slot_details(int slot, const char *path)
     }
     /* FUN_00458371 stores the file time; FUN_00472da0 formats it like ctime
        ("Www Mmm dd hh:mm:ss yyyy"). */
-    if (GetFileAttributesExA(path, GetFileExInfoStandard, &attributes)) {
-        FILETIME local;
-        SYSTEMTIME time;
+    if (platform_file_time(path, &time)) {
         static const char *const days[7] = {"Sun", "Mon", "Tue", "Wed",
                                             "Thu", "Fri", "Sat"};
         static const char *const months[12] = {"Jan", "Feb", "Mar", "Apr",
             "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-        if (FileTimeToLocalFileTime(&attributes.ftLastWriteTime, &local) &&
-            FileTimeToSystemTime(&local, &time) && time.wMonth >= 1 &&
-            time.wMonth <= 12 && time.wDayOfWeek < 7)
+        if (time.month >= 1 && time.month <= 12 && time.day_of_week >= 0 &&
+            time.day_of_week < 7)
             (void)snprintf(g_load_slot_date[slot], sizeof(g_load_slot_date[slot]),
-                "%s %s %2u %02u:%02u:%02u %u", days[time.wDayOfWeek],
-                months[time.wMonth - 1], time.wDay, time.wHour,
-                time.wMinute, time.wSecond, time.wYear);
+                "%s %s %2d %02d:%02d:%02d %d", days[time.day_of_week],
+                months[time.month - 1], time.day, time.hour,
+                time.minute, time.second, time.year);
     }
 }
 
@@ -109,11 +101,9 @@ static void scan_load_slots(void)
                VirtualStore. Windows redirects reads there only for 32-bit
                processes without a manifest, so look there explicitly. */
             char store[MAX_PATH];
-            DWORD length = GetEnvironmentVariableA("LOCALAPPDATA", store,
-                                                   (DWORD)sizeof(store));
             const char *game = game_file_path("");
-            if (length == 0 || length >= sizeof(store) || game[0] == '\0' ||
-                game[1] != ':') continue;
+            if (!platform_environment("LOCALAPPDATA", store, sizeof(store)) ||
+                game[0] == '\0' || game[1] != ':') continue;
             (void)snprintf(path, sizeof(path), "%s\\VirtualStore%s%02d.SAV",
                            store, game + 2, slot);
             if (!save_header_is_valid(path)) continue;

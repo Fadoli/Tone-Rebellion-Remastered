@@ -181,47 +181,33 @@ static const MusicTune g_music_tunes[] = {
 static int music_file_exists_in(const char *directory, const char *file_name,
                                 char *path, size_t path_capacity)
 {
-    DWORD attributes;
     int written = snprintf(path, path_capacity, "%s\\%s", directory, file_name);
     if (written < 0 || (size_t)written >= path_capacity) return 0;
-    attributes = GetFileAttributesA(path);
-    return attributes != INVALID_FILE_ATTRIBUTES &&
-           (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+    return platform_path_kind(path) == PLATFORM_PATH_FILE;
 }
 
 static int resolve_music_directory(const char *file_name,
                                    char *path, size_t path_capacity)
 {
     char candidate[MAX_PATH];
-    DWORD environment_length;
-    DWORD executable_length;
-    char *separator;
 
     if (g_iso_open && iso_extract_music(file_name, path, path_capacity)) return 1;
     if (g_music_directory[0] != '\0' &&
         music_file_exists_in(g_music_directory, file_name, path, path_capacity)) {
         return 1;
     }
-    environment_length = GetEnvironmentVariableA(
-        "TONE_REBELLION_THING2", candidate, (DWORD)sizeof(candidate));
-    if (environment_length > 0 && environment_length < sizeof(candidate) &&
+    if (platform_environment("TONE_REBELLION_THING2", candidate, sizeof(candidate)) &&
         music_file_exists_in(candidate, file_name, path, path_capacity)) {
         (void)strncpy(g_music_directory, candidate, sizeof(g_music_directory) - 1);
         g_music_directory[sizeof(g_music_directory) - 1] = '\0';
         return 1;
     }
-    executable_length = GetModuleFileNameA(NULL, candidate, (DWORD)sizeof(candidate));
-    if (executable_length > 0 && executable_length < sizeof(candidate)) {
-        separator = strrchr(candidate, '\\');
-        if (separator != NULL) {
-            *separator = '\0';
-            if (strlen(candidate) + sizeof("\\THING2") < sizeof(g_music_directory)) {
-                (void)strcpy(g_music_directory, candidate);
-                (void)strcat(g_music_directory, "\\THING2");
-                if (music_file_exists_in(g_music_directory, file_name,
-                                         path, path_capacity)) return 1;
-            }
-        }
+    if (platform_executable_directory(candidate, sizeof(candidate)) &&
+        strlen(candidate) + sizeof("\\THING2") < sizeof(g_music_directory)) {
+        (void)strcpy(g_music_directory, candidate);
+        (void)strcat(g_music_directory, "\\THING2");
+        if (music_file_exists_in(g_music_directory, file_name,
+                                 path, path_capacity)) return 1;
     }
     /* Disc layout: game files in THING1, music in the sibling THING2. */
     if (strlen(g_game_directory) + sizeof("\\..\\THING2") < sizeof(candidate)) {

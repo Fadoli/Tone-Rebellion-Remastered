@@ -111,8 +111,9 @@ static HWND sdl_create_window(void)
                                           SDL_PROP_WINDOW_WIN32_HWND_POINTER,
                                           NULL);
     if (window == NULL) return NULL;
-    /* SDL's window is a Unicode window: an ANSI subclass would convert
-       WM_SETTEXT and cut SDL_SetWindowTitle's text in half. */
+    /* SDL's window is a Unicode window: an ANSI subclass would make Windows
+       convert its text messages (WM_SETTEXT, WM_CHAR) to the ANSI code page
+       and back. */
     g_sdl_window_proc = (WNDPROC)SetWindowLongPtrW(window, GWLP_WNDPROC,
                                                    (LONG_PTR)sdl_subclass_proc);
     if (!sdl_ensure_back_buffer()) return NULL;

@@ -41,3 +41,94 @@ static void platform_capture_mouse(HWND window, int capture)
     if (capture) (void)SetCapture(window);
     else (void)ReleaseCapture();
 }
+
+enum { PLATFORM_PATH_MISSING, PLATFORM_PATH_FILE, PLATFORM_PATH_DIRECTORY };
+
+static int platform_path_kind(const char *path)
+{
+    DWORD attributes = GetFileAttributesA(path);
+    if (attributes == INVALID_FILE_ATTRIBUTES) return PLATFORM_PATH_MISSING;
+    return (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 ? PLATFORM_PATH_DIRECTORY
+                                                        : PLATFORM_PATH_FILE;
+}
+
+/* Creates one directory level; an existing directory is not an error. */
+static void platform_create_directory(const char *path)
+{
+    (void)CreateDirectoryA(path, NULL);
+}
+
+/* Replaces `to` with `from`. */
+static int platform_rename_replace(const char *from, const char *to)
+{
+    return MoveFileExA(from, to, MOVEFILE_REPLACE_EXISTING) != 0;
+}
+
+/* The executable's directory, without a trailing separator. */
+static int platform_executable_directory(char *out, size_t capacity)
+{
+    DWORD length = GetModuleFileNameA(NULL, out, (DWORD)capacity);
+    char *slash;
+    if (length == 0 || length >= capacity) return 0;
+    slash = strrchr(out, '\\');
+    if (slash == NULL) return 0;
+    *slash = '\0';
+    return 1;
+}
+
+/* Value of an environment variable; 0 when unset, empty or too long. */
+static int platform_environment(const char *name, char *out, size_t capacity)
+{
+    DWORD length = GetEnvironmentVariableA(name, out, (DWORD)capacity);
+    return length > 0 && length < capacity;
+}
+
+typedef struct PlatformDateTime {
+    int year, month, day;  /* month 1..12 */
+    int hour, minute, second;
+    int day_of_week;       /* 0 = Sunday */
+} PlatformDateTime;
+
+/* Last write time of a file, in local time. */
+static int platform_file_time(const char *path, PlatformDateTime *out)
+{
+    WIN32_FILE_ATTRIBUTE_DATA attributes;
+    FILETIME local;
+    SYSTEMTIME time;
+    if (!GetFileAttributesExA(path, GetFileExInfoStandard, &attributes) ||
+        !FileTimeToLocalFileTime(&attributes.ftLastWriteTime, &local) ||
+        !FileTimeToSystemTime(&local, &time)) return 0;
+    out->year = time.wYear;
+    out->month = time.wMonth;
+    out->day = time.wDay;
+    out->hour = time.wHour;
+    out->minute = time.wMinute;
+    out->second = time.wSecond;
+    out->day_of_week = time.wDayOfWeek;
+    return 1;
+}
+
+/* Calls visit(full path) for each file of `directory` named *`suffix`
+   (case-insensitive) until it returns non-zero; returns that value. */
+static int platform_each_file(const char *directory, const char *suffix,
+                              int (*visit)(const char *path, void *context),
+                              void *context)
+{
+    WIN32_FIND_DATAA data;
+    char pattern[MAX_PATH];
+    char path[MAX_PATH];
+    HANDLE handle;
+    int result = 0;
+    if (snprintf(pattern, sizeof(pattern), "%s\\*%s", directory, suffix) >=
+        (int)sizeof(pattern)) return 0;
+    handle = FindFirstFileA(pattern, &data);
+    if (handle == INVALID_HANDLE_VALUE) return 0;
+    do {
+        if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 &&
+            snprintf(path, sizeof(path), "%s\\%s", directory, data.cFileName) <
+                (int)sizeof(path))
+            result = visit(path, context);
+    } while (result == 0 && FindNextFileA(handle, &data));
+    FindClose(handle);
+    return result;
+}

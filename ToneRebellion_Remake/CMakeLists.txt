@@ -307,15 +307,28 @@ if(WIN32)
         if(NOT MSVC)
             target_link_libraries(remake_sdl PRIVATE m)
         endif()
+        # The DLLs SDL3.dll itself needs are not in TARGET_RUNTIME_DLLS. The
+        # MSYS2 build imports libiconv-2.dll; without its own copy beside the
+        # executable, Windows takes the first one on PATH (Git's 1.16), which
+        # halves every UTF-8 to UTF-16 conversion: window titles, message
+        # boxes and the paths SDL_GetPathInfo checks.
+        set(remake_sdl_runtime_dlls "$<TARGET_RUNTIME_DLLS:remake_sdl>")
+        get_target_property(sdl3_dll SDL3::SDL3-shared IMPORTED_LOCATION_RELEASE)
+        if(sdl3_dll)
+            get_filename_component(sdl3_dll_dir "${sdl3_dll}" DIRECTORY)
+            if(EXISTS "${sdl3_dll_dir}/libiconv-2.dll")
+                list(APPEND remake_sdl_runtime_dlls "${sdl3_dll_dir}/libiconv-2.dll")
+            endif()
+        endif()
         add_custom_command(TARGET remake_sdl POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_RUNTIME_DLLS:remake_sdl> $<TARGET_FILE_DIR:remake_sdl>
+                ${remake_sdl_runtime_dlls} $<TARGET_FILE_DIR:remake_sdl>
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "$<TARGET_FILE:remake_sdl>"
                 "${CMAKE_CURRENT_SOURCE_DIR}/ToneRebellion_Remake_sdl.exe"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_RUNTIME_DLLS:remake_sdl> "${CMAKE_CURRENT_SOURCE_DIR}"
-            COMMENT "Updating the ready-to-launch ToneRebellion_Remake_sdl.exe and SDL3.dll"
+                ${remake_sdl_runtime_dlls} "${CMAKE_CURRENT_SOURCE_DIR}"
+            COMMENT "Updating the ready-to-launch ToneRebellion_Remake_sdl.exe, SDL3.dll and its DLLs"
             COMMAND_EXPAND_LISTS
         )
     endif()

@@ -13,7 +13,7 @@ static int game_directory_is_valid(const char *directory)
     if (directory == NULL || directory[0] == '\0' ||
         strlen(directory) + sizeof("\\TONE01.COB") >= sizeof(path)) return 0;
     (void)snprintf(path, sizeof(path), "%s\\TONE01.COB", directory);
-    return GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES;
+    return platform_path_kind(path) != PLATFORM_PATH_MISSING;
 }
 
 static int game_directory_accept(const char *directory)
@@ -39,21 +39,18 @@ static char g_iso_cache[MAX_PATH];
 static int iso_prepare_cache(void)
 {
     char base[MAX_PATH];
-    DWORD length = GetEnvironmentVariableA("LOCALAPPDATA", base, (DWORD)sizeof(base));
-    if (length == 0 || length >= sizeof(base) - 40U) {
-        length = GetModuleFileNameA(NULL, base, (DWORD)sizeof(base));
-        if (length == 0 || length >= sizeof(base) - 40U) return 0;
-        *strrchr(base, '\\') = '\0';
-    } else {
+    if (platform_environment("LOCALAPPDATA", base, sizeof(base) - 40U)) {
         (void)strcat(base, "\\ToneRebellion_Remake");
-        (void)CreateDirectoryA(base, NULL);
+        platform_create_directory(base);
+    } else if (!platform_executable_directory(base, sizeof(base) - 40U)) {
+        return 0;
     }
     (void)snprintf(g_iso_cache, sizeof(g_iso_cache), "%s\\iso_cache", base);
-    (void)CreateDirectoryA(g_iso_cache, NULL);
+    platform_create_directory(g_iso_cache);
     (void)snprintf(base, sizeof(base), "%s\\THING1", g_iso_cache);
-    (void)CreateDirectoryA(base, NULL);
+    platform_create_directory(base);
     (void)snprintf(base, sizeof(base), "%s\\THING2", g_iso_cache);
-    (void)CreateDirectoryA(base, NULL);
+    platform_create_directory(base);
     return 1;
 }
 
@@ -125,29 +122,32 @@ static int command_line_value(const char *command_line, const char *name,
     return 1;
 }
 
-/* First *.iso next to the executable, or in C:\toneIso's parent. */
+typedef struct IsoSearch {
+    char *out;
+    size_t capacity;
+} IsoSearch;
+
+static int visit_game_iso(const char *path, void *context)
+{
+    IsoSearch *search = (IsoSearch *)context;
+    Iso9660 probe;
+    IsoFile file;
+    int ok;
+    if (strlen(path) >= search->capacity || !iso9660_open(path, &probe, NULL, 0))
+        return 0;
+    ok = iso9660_find(&probe, "THING1\\TONE01.COB", &file);
+    iso9660_close(&probe);
+    if (ok) (void)strcpy(search->out, path);
+    return ok;
+}
+
+/* First *.iso next to the executable that holds the game. */
 static int find_adjacent_iso(const char *directory, char *out, size_t capacity)
 {
-    WIN32_FIND_DATAA data;
-    char pattern[MAX_PATH];
-    HANDLE handle;
-    (void)snprintf(pattern, sizeof(pattern), "%s\\*.iso", directory);
-    handle = FindFirstFileA(pattern, &data);
-    if (handle == INVALID_HANDLE_VALUE) return 0;
-    do {
-        if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 &&
-            snprintf(out, capacity, "%s\\%s", directory, data.cFileName) < (int)capacity) {
-            Iso9660 probe;
-            if (iso9660_open(out, &probe, NULL, 0)) {
-                IsoFile file;
-                int ok = iso9660_find(&probe, "THING1\\TONE01.COB", &file);
-                iso9660_close(&probe);
-                if (ok) { FindClose(handle); return 1; }
-            }
-        }
-    } while (FindNextFileA(handle, &data));
-    FindClose(handle);
-    return 0;
+    IsoSearch search;
+    search.out = out;
+    search.capacity = capacity;
+    return platform_each_file(directory, ".iso", visit_game_iso, &search);
 }
 
 static void game_directory_resolve(const char *command_line)
@@ -155,7 +155,6 @@ static void game_directory_resolve(const char *command_line)
     char candidate[MAX_PATH];
     char executable_directory[MAX_PATH];
     char drive;
-    DWORD length;
 
     g_game_directory[0] = '\0';
     executable_directory[0] = '\0';
@@ -178,12 +177,12 @@ static void game_directory_resolve(const char *command_line)
                 while (count > 0 && cursor[count - 1] == ' ') --count;
             }
             if (count > 0 && count < sizeof(candidate)) {
-                DWORD attributes;
+                int kind;
                 (void)memcpy(candidate, cursor, count);
                 candidate[count] = '\0';
-                attributes = GetFileAttributesA(candidate);
-                if (attributes != INVALID_FILE_ATTRIBUTES) {
-                    if ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+                kind = platform_path_kind(candidate);
+                if (kind != PLATFORM_PATH_MISSING) {
+                    if (kind == PLATFORM_PATH_DIRECTORY) {
                         char thing1[MAX_PATH];
                         if (game_directory_accept(candidate)) return;
                         (void)snprintf(thing1, sizeof(thing1), "%s\\THING1", candidate);
@@ -195,16 +194,12 @@ static void game_directory_resolve(const char *command_line)
             }
         }
     }
-    length = GetEnvironmentVariableA("TONE_REBELLION_GAME_DIR", candidate,
-                                     (DWORD)sizeof(candidate));
-    if (length > 0 && length < sizeof(candidate) && game_directory_accept(candidate)) return;
-    length = GetEnvironmentVariableA("TONE_REBELLION_ISO", candidate,
-                                     (DWORD)sizeof(candidate));
-    if (length > 0 && length < sizeof(candidate) && game_directory_from_iso(candidate)) return;
-    length = GetModuleFileNameA(NULL, executable_directory, (DWORD)sizeof(executable_directory));
-    if (length > 0 && length < sizeof(executable_directory)) {
+    if (platform_environment("TONE_REBELLION_GAME_DIR", candidate, sizeof(candidate)) &&
+        game_directory_accept(candidate)) return;
+    if (platform_environment("TONE_REBELLION_ISO", candidate, sizeof(candidate)) &&
+        game_directory_from_iso(candidate)) return;
+    if (platform_executable_directory(executable_directory, sizeof(executable_directory))) {
         char sibling[MAX_PATH];
-        *strrchr(executable_directory, '\\') = '\0';
         if (game_directory_accept(executable_directory)) return;
         if (strlen(executable_directory) + sizeof("\\THING1") < sizeof(sibling)) {
             (void)snprintf(sibling, sizeof(sibling), "%s\\THING1", executable_directory);

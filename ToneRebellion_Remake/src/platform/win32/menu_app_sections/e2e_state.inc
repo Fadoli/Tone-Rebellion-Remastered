@@ -98,6 +98,6 @@ static void e2e_write_state(void)
         }
     }
     fclose(file);
-    (void)MoveFileExA(tmp_path, path, MOVEFILE_REPLACE_EXISTING);
+    (void)platform_rename_replace(tmp_path, path);
 }
 
