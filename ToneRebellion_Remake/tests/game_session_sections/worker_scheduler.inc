@@ -867,6 +867,114 @@ static void test_row_cancelled_during_a_crossing_frees_the_worker(void)
     assert(worker->movement_state != 0x11);
 }
 
+/* Every row's attach count equals the workers linked to it: a leaked count
+   would make FUN_0042219e's count rule move workers for no reason. */
+static void assert_task_counts_match_links(const GameSession *session)
+{
+    unsigned int slot;
+    for (slot = 0; slot < GAME_SESSION_MAX_PENDING_EVENTS; ++slot) {
+        if (session->pending_events[slot].active == 0) continue;
+        assert(session->pending_events[slot].assigned_floater_count ==
+               (int)workers_on_slot(session, (int)slot));
+    }
+}
+
+static void test_new_row_does_not_take_a_crossing_worker(void)
+{
+    GameSession session;
+    PadCatalog catalog;
+    GameFloaterStart *worker;
+    unsigned int tick;
+    int remote;
+    int local;
+
+    make_bridged_islands(&session, &catalog, 1);
+    worker = &session.floaters[0];
+    worker->carried_resource_code = 1;
+    remote = game_session_pending_event_add(&session, 0, 1, 5, 0,
+                                            SCHED_REMOTE_PAD, 0x25);
+    run_scheduler_ticks(&session, &catalog, 1, 1);
+    assert(worker->linked_task_slot == remote);
+    assert(worker->movement_state == 0x11);
+
+    /* A local row added while the worker walks to the bridge: its count 0
+       is not below 1 - 1, so FUN_0042219e keeps the worker on its row
+       through the walk, the crossing and the replanning on arrival. */
+    local = game_session_pending_event_add(&session, 0, 0, 5, 0, SCHED_PAD,
+                                           0x25);
+    assert(local > remote);
+    for (tick = 2; tick < 2000 && worker->island_index == 0; ++tick) {
+        run_scheduler_ticks(&session, &catalog, tick, tick);
+        assert(worker->linked_task_slot == remote);
+        assert(worker->carried_resource_code == 1);
+    }
+    for (; tick < 2000 && worker->movement_state == 0x11; ++tick)
+        run_scheduler_ticks(&session, &catalog, tick, tick);
+    run_scheduler_ticks(&session, &catalog, tick, tick);
+    assert(worker->island_index == 1);
+    assert(worker->linked_task_slot == remote);
+    assert(worker->movement_state == 4);
+    assert(session.pending_events[local].assigned_floater_count == 0);
+}
+
+static void test_workers_keep_their_rows_across_bridges(void)
+{
+    GameSession session;
+    PadCatalog catalog;
+    int16_t settled[2];
+    unsigned int tick;
+    unsigned int index;
+    unsigned int crossings = 0;
+    uint8_t previous_island[2] = {0, 0};
+    int remote;
+    int local;
+
+    /* Two pads of cost 6, one per island, two workers. The first scan puts
+       both on the first row; the next re-evaluation moves one to the empty
+       row (0 < 2 - 1). From then on the rows are balanced 1/1 and no worker
+       may change row, whatever its leg, crossing or cargo, until a row ends. */
+    make_bridged_islands(&session, &catalog, 2);
+    catalog.items[0x25].building_tone_cost = 6;
+    /* The local pad (item 0x26) costs more, so it outlasts several remote
+       round trips. */
+    catalog.item_count = 0x27;
+    catalog.items[0x26] = catalog.items[0x25];
+    catalog.items[0x26].item_id = 0x26;
+    catalog.items[0x26].building_tone_cost = 30;
+    session.islands[0].locations[SCHED_HALL]
+        .resource_stock[GAME_RESOURCE_BUILD_TONE] = 50;
+    session.floaters[1].x = 120;
+    remote = game_session_pending_event_add(&session, 0, 1, 5, 0,
+                                            SCHED_REMOTE_PAD, 0x25);
+    local = game_session_pending_event_add(&session, 0, 0, 5, 0, SCHED_PAD,
+                                           0x26);
+    for (tick = 1; tick <= 20; ++tick) {
+        run_scheduler_ticks(&session, &catalog, tick, tick);
+        assert_task_counts_match_links(&session);
+    }
+    assert(workers_on_slot(&session, remote) == 1);
+    assert(workers_on_slot(&session, local) == 1);
+    settled[0] = session.floaters[0].linked_task_slot;
+    settled[1] = session.floaters[1].linked_task_slot;
+
+    for (; tick < 8000; ++tick) {
+        run_scheduler_ticks(&session, &catalog, tick, tick);
+        assert_task_counts_match_links(&session);
+        /* A finished row frees its worker: that is a reason to move. */
+        if (session.pending_events[remote].active == 0 ||
+            session.pending_events[local].active == 0) break;
+        for (index = 0; index < 2; ++index) {
+            const GameFloaterStart *worker = &session.floaters[index];
+            assert(worker->linked_task_slot == settled[index]);
+            if (worker->island_index != previous_island[index]) ++crossings;
+            previous_island[index] = worker->island_index;
+        }
+    }
+    assert(tick < 8000);
+    /* The remote builder fetched from the Hall: several round trips. */
+    assert(crossings >= 4);
+}
+
 static void test_worker_scheduler(void)
 {
     test_scheduler_ignores_the_task_island();
@@ -891,4 +999,6 @@ static void test_worker_scheduler(void)
     test_remote_artifact_row_is_delivered();
     test_unreachable_routed_row_does_not_hide_later_rows();
     test_row_cancelled_during_a_crossing_frees_the_worker();
+    test_new_row_does_not_take_a_crossing_worker();
+    test_workers_keep_their_rows_across_bridges();
 }
