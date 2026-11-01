@@ -258,6 +258,12 @@ static void net_apply_game_start(HWND window, const NetGameStart *start)
     if (begin_new_game(window)) {
         uint8_t peers = 0;
         unsigned slot;
+        /* Same on every machine: built from the shared start record. */
+        g_game_session.shared_bridge_player_mask = 0;
+        for (slot = 0; slot < NET_LOBBY_MAX_PLAYERS; ++slot)
+            if (start->tribes[slot] < GAME_START_PLAYER_COUNT)
+                g_game_session.shared_bridge_player_mask |=
+                    (uint8_t)(1U << start->tribes[slot]);
         if (g_net_mode == NET_MODE_HOST)
             for (slot = 1; slot < NET_LOBBY_MAX_PLAYERS; ++slot)
                 if (g_net_lobby.players[slot].connected) peers |= (uint8_t)(1U << slot);

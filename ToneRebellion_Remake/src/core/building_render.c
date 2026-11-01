@@ -74,10 +74,20 @@ int building_render_catalog_load(const unsigned char *bytes, size_t length,
                 return 0;
             }
         } else if (current != NULL && building_render_ascii_case_equal(tag, "prod")) {
+            char fields[sizeof(line)];
+            char *comma;
             if (!building_render_parse_animation_layer(line, "prod", &current->prod)) {
                 building_render_set_error(error, error_capacity, "invalid PROD animation segment", line_number);
                 return 0;
             }
+            (void)strcpy(fields, line);
+            for (comma = strchr(fields, ','); comma != NULL;
+                 comma = strchr(comma + 1, ','))
+                *comma = ' ';
+            current->prod_effect[0] = '\0';
+            if (sscanf(fields, "%*s %*s %*s %*s %*s %*s %*s %*s %*s %15s",
+                       current->prod_effect) != 1)
+                current->prod_effect[0] = '\0';
         } else if (current != NULL && building_render_ascii_case_equal(tag, "occu")) {
             if (!building_render_parse_occu(line, &current->occu)) {
                 building_render_set_error(error, error_capacity, "invalid OCCU segment", line_number);

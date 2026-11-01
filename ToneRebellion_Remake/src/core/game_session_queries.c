@@ -6,7 +6,11 @@
    +0x1c flag bit 0x1 is clear and whose Chebyshev distance to the click is
    < 20. No owner, type, subtype, death-flag or explored-cell test is made, so
    Leviathans (type 4) and dying floaters stay pickable
-   (ev_fd65e30cf8e5016cd62c94f95aa773e60aa16693a519b2f4d4e9c34963c9d2ae). */
+   (ev_fd65e30cf8e5016cd62c94f95aa773e60aa16693a519b2f4d4e9c34963c9d2ae).
+   Remake deviation: a floater in its bridge animation (state 0x11, +0x34 >= 1)
+   is skipped. FUN_0041e569 case 0x10 never sets +0x1c bit 0x1 there
+   (ev_348f5497...), so natively it stays pickable while it sits on the bridge
+   marker and swallows the bridge click. */
 int game_session_floater_at(const GameSession *session,
                             uint8_t island_index,
                             uint16_t x,
@@ -21,6 +25,8 @@ int game_session_floater_at(const GameSession *session,
         int32_t dy;
         if (!game_session_floater_is_active(floater) ||
             (floater->source_runtime_flags & 0x001U) != 0) continue;
+        if (floater->movement_state == 0x11 &&
+            (int16_t)floater->order_timer >= 1) continue;
         if (floater->island_index != island_index) continue;
         dx = (int32_t)x - floater->x;
         dy = (int32_t)y - floater->y;

@@ -44,6 +44,12 @@ int game_session_spawn_attack_visual(GameSession *session,
 int game_session_spawn_effect_visual(GameSession *session, int def_index,
                                      uint8_t island_index, uint16_t x,
                                      uint16_t y);
+/* Tower effect slot whose arrival hit uses the tower's attack power. */
+int game_session_spawn_defense_effect(GameSession *session, int def_index,
+                                      uint8_t island_index, uint16_t x,
+                                      uint16_t y, unsigned int target_index,
+                                      int32_t attack_power,
+                                      uint8_t impact_realm);
 /* Strike-time or arrival-time hit of FUN_004200d2 / FUN_00420188 with the
    targets named explicitly; returns the damage dealt. */
 int32_t game_session_resolve_attack_hit(GameSession *session,

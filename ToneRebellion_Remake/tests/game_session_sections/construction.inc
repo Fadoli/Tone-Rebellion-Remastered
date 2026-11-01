@@ -405,7 +405,8 @@ static void test_construction_assignment_matches_source_candidate_guards(void)
     game_session_assign_local_resource_tasks(&session, &catalog);
     assert(floater->active_order_action == 4);
     assert(floater->linked_task_slot == slot);
-    assert(floater->movement_state == 3);
+    /* FUN_00421ec1 resets state +0x2c; FUN_004211bb plans the fetch later. */
+    assert(floater->movement_state == 0);
     assert(session.pending_events[slot].assigned_floater_count == 1);
 
     other_floater->is_active = 1;
@@ -414,10 +415,16 @@ static void test_construction_assignment_matches_source_candidate_guards(void)
     assert(other_floater->active_order_action == 0);
     other_floater->owner_slot = 0;
 
-    /* A second worker cannot over-reserve the remaining Build Tone cost. */
+    /* FUN_00422031 has no cap on the remaining Build Tone cost: a second
+       worker is admitted while a source exists. */
     site->resource_stock[GAME_RESOURCE_BUILD_TONE] = 1;
     game_session_assign_local_resource_tasks(&session, &catalog);
-    assert(other_floater->active_order_action == 0);
+    assert(other_floater->active_order_action == 4);
+    assert(other_floater->linked_task_slot == slot);
+    assert(session.pending_events[slot].assigned_floater_count == 2);
+    other_floater->active_order_action = 0;
+    other_floater->linked_task_slot = -1;
+    session.pending_events[slot].assigned_floater_count = 1;
 
     /* FUN_004526de / FUN_00452794 reject an invisible site and over-budget pad. */
     site->resource_stock[GAME_RESOURCE_BUILD_TONE] = 0;
@@ -879,7 +886,20 @@ static void test_initialized_workers_build_from_queued_selection(void)
     assert(site->record_value_10 == 37);
     assert(site->owner_id == 0);
     assert(site->source_value_14 == 0);
-    assert(hall->resource_stock[GAME_RESOURCE_BUILD_TONE] == 15);
+    /* FUN_00422031 has no cap: workers fetching when the pad completed keep
+       their Build Tone after FUN_00466533 detaches them. 50 - 35 = 15 units
+       stay split between the Hall and their cargo. */
+    {
+        unsigned int carried = 0;
+        for (worker_index = 0; worker_index < start->floater_count;
+             ++worker_index) {
+            const GameFloaterStart *worker = &session.floaters[
+                (unsigned int)(start->floater_type_index *
+                    GAME_START_FLOATERS_PER_PLAYER) + worker_index];
+            if (worker->carried_resource_code == 1) ++carried;
+        }
+        assert(hall->resource_stock[GAME_RESOURCE_BUILD_TONE] + carried == 15);
+    }
     assert(session.pending_event_count == 0);
     assert(session.pending_events[slot].active == 0);
     for (worker_index = 0; worker_index < start->floater_count; ++worker_index) {

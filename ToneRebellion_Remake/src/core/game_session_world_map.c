@@ -101,6 +101,27 @@ static int mark_bridge_constructed_with_contributor(
         (void)game_session_acquire_island_access(
             session, (uint8_t)contributor_slot, island_a, island_b);
     }
+    /* Remake addition: native grants only the contributor (single call at
+       FUN_004669bd, ev_b30589ad...); everyone else has to cross with a
+       floater first, which no task can order while the far island is closed
+       to them. In a network game every human player already on one endpoint
+       gets the other one too; a player reaching neither island stays out. */
+    {
+        unsigned int slot;
+        for (slot = 0; slot < GAME_START_PLAYER_COUNT; ++slot) {
+            uint8_t bit = (uint8_t)(1U << slot);
+            int has_a, has_b;
+            if ((session->shared_bridge_player_mask & bit) == 0) continue;
+            has_a = (session->islands[island_a].access_mask & bit) != 0;
+            has_b = (session->islands[island_b].access_mask & bit) != 0;
+            if (has_a && !has_b)
+                (void)game_session_acquire_island_access(
+                    session, (uint8_t)slot, island_a, island_b);
+            else if (has_b && !has_a)
+                (void)game_session_acquire_island_access(
+                    session, (uint8_t)slot, island_b, island_a);
+        }
+    }
     /* FUN_004669bd refreshes both endpoint islands through FUN_00466c8b. */
     game_session_refresh_player_maintenance_budgets(session);
     game_session_recalculate_leviathan_island(session, island_a);
@@ -218,6 +239,25 @@ int game_session_acquire_island_access(GameSession *session,
     }
     (void)game_session_recalculate_player_island_visibility(
         session, target_island, player_slot);
+    /* Remake addition (network game): a human player reaching an island also
+       reaches every island joined to it by an open bridge. The access bit is
+       set above, so the walk ends. */
+    if ((session->shared_bridge_player_mask & player_bit) != 0) {
+        unsigned int bridge_index;
+        for (bridge_index = 0; bridge_index < session->world_bridge_count;
+             ++bridge_index) {
+            const WorldBridge *bridge = &session->world_bridges[bridge_index];
+            uint8_t other;
+            if (bridge->island_a == target_island) other = bridge->island_b;
+            else if (bridge->island_b == target_island) other = bridge->island_a;
+            else continue;
+            if (game_session_world_bridge_is_renderable(session,
+                    (uint8_t)bridge_index, session->world_bridge_count,
+                    bridge->island_a, bridge->island_b))
+                (void)game_session_acquire_island_access(
+                    session, player_slot, target_island, other);
+        }
+    }
     return 1;
 }
 

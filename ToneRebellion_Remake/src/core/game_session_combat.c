@@ -1671,6 +1671,55 @@ int game_session_spawn_attack_visual(GameSession *session,
     return 0;
 }
 
+/* FUN_00416342(site, 0, 1) for a defense whose PROD names an effect (e.g.
+   V-ATTCK6 DEVIL): the slot starts at the site plus the PROD offset, keeps
+   the target floater from site +0x36 and sets flags 0x8|0x10, so the hit
+   waits for FUN_00416ff8's arrival (ev_4c6d730c, ev_04c78e7b). */
+int game_session_spawn_defense_effect(GameSession *session, int def_index,
+                                      uint8_t island_index, uint16_t x,
+                                      uint16_t y, unsigned int target_index,
+                                      int32_t attack_power,
+                                      uint8_t impact_realm)
+{
+    const FloaterEffectDef *def;
+    const GameFloaterStart *target;
+    unsigned int slot;
+    if (session == NULL || def_index < 0 || def_index >= FLOATER_EFFECT_MAX ||
+        target_index >= session->floater_count) return 0;
+    def = &session->attack_effect_defs[def_index];
+    if ((def->type != FLOATER_EFFECT_ONESHOT &&
+         def->type != FLOATER_EFFECT_LIGHTNING) || def->level_count == 0)
+        return 0;
+    target = &session->floaters[target_index];
+    for (slot = 0; slot < GAME_SESSION_MAX_CAST_EFFECTS; ++slot) {
+        struct GameAttackVisual *visual = &session->attack_visuals[slot];
+        if (visual->active) continue;
+        memset(visual, 0, sizeof(*visual));
+        visual->active = 1;
+        visual->def = (int16_t)def_index;
+        visual->frame = def->level_start[0];
+        visual->x = x;
+        visual->y = y;
+        visual->island_index = island_index;
+        visual->target_floater = (int16_t)target_index;
+        visual->target_x = target->x;
+        visual->target_y = target->y;
+        visual->impact_realm = impact_realm < 4U ? (int8_t)impact_realm : -1;
+        visual->attacker = -1;
+        visual->strike_state = GAME_FLOATER_STATE_ATTACK;
+        visual->target_location = -1;
+        visual->tower_power = (int16_t)(attack_power > INT16_MAX ? INT16_MAX
+                                                                 : attack_power);
+        visual->pending_hit = 1;
+        if (def->type == FLOATER_EFFECT_LIGHTNING)
+            init_lightning_visual(session, visual);
+        (void)game_session_queue_effect_sound(session, def_index,
+                                              island_index, visual->x);
+        return 1;
+    }
+    return 0;
+}
+
 /* A world-event effect instance (FUN_00416a9a) at a fixed point: no hit,
    no impact; it plays its SOUND on its first tick and ends with its frames. */
 int game_session_spawn_effect_visual(GameSession *session, int def_index,
@@ -1727,6 +1776,11 @@ static void finish_attack_visual(GameSession *session,
                 visual->target_floater, visual->target_location);
             visual->impact_damage = (int16_t)(damage > INT16_MAX ? INT16_MAX
                                                                   : damage);
+        } else if (visual->attacker < 0 && visual->tower_power > 0 &&
+                   visual->target_floater >= 0) {
+            visual->impact_damage = (int16_t)
+                game_session_damage_floater_from_power(session,
+                    (unsigned int)visual->target_floater, visual->tower_power);
         }
     }
     if (visual->impact_damage <= 0 || visual->impact_realm < 0) {

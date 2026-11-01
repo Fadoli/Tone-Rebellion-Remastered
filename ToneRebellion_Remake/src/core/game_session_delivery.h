@@ -4,10 +4,8 @@
 #include "game_session.h"
 #include "pad_catalog.h"
 
-/* Ticks a worker keeps a freshly assigned task before it may be reallocated. */
-#define GAME_SESSION_TASK_COMMIT_TICKS 300U
-
-/* Assign the first eligible task in source slot order for each idle floater. */
+/* FUN_0042219e: (re)assign workers to the first eligible task row in slot
+   order, using the per-row worker count rule. */
 void game_session_assign_local_resource_tasks(GameSession *session,
                                                const PadCatalog *catalog);
 /* Complete CONSTR tasks whose Build Tone target has reached its pad cost. */

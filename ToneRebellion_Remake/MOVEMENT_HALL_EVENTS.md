@@ -55,6 +55,12 @@ Evidence:
 The four Hall rows in local `original_content/pad.txt` give base cost
 `(15,0,15)`; `game_session_location_move_costs` applies the observed
 `+0x4a + 1` multiplier to a runtime location's raw `+0x4a` field. Target
-selection and the UI trigger are not ported yet. Cost evidence:
+selection and the UI trigger are not ported yet. Column pairing confirmed in
+assembly: `FUN_0045f2a1` multiplies PAD row `+6`, `+0x0a`, `+8` (pad.txt
+column 3 values 1, 2, 3, stored out of order by the loader) by moved site
+`+0x4a + 1`, and `FUN_0045f4f5` debits them from the Hall's `+0x28` build,
+`+0x2a` crystal and `+0x2c` magic stocks, matching `movement_cost[0..2]`
+(`ev_63f31ab7fdc86e81fb4568867e13141acf0b30eb8f9af59c01303527b123e868`,
+`ev_319fcb3251a048ab26d0d060003cbced79a788108865b5de760f7e1e39091642`). Cost evidence:
 `ev_166ec7236cb49a5bd45dcbc859b69f029d1132243f92ee2e155015d72a50dedd`,
 `ev_f92b05e1bac76d2be3a91b76e6eb420474e1d04db600d49cc8d4a55edf30587d`.

@@ -1,4 +1,5 @@
 #include "native_save.h"
+#include "floater_catalog.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -150,6 +151,76 @@ static void test_find_world_matches_island_count(void)
     free(data);
 }
 
+/* A worker saved mid-crossing (state 0x11) on its CONSTR task: FUN_004210a9
+   kept +0x3c/+0x38/+0x40/+0x42/+0x46, so the port resumes the crossing and
+   replans the next leg on arrival (resume action 4, state 0). */
+static GameSession crossing_session;
+static FloaterCatalog crossing_catalog;
+
+static void test_crossing_worker_resumes_its_task(uint16_t step)
+{
+    size_t size;
+    uint8_t *data = build_save(2, 2, &size);
+    NativeSave save;
+    uint8_t *event;
+    uint8_t *rec;
+    const GameFloaterStart *worker;
+    unsigned int slot;
+    char error[96] = "";
+
+    assert(native_save_parse(data, size, &save, error, sizeof(error)));
+    for (slot = 0; slot < FLOATER_SLOTS; ++slot)
+        put32(data + save.floater_offset + (size_t)slot * FLOATER_RECORD,
+              0xffffffffU);
+    event = data + save.stream2_offset + STREAM2_SCALARS + 3U * 0x14U;
+    put32(event, 1);
+    put16(event + 0x06, 1);    /* priority */
+    put16(event + 0x08, 0);    /* player */
+    put16(event + 0x0a, 1);    /* island */
+    put16(event + 0x0e, 0);    /* site */
+    put16(event + 0x10, 5);    /* CONSTR */
+    put16(event + 0x12, 0x25);
+    rec = data + save.floater_offset;
+    put32(rec, 0);             /* owner */
+    put32(rec + 4, 0);         /* subtype: worker */
+    put16(rec + 0x0e, 0);      /* island */
+    put16(rec + 0x10, 120);
+    put16(rec + 0x12, 90);
+    put16(rec + 0x18, 1);      /* carries Build Tone */
+    put32(rec + 0x2c, 0x11);
+    put16(rec + 0x30, 1);      /* crossing toward island 1 */
+    put16(rec + 0x32, 1);      /* departure site */
+    put16(rec + 0x34, 30);
+    put32(rec + 0x38, 3);      /* task slot */
+    put32(rec + 0x3c, 5);
+    put16(rec + 0x40, 1);
+    put16(rec + 0x42, 0);
+    put16(rec + 0x44, 0x25);
+    put16(rec + 0x46, step);
+
+    memset(&crossing_session, 0, sizeof(crossing_session));
+    memset(&crossing_catalog, 0, sizeof(crossing_catalog));
+    crossing_session.island_count = 2;
+    crossing_session.islands[0].location_count = 2;
+    crossing_session.islands[1].location_count = 2;
+    assert(native_save_apply(&save, &crossing_catalog, &crossing_session,
+                             error, sizeof(error)));
+    worker = &crossing_session.floaters[0];
+    assert(worker->movement_state == 0x11);
+    assert(worker->active_order_action == 9);
+    assert(worker->linked_task_slot == 3);
+    assert(crossing_session.pending_events[3].assigned_floater_count == 1);
+    assert(worker->handoff_target_island == 1);
+    assert(worker->handoff_departure_location == 1);
+    assert(worker->handoff_resume_action == 4);
+    assert(worker->handoff_resume_state == 0);
+    assert(worker->order_target_island == 1);
+    assert(worker->order_target_location == 0);
+    assert(worker->task_step == (int32_t)(int16_t)step);
+    assert(worker->order_timer == 30);
+    free(data);
+}
+
 int main(void)
 {
     test_valid_save_reports_header_and_offsets();
@@ -157,6 +228,8 @@ int main(void)
     test_island_and_site_counts_are_range_checked();
     test_every_truncation_is_rejected_without_overread();
     test_find_world_matches_island_count();
+    test_crossing_worker_resumes_its_task(0);
+    test_crossing_worker_resumes_its_task(1);
     (void)puts("native save unit tests passed");
     return 0;
 }

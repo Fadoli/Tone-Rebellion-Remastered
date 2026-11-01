@@ -154,27 +154,6 @@ static int artifact_delivery_target_valid(const GameSession *session,
         base_item_id == 0x2f || base_item_id == 0x30;
 }
 
-static int construction_handoff_available(const GameSession *session,
-                                           uint8_t island_index,
-                                           uint8_t owner_slot)
-{
-    const GameRuntimeIsland *island;
-    unsigned int location_index;
-
-    if (session == NULL || island_index >= session->island_count ||
-        owner_slot >= GAME_FLOATER_CATEGORY_COUNT) return 0;
-    island = &session->islands[island_index];
-    if (island->location_count > ISLAND_DATA_MAX_LOCATIONS) return 0;
-    for (location_index = 0; location_index < island->location_count;
-         ++location_index) {
-        const GameRuntimeLocation *location = &island->locations[location_index];
-        if (location->renderer_class == 2 && (location->source_flags & 1U) != 0 &&
-            (int32_t)location->x >= island->floater_min_x[owner_slot] &&
-            (int32_t)location->x <= island->floater_max_x[owner_slot]) return 1;
-    }
-    return 0;
-}
-
 static int assign_charge_task_for_floater(GameSession *session,
                                           GameFloaterStart *floater,
                                           unsigned int floater_index,
@@ -268,9 +247,11 @@ static int assign_delivery_task_for_floater(GameSession *session,
     GameRuntimeIsland *island;
     int source_index;
 
+    /* FUN_00422031 has no island test: a row on another island is reached
+       through FUN_004210a9, toward the source first or, cargo in hand,
+       toward the row's island (FUN_004211bb case 3). */
     if (event->active == 0 || event->action_type != 4 ||
         event->player_id != floater->owner_slot ||
-        event->payload_0a != floater->island_index ||
         !delivery_item_code_valid(event->payload_12) ||
         event->payload_0a < 0 || event->payload_0a >= session->island_count ||
         event->payload_0e < 0 ||
@@ -285,36 +266,6 @@ static int assign_delivery_task_for_floater(GameSession *session,
        concurrent workers reserve duplicate deliveries to that site. */
     if (event->payload_12 >= GAME_INVENTORY_ITEM_FIRST_ID &&
         event->assigned_floater_count != 0) return 0;
-
-    if (event->payload_12 == 1 &&
-        event->payload_0a >= 0 && event->payload_0a < session->island_count &&
-        event->payload_0e >= 0 &&
-        (uint16_t)event->payload_0e <
-            session->islands[event->payload_0a].location_count) {
-        const GameRuntimeLocation *target = &session->islands[
-            event->payload_0a].locations[(uint16_t)event->payload_0e];
-        if (event->payload_0a >= 0 && target->spread_task_plus1[event->player_id] ==
-                (uint16_t)(slot + 1U) &&
-            (unsigned int)target->spread_count[event->player_id] +
-                (uint16_t)event->assigned_floater_count >= 10U) return 0;
-        if (target->upgrade_task_handle == (int16_t)slot &&
-            (uint32_t)target->resource_stock[GAME_RESOURCE_BUILD_TONE] +
-                (uint16_t)event->assigned_floater_count >= 20U) return 0;
-    }
-    if ((event->payload_12 == 2 || event->payload_12 == 3) &&
-        event->payload_0a >= 0 && event->payload_0a < session->island_count &&
-        event->payload_0e >= 0 &&
-        (uint16_t)event->payload_0e <
-            session->islands[event->payload_0a].location_count) {
-        /* Cap workers on a training SUPPLY task so deliveries in flight never
-           overshoot the stop level (remake guard, like UPGRADE above). */
-        const GameRuntimeLocation *target = &session->islands[
-            event->payload_0a].locations[(uint16_t)event->payload_0e];
-        if (target->source_task_slot[event->payload_12 - 1] == (int16_t)slot &&
-            (int32_t)target->resource_stock[event->payload_12 - 1] +
-                (int32_t)event->assigned_floater_count >=
-                game_session_training_supply_threshold(target)) return 0;
-    }
 
     source_index = floater->carried_resource_code == event->payload_12
         ? -1
@@ -332,7 +283,22 @@ static int assign_delivery_task_for_floater(GameSession *session,
     floater->order_target_island = (uint8_t)event->payload_0a;
     floater->order_source_island = source_island;
     floater->order_timer = 0;
-    if (floater->carried_resource_code == event->payload_12) {
+    if (floater->carried_resource_code == event->payload_12 &&
+        event->payload_0a != floater->island_index) {
+        const GameRuntimeLocation *target = &session->islands[
+            event->payload_0a].locations[(uint16_t)event->payload_0e];
+        floater->order_source_location = -1;
+        floater->source_order_coordinate_30 = (uint16_t)(
+            ((uint16_t)(((uint32_t)target->x + 5U) / 10U) << 8) |
+            (uint16_t)(((uint32_t)target->y + 5U) / 10U));
+        if (!game_session_begin_floater_handoff(
+                session, floater, (uint8_t)event->payload_0a)) {
+            floater->active_order_action = 0;
+            release_task_claim(session, floater);
+            return 0;
+        }
+        floater->handoff_resume_state = 4;
+    } else if (floater->carried_resource_code == event->payload_12) {
         floater->order_source_location = -1;
         floater_target_location(session, floater,
             &island->locations[(uint16_t)event->payload_0e], 4);
@@ -413,105 +379,192 @@ static int construction_task_details(const GameSession *session,
     return 1;
 }
 
-static int assign_construction_task_for_floater(
-    GameSession *session, const PadCatalog *catalog,
-    GameFloaterStart *floater, unsigned int slot)
+/* Task rows whose legs FUN_004211bb plans one at a time: resource deliveries
+   (type 4, codes 1..3, FUN_004211bb case 3) and construction supply (type 5,
+   case 4). The port runs both as action 4; construction carries code 1. */
+static const GamePendingEvent *planned_task(const GameSession *session,
+                                            const GameFloaterStart *floater)
+{
+    const GamePendingEvent *event;
+
+    if (floater->active_order_action != 4 || floater->linked_task_slot < 0 ||
+        floater->linked_task_slot >= GAME_SESSION_MAX_PENDING_EVENTS) return NULL;
+    event = &session->pending_events[(uint8_t)floater->linked_task_slot];
+    if (event->active == 0 || event->player_id != floater->owner_slot ||
+        event->payload_0a != floater->order_target_island ||
+        event->payload_0e != floater->order_target_location ||
+        event->payload_0a < 0 || event->payload_0a >= session->island_count ||
+        event->payload_0e < 0 ||
+        (uint16_t)event->payload_0e >=
+            session->islands[event->payload_0a].location_count) return NULL;
+    if (event->action_type == 5) return event;
+    if (event->action_type == 4 && event->payload_12 >= 1 &&
+        event->payload_12 <= GAME_RESOURCE_TYPE_COUNT) return event;
+    return NULL;
+}
+
+/* FUN_00421ec1(-1), then FUN_0042219e's tail: the worker leaves its task
+   row, its runtime state and flags 0x65, and falls back to FA_Wander. Cargo
+   is kept (+0x18 is not touched). */
+static void detach_task(GameSession *session, GameFloaterStart *floater)
+{
+    release_task_claim(session, floater);
+    floater->active_order_action = 0;
+    floater->movement_state = 0;
+    floater->has_move_order = 0;
+    floater->order_timer = 0;
+    floater->order_source_location = -1;
+    floater->task_step = 0;
+    floater->source_runtime_flags &= ~0x065U;
+    floater->has_wander_order = 1;
+    floater->wander_timer = 0;
+}
+
+/* FUN_00421ec1(slot) for a planned task: the old row loses one worker, the
+   new one gains one, the order copies the row's island, site and payload,
+   step +0x46 and state +0x2c restart at 0. FUN_004211bb plans the first leg
+   on the next update. */
+static void attach_task(GameSession *session, GameFloaterStart *floater,
+                        unsigned int slot)
 {
     GamePendingEvent *event = &session->pending_events[slot];
-    const GameRuntimeLocation *target;
-    const PadCatalogItem *item;
-    uint32_t reserved;
-    uint8_t source_island = floater->island_index;
-    int source_index;
-    int finalize_building;
 
-    if (event->player_id != floater->owner_slot ||
-        !construction_task_details(session, catalog, event, &target, &item))
-        return 0;
-    finalize_building = target->resource_stock[GAME_RESOURCE_BUILD_TONE] >=
-        (uint16_t)item->building_tone_cost;
-    if (finalize_building) {
-        /* The task's assigned count includes workers still returning from a
-           source. Let those orders drain before assigning the single state-5
-           finisher; otherwise several idle workers can queue for one site. */
-        if (event->assigned_floater_count != 0) return 0;
-        source_index = -1;
-    } else {
-        reserved = target->resource_stock[GAME_RESOURCE_BUILD_TONE] +
-            (uint16_t)event->assigned_floater_count;
-        if (reserved >= (uint16_t)item->building_tone_cost) return 0;
-        source_index = floater->carried_resource_code == 1 ? -1 :
-            construction_refill_source(session, floater, &source_island);
-        if (floater->carried_resource_code != 1 && source_index < 0) return 0;
-    }
-    if (event->payload_0a != source_island &&
-        !construction_handoff_available(session, source_island,
-                                         floater->owner_slot)) return 0;
-
-    ++event->assigned_floater_count;
-    floater->active_order_action = 4;
-    floater->order_resource_code = 1;
+    release_task_claim(session, floater);
+    if (event->assigned_floater_count < INT16_MAX)
+        ++event->assigned_floater_count;
     floater->linked_task_slot = (int16_t)slot;
-    floater->order_target_location = event->payload_0e;
+    floater->active_order_action = 4;
     floater->order_target_island = (uint8_t)event->payload_0a;
-    floater->order_source_island = source_island;
+    floater->order_target_location = event->payload_0e;
+    floater->order_resource_code = event->action_type == 5 ? 1 : event->payload_12;
+    floater->order_source_island = floater->island_index;
+    floater->order_source_location = -1;
     floater->order_timer = 0;
-    if (finalize_building) {
-        floater->order_source_location = -1;
-        if (event->payload_0a == floater->island_index) {
-            floater_target_location(session, floater, target, 5);
-        } else {
-            floater->source_order_coordinate_30 = (uint16_t)(
-                ((uint16_t)(((uint32_t)target->x + 5U) / 10U) << 8) |
-                (uint16_t)(((uint32_t)target->y + 5U) / 10U));
-            if (!game_session_begin_floater_handoff(
-                    session, floater, (uint8_t)event->payload_0a)) {
-                floater->active_order_action = 0;
-                release_task_claim(session, floater);
-                return 0;
-            }
-            floater->handoff_resume_action = 4;
-            floater->handoff_resume_state = 5;
-        }
-    } else if (source_index < 0) {
-        floater->order_source_location = -1;
-        if (event->payload_0a == floater->island_index) {
-            floater_target_location(session, floater, target, 4);
-        } else {
-            floater->source_order_coordinate_30 = (uint16_t)(
-                ((uint16_t)(((uint32_t)target->x + 5U) / 10U) << 8) |
-                (uint16_t)(((uint32_t)target->y + 5U) / 10U));
-            if (!game_session_begin_floater_handoff(
-                    session, floater, (uint8_t)event->payload_0a)) {
-                floater->active_order_action = 0;
-                release_task_claim(session, floater);
-                return 0;
-            }
-            floater->handoff_resume_action = 4;
-            floater->handoff_resume_state = 4;
-        }
-    } else {
-        const GameRuntimeLocation *source = &session->islands[source_island]
-            .locations[(unsigned int)source_index];
-        floater->order_source_location = (int16_t)source_index;
-        if (source_island == floater->island_index) {
-            floater_target_location(session, floater, source, 3);
-        } else {
-            floater->source_order_coordinate_30 = (uint16_t)(
-                ((uint16_t)(((uint32_t)source->x + 5U) / 10U) << 8) |
-                (uint16_t)(((uint32_t)source->y + 5U) / 10U));
-            if (!game_session_begin_floater_handoff(
-                    session, floater, source_island)) {
-                floater->active_order_action = 0;
-                release_task_claim(session, floater);
-                return 0;
-            }
-            floater->handoff_resume_state = 3;
-        }
-    }
+    floater->task_step = 0;
+    floater->movement_state = 0;
+    floater->has_move_order = 0;
+    floater->handoff_departure_location = -1;
+    floater->handoff_resume_action = 0;
+    floater->handoff_resume_state = 0;
+    floater->source_runtime_flags &= ~0x065U;
     floater->has_wander_order = 0;
     floater->wander_timer = 0;
+}
+
+/* End of one leg (pickup, deposit or failed wait): state +0x2c returns to 0
+   with the task still attached, so FUN_004211bb plans the next leg. */
+static void end_task_leg(GameFloaterStart *floater)
+{
+    floater->movement_state = 0;
+    floater->has_move_order = 0;
+    floater->order_timer = 0;
+    floater->order_source_location = -1;
+    floater->source_runtime_flags &= ~1U;
+}
+
+/* FUN_004210a9: walk to the bridge toward `island` (state 0x11). The task
+   stays attached and is replanned after the crossing (resume state 0). */
+static int cross_for_task(GameSession *session, GameFloaterStart *floater,
+                          uint8_t island)
+{
+    if (!game_session_begin_floater_handoff(session, floater, island)) return 0;
+    floater->handoff_resume_action = 4;
+    floater->handoff_resume_state = 0;
     return 1;
+}
+
+/* FUN_00420dbd then the case-3/4 tail: state 3 toward a local source, the
+   bridge toward a source elsewhere, or detach when there is none. */
+static int start_fetch_leg(GameSession *session, GameFloaterStart *floater,
+                           int16_t code)
+{
+    uint8_t source_island = floater->island_index;
+    int source_index = refill_source(session, floater, code, &source_island);
+
+    if (source_index < 0) return 0;
+    if (source_island != floater->island_index)
+        return cross_for_task(session, floater, source_island);
+    floater->order_source_island = source_island;
+    floater->order_source_location = (int16_t)source_index;
+    floater->order_timer = 0;
+    floater_target_location(session, floater,
+        &session->islands[source_island].locations[(unsigned int)source_index],
+        3);
+    return 1;
+}
+
+/* Walk to the task site in `state` (4 deposit, 5 build), crossing first when
+   the site is on another island. */
+static int start_site_leg(GameSession *session, GameFloaterStart *floater,
+                          const GamePendingEvent *event, uint8_t state)
+{
+    if (event->payload_0a != floater->island_index)
+        return cross_for_task(session, floater, (uint8_t)event->payload_0a);
+    floater->order_timer = 0;
+    floater_target_location(session, floater,
+        &session->islands[event->payload_0a].locations[
+            (uint16_t)event->payload_0e], state);
+    return 1;
+}
+
+/* FUN_004211bb for an attached worker whose state +0x2c is 0
+   (ev_96f90fdc7951d5fe26fcf0b495de08970ec0e6984d64572c67ff099abac40957). */
+static void plan_task_leg(GameSession *session, const PadCatalog *catalog,
+                          GameFloaterStart *floater)
+{
+    const GamePendingEvent *event = planned_task(session, floater);
+    int planned;
+
+    if (event == NULL) {
+        detach_task(session, floater);
+        return;
+    }
+    if (event->action_type == 5) {
+        /* Case 4: FUN_004526de failing (site no longer buildable, upkeep over
+           budget) detaches the worker and deletes the row. Otherwise a pad
+           whose Build Tone reached the cost (FUN_00452794) gets the builder
+           (state 5); a worker carrying tone deposits it (state 4); any
+           other fetches tone. No step counter: the worker loops until the
+           building stands. */
+        const GameRuntimeLocation *site;
+        const PadCatalogItem *item;
+        if (!construction_task_details(session, catalog, event, &site, &item)) {
+            uint8_t slot = (uint8_t)floater->linked_task_slot;
+            GamePendingEvent expected = *event;
+            detach_task(session, floater);
+            (void)game_session_dispatch_task_command(session, slot, 12,
+                                                     &expected);
+            return;
+        }
+        if (site->resource_stock[GAME_RESOURCE_BUILD_TONE] >=
+                (uint16_t)item->building_tone_cost)
+            planned = start_site_leg(session, floater, event, 5);
+        else if (floater->carried_resource_code == 1)
+            planned = start_site_leg(session, floater, event, 4);
+        else
+            planned = start_fetch_leg(session, floater, 1);
+        if (!planned) detach_task(session, floater);
+        return;
+    }
+
+    /* Case 3, resource codes 1..3. Step 1 follows a deposit attempt: an
+       accepted one (cargo gone) loops back to step 0, a refused one goes to
+       step 2, which detaches. Neither moves the worker this update. */
+    if (floater->task_step == 1) {
+        floater->task_step = floater->carried_resource_code == 0 ? 0 : 2;
+        return;
+    }
+    if (floater->task_step != 0) {
+        detach_task(session, floater);
+        return;
+    }
+    if (floater->carried_resource_code == event->payload_12) {
+        planned = start_site_leg(session, floater, event, 4);
+        if (planned && floater->movement_state == 4) floater->task_step = 1;
+    } else {
+        planned = start_fetch_leg(session, floater, event->payload_12);
+    }
+    if (!planned) detach_task(session, floater);
 }
 
 static int assign_repair_task_for_floater(GameSession *session,
@@ -682,16 +735,18 @@ static void reclaim_orphaned_task_claim(GameSession *session,
     }
 }
 
-/* FUN_0041e454 marks CHARGE and artifact deliveries as urgent: they take one
-   worker only and are never swapped away from. */
+/* FUN_0041e454 (ev_516df530870cffc769dce043e9a8c1b1b8c1f94b19f0c02801576769f23972ae):
+   types 6, 0xb, 0xd, 0x11 and artifact deliveries are urgent. They take one
+   worker, and a worker holding one is never re-evaluated. */
 static int task_is_urgent(const GamePendingEvent *event)
 {
-    return event->action_type == 0x0b || event->action_type == 0x0d ||
+    return event->action_type == 6 || event->action_type == 0x0b ||
+        event->action_type == 0x0d || event->action_type == 0x11 ||
         (event->action_type == 4 && event->payload_12 >= 5 &&
          event->payload_12 < 0x22);
 }
 
-/* Per-row test of FUN_0042219e (ev_336bbb7515c8443945b3e4cc1fce6af1a1909d6c26154f4c7db9b75deaa9afaa).
+/* Per-row test of FUN_0042219e (ev_787dc785055d52728b1408fa372d280fa57be569a05f32883f94a4022cbce846).
    With no current task the scan starts at count 1000 / class 1, so class 1
    rows accept below 999 workers, class 2 below 1998 and class 3 always. With
    a task, a row replaces it only when it has at least two workers fewer (same
@@ -712,28 +767,81 @@ static int task_count_rule_accepts(const GamePendingEvent *row,
     return 0;
 }
 
-/* FUN_0042219e leaves urgent tasks alone and skips workers in combat states
-   6/7 or +0x2c == 4 (delivering). The remake lets a delivering worker
-   (state 4) be reallocated once its commitment window has elapsed, but never
-   a worker at its build site (state 5) or on a cross-island handoff
-   (action 9), so long tasks still complete. */
-static const GamePendingEvent *rebalance_current_task(
-    const GameSession *session, const GameFloaterStart *floater)
+/* FUN_00422031 (ev_9d5d129cd6bb5e1095f8136fbde959c47360ad898c94d3104c63add6dcda3bc7):
+   type 4 needs a source of its code unless the worker already carries it or
+   the code is an artifact; type 5 needs FUN_004526de and, unless the worker
+   carries Build Tone or the pad is complete (FUN_00452794), a Build Tone
+   source; type 0xb takes subtype-0 workers only; type 0x12 needs Build Tone
+   in hand or a source. Every other type admits any worker. There is no
+   island test and no cap on the number of workers. */
+static int worker_admitted_to_task(GameSession *session,
+                                   const PadCatalog *catalog,
+                                   const GameFloaterStart *floater,
+                                   const GamePendingEvent *event)
 {
-    const GamePendingEvent *event;
+    int16_t needed = 0;
+    uint8_t source_island = floater->island_index;
 
-    if (floater->linked_task_slot < 0 ||
-        floater->linked_task_slot >= GAME_SESSION_MAX_PENDING_EVENTS ||
-        (floater->active_order_action != 4 &&
-         floater->active_order_action != 0x12) ||
-        floater->movement_state == 5 || floater->movement_state == 6 ||
-        floater->movement_state == 7 ||
-        session->simulation_tick < floater->task_commit_tick)
-        return NULL;
-    event = &session->pending_events[(uint8_t)floater->linked_task_slot];
-    if (event->active == 0 || event->player_id != floater->owner_slot ||
-        task_is_urgent(event)) return NULL;
-    return event;
+    switch (event->action_type) {
+    case 4:
+        if (floater->carried_resource_code != event->payload_12 &&
+            (event->payload_12 < 5 || event->payload_12 > 0x21))
+            needed = event->payload_12;
+        break;
+    case 5: {
+        const GameRuntimeLocation *site;
+        const PadCatalogItem *item;
+        if (!construction_task_details(session, catalog, event, &site, &item))
+            return 0;
+        if (floater->carried_resource_code != 1 &&
+            site->resource_stock[GAME_RESOURCE_BUILD_TONE] <
+                (uint16_t)item->building_tone_cost) needed = 1;
+        break;
+    }
+    case 0x0b:
+        if (floater->source_subtype != 0) return 0;
+        break;
+    case 0x12:
+        if (floater->carried_resource_code != 1) needed = 1;
+        break;
+    default:
+        break;
+    }
+    return needed == 0 ||
+        refill_source(session, floater, needed, &source_island) >= 0;
+}
+
+/* Remake limit: only these rows have an executor in the port. Native rows of
+   other types (6, 0x11, ...) never reach the regular worker table here. */
+static int task_has_port_executor(const GamePendingEvent *event)
+{
+    return event->action_type == 4 || event->action_type == 5 ||
+        event->action_type == 0x0b || event->action_type == 0x0d ||
+        event->action_type == 0x12;
+}
+
+/* Rows the port still routes when they are assigned (charge, obtain,
+   artifact delivery, repair); resource and construction rows are planned
+   leg by leg by plan_task_leg instead. */
+static int assign_routed_task(GameSession *session, const PadCatalog *catalog,
+                              GameFloaterStart *floater,
+                              unsigned int floater_index, unsigned int slot)
+{
+    switch (session->pending_events[slot].action_type) {
+    case 0x0b:
+        return assign_charge_task_for_floater(session, floater, floater_index,
+                                              slot);
+    case 0x0d:
+        return assign_obtain_task_for_floater(session, floater, floater_index,
+                                              slot);
+    case 4:
+        return assign_delivery_task_for_floater(session, floater, slot);
+    case 0x12:
+        return catalog != NULL &&
+            assign_repair_task_for_floater(session, catalog, floater, slot);
+    default:
+        return 0;
+    }
 }
 
 static void assign_resource_tasks(GameSession *session,
@@ -756,142 +864,106 @@ static void assign_resource_tasks(GameSession *session,
     for (floater_index = 0; floater_index < session->floater_count;
          ++floater_index) {
         GameFloaterStart *floater = &session->floaters[floater_index];
-        GameFloaterStart saved_floater;
-        GamePendingEvent saved_events[GAME_SESSION_MAX_PENDING_EVENTS];
         const GamePendingEvent *current_task = NULL;
         int current_count = 1000;
         int current_class = 1;
         int current_slot = -1;
-        int swapped = 0;
-        int assigned_task = 0;
-        uint64_t visited;
-        int idle_wander;
-        int idle_action;
-        int replacing_move;
-        int can_take_local_task;
-        int can_take_construction;
+        int chosen = -1;
         /* Remake safeguard: a worker holding an artifact only takes another
            Obtain (whose pickup sets the old artifact down); any other cargo
            would replace it and could lose a quest item for good. */
         const int artifact_carrier = floater_carries_artifact(floater);
 
         reclaim_orphaned_task_claim(session, floater);
-        /* FUN_0041e569 skips floaters with +0x1c bits 0x808. */
+        /* FUN_0041e569 skips floaters with +0x1c bits 0x808; linked units,
+           the Leviathan and subtype 8 take the other FUN_0042219e branches. */
         if (!game_session_floater_is_active(floater) ||
             (floater->source_runtime_flags & 0x808U) != 0 ||
             floater->source_link_0c != -1 ||
             floater->type_index == 4 || floater->source_subtype == 8 ||
             floater->owner_slot >= GAME_FLOATER_CATEGORY_COUNT ||
             floater->island_index >= session->island_count) continue;
+        /* FUN_0041e569 calls FUN_0042219e on every update while state +0x2c
+           is 0, otherwise when (tick + floater index) % 10 == 0. */
+        if (floater->movement_state != 0 &&
+            (session->simulation_tick + floater_index) % 10U != 0) continue;
+        /* FUN_0042219e returns for states 6/7, runs the attack branch on an
+           island in danger (DAT_005eebd4, game_session_apply_panic_orders),
+           and keeps a worker in state 4 (deposit) on its task. */
+        if (floater->movement_state == 6 || floater->movement_state == 7 ||
+            floater->movement_state == 4 ||
+            game_session_panic_active(session, floater->owner_slot,
+                                      floater->island_index)) continue;
+        /* Remake guard: the port moves a floater between islands at a fixed
+           point of the crossing timer, so a crossing that has started is not
+           interrupted (walking to the bridge still is). */
+        if (floater->movement_state == 0x11 && floater->order_timer != 0)
+            continue;
         if (floater->linked_task_slot != -1) {
-            /* Remake deviation: FUN_0041e569 re-evaluates busy workers once
-               per ten ticks; re-evaluate every tick so reallocation does not
-               wait for the worker to finish its current task. */
-            current_task = rebalance_current_task(session, floater);
-            if (current_task == NULL) continue;
+            if (floater->linked_task_slot < 0 ||
+                floater->linked_task_slot >= GAME_SESSION_MAX_PENDING_EVENTS)
+                continue;
+            current_task =
+                &session->pending_events[(uint8_t)floater->linked_task_slot];
+            if (task_is_urgent(current_task)) continue;
             current_count = current_task->assigned_floater_count;
             current_class = current_task->priority;
             current_slot = floater->linked_task_slot;
         }
 
-        /* FUN_0042219e scans the task table in slot order and the first row
-           that passes the count rule and the task guards takes the worker. */
-        for (visited = 0;;) {
-            GamePendingEvent *event;
-            unsigned int candidate;
-
-            slot = GAME_SESSION_MAX_PENDING_EVENTS;
-            for (candidate = 0; candidate < GAME_SESSION_MAX_PENDING_EVENTS;
-                 ++candidate) {
-                const GamePendingEvent *row = &session->pending_events[candidate];
-                if ((visited >> candidate & 1U) != 0 || row->active == 0 ||
-                    (int)candidate == current_slot) continue;
-                slot = candidate;
-                break;
-            }
-            if (slot == GAME_SESSION_MAX_PENDING_EVENTS) break;
-            visited |= (uint64_t)1 << slot;
-            event = &session->pending_events[slot];
-            if (artifact_carrier && event->action_type != 0x0d) continue;
+        /* The first row in slot order that passes FUN_00422031 and then the
+           count rule takes the worker. While the player has a priority-3 row,
+           only priority-3 and urgent rows are considered. */
+        for (slot = 0; slot < GAME_SESSION_MAX_PENDING_EVENTS; ++slot) {
+            const GamePendingEvent *event = &session->pending_events[slot];
+            if (event->active == 0 || (int)slot == current_slot ||
+                event->player_id != floater->owner_slot ||
+                !task_has_port_executor(event)) continue;
             if (priority_three_pending[floater->owner_slot] &&
                 event->priority != 3 && !task_is_urgent(event)) continue;
-            if (!task_count_rule_accepts(event, current_count, current_class))
+            if (artifact_carrier && event->action_type != 0x0d) continue;
+            if (!worker_admitted_to_task(session, catalog, floater, event) ||
+                !task_count_rule_accepts(event, current_count, current_class))
                 continue;
-            if (current_task != NULL && !swapped) {
-                /* Release the old claim only once a row passed the count
-                   test; everything is restored if no row takes the worker. */
-                saved_floater = *floater;
+            if (event->action_type == 5 ||
+                (event->action_type == 4 && event->payload_12 >= 1 &&
+                 event->payload_12 <= GAME_RESOURCE_TYPE_COUNT)) {
+                attach_task(session, floater, slot);
+                chosen = (int)slot;
+                break;
+            }
+            {
+                /* Routed rows set their first leg at once. Remake guard: the
+                   native attach (FUN_00421ec1) cannot fail, but a routed leg
+                   can (no bridge, stale charge handle); the worker then keeps
+                   its order and the scan goes on, so one unreachable row no
+                   longer hides every later row from it. */
+                GameFloaterStart saved_floater = *floater;
+                GamePendingEvent saved_events[GAME_SESSION_MAX_PENDING_EVENTS];
                 memcpy(saved_events, session->pending_events,
                        sizeof(saved_events));
-                release_task_claim(session, floater);
+                if (current_task != NULL) detach_task(session, floater);
                 floater->active_order_action = 0;
                 floater->movement_state = 0;
                 floater->has_move_order = 0;
-                floater->order_timer = 0;
-                floater->order_target_location = -1;
-                floater->order_target_island = UINT8_MAX;
-                floater->order_resource_code = GAME_RESOURCE_NONE;
-                swapped = 1;
-            }
-            idle_wander = floater->movement_state == 0x0e &&
-                floater->has_wander_order && !floater->has_move_order;
-            replacing_move = floater->active_order_action == 9 &&
-                floater->movement_state == 9;
-            /* The home-island fallback (FA_Wander, action 0x0e) never returns
-               to action 0 once set, so a cancelled worker would stay in it and
-               ignore every later task. It is idle while it has no route. */
-            idle_action = floater->active_order_action == 0 ||
-                (floater->active_order_action == 0x0e &&
-                 !floater->has_move_order);
-            can_take_local_task = idle_action &&
-                (floater->movement_state == 0 || idle_wander);
-            can_take_construction =
-                (idle_action || replacing_move) &&
-                (floater->movement_state == 0 || floater->movement_state == 9 ||
-                 idle_wander) &&
-                (floater->carried_resource_code == 0 ||
-                 floater->carried_resource_code == 1);
-
-            if (event->action_type == 0x0b && can_take_local_task &&
-                assign_charge_task_for_floater(
-                    session, floater, floater_index, slot)) {
-                assigned_task = 1;
-                break;
-            }
-            if (event->action_type == 0x0d && can_take_local_task &&
-                assign_obtain_task_for_floater(
-                    session, floater, floater_index, slot)) {
-                assigned_task = 1;
-                break;
-            }
-            if (event->action_type == 4 && can_take_local_task &&
-                assign_delivery_task_for_floater(session, floater, slot)) {
-                assigned_task = 1;
-                break;
-            }
-            if (event->action_type == 5 && catalog != NULL &&
-                can_take_construction &&
-                assign_construction_task_for_floater(
-                    session, catalog, floater, slot)) {
-                assigned_task = 1;
-                break;
-            }
-            if (event->action_type == 0x12 && catalog != NULL &&
-                can_take_local_task &&
-                assign_repair_task_for_floater(
-                    session, catalog, floater, slot)) {
-                assigned_task = 1;
-                break;
+                if (assign_routed_task(session, catalog, floater, floater_index,
+                                       slot)) {
+                    /* FUN_00421ec1 clears mask 0x65 (ev_16b5390f): a former
+                       attacker drops 0x40, releasing its melee target. */
+                    floater->source_runtime_flags &= ~0x065U;
+                    floater->task_step = 0;
+                    chosen = (int)slot;
+                    break;
+                }
+                *floater = saved_floater;
+                memcpy(session->pending_events, saved_events,
+                       sizeof(saved_events));
             }
         }
-        if (swapped && !assigned_task) {
-            *floater = saved_floater;
-            memcpy(session->pending_events, saved_events, sizeof(saved_events));
-        }
+        if (chosen >= 0) continue;
         /* An idle artifact carrier resumes its delivery leg; with no Hall in
            reach it keeps holding the artifact (never dropped silently). */
-        if (artifact_carrier && !assigned_task &&
-            floater->linked_task_slot == -1 &&
+        if (artifact_carrier && floater->linked_task_slot == -1 &&
             (floater->active_order_action == 0 ||
              (floater->active_order_action == 0x0e &&
               !floater->has_move_order)) &&
@@ -899,14 +971,6 @@ static void assign_resource_tasks(GameSession *session,
              (floater->movement_state == 0x0e && floater->has_wander_order &&
               !floater->has_move_order)))
             (void)game_session_start_artifact_delivery(session, floater);
-        if (assigned_task) {
-            /* FUN_0042219e assigns through FUN_00421ec1, which always clears
-               mask 0x65 (ev_16b5390f): a former attacker drops 0x40, so its
-               melee target is no longer held in place. */
-            floater->source_runtime_flags &= ~0x065U;
-            floater->task_commit_tick =
-                session->simulation_tick + GAME_SESSION_TASK_COMMIT_TICKS;
-        }
     }
 }
 
@@ -1217,32 +1281,6 @@ void game_session_update_construction_tasks(GameSession *session,
 
 }
 
-/* The worker that drops the last Build Tone unit keeps its CONSTR claim and
-   walks the final leg (state 5) itself, so no other idle worker finishes the
-   building. Returns 1 when the floater became the finisher. */
-static int continue_as_construction_finisher(GameSession *session,
-                                             const PadCatalog *catalog,
-                                             GameFloaterStart *floater)
-{
-    const GameRuntimeLocation *target;
-    const PadCatalogItem *item;
-    const GamePendingEvent *event;
-
-    if (!floater_has_construction_task(session, floater)) return 0;
-    event = &session->pending_events[(uint8_t)floater->linked_task_slot];
-    if (event->assigned_floater_count != 1 ||
-        !construction_task_details(session, catalog, event, &target, &item) ||
-        target->resource_stock[GAME_RESOURCE_BUILD_TONE] <
-            (uint16_t)item->building_tone_cost) return 0;
-    floater->order_source_location = -1;
-    floater->order_timer = 0;
-    floater->source_runtime_flags &= ~1U;
-    floater_target_location(session, floater, target, 5);
-    floater->has_wander_order = 0;
-    floater->wander_timer = 0;
-    return 1;
-}
-
 /* Ends a state-4 delivery. FUN_004211bb reaches step +0x46 == -1 once the
    cargo is handed over; for a type-4 order with item 5..33 (DARTIFACT) it
    then calls FUN_00421ec1(-1) and FUN_00466533 on the task slot, so the
@@ -1289,6 +1327,14 @@ void game_session_advance_local_resource_task(GameSession *session,
        building (game_session_tick_building_stay); the withdrawal below is
        state 3's case 2 and is not reached by them (ev_8578fcc7). */
     recharge_order = 0;
+    /* FUN_0041e569 runs FUN_004211bb whenever state +0x2c is 0 and an order
+       is set: an attached worker gets its next leg. */
+    if (floater->active_order_action == 4 && floater->movement_state == 0 &&
+        !floater->has_move_order && catalog != NULL &&
+        floater->island_index < session->island_count) {
+        plan_task_leg(session, catalog, floater);
+        return;
+    }
     if ((floater->active_order_action != 4 && !recharge_order &&
          floater->active_order_action != 0x12) ||
         catalog == NULL ||
@@ -1303,7 +1349,10 @@ void game_session_advance_local_resource_task(GameSession *session,
         const PadCatalogItem *build_item;
         IslandLocation site = {0};
 
-        if (slot < 0 || slot >= GAME_SESSION_MAX_PENDING_EVENTS) return;
+        if (slot < 0 || slot >= GAME_SESSION_MAX_PENDING_EVENTS) {
+            end_task_leg(floater);
+            return;
+        }
         event = &session->pending_events[(uint8_t)slot];
         if (event->active == 0 || event->action_type != 5 ||
             event->player_id != floater->owner_slot ||
@@ -1313,10 +1362,9 @@ void game_session_advance_local_resource_task(GameSession *session,
                                        &build_target, &build_item) ||
             build_target->resource_stock[GAME_RESOURCE_BUILD_TONE] <
                 (uint16_t)build_item->building_tone_cost) {
-            floater->active_order_action = 0;
-            release_task_claim(session, floater);
-            floater->movement_state = 0;
-            floater->has_move_order = 0;
+            /* FUN_004527ee refused: the state ends and FUN_004211bb replans
+               (or detaches when the row is no longer valid). */
+            end_task_leg(floater);
             return;
         }
 
@@ -1330,10 +1378,7 @@ void game_session_advance_local_resource_task(GameSession *session,
             (void)game_session_dispatch_task_command(
                 session, (uint8_t)slot, 12, &expected);
         } else {
-            floater->active_order_action = 0;
-            release_task_claim(session, floater);
-            floater->movement_state = 0;
-            floater->has_move_order = 0;
+            end_task_leg(floater);
         }
         return;
     }
@@ -1467,6 +1512,12 @@ void game_session_advance_local_resource_task(GameSession *session,
                 !game_session_consume_location_resource(session,
                     floater->island_index,
                     (uint16_t)floater->order_source_location, code)) {
+                /* FUN_0041e569 case 2 ends the state without cargo; an
+                   attached worker is replanned (new source or detach). */
+                if (planned_task(session, floater) != NULL) {
+                    end_task_leg(floater);
+                    return;
+                }
                 floater->active_order_action = 0;
                 release_task_claim(session, floater);
                 floater->has_move_order = 0;
@@ -1506,6 +1557,11 @@ void game_session_advance_local_resource_task(GameSession *session,
                 if (!local_refill_source_is_valid(session, floater->island_index,
                         (uint16_t)floater->order_source_location,
                         floater->owner_slot, code)) {
+                    /* FUN_00452ceb rejects the source: the state ends. */
+                    if (planned_task(session, floater) != NULL) {
+                        end_task_leg(floater);
+                        return;
+                    }
                     floater->active_order_action = 0;
                     release_task_claim(session, floater);
                     floater->has_move_order = 0;
@@ -1518,6 +1574,12 @@ void game_session_advance_local_resource_task(GameSession *session,
             }
         }
         take_cargo(session, floater, code);
+        /* An attached worker is replanned: FUN_004211bb sends it to the site
+           (or, for CONSTR, to build when the pad is already complete). */
+        if (planned_task(session, floater) != NULL) {
+            end_task_leg(floater);
+            return;
+        }
         /* The source lock ends at pickup, even though the delivery task stays
            linked until the cargo reaches its destination. */
         floater->order_source_location = -1;
@@ -1609,8 +1671,10 @@ void game_session_advance_local_resource_task(GameSession *session,
             return;
         }
         credit_floater_delivery(session, floater, code);
-        if (continue_as_construction_finisher(session, catalog, floater))
+        if (planned_task(session, floater) != NULL) {
+            end_task_leg(floater);
             return;
+        }
         finish_delivery_order(session, floater, code);
         return;
     }
@@ -1618,7 +1682,12 @@ void game_session_advance_local_resource_task(GameSession *session,
     /* The other state-4 path finishes on exact arrival and attempts the same
        receiver without the 20-tick Hall wait. */
     credit_floater_delivery(session, floater, code);
-    if (continue_as_construction_finisher(session, catalog, floater)) return;
+    /* An attached worker stays on its task: step 1 then decides between the
+       next round trip and detaching (FUN_004211bb case 3, step +0x46). */
+    if (planned_task(session, floater) != NULL) {
+        end_task_leg(floater);
+        return;
+    }
     finish_delivery_order(session, floater, code);
 }
 

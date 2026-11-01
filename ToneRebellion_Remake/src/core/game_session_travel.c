@@ -197,28 +197,39 @@ int game_session_tick_floater_handoff(GameSession *session,
             ISLAND_DATA_MAX_LOCATIONS ||
         floater->handoff_target_island >= session->island_count ||
         session->islands[floater->handoff_target_island].location_count >
-            ISLAND_DATA_MAX_LOCATIONS ||
-        floater->handoff_departure_location < 0 ||
-        (uint16_t)floater->handoff_departure_location >=
-            session->islands[floater->island_index].location_count) {
+            ISLAND_DATA_MAX_LOCATIONS) {
         cancel_handoff(session, floater);
         return 1;
     }
 
-    departure = &session->islands[floater->island_index]
-                     .locations[(uint16_t)floater->handoff_departure_location];
-    if (floater->has_move_order) {
-        if (floater->x != departure->x || floater->y != departure->y) return 0;
-        floater->has_move_order = 0;
-    }
-
-    if (floater->order_timer == 0) {
-        if ((departure->source_flags & 1U) == 0) {
+    /* The departure record (+0x32) is read only on the departure island,
+       while walking (timer 0) and lifting (1..60) (ev_6c3ec9c5). From timer
+       120 the floater already stands on the target island, whose records
+       the index does not name: checking it there dropped the task on
+       arrival whenever that island had fewer records. */
+    if (floater->order_timer <= 60) {
+        if (floater->handoff_departure_location < 0 ||
+            (uint16_t)floater->handoff_departure_location >=
+                session->islands[floater->island_index].location_count) {
             cancel_handoff(session, floater);
-        } else {
-            floater->order_timer = 1;
+            return 1;
         }
-        return 1;
+        departure = &session->islands[floater->island_index]
+                         .locations[(uint16_t)floater->handoff_departure_location];
+        if (floater->has_move_order) {
+            if (floater->x != departure->x || floater->y != departure->y)
+                return 0;
+            floater->has_move_order = 0;
+        }
+
+        if (floater->order_timer == 0) {
+            if ((departure->source_flags & 1U) == 0) {
+                cancel_handoff(session, floater);
+            } else {
+                floater->order_timer = 1;
+            }
+            return 1;
+        }
     }
     if (floater->order_timer < 60) {
         ++floater->order_timer;
@@ -287,7 +298,16 @@ int game_session_tick_floater_handoff(GameSession *session,
         if (floater->source_subtype == 8U && resume_action != 0x13 &&
             session->world_sequence_state == 0)
             resume_action = 9;
-        if ((resume_action == 4 || resume_action == 0x12) &&
+        if (resume_action == 4 && resume_state == 0) {
+            /* FUN_004210a9 crossing for an attached task: state 0 again, so
+               FUN_004211bb plans the next leg from this island. */
+            floater->active_order_action = 4;
+            floater->movement_state = 0;
+            floater->has_move_order = 0;
+            floater->destination_x = floater->x;
+            floater->destination_y = floater->y;
+            return 1;
+        } else if ((resume_action == 4 || resume_action == 0x12) &&
             (resume_state == 3 || resume_state == 4)) {
             uint8_t destination_island = resume_state == 3
                 ? floater->order_source_island : floater->order_target_island;

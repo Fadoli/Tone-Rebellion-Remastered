@@ -33,6 +33,9 @@ typedef struct BuildingRenderItem {
     BuildingRenderSegment prod;
     BuildingRenderSegment occu;
     BuildingRenderSegment barg;
+    /* Optional tenth PROD field: the effects.txt name FUN_00455833 resolves
+       through FUN_00415f1e into descriptor +0x0e (empty: the -1 sentinel). */
+    char prod_effect[16];
     uint8_t present;
 } BuildingRenderItem;
 

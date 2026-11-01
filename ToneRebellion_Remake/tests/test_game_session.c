@@ -434,6 +434,117 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
     assert(islands[1].locations[4].renderer_variant == 99);
 }
 
+/* make_world's 0-1 bridge plus a hand-wired 1-2 bridge, with every access
+   bit cleared so each case sets exactly who reaches what. */
+static void make_bridge_chain_session(GameSession *session)
+{
+    WorldDefinition world;
+    IslandData islands[5];
+    GameSessionConfig config;
+    PadCatalog catalog;
+    FloaterCatalog floater_catalog;
+    char error[160];
+    unsigned int island_index;
+
+    make_world(&world, islands);
+    make_pad_catalog(&catalog);
+    make_floater_catalog(&floater_catalog);
+    memset(&config, 0, sizeof(config));
+    config.random_seed = 1;
+    if (!game_session_initialize(&world, islands, &catalog, &floater_catalog,
+                                 &config, session, error, sizeof(error))) {
+        (void)fprintf(stderr, "session initialization failed: %s\n", error);
+        assert(0);
+    }
+    session->world_bridge_count = 2;
+    session->world_bridges[1].island_a = 1;
+    session->world_bridges[1].island_b = 2;
+    session->islands[1].locations[11].renderer_class = 2;
+    session->islands[1].locations[11].bridge_neighbor_island = 2;
+    session->islands[2].locations[11].renderer_class = 2;
+    session->islands[2].locations[11].bridge_neighbor_island = 1;
+    for (island_index = 0; island_index < session->island_count; ++island_index)
+        session->islands[island_index].access_mask = 0;
+}
+
+static int reaches(const GameSession *session, uint8_t island, unsigned int slot)
+{
+    return game_session_can_enter_island(session, island, (uint8_t)(1U << slot));
+}
+
+static void test_completed_bridge_opens_only_to_its_contributor_in_solo(void)
+{
+    static GameSession session;
+    make_bridge_chain_session(&session);
+    assert(session.shared_bridge_player_mask == 0);
+    session.islands[0].access_mask = 0x0f;
+    session.islands[0].locations[12].resource_stock[GAME_RESOURCE_MAGIC_TONE] = 0;
+    assert(game_session_mark_bridge_constructed(&session, 0, 2, 0, 1));
+    /* FUN_004669bd: one FUN_00466b09 call, for the +0x2c contributor. */
+    assert(reaches(&session, 1, 0));
+    assert(!reaches(&session, 1, 1));
+    assert(!reaches(&session, 1, 2));
+    assert(!reaches(&session, 1, 3));
+}
+
+static void test_completed_bridge_opens_to_human_players_on_either_end(void)
+{
+    static GameSession session;
+    make_bridge_chain_session(&session);
+    /* Slots 0, 1 and 3 are human; slot 2 is not. */
+    session.shared_bridge_player_mask = 0x0b;
+    session.islands[0].access_mask = 0x07;  /* slots 0, 1, 2 */
+    session.islands[1].access_mask = 0x00;
+    session.islands[3].access_mask = 0x08;  /* slot 3 reaches neither end */
+    session.islands[0].locations[12].resource_stock[GAME_RESOURCE_MAGIC_TONE] = 0;
+    assert(game_session_mark_bridge_constructed(&session, 0, 2, 0, 1));
+    assert(reaches(&session, 1, 0));
+    assert(reaches(&session, 1, 1));
+    assert(!reaches(&session, 1, 2));
+    assert(!reaches(&session, 1, 3));
+    assert(!reaches(&session, 0, 3));
+    /* The rule works both ways: a human only on the far end gets the near
+       one, even when the contributor slot is out of range. */
+    make_bridge_chain_session(&session);
+    session.shared_bridge_player_mask = 0x02;
+    session.islands[1].access_mask = 0x02;
+    session.islands[0].locations[12].resource_stock[GAME_RESOURCE_MAGIC_TONE] = 4;
+    assert(game_session_mark_bridge_constructed(&session, 0, 2, 0, 1));
+    assert(reaches(&session, 0, 1));
+}
+
+static void test_island_access_follows_open_bridges_for_human_players(void)
+{
+    static GameSession session;
+    make_bridge_chain_session(&session);
+    session.shared_bridge_player_mask = 0x03;
+    /* Nobody reaches the chain yet: building both bridges opens nothing. */
+    session.islands[1].locations[11].resource_stock[GAME_RESOURCE_MAGIC_TONE] = 4;
+    session.islands[0].locations[12].resource_stock[GAME_RESOURCE_MAGIC_TONE] = 4;
+    assert(game_session_mark_bridge_constructed(&session, 1, 2, 1, 2));
+    assert(game_session_mark_bridge_constructed(&session, 0, 2, 0, 1));
+    assert(!reaches(&session, 0, 0) && !reaches(&session, 1, 0) &&
+           !reaches(&session, 2, 0));
+    /* Reaching island 0 later walks 0-1-2. */
+    session.islands[3].access_mask = 0x01;
+    assert(game_session_acquire_island_access(&session, 0, 3, 0));
+    assert(reaches(&session, 1, 0));
+    assert(reaches(&session, 2, 0));
+    assert(!reaches(&session, 4, 0));
+    /* A closed bridge stops the walk. */
+    assert(game_session_set_bridge_active(&session, 1, 2, 0));
+    session.islands[3].access_mask |= 0x02;
+    assert(game_session_acquire_island_access(&session, 1, 3, 0));
+    assert(reaches(&session, 1, 1));
+    assert(!reaches(&session, 2, 1));
+    /* Without the human bit native access stays per island. */
+    session.shared_bridge_player_mask = 0;
+    assert(game_session_set_bridge_active(&session, 1, 2, 1));
+    session.islands[3].access_mask |= 0x04;
+    assert(game_session_acquire_island_access(&session, 2, 3, 0));
+    assert(!reaches(&session, 1, 2));
+}
+
 /* Ordered test fragments keep shared fixture helpers in this translation unit. */
 #include "game_session_sections/resources.inc"
 
@@ -446,12 +557,16 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
 #include "game_session_sections/movement.inc"
 
 #include "game_session_sections/worker_tasks.inc"
+#include "game_session_sections/worker_scheduler.inc"
 #include "game_session_sections/audio.inc"
 #include "game_session_sections/spells.inc"
 
 int main(void)
 {
     test_session_initializes_player_starts_and_runtime_items();
+    test_completed_bridge_opens_only_to_its_contributor_in_solo();
+    test_completed_bridge_opens_to_human_players_on_either_end();
+    test_island_access_follows_open_bridges_for_human_players();
     test_building_placement_matches_source_runtime_initialization();
     test_building_placement_links_every_player_and_source_record();
     test_full_source_record_table_still_completes_construction();
@@ -459,6 +574,7 @@ int main(void)
     test_several_workers_share_one_construction_task_from_the_hall();
     test_busy_worker_moves_to_a_task_with_two_fewer_workers();
     test_worker_tasks_and_panic();
+    test_worker_scheduler();
     test_audio_effect_sounds();
     test_hall_resource_ledger_is_safe();
     test_hall_resource_modes_cycle_through_original_three_states();

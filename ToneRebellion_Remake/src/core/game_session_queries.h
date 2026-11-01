@@ -4,7 +4,8 @@
 #include "game_session_types.h"
 
 /* Hit test the visible island's active floaters in session order. The original
-   FUN_00435581 uses Chebyshev distance < 0x14 (20) for floater selection. */
+   FUN_00435581 uses Chebyshev distance < 0x14 (20) for floater selection.
+   Floaters in their bridge animation are not pickable (remake deviation). */
 int game_session_floater_at(const GameSession *session,
                             uint8_t island_index,
                             uint16_t x,

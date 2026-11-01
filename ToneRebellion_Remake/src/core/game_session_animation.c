@@ -635,20 +635,15 @@ static int32_t chebyshev_distance(uint16_t ax, uint16_t ay,
     return dx > dy ? dx : dy;
 }
 
-static int32_t leviathan_defense_target_power(
-    const PadCatalog *pad_catalog, const GameFloaterStart *target)
+/* FUN_004533a8 runs with ECX = the tower site and the target floater as its
+   stack argument (assembly ev_cef1ed76): FUN_004641de(site +0x14, site
+   +0x10) picks the tower's own PAD row (item ID for owner 4, ev_a261d3f2)
+   and row +0x0a goes to FUN_00420217. The pad.txt loader stores the third
+   column's values at +6, +0x0a, +8, so +0x0a is its second value: the
+   "strength" the file header documents for Leviathan rows. */
+static int32_t leviathan_defense_power(const PadCatalogItem *pad)
 {
-    const PadCatalogItem *target_pad;
-    uint16_t target_pad_id;
-
-    if (target == NULL) return 0;
-    target_pad_id = (uint16_t)target->owner_slot * 16U +
-        target->source_subtype;
-    target_pad = pad_catalog_find(pad_catalog, target_pad_id);
-    /* FUN_004533a8 resolves the selected floater's own PAD row by owner and
-       item ID, then passes row +0x0a to FUN_00420217. */
-    return target_pad != NULL ? target_pad->movement_cost[2] :
-        target->attack_strength;
+    return pad != NULL ? pad->movement_cost[1] : 0;
 }
 
 static uint8_t leviathan_projectile_sheet(int32_t item_id)
@@ -841,53 +836,68 @@ static void tick_leviathan_defense(GameSession *session,
     int32_t cycle_limit = has_prod
         ? (int32_t)building_render_prod_duration(item) : 0x28;
     uint8_t island_index = (uint8_t)(island - session->islands);
-    int started_cycle = 0;
 
-    (void)location_index;
     if (reach < 0) reach = 0;
+    if (state->renderer_class == 1 && state->source_value_14 != 4)
+        cycle_limit = 100;
+
+    /* FUN_00450a71's preamble (0x450a71 lines 198-216 of the stored
+       decompile) advances +0x42 and ends the cycle at descriptor +0x0c
+       before the item switch, even while flag 0x001 is clear. A tower whose
+       cycle ends on its phase tick therefore restarts on that same tick:
+       the attack period is the cycle length rounded up to ten ticks. */
+    if ((state->source_flags & 0x002U) != 0) {
+        if (state->production_progress < UINT16_MAX) ++state->production_progress;
+        state->source_value_42 = (int16_t)state->production_progress;
+        if ((int32_t)state->production_progress >= cycle_limit) {
+            state->resource_retry_tick_36 = -1;
+            state->source_flags &= ~0x002U;
+            state->production_progress = 0;
+            state->source_value_42 = 0;
+        }
+    }
     if ((state->source_flags & 1U) == 0) return;
 
     /* FUN_00450a71 locks a ranged tower's floater slot at cycle start in
-       +0x36. V-ATTCK cycles instead reacquire a random target when firing. */
-    if ((state->source_flags & 0x002U) == 0 &&
-        (item_id < 0x10 || state->resource_retry_tick_36 == -1) &&
-        (session->simulation_tick + 10U - ((uint32_t)item_id % 10U)) % 10U == 0) {
-        for (candidate_index = 0; candidate_index < session->floater_count;
-             ++candidate_index) {
-            const GameFloaterStart *target = &session->floaters[candidate_index];
-            int32_t target_distance;
-            if (!game_session_floater_is_active(target) ||
-                target->owner_slot >= GAME_START_PLAYER_COUNT ||
-                target->type_index >= 4U || target->island_index != island_index)
-                continue;
-            target_distance = chebyshev_distance(state->x, state->y,
-                                                  target->x, target->y);
-            /* V-ATTCK uses the strict fixed <0x3c gate. V-SHOT/V-ROD use
-               their PAD range and retain the first matching target in +0x36. */
-            if ((item_id < 0x10 && target_distance >= 0x3c) ||
-                (item_id >= 0x10 && target_distance > reach)) continue;
-            if (item_id >= 0x10)
-                state->resource_retry_tick_36 = (int16_t)candidate_index;
-            candidate_count = 1;
-            break;
+       +0x36. V-ATTCK cycles instead reacquire a random target when firing.
+       The start phase is (DAT_00618e44 - FUN_0045035a()) % 10, where
+       FUN_0045035a returns the site's index in its island record array. */
+    if ((state->source_flags & 0x002U) == 0) {
+        if ((item_id < 0x10 || state->resource_retry_tick_36 == -1) &&
+            (session->simulation_tick + 10U - (location_index % 10U)) % 10U == 0) {
+            for (candidate_index = 0; candidate_index < session->floater_count;
+                 ++candidate_index) {
+                const GameFloaterStart *target =
+                    &session->floaters[candidate_index];
+                int32_t target_distance;
+                if (!game_session_floater_is_active(target) ||
+                    target->owner_slot >= GAME_START_PLAYER_COUNT ||
+                    target->type_index >= 4U ||
+                    target->island_index != island_index)
+                    continue;
+                target_distance = chebyshev_distance(state->x, state->y,
+                                                      target->x, target->y);
+                /* V-ATTCK uses the strict fixed <0x3c gate. V-SHOT/V-ROD use
+                   their PAD range and retain the first match in +0x36. */
+                if ((item_id < 0x10 && target_distance >= 0x3c) ||
+                    (item_id >= 0x10 && target_distance > reach)) continue;
+                if (item_id >= 0x10)
+                    state->resource_retry_tick_36 = (int16_t)candidate_index;
+                candidate_count = 1;
+                break;
+            }
+            if (candidate_count != 0) {
+                state->source_flags |= 0x002U;
+                state->production_progress = 0;
+                state->source_value_42 = 0;
+            }
         }
-        if (candidate_count != 0) {
-            state->source_flags |= 0x002U;
-            state->production_progress = 0;
-            state->source_value_42 = 0;
-            started_cycle = 1;
-        }
+        return;
     }
 
-    /* The native update advances PROD before its item-specific switch can
-       start a new cycle, so the first progress tick is the following update. */
-    if (started_cycle) return;
-    if ((state->source_flags & 0x002U) == 0) return;
-
-    if (state->production_progress < UINT16_MAX) ++state->production_progress;
-    state->source_value_42 = (int16_t)state->production_progress;
     /* FUN_00450a71 fires at descriptor +4 (already converted to ticks by
-       the loader), while descriptor +0x0c controls cycle completion. */
+       the loader); a fire tick at or past +0x0c never fires because the
+       preamble has already ended the cycle. */
     if (fire_tick > 0 &&
         (int32_t)state->production_progress == fire_tick) {
         unsigned int target_index = (unsigned int)state->resource_retry_tick_36;
@@ -913,11 +923,23 @@ static void tick_leviathan_defense(GameSession *session,
                 target_index = (unsigned int)candidate_floaters[
                     tone_rng_bounded(&session->random_state,
                         (int32_t)candidate_count)];
-                {
+                state->resource_retry_tick_36 = (int16_t)target_index;
+                /* Descriptor +0x0e set (V-ATTCK6 DEVIL): no immediate
+                   FUN_004533a8; FUN_00416342(site, 0, 1) launches the PROD
+                   effect and its arrival resolves the hit. */
+                if (item != NULL && item->prod_effect[0] != '\0') {
+                    (void)game_session_spawn_defense_effect(session,
+                        game_session_effect_def_index(session,
+                                                      item->prod_effect),
+                        island_index,
+                        (uint16_t)((int32_t)state->x + item->prod.offset_x),
+                        (uint16_t)((int32_t)state->y + item->prod.offset_y),
+                        target_index, leviathan_defense_power(pad),
+                        leviathan_projectile_impact_realm(item_id));
+                } else {
                     GameFloaterStart *target = &session->floaters[target_index];
                     int32_t damage = game_session_damage_floater_from_power(
-                        session, target_index,
-                        leviathan_defense_target_power(pad_catalog, target));
+                        session, target_index, leviathan_defense_power(pad));
                     GameDefenseProjectile *impact =
                         damage > 0 ? allocate_defense_projectile(session) : NULL;
                     if (impact != NULL) {
@@ -938,16 +960,15 @@ static void tick_leviathan_defense(GameSession *session,
         } else {
             if (state->resource_retry_tick_36 < 0 ||
                 (unsigned int)state->resource_retry_tick_36 >=
-                    session->floater_count) goto finish_attack_tick;
+                    session->floater_count) return;
             target_index = (unsigned int)state->resource_retry_tick_36;
             if (!game_session_floater_is_active(
                     &session->floaters[target_index])) {
                 state->resource_retry_tick_36 = -1;
-                goto finish_attack_tick;
+                return;
             }
             uint8_t sheet = leviathan_projectile_sheet(item_id);
-            int32_t attack_power = leviathan_defense_target_power(
-                pad_catalog, &session->floaters[target_index]);
+            int32_t attack_power = leviathan_defense_power(pad);
             state->resource_retry_tick_36 = -1;
             if (sheet != UINT8_MAX) {
                 GameDefenseProjectile *projectile =
@@ -995,15 +1016,6 @@ static void tick_leviathan_defense(GameSession *session,
                     target_index, attack_power);
             }
         }
-    }
-finish_attack_tick:
-    if (state->renderer_class == 1 && state->source_value_14 != 4)
-        cycle_limit = 100;
-    if ((int32_t)state->production_progress >= cycle_limit) {
-        state->resource_retry_tick_36 = -1;
-        state->source_flags &= ~0x002U;
-        state->production_progress = 0;
-        state->source_value_42 = 0;
     }
 }
 

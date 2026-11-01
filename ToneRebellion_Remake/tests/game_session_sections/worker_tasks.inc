@@ -55,63 +55,31 @@ static unsigned int workers_on_slot(const GameSession *session, int slot)
     return total;
 }
 
-static void test_reallocation_does_not_wait_for_the_ten_tick_phase(void)
+static void test_busy_worker_is_reevaluated_on_its_ten_tick_phase(void)
 {
     GameSession session;
     int slot_a = setup_two_delivery_tasks(&session, 3, 3);
 
-    /* Floater 0 is not due at tick 5 under the source cadence; the remake
-       evaluates busy workers every tick, so it still moves to task B. */
+    /* FUN_0041e569 calls FUN_0042219e for a busy worker only when
+       (tick + index) % 10 == 0: floater 0 waits at tick 5, moves at 10. */
     session.simulation_tick = 5;
+    game_session_assign_local_resource_tasks(&session, NULL);
+    assert(workers_on_slot(&session, slot_a) == 3);
+    session.simulation_tick = 10;
     game_session_assign_local_resource_tasks(&session, NULL);
     assert(session.floaters[0].linked_task_slot == slot_a + 1);
     assert(workers_on_slot(&session, slot_a) == 2);
 }
 
-static void test_delivering_worker_is_reallocated_after_commitment(void)
+static void test_delivering_worker_keeps_its_task(void)
 {
     GameSession session;
     int slot_a = setup_two_delivery_tasks(&session, 3, 4);
 
-    /* A worker walking a delivery (state 4) is not blocked by its trip. */
+    /* FUN_0042219e returns for state 4 (deposit). */
     session.simulation_tick = 0;
     game_session_assign_local_resource_tasks(&session, NULL);
-    assert(session.floaters[0].linked_task_slot == slot_a + 1);
-}
-
-static void test_fresh_assignment_is_stable_for_the_commit_window(void)
-{
-    GameSession session;
-    int slot_a = setup_two_delivery_tasks(&session, 3, 3);
-    unsigned int index;
-
-    /* Every worker just got its task: nobody may leave it, however lopsided
-       the counts are, until the commitment window has passed. */
-    for (index = 0; index < 3; ++index)
-        session.floaters[index].task_commit_tick =
-            GAME_SESSION_TASK_COMMIT_TICKS;
-    for (session.simulation_tick = 0;
-         session.simulation_tick < GAME_SESSION_TASK_COMMIT_TICKS;
-         session.simulation_tick += 7) {
-        game_session_assign_local_resource_tasks(&session, NULL);
-        assert(workers_on_slot(&session, slot_a) == 3);
-        assert(session.pending_events[slot_a].assigned_floater_count == 3);
-    }
-    session.simulation_tick = GAME_SESSION_TASK_COMMIT_TICKS;
-    game_session_assign_local_resource_tasks(&session, NULL);
-    assert(workers_on_slot(&session, slot_a) < 3);
-}
-
-static void test_reallocated_worker_gets_a_new_commit_window(void)
-{
-    GameSession session;
-    int slot_a = setup_two_delivery_tasks(&session, 3, 3);
-
-    session.simulation_tick = 100;
-    game_session_assign_local_resource_tasks(&session, NULL);
-    assert(session.floaters[0].linked_task_slot == slot_a + 1);
-    assert(session.floaters[0].task_commit_tick ==
-           100U + GAME_SESSION_TASK_COMMIT_TICKS);
+    assert(workers_on_slot(&session, slot_a) == 3);
 }
 
 static void test_balanced_workers_never_change_task(void)
@@ -121,7 +89,7 @@ static void test_balanced_workers_never_change_task(void)
     unsigned int tick;
 
     /* Settle: 4 workers on A, 0 on B move until counts differ by < 2. */
-    for (tick = 0; tick < 4U * GAME_SESSION_TASK_COMMIT_TICKS; ++tick) {
+    for (tick = 0; tick < 1200U; ++tick) {
         session.simulation_tick = tick;
         game_session_assign_local_resource_tasks(&session, NULL);
     }
@@ -133,7 +101,7 @@ static void test_balanced_workers_never_change_task(void)
         unsigned int index;
         for (index = 0; index < 4; ++index)
             before[index] = session.floaters[index].linked_task_slot;
-        for (; tick < 12U * GAME_SESSION_TASK_COMMIT_TICKS; ++tick) {
+        for (; tick < 3600U; ++tick) {
             session.simulation_tick = tick;
             game_session_assign_local_resource_tasks(&session, NULL);
         }
@@ -142,28 +110,31 @@ static void test_balanced_workers_never_change_task(void)
     }
 }
 
-static void test_worker_at_build_site_is_never_reallocated(void)
+static void test_worker_at_build_site_follows_the_count_rule(void)
 {
     GameSession session;
     int slot_a = setup_two_delivery_tasks(&session, 3, 5);
 
-    /* State 5 is the build/finish step: long tasks must complete. */
-    session.simulation_tick = 10U * GAME_SESSION_TASK_COMMIT_TICKS;
+    /* FUN_0042219e does not exempt state 5: on its phase the worker moves to
+       a row with at least two workers fewer. */
+    session.simulation_tick = 3000;
     game_session_assign_local_resource_tasks(&session, NULL);
-    assert(workers_on_slot(&session, slot_a) == 3);
-    assert(session.pending_events[slot_a].assigned_floater_count == 3);
+    assert(session.floaters[0].linked_task_slot == slot_a + 1);
 }
 
-static void test_combat_and_handoff_workers_are_not_reallocated(void)
+static void test_combat_and_crossing_workers_are_not_reallocated(void)
 {
     GameSession session;
     int slot_a = setup_two_delivery_tasks(&session, 3, 6);
 
+    /* States 6/7 return from FUN_0042219e; a started bridge crossing is a
+       remake guard. Tick 2998 is floater 2's phase. */
     session.floaters[1].movement_state = 7;
     session.floaters[2].active_order_action = 9;
-    session.floaters[2].movement_state = 3;
+    session.floaters[2].movement_state = 0x11;
+    session.floaters[2].order_timer = 5;
     session.floaters[2].handoff_resume_action = 4;
-    session.simulation_tick = 10U * GAME_SESSION_TASK_COMMIT_TICKS;
+    session.simulation_tick = 2998;
     game_session_assign_local_resource_tasks(&session, NULL);
     assert(workers_on_slot(&session, slot_a) == 3);
 }
@@ -206,7 +177,7 @@ static void test_three_three_split_never_swaps_workers(void)
     unsigned int tick;
 
     make_workers_idle(&session);
-    for (tick = 0; tick < 6U * GAME_SESSION_TASK_COMMIT_TICKS; ++tick) {
+    for (tick = 0; tick < 1800U; ++tick) {
         session.simulation_tick = tick;
         game_session_assign_local_resource_tasks(&session, NULL);
     }
@@ -214,8 +185,8 @@ static void test_three_three_split_never_swaps_workers(void)
     assert(workers_on_slot(&session, slot_a + 1) == 3);
     for (index = 0; index < 6; ++index)
         before[index] = session.floaters[index].linked_task_slot;
-    /* Long run, far past every commitment window: nobody moves A <-> B. */
-    for (; tick < 26U * GAME_SESSION_TASK_COMMIT_TICKS; ++tick) {
+    /* Long run: the count rule never moves anyone A <-> B. */
+    for (; tick < 21800U; ++tick) {
         session.simulation_tick = tick;
         game_session_assign_local_resource_tasks(&session, NULL);
         for (index = 0; index < 6; ++index)
@@ -410,11 +381,16 @@ static void test_home_wander_fallback_worker_is_idle(void)
 
     make_workers_idle(&session);
     /* Idle fallback (FA_Wander, action 0x0e) with no route must not block
-       task assignment. A worker still on a route (handoff) stays untouched. */
+       task assignment. FUN_0042219e does not test the action; only a bridge
+       crossing already under way (remake guard) stays untouched. Tick 9 is
+       floater 1's phase. */
     session.floaters[0].active_order_action = 0x0e;
     session.floaters[0].has_wander_order = 1;
     session.floaters[1].active_order_action = 0x0e;
     session.floaters[1].has_move_order = 1;
+    session.floaters[1].movement_state = 0x11;
+    session.floaters[1].order_timer = 5;
+    session.simulation_tick = 9;
     game_session_assign_local_resource_tasks(&session, NULL);
     assert(session.floaters[0].linked_task_slot >= slot_a);
     assert(session.floaters[0].active_order_action == 4);
@@ -434,7 +410,9 @@ static void test_orphaned_order_without_claim_is_released(void)
     game_session_assign_local_resource_tasks(&session, NULL);
     assert(session.floaters[0].linked_task_slot >= 0);
     assert(session.floaters[0].active_order_action == 4);
-    assert(session.floaters[0].has_move_order == 1);
+    /* FUN_00421ec1 resets state +0x2c; FUN_004211bb plans the leg later. */
+    assert(session.floaters[0].movement_state == 0);
+    assert(session.floaters[0].task_step == 0);
 }
 
 static void test_task_assignment_drops_a_stale_melee_hold(void)
@@ -575,15 +553,13 @@ static void test_worker_left_on_a_finished_move_is_idle_again(void)
 
 static void test_worker_tasks_and_panic(void)
 {
-    test_reallocation_does_not_wait_for_the_ten_tick_phase();
-    test_delivering_worker_is_reallocated_after_commitment();
-    test_fresh_assignment_is_stable_for_the_commit_window();
-    test_reallocated_worker_gets_a_new_commit_window();
+    test_busy_worker_is_reevaluated_on_its_ten_tick_phase();
+    test_delivering_worker_keeps_its_task();
     test_balanced_workers_never_change_task();
     test_idle_workers_take_the_first_task_in_slot_order();
     test_three_three_split_never_swaps_workers();
-    test_worker_at_build_site_is_never_reallocated();
-    test_combat_and_handoff_workers_are_not_reallocated();
+    test_worker_at_build_site_follows_the_count_rule();
+    test_combat_and_crossing_workers_are_not_reallocated();
     test_panic_sends_workers_to_the_nearest_enemy();
     test_defending_soldier_ignores_its_own_tribe();
     test_panic_is_per_player_and_per_island();

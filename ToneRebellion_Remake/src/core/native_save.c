@@ -428,6 +428,7 @@ static int restore_task_order(GameSession *session, GameFloaterStart *floater,
     floater->order_source_island = floater->island_index;
     floater->order_source_location = -1;
     floater->order_progress = progress ? 1U : 0U;
+    floater->task_step = i16_at(rec + 0x46);
     floater->order_timer = u16_at(rec + 0x34);
     floater->destination_x = u16_at(rec + 0x28);
     floater->destination_y = u16_at(rec + 0x2a);
@@ -450,16 +451,14 @@ static int restore_task_order(GameSession *session, GameFloaterStart *floater,
         if (handoff_island >= session->island_count ||
             handoff_island == floater->island_index || departure < 0 ||
             departure >= island->location_count) return 0;
+        /* FUN_004210a9 keeps +0x3c and the task: after the crossing,
+           FUN_004211bb plans the next leg from the arrival island (resume
+           state 0 in the port), whether the worker went for a source or
+           for the site. */
         floater->handoff_target_island = (uint8_t)handoff_island;
         floater->handoff_departure_location = departure;
         floater->handoff_resume_action = 4;
-        floater->handoff_resume_state = progress ? 4 : 3;
-        if (!progress) {
-            const GamePlayerEconomy *economy = &session->economy[floater->owner_slot];
-            floater->order_source_island = (uint8_t)handoff_island;
-            if (economy->hall_island_index == handoff_island)
-                floater->order_source_location = (int16_t)economy->hall_location_index;
-        }
+        floater->handoff_resume_state = 0;
         floater->active_order_action = 9;
         floater->movement_state = 0x11;
         floater->has_move_order = 1;

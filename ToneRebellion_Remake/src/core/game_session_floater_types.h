@@ -103,9 +103,13 @@ typedef struct GameFloaterStart {
     int16_t carried_resource_code;
     int16_t order_resource_code;
     int16_t linked_task_slot;
-    /* Remake: earliest simulation tick at which a worker may be moved off its
-       current task, so long tasks are not abandoned by constant rebalancing. */
-    uint32_t task_commit_tick;
+    /* Tick record +0x46 for task orders: FUN_004211bb's step for a type-4
+       delivery (0 fetch/deliver, 1 deposit tried, 2 deposit refused, -1
+       done). It returns to 0 after each successful deposit, so a worker keeps
+       serving its task until the task is cancelled or it is rebalanced.
+       Kept 32-bit so the remake save layout is unchanged; a value loaded from
+       an older save is not a valid step and makes the worker detach. */
+    int32_t task_step;
     uint16_t order_timer;
     int16_t order_source_location;
     uint8_t order_source_island;
@@ -264,6 +268,9 @@ typedef struct GameSession {
         uint8_t strike_state;
         int16_t attacker;
         int16_t target_location;
+        /* Tower-owned slot (attacker -1): FUN_00416ff8 resolves the hit
+           through FUN_004533a8 with the tower's PAD +0x0a strength. */
+        int16_t tower_power;
         /* LIGHTNING slot words s5/s6: segment pattern and per-tick frame bits
            (random values drawn from visual_random_state). */
         uint16_t bolt_seed;
@@ -321,6 +328,11 @@ typedef struct GameSession {
     WorldBridge world_bridges[WORLD_MAP_MAX_BRIDGES];
     /* FUN_004718eb reads one active flag per WORLDPOS bridge pair. */
     uint32_t active_bridge_mask;
+    /* Remake addition: player slots played by a human in a network game
+       (zero in solo). A completed bridge opens to every such player who
+       already reaches one of its islands; see
+       mark_bridge_constructed_with_contributor. */
+    uint8_t shared_bridge_player_mask;
     GameRuntimeIsland islands[WORLD_MAP_MAX_ISLANDS];
 } GameSession;
 
