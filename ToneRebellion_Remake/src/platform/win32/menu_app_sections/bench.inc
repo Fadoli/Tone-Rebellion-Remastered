@@ -28,15 +28,21 @@ typedef struct BenchSample {
 static volatile LONG g_bench_phase;
 static volatile LONG g_bench_sampling;
 static volatile LONG g_bench_stop;
+#ifndef TONE_PLATFORM_SDL
 static BenchSample *g_bench_samples;
 static volatile LONG g_bench_sample_count;
 static HANDLE g_bench_main_thread;
 static uintptr_t g_bench_stack_low;
 static uintptr_t g_bench_stack_high;
+#endif
 
 static const char *const g_bench_phase_names[BENCH_PHASE_COUNT] = {
     "idle", "sim", "render", "present"
 };
+
+#ifndef TONE_PLATFORM_SDL
+/* --bench-profile samples with Win32 thread suspension; remake_sdl runs
+   the timings and dumps without it. */
 
 /* Stack walk over the frame-pointer (EBP/RBP) chain of the suspended main thread. Frames must
    stay inside its stack and grow upwards; system DLLs keep frame pointers,
@@ -204,21 +210,30 @@ static void bench_write_frame(FILE *file, uintptr_t address)
     entry->address = address;
     fprintf(file, " %s", entry->text);
 }
+#endif
 
-static double bench_seconds(LONGLONG ticks)
+static double bench_seconds(int64_t ticks)
 {
-    static LARGE_INTEGER frequency;
-    if (frequency.QuadPart == 0) QueryPerformanceFrequency(&frequency);
-    return (double)ticks / (double)frequency.QuadPart;
+    return (double)ticks / (double)platform_counter_frequency();
 }
 
-static LONGLONG bench_now(void)
+static int64_t bench_now(void)
 {
-    LARGE_INTEGER now;
-    QueryPerformanceCounter(&now);
-    return now.QuadPart;
+    return (int64_t)platform_counter();
 }
 
+#ifdef TONE_PLATFORM_SDL
+/* No portable thread / process CPU time: the report shows 0. */
+static int64_t bench_thread_cpu(void)
+{
+    return 0;
+}
+
+static int64_t bench_process_cpu(void)
+{
+    return 0;
+}
+#else
 static LONGLONG bench_filetime(const FILETIME *time)
 {
     return ((LONGLONG)time->dwHighDateTime << 32) | time->dwLowDateTime;
@@ -240,6 +255,7 @@ static LONGLONG bench_process_cpu(void)
         return 0;
     return bench_filetime(&kernel) + bench_filetime(&user);
 }
+#endif
 
 static int bench_compare_double(const void *a, const void *b)
 {
@@ -310,6 +326,11 @@ static int bench_open_home_island(HWND window)
 
 static void bench_pump_messages(void)
 {
+#ifdef TONE_PLATFORM_SDL
+    /* Window events are not input to replay. */
+    SDL_PumpEvents();
+    SDL_FlushEvents(SDL_EVENT_FIRST, SDL_EVENT_LAST);
+#else
     MSG message;
     while (PeekMessageA(&message, NULL, 0, 0, PM_REMOVE)) {
         if (message.message == WM_PAINT) {
@@ -319,10 +340,6 @@ static void bench_pump_messages(void)
         TranslateMessage(&message);
         DispatchMessageA(&message);
     }
-#ifdef TONE_PLATFORM_SDL
-    /* The SDL events those messages queued are not input to replay. */
-    SDL_PumpEvents();
-    SDL_FlushEvents(SDL_EVENT_FIRST, SDL_EVENT_LAST);
 #endif
 }
 
@@ -378,30 +395,36 @@ static void bench_set_client_size(HWND window, unsigned width, unsigned height)
     bench_pump_messages();
 }
 
-/* Writes the 640x480 back buffer as a top-down 32-bit BMP. */
+static void bench_put_u32(unsigned char *p, uint32_t value)
+{
+    p[0] = (unsigned char)value;
+    p[1] = (unsigned char)(value >> 8);
+    p[2] = (unsigned char)(value >> 16);
+    p[3] = (unsigned char)(value >> 24);
+}
+
+/* Writes the 640x480 back buffer as a top-down 32-bit BMP: a 14-byte file
+   header and a 40-byte BITMAPINFOHEADER, written byte by byte. */
 static void bench_dump_back_buffer(const char *path)
 {
-    BITMAPFILEHEADER file_header;
-    BITMAPINFOHEADER info;
-    DWORD bytes = LOGICAL_WIDTH * LOGICAL_HEIGHT * 4U;
+    unsigned char header[54];
+    uint32_t bytes = LOGICAL_WIDTH * LOGICAL_HEIGHT * 4U;
     FILE *file = fopen(path, "wb");
     if (file == NULL || g_back_surface.pixels == NULL) {
         if (file != NULL) fclose(file);
         return;
     }
-    ZeroMemory(&file_header, sizeof(file_header));
-    ZeroMemory(&info, sizeof(info));
-    file_header.bfType = 0x4d42;
-    file_header.bfOffBits = sizeof(file_header) + sizeof(info);
-    file_header.bfSize = file_header.bfOffBits + bytes;
-    info.biSize = sizeof(info);
-    info.biWidth = LOGICAL_WIDTH;
-    info.biHeight = -LOGICAL_HEIGHT;
-    info.biPlanes = 1;
-    info.biBitCount = 32;
-    info.biCompression = BI_RGB;
-    fwrite(&file_header, sizeof(file_header), 1, file);
-    fwrite(&info, sizeof(info), 1, file);
+    memset(header, 0, sizeof(header));
+    header[0] = 'B';
+    header[1] = 'M';
+    bench_put_u32(header + 2, (uint32_t)sizeof(header) + bytes);
+    bench_put_u32(header + 10, (uint32_t)sizeof(header));
+    bench_put_u32(header + 14, 40U);
+    bench_put_u32(header + 18, LOGICAL_WIDTH);
+    bench_put_u32(header + 22, (uint32_t)-LOGICAL_HEIGHT);
+    header[26] = 1;   /* planes */
+    header[28] = 32;  /* bits per pixel, BI_RGB */
+    fwrite(header, sizeof(header), 1, file);
     fwrite(g_back_surface.pixels, bytes, 1, file);
     fclose(file);
 }
@@ -580,9 +603,11 @@ static int bench_run(HWND window, const char *command_line)
     double *frame_ms;
     double phase_total[BENCH_PHASE_COUNT] = {0};
     double phase_max[BENCH_PHASE_COUNT] = {0};
-    LONGLONG wall_start, wall_end, thread_cpu_start, thread_cpu_end;
-    LONGLONG process_cpu_start, process_cpu_end;
+    int64_t wall_start, wall_end, thread_cpu_start, thread_cpu_end;
+    int64_t process_cpu_start, process_cpu_end;
+#ifndef TONE_PLATFORM_SDL
     HANDLE sampler = NULL;
+#endif
     FILE *file;
     unsigned frame;
     unsigned active = 0;
@@ -604,10 +629,10 @@ static int bench_run(HWND window, const char *command_line)
     }
     if (!command_line_value(command_line, "--bench-out", out_path,
                             sizeof(out_path))) {
-        DWORD length = GetModuleFileNameA(NULL, out_path, sizeof(out_path));
-        char *slash = length != 0 ? strrchr(out_path, '\\') : NULL;
-        if (slash == NULL) out_path[0] = '\0';
-        else slash[1] = '\0';
+        if (platform_executable_directory(out_path, sizeof(out_path) - 1U))
+            (void)strcat(out_path, "/");
+        else
+            out_path[0] = '\0';
         strncat(out_path, "bench_report.txt",
                 sizeof(out_path) - strlen(out_path) - 1U);
     }
@@ -627,7 +652,7 @@ static int bench_run(HWND window, const char *command_line)
             bench_set_client_size(window, width, height);
         }
     }
-    GetClientRect(window, &client);
+    platform_client_rect(window, &client);
     if (!bench_begin_present(window, &screen)) {
         bench_end_present(window, screen);
         return 1;
@@ -638,6 +663,9 @@ static int bench_run(HWND window, const char *command_line)
         return 1;
     }
 
+#ifdef TONE_PLATFORM_SDL
+    (void)profile;
+#else
     if (profile) {
         NT_TIB *tib = (NT_TIB *)NtCurrentTeb();
         g_bench_samples = (BenchSample *)calloc(BENCH_MAX_SAMPLES,
@@ -653,19 +681,20 @@ static int bench_run(HWND window, const char *command_line)
         }
         g_bench_sampling = sampler != NULL;
     }
+#endif
 
     wall_start = bench_now();
     thread_cpu_start = bench_thread_cpu();
     process_cpu_start = bench_process_cpu();
     for (frame = 0; frame < frames; ++frame) {
-        LONGLONG t0, t1, t2, t3;
+        int64_t t0, t1, t2, t3;
         double phase_ms[BENCH_PHASE_COUNT];
         int phase;
         if (paced) {
             while (frame_clock_due() == 0U) {
                 g_bench_phase = BENCH_PHASE_IDLE;
                 bench_pump_messages();
-                Sleep(1);
+                platform_sleep_ms(1);
             }
         }
         bench_pump_messages();
@@ -680,7 +709,11 @@ static int bench_run(HWND window, const char *command_line)
         bench_present(screen, &client);
         t3 = bench_now();
         g_bench_phase = BENCH_PHASE_IDLE;
+#ifdef TONE_PLATFORM_SDL
+        g_sdl_dirty = 0;
+#else
         ValidateRect(window, NULL);
+#endif
         phase_ms[BENCH_PHASE_IDLE] = 0.0;
         phase_ms[BENCH_PHASE_SIM] = bench_seconds(t1 - t0) * 1000.0;
         phase_ms[BENCH_PHASE_RENDER] = bench_seconds(t2 - t1) * 1000.0;
@@ -697,10 +730,12 @@ static int bench_run(HWND window, const char *command_line)
     process_cpu_end = bench_process_cpu();
     g_bench_sampling = 0;
     g_bench_stop = 1;
+#ifndef TONE_PLATFORM_SDL
     if (sampler != NULL) {
         WaitForSingleObject(sampler, INFINITE);
         CloseHandle(sampler);
     }
+#endif
     bench_end_present(window, screen);
     if (frame < frames) frames = frame + 1U;
     {
@@ -740,6 +775,7 @@ static int bench_run(HWND window, const char *command_line)
             fprintf(file, "phase %s mean_ms %.3f max_ms %.3f\n",
                     g_bench_phase_names[phase], phase_total[phase] / frames,
                     phase_max[phase]);
+#ifndef TONE_PLATFORM_SDL
         if (g_bench_samples != NULL) {
             LONG count = g_bench_sample_count;
             LONG s;
@@ -754,13 +790,16 @@ static int bench_run(HWND window, const char *command_line)
                 fputc('\n', file);
             }
         }
+#endif
         fclose(file);
     }
     free(frame_ms);
+#ifndef TONE_PLATFORM_SDL
     free(g_bench_samples);
     g_bench_samples = NULL;
     free(g_bench_frame_names);
     g_bench_frame_names = NULL;
     if (g_bench_main_thread != NULL) CloseHandle(g_bench_main_thread);
+#endif
     return file != NULL ? 0 : 1;
 }

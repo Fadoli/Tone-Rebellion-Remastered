@@ -5,5 +5,6 @@
 *.zip
 
 ToneRebellion_Remake/saves/
+ToneRebellion_Remake/web/out/
 
 *.log

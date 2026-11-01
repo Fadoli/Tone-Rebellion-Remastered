@@ -103,11 +103,7 @@ static void update_interaction_cursor(void)
             ++slot;
         }
     }
-    if (g_interaction_cursors[slot] != NULL) {
-        SetCursor(g_interaction_cursors[slot]);
-        return;
-    }
-    SetCursor(LoadCursorA(NULL, IDC_ARROW));
+    platform_set_cursor(slot);
 }
 
 
@@ -138,7 +134,7 @@ static int begin_new_game(HWND window)
     g_hovered_island = -1;
     g_menu.screen = SCREEN_WORLD_MAP;
     update_window_title(window);
-    InvalidateRect(window, NULL, FALSE);
+    platform_invalidate(window);
     return 1;
 }
 
@@ -181,7 +177,7 @@ static const MusicTune g_music_tunes[] = {
 static int music_file_exists_in(const char *directory, const char *file_name,
                                 char *path, size_t path_capacity)
 {
-    int written = snprintf(path, path_capacity, "%s\\%s", directory, file_name);
+    int written = snprintf(path, path_capacity, "%s/%s", directory, file_name);
     if (written < 0 || (size_t)written >= path_capacity) return 0;
     return platform_path_kind(path) == PLATFORM_PATH_FILE;
 }
@@ -203,15 +199,15 @@ static int resolve_music_directory(const char *file_name,
         return 1;
     }
     if (platform_executable_directory(candidate, sizeof(candidate)) &&
-        strlen(candidate) + sizeof("\\THING2") < sizeof(g_music_directory)) {
+        strlen(candidate) + sizeof("/THING2") < sizeof(g_music_directory)) {
         (void)strcpy(g_music_directory, candidate);
-        (void)strcat(g_music_directory, "\\THING2");
+        (void)strcat(g_music_directory, "/THING2");
         if (music_file_exists_in(g_music_directory, file_name,
                                  path, path_capacity)) return 1;
     }
     /* Disc layout: game files in THING1, music in the sibling THING2. */
-    if (strlen(g_game_directory) + sizeof("\\..\\THING2") < sizeof(candidate)) {
-        (void)snprintf(candidate, sizeof(candidate), "%s\\..\\THING2", g_game_directory);
+    if (strlen(g_game_directory) + sizeof("/../THING2") < sizeof(candidate)) {
+        (void)snprintf(candidate, sizeof(candidate), "%s/../THING2", g_game_directory);
         if (music_file_exists_in(candidate, file_name, path, path_capacity)) {
             (void)strncpy(g_music_directory, candidate, sizeof(g_music_directory) - 1);
             g_music_directory[sizeof(g_music_directory) - 1] = '\0';
@@ -274,10 +270,12 @@ static void keep_background_tune_playing(void)
 static void set_background_tune_mode(const char *tune_id, int loop)
 {
     char path[MAX_PATH];
-    char command[MAX_PATH + 64];
     size_t i;
     const char *file_name = NULL;
+#ifndef TONE_PLATFORM_SDL
+    char command[MAX_PATH + 64];
     MCIERROR result;
+#endif
 
     if (tune_id == NULL || strcmp(g_current_tune, tune_id) == 0) return;
     if (!g_music_enabled) {
@@ -299,8 +297,6 @@ static void set_background_tune_mode(const char *tune_id, int loop)
     stop_background_tune();
 #ifdef TONE_PLATFORM_SDL
     /* Silent until apply_music_volume below sets the slider gain. */
-    (void)command;
-    (void)result;
     if (!sdl_music_open(path, loop, 0.0)) return;
     g_music_device_open = 1;
 #else

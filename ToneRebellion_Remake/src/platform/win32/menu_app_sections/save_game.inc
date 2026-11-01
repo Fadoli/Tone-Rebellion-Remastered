@@ -220,7 +220,7 @@ static int save_slot_path(int slot, char *path, size_t capacity)
     char directory[MAX_PATH];
     if (slot < 0 || slot > 7 || !save_directory(directory, sizeof(directory)))
         return 0;
-    (void)snprintf(path, capacity, "%s\\%02d.sav", directory, slot);
+    (void)snprintf(path, capacity, "%s/%02d.sav", directory, slot);
     return 1;
 }
 
@@ -228,7 +228,7 @@ static int resume_path(char *path, size_t capacity)
 {
     char directory[MAX_PATH];
     if (!save_directory(directory, sizeof(directory))) return 0;
-    (void)snprintf(path, capacity, "%s\\resume.gam", directory);
+    (void)snprintf(path, capacity, "%s/resume.gam", directory);
     return 1;
 }
 

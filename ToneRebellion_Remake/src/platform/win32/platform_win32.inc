@@ -23,6 +23,11 @@ static uint64_t platform_counter_frequency(void)
     return (uint64_t)frequency.QuadPart;
 }
 
+static void platform_sleep_ms(uint32_t milliseconds)
+{
+    Sleep(milliseconds);
+}
+
 static void platform_message_box(HWND window, const char *text,
                                  const char *caption, int error)
 {
@@ -40,6 +45,70 @@ static void platform_capture_mouse(HWND window, int capture)
 {
     if (capture) (void)SetCapture(window);
     else (void)ReleaseCapture();
+}
+
+/* Asks for the frame to be composed and presented again. */
+static void platform_invalidate(HWND window)
+{
+    (void)InvalidateRect(window, NULL, FALSE);
+}
+
+/* The window's drawable area in pixels, as a RECT at (0, 0). */
+static void platform_client_rect(HWND window, RECT *out)
+{
+    (void)GetClientRect(window, out);
+}
+
+static int platform_shift_down(void)
+{
+    return (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+}
+
+/* Closes the window through the normal shutdown path (WM_DESTROY). */
+static void platform_request_close(HWND window)
+{
+    (void)PostMessageA(window, WM_CLOSE, 0, 0);
+}
+
+/* The original game's cursors, read from FLOAT.EXE as a data file (never
+   executed); slot n is cursor group ids[n]. */
+enum { PLATFORM_CURSOR_MAX = 32 };
+static HMODULE g_platform_cursor_module;
+static HCURSOR g_platform_cursors[PLATFORM_CURSOR_MAX];
+
+static void platform_load_cursors(const char *exe_path, const WORD *ids,
+                                  unsigned count)
+{
+    unsigned slot;
+    g_platform_cursor_module = LoadLibraryExA(exe_path, NULL,
+                                              LOAD_LIBRARY_AS_DATAFILE);
+    if (g_platform_cursor_module == NULL) return;
+    for (slot = 0; slot < count && slot < PLATFORM_CURSOR_MAX; ++slot)
+        g_platform_cursors[slot] = (HCURSOR)LoadImageA(
+            g_platform_cursor_module, MAKEINTRESOURCEA(ids[slot]),
+            IMAGE_CURSOR, 0, 0, LR_DEFAULTSIZE);
+}
+
+/* Slot of platform_load_cursors, or the system arrow when it has none. */
+static void platform_set_cursor(int slot)
+{
+    if (slot >= 0 && slot < PLATFORM_CURSOR_MAX &&
+        g_platform_cursors[slot] != NULL) {
+        SetCursor(g_platform_cursors[slot]);
+        return;
+    }
+    SetCursor(LoadCursorA(NULL, IDC_ARROW));
+}
+
+static void platform_free_cursors(void)
+{
+    unsigned slot;
+    for (slot = 0; slot < PLATFORM_CURSOR_MAX; ++slot) {
+        if (g_platform_cursors[slot] != NULL) DestroyCursor(g_platform_cursors[slot]);
+        g_platform_cursors[slot] = NULL;
+    }
+    if (g_platform_cursor_module != NULL) FreeLibrary(g_platform_cursor_module);
+    g_platform_cursor_module = NULL;
 }
 
 enum { PLATFORM_PATH_MISSING, PLATFORM_PATH_FILE, PLATFORM_PATH_DIRECTORY };
@@ -89,15 +158,16 @@ typedef struct PlatformDateTime {
     int day_of_week;       /* 0 = Sunday */
 } PlatformDateTime;
 
-/* Last write time of a file, in local time. */
+/* Last write time of a file, in local time with the daylight-saving rule
+   of that date (FileTimeToLocalFileTime would apply today's). */
 static int platform_file_time(const char *path, PlatformDateTime *out)
 {
     WIN32_FILE_ATTRIBUTE_DATA attributes;
-    FILETIME local;
+    SYSTEMTIME utc;
     SYSTEMTIME time;
     if (!GetFileAttributesExA(path, GetFileExInfoStandard, &attributes) ||
-        !FileTimeToLocalFileTime(&attributes.ftLastWriteTime, &local) ||
-        !FileTimeToSystemTime(&local, &time)) return 0;
+        !FileTimeToSystemTime(&attributes.ftLastWriteTime, &utc) ||
+        !SystemTimeToTzSpecificLocalTime(NULL, &utc, &time)) return 0;
     out->year = time.wYear;
     out->month = time.wMonth;
     out->day = time.wDay;

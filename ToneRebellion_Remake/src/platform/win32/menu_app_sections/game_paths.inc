@@ -11,8 +11,8 @@ static int game_directory_is_valid(const char *directory)
 {
     char path[MAX_PATH];
     if (directory == NULL || directory[0] == '\0' ||
-        strlen(directory) + sizeof("\\TONE01.COB") >= sizeof(path)) return 0;
-    (void)snprintf(path, sizeof(path), "%s\\TONE01.COB", directory);
+        strlen(directory) + sizeof("/TONE01.COB") >= sizeof(path)) return 0;
+    (void)snprintf(path, sizeof(path), "%s/TONE01.COB", directory);
     return platform_path_kind(path) != PLATFORM_PATH_MISSING;
 }
 
@@ -40,16 +40,16 @@ static int iso_prepare_cache(void)
 {
     char base[MAX_PATH];
     if (platform_environment("LOCALAPPDATA", base, sizeof(base) - 40U)) {
-        (void)strcat(base, "\\ToneRebellion_Remake");
+        (void)strcat(base, "/ToneRebellion_Remake");
         platform_create_directory(base);
     } else if (!platform_executable_directory(base, sizeof(base) - 40U)) {
         return 0;
     }
-    (void)snprintf(g_iso_cache, sizeof(g_iso_cache), "%s\\iso_cache", base);
+    (void)snprintf(g_iso_cache, sizeof(g_iso_cache), "%s/iso_cache", base);
     platform_create_directory(g_iso_cache);
-    (void)snprintf(base, sizeof(base), "%s\\THING1", g_iso_cache);
+    (void)snprintf(base, sizeof(base), "%s/THING1", g_iso_cache);
     platform_create_directory(base);
-    (void)snprintf(base, sizeof(base), "%s\\THING2", g_iso_cache);
+    (void)snprintf(base, sizeof(base), "%s/THING2", g_iso_cache);
     platform_create_directory(base);
     return 1;
 }
@@ -60,7 +60,7 @@ static int iso_extract_to_cache(const char *iso_path, const char *name)
     char destination[MAX_PATH];
     char error[128];
     if (!iso9660_find(&g_iso, iso_path, &file)) return 0;
-    (void)snprintf(destination, sizeof(destination), "%s\\%s", g_iso_cache, name);
+    (void)snprintf(destination, sizeof(destination), "%s/%s", g_iso_cache, name);
     return iso9660_extract(&g_iso, &file, destination, error, sizeof(error));
 }
 
@@ -79,10 +79,10 @@ static int game_directory_from_iso(const char *iso_path)
     g_iso_open = 1;
     if (!iso_prepare_cache()) goto fail;
     for (index = 0; index < sizeof(files) / sizeof(files[0]); ++index) {
-        (void)snprintf(path, sizeof(path), "THING1\\%s", files[index]);
+        (void)snprintf(path, sizeof(path), "THING1/%s", files[index]);
         if (!iso_extract_to_cache(path, path) && index < 2) goto fail;
     }
-    (void)snprintf(cache_thing1, sizeof(cache_thing1), "%s\\THING1", g_iso_cache);
+    (void)snprintf(cache_thing1, sizeof(cache_thing1), "%s/THING1", g_iso_cache);
     if (game_directory_accept(cache_thing1)) return 1;
 fail:
     iso9660_close(&g_iso);
@@ -94,10 +94,10 @@ fail:
 static int iso_extract_music(const char *file_name, char *path, size_t path_capacity)
 {
     char relative[64];
-    if (!g_iso_open || strlen(file_name) + sizeof("THING2\\") >= sizeof(relative)) return 0;
-    (void)snprintf(relative, sizeof(relative), "THING2\\%s", file_name);
+    if (!g_iso_open || strlen(file_name) + sizeof("THING2/") >= sizeof(relative)) return 0;
+    (void)snprintf(relative, sizeof(relative), "THING2/%s", file_name);
     if (!iso_extract_to_cache(relative, relative)) return 0;
-    return snprintf(path, path_capacity, "%s\\%s", g_iso_cache, relative) < (int)path_capacity;
+    return snprintf(path, path_capacity, "%s/%s", g_iso_cache, relative) < (int)path_capacity;
 }
 
 /* Value of `--name <v>`, `--name=<v>` or `--name "<v>"`; 0 when absent. */
@@ -185,7 +185,7 @@ static void game_directory_resolve(const char *command_line)
                     if (kind == PLATFORM_PATH_DIRECTORY) {
                         char thing1[MAX_PATH];
                         if (game_directory_accept(candidate)) return;
-                        (void)snprintf(thing1, sizeof(thing1), "%s\\THING1", candidate);
+                        (void)snprintf(thing1, sizeof(thing1), "%s/THING1", candidate);
                         if (game_directory_accept(thing1)) return;
                     } else if (game_directory_from_iso(candidate)) {
                         return;
@@ -201,8 +201,8 @@ static void game_directory_resolve(const char *command_line)
     if (platform_executable_directory(executable_directory, sizeof(executable_directory))) {
         char sibling[MAX_PATH];
         if (game_directory_accept(executable_directory)) return;
-        if (strlen(executable_directory) + sizeof("\\THING1") < sizeof(sibling)) {
-            (void)snprintf(sibling, sizeof(sibling), "%s\\THING1", executable_directory);
+        if (strlen(executable_directory) + sizeof("/THING1") < sizeof(sibling)) {
+            (void)snprintf(sibling, sizeof(sibling), "%s/THING1", executable_directory);
             if (game_directory_accept(sibling)) return;
         }
     } else {
@@ -229,6 +229,6 @@ static const char *game_file_path(const char *name)
     static char buffers[4][MAX_PATH];
     static unsigned next;
     char *buffer = buffers[next++ & 3U];
-    (void)snprintf(buffer, MAX_PATH, "%s\\%s", g_game_directory, name);
+    (void)snprintf(buffer, MAX_PATH, "%s/%s", g_game_directory, name);
     return buffer;
 }

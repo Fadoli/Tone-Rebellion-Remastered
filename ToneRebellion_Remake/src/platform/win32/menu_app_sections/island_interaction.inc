@@ -95,7 +95,7 @@ static int open_island_view(HWND window, int map_island_index)
         }
     }
     update_window_title(window);
-    InvalidateRect(window, NULL, FALSE);
+    platform_invalidate(window);
     return 1;
 }
 

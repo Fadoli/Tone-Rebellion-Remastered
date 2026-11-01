@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tone Rebellion remake</title>
+<style>
+  :root { color-scheme: dark; --bg: #0b0d12; --panel: #161a23; --text: #e6e8ee;
+          --muted: #9aa1b1; --accent: #7fb2ff; --border: #2a3040; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+               font: 15px/1.5 system-ui, sans-serif; }
+  #setup { max-width: 34rem; margin: 8vh auto; padding: 1.5rem 1.75rem;
+           background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
+  #setup h1 { margin: 0 0 .5rem; font-size: 1.35rem; }
+  #setup p { margin: .5rem 0; color: var(--muted); }
+  #setup button, #setup label.pick { display: inline-block; margin: .75rem .5rem 0 0;
+           padding: .55rem 1rem; border-radius: 6px; border: 1px solid var(--accent);
+           background: transparent; color: var(--text); font: inherit; cursor: pointer; }
+  #setup button.primary { background: var(--accent); color: #0b0d12; }
+  #setup input[type=file] { display: none; }
+  #status { min-height: 1.5em; margin-top: 1rem; color: var(--accent); }
+  #game { display: none; position: fixed; inset: 0; align-items: center; justify-content: center; }
+  #canvas { display: block; max-width: 100vw; max-height: 100vh; outline: none;
+            image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<div id="setup">
+  <h1>Tone Rebellion remake</h1>
+  <p>Choisissez le dossier du jeu d'origine : le CD (ou son image extraite) contenant
+     <code>THING1</code> et <code>THING2</code>, ou un dossier d'installation contenant
+     <code>TONE00.COB</code> et <code>TONE01.COB</code>. Les fichiers restent dans ce
+     navigateur : ils sont copiés dans son stockage local, rien n'est envoyé.</p>
+  <p><label><input type="checkbox" id="music" checked> Copier aussi les musiques
+     (<code>THING2\*.WAV</code>, environ 330 Mo)</label></p>
+  <div>
+    <button id="play" class="primary" hidden>Jouer</button>
+    <label class="pick">Choisir le dossier du jeu…
+      <input type="file" id="folder" webkitdirectory multiple></label>
+  </div>
+  <div id="status">Chargement…</div>
+</div>
+<div id="game"><canvas id="canvas" tabindex="-1"></canvas></div>
+<script>
+  "use strict";
+  const GAME_FILES = new Set(["TONE00.COB", "TONE01.COB", "FLOAT.EXE", "FLOAT.CFG",
+                              "COB.CFG", "MULTI.CFG"]);
+  const statusLine = document.getElementById("status");
+  const playButton = document.getElementById("play");
+  const folderInput = document.getElementById("folder");
+  const canvas = document.getElementById("canvas");
+  let syncing = false;
+
+  function setStatus(text) { statusLine.textContent = text; }
+
+  function sync(populate) {
+    return new Promise((resolve, reject) =>
+      FS.syncfs(populate, (error) => error ? reject(error) : resolve()));
+  }
+
+  function hasGame() {
+    return FS.analyzePath("/tone/THING1/TONE01.COB").exists &&
+           FS.analyzePath("/tone/THING1/TONE00.COB").exists;
+  }
+
+  function ensureDirectory(path) {
+    if (!FS.analyzePath(path).exists) FS.mkdir(path);
+  }
+
+  /* Where a picked file goes in /tone, or null to skip it. */
+  function destination(file, withMusic) {
+    const parts = (file.webkitRelativePath || file.name).split("/");
+    const name = parts[parts.length - 1].toUpperCase();
+    const folder = parts.length >= 2 ? parts[parts.length - 2].toUpperCase() : "";
+    if (folder === "THING1") return "/tone/THING1/" + name;
+    if (folder === "THING2") return withMusic && name.endsWith(".WAV") ? "/tone/THING2/" + name : null;
+    if (GAME_FILES.has(name)) return "/tone/THING1/" + name;
+    return null;
+  }
+
+  async function copyFolder(files) {
+    const withMusic = document.getElementById("music").checked;
+    const picked = [];
+    for (const file of files) {
+      const target = destination(file, withMusic);
+      if (target !== null) picked.push([file, target]);
+    }
+    if (!picked.some(([, target]) => target.endsWith("/TONE01.COB"))) {
+      setStatus("TONE01.COB introuvable dans ce dossier.");
+      return false;
+    }
+    ensureDirectory("/tone/THING1");
+    ensureDirectory("/tone/THING2");
+    let index = 0;
+    for (const [file, target] of picked) {
+      setStatus("Copie " + (++index) + "/" + picked.length + " : " + file.name);
+      FS.writeFile(target, new Uint8Array(await file.arrayBuffer()));
+    }
+    setStatus("Enregistrement dans le stockage du navigateur…");
+    await sync(false);
+    return true;
+  }
+
+  /* ?data=<url>: the same layout (THING1/, THING2/) served over HTTP, for
+     a copy the player hosts themselves. Missing tunes are skipped. */
+  const MUSIC_FILES = ["ACT1.WAV", "ACT2.WAV", "ACT3.WAV", "ACT4.WAV", "AMBIENT1.WAV",
+                       "AMBIENT2.WAV", "AMBIENT3.WAV", "AMBIENT4.WAV", "LEVIATAN.WAV",
+                       "LIFEGIVE.WAV", "LOSEND.WAV", "MYSTICS.WAV", "PROTECT.WAV",
+                       "SEEKERS.WAV", "START.WAV", "WINNER.WAV"];
+  async function fetchFolder(base) {
+    const withMusic = document.getElementById("music").checked;
+    const wanted = [...GAME_FILES].map((name) => ["THING1/" + name, "/tone/THING1/" + name]);
+    if (withMusic)
+      for (const name of MUSIC_FILES) wanted.push(["THING2/" + name, "/tone/THING2/" + name]);
+    ensureDirectory("/tone/THING1");
+    ensureDirectory("/tone/THING2");
+    let index = 0;
+    for (const [path, target] of wanted) {
+      setStatus("Téléchargement " + (++index) + "/" + wanted.length + " : " + path);
+      const response = await fetch(new URL(path, base));
+      if (!response.ok) {
+        if (path.endsWith("TONE00.COB") || path.endsWith("TONE01.COB")) {
+          setStatus(path + " introuvable (" + response.status + ").");
+          return false;
+        }
+        continue;
+      }
+      FS.writeFile(target, new Uint8Array(await response.arrayBuffer()));
+    }
+    setStatus("Enregistrement dans le stockage du navigateur…");
+    await sync(false);
+    return true;
+  }
+
+  function start() {
+    document.getElementById("setup").style.display = "none";
+    document.getElementById("game").style.display = "flex";
+    canvas.focus();
+    ensureDirectory("/tone/saves");
+    Module.callMain([]);
+    /* Saves and settings are written to /tone/saves: keep IndexedDB in step. */
+    setInterval(() => {
+      if (syncing) return;
+      syncing = true;
+      sync(false).catch(() => {}).finally(() => { syncing = false; });
+    }, 5000);
+  }
+
+  canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+  playButton.addEventListener("click", start);
+  folderInput.addEventListener("change", async () => {
+    playButton.hidden = true;
+    try {
+      if (await copyFolder(folderInput.files)) start();
+    } catch (error) {
+      setStatus("Erreur : " + error);
+    }
+  });
+
+  var Module = {
+    canvas: canvas,
+    print: (text) => console.log(text),
+    printErr: (text) => console.warn(text),
+    onRuntimeInitialized: async () => {
+      FS.mkdir("/tone");
+      FS.mount(IDBFS, {}, "/tone");
+      try {
+        await sync(true);
+      } catch (error) {
+        console.warn("IndexedDB indisponible", error);
+      }
+      const data = new URLSearchParams(location.search).get("data");
+      if (data !== null && !hasGame()) {
+        const base = new URL(data.endsWith("/") ? data : data + "/", location.href);
+        try {
+          if (await fetchFolder(base)) start();
+        } catch (error) {
+          setStatus("Erreur : " + error);
+        }
+      } else if (hasGame()) {
+        playButton.hidden = false;
+        setStatus("Données du jeu trouvées dans ce navigateur.");
+      } else {
+        setStatus("");
+      }
+    }
+  };
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>

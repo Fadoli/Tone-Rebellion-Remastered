@@ -15,6 +15,7 @@ endif()
 add_library(tone_core STATIC
     src/data/cob_archive.c
     src/data/iso9660.c
+    src/data/pe_cursor.c
     src/data/font_image.c
     src/core/bitmap_font_render.c
     src/data/shp_image.c
@@ -89,6 +90,7 @@ else()
     target_compile_options(tone_render PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+if(NOT EMSCRIPTEN)
 add_executable(remake_inspect_worlds src/tools/inspect_worlds.c)
 target_link_libraries(remake_inspect_worlds PRIVATE tone_core)
 target_compile_features(remake_inspect_worlds PRIVATE c_std_11)
@@ -96,6 +98,7 @@ target_compile_features(remake_inspect_worlds PRIVATE c_std_11)
 add_executable(remake_inspect_cob src/tools/inspect_cob.c)
 target_link_libraries(remake_inspect_cob PRIVATE tone_core)
 target_compile_features(remake_inspect_cob PRIVATE c_std_11)
+endif()
 
 if(BUILD_TESTING)
     find_program(NODE_EXECUTABLE NAMES node)
@@ -281,7 +284,7 @@ if(BUILD_TESTING)
 endif()
 
 if(WIN32)
-    add_executable(remake_menu WIN32 src/platform/win32/menu_app.c)
+    add_executable(remake_menu WIN32 src/platform/win32/menu_app.c src/platform/net_socket.c)
     target_link_libraries(remake_menu PRIVATE tone_core tone_render user32 gdi32 winmm ws2_32)
     target_compile_features(remake_menu PRIVATE c_std_11)
     if(NOT MSVC)
@@ -299,10 +302,11 @@ if(WIN32)
     # an SDL3 package is found (MSYS2: mingw-w64-ucrt-x86_64-sdl3).
     find_package(SDL3 CONFIG QUIET)
     if(SDL3_FOUND)
-        add_executable(remake_sdl WIN32 src/platform/win32/menu_app.c)
+        add_executable(remake_sdl WIN32 src/platform/win32/menu_app.c src/platform/net_socket.c)
         target_compile_definitions(remake_sdl PRIVATE TONE_PLATFORM_SDL=1)
-        target_link_libraries(remake_sdl PRIVATE tone_core tone_render SDL3::SDL3
-                              user32 gdi32 winmm ws2_32)
+        # The shell reaches the system only through SDL, except the TCP
+        # sockets of net_socket.c (SDL has none): Winsock here.
+        target_link_libraries(remake_sdl PRIVATE tone_core tone_render SDL3::SDL3 ws2_32)
         target_compile_features(remake_sdl PRIVATE c_std_11)
         if(NOT MSVC)
             target_link_libraries(remake_sdl PRIVATE m)
@@ -332,4 +336,31 @@ if(WIN32)
             COMMAND_EXPAND_LISTS
         )
     endif()
+endif()
+
+# Web build (TODO_WEB.md step 4, tools/build_web.sh): the SDL shell under
+# Emscripten, drawn through SDL's WebGL renderer. The page (web/shell.html)
+# asks for the player's own game folder and copies it to /tone before
+# starting the game; no original data is part of the build.
+if(EMSCRIPTEN)
+    find_package(SDL3 CONFIG REQUIRED)
+    add_executable(remake_sdl src/platform/win32/menu_app.c src/platform/net_socket.c)
+    target_compile_definitions(remake_sdl PRIVATE TONE_PLATFORM_SDL=1)
+    target_link_libraries(remake_sdl PRIVATE tone_core tone_render SDL3::SDL3-static)
+    target_compile_features(remake_sdl PRIVATE c_std_11)
+    set_target_properties(remake_sdl PROPERTIES
+        OUTPUT_NAME ToneRebellion_Remake
+        SUFFIX ".html")
+    # The native build runs with a 1 MB+ stack; Emscripten's default is
+    # 64 KB. main() only starts once the page has filled /tone.
+    target_link_options(remake_sdl PRIVATE
+        -sALLOW_MEMORY_GROWTH=1
+        -sSTACK_SIZE=4MB
+        -sINVOKE_RUN=0
+        -sFORCE_FILESYSTEM=1
+        "-sEXPORTED_RUNTIME_METHODS=['callMain','FS']"
+        -lidbfs.js
+        "--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html")
+    set_property(TARGET remake_sdl APPEND PROPERTY LINK_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html")
 endif()

@@ -55,7 +55,7 @@ static int net_setup_config_path(char *path, size_t capacity)
 {
     char directory[MAX_PATH];
     if (!save_directory(directory, sizeof(directory))) return 0;
-    (void)snprintf(path, capacity, "%s\\network.cfg", directory);
+    (void)snprintf(path, capacity, "%s/network.cfg", directory);
     return 1;
 }
 
@@ -205,7 +205,7 @@ static void net_setup_key(HWND window, WPARAM key)
         /* Return joins; hosting is one click on its button. */
         net_setup_activate(window, NET_SETUP_BUTTON_JOIN);
     } else if (key == VK_TAB || key == VK_DOWN) {
-        g_net_setup_field = (g_net_setup_field + (GetKeyState(VK_SHIFT) < 0 ? -1 : 1) +
+        g_net_setup_field = (g_net_setup_field + (platform_shift_down() ? -1 : 1) +
                              NET_SETUP_FIELD_COUNT) % NET_SETUP_FIELD_COUNT;
     } else if (key == VK_UP) {
         g_net_setup_field = (g_net_setup_field + NET_SETUP_FIELD_COUNT - 1) %

@@ -3,6 +3,39 @@
    SDL window is the one sdl_app.inc creates. */
 
 static SDL_Window *g_sdl_window;
+/* Set when the frame must be composed and presented again. */
+static int g_sdl_dirty = 1;
+static int g_sdl_quit_requested;
+
+static void platform_invalidate(HWND window)
+{
+    (void)window;
+    g_sdl_dirty = 1;
+}
+
+static void platform_client_rect(HWND window, RECT *out)
+{
+    int width = 0;
+    int height = 0;
+    (void)window;
+    if (g_sdl_window != NULL)
+        (void)SDL_GetWindowSizeInPixels(g_sdl_window, &width, &height);
+    out->left = 0;
+    out->top = 0;
+    out->right = width;
+    out->bottom = height;
+}
+
+static int platform_shift_down(void)
+{
+    return (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
+}
+
+static void platform_request_close(HWND window)
+{
+    (void)window;
+    g_sdl_quit_requested = 1;
+}
 
 static uint32_t platform_ticks_ms(void)
 {
@@ -17,6 +50,11 @@ static uint64_t platform_counter(void)
 static uint64_t platform_counter_frequency(void)
 {
     return SDL_GetPerformanceFrequency();
+}
+
+static void platform_sleep_ms(uint32_t milliseconds)
+{
+    SDL_Delay(milliseconds);
 }
 
 /* Also works before SDL_Init and without a window (data errors). */
@@ -41,6 +79,70 @@ static void platform_capture_mouse(HWND window, int capture)
     (void)SDL_CaptureMouse(capture != 0);
 }
 
+/* The original game's cursors, decoded from FLOAT.EXE's resources as bytes
+   (pe_cursor.c); SDL needs the video subsystem, so they are created on
+   first use. */
+enum { PLATFORM_CURSOR_MAX = 32 };
+static SDL_Cursor *g_platform_cursors[PLATFORM_CURSOR_MAX];
+static PeCursor g_platform_cursor_images[PLATFORM_CURSOR_MAX];
+static SDL_Cursor *g_platform_arrow;
+static SDL_Cursor *g_platform_current_cursor;
+
+static void platform_load_cursors(const char *exe_path, const WORD *ids,
+                                  unsigned count)
+{
+    uint8_t *image;
+    size_t size;
+    unsigned slot;
+    if (!pe_image_load(exe_path, &image, &size)) return;
+    for (slot = 0; slot < count && slot < PLATFORM_CURSOR_MAX; ++slot)
+        (void)pe_cursor_decode(image, size, ids[slot],
+                               &g_platform_cursor_images[slot]);
+    pe_image_free(image);
+}
+
+static void platform_set_cursor(int slot)
+{
+    SDL_Cursor *cursor = NULL;
+    if (slot >= 0 && slot < PLATFORM_CURSOR_MAX) {
+        PeCursor *image = &g_platform_cursor_images[slot];
+        if (g_platform_cursors[slot] == NULL && image->pixels != NULL) {
+            SDL_Surface *surface = SDL_CreateSurfaceFrom(
+                image->width, image->height, SDL_PIXELFORMAT_ARGB8888,
+                image->pixels, image->width * (int)sizeof(uint32_t));
+            if (surface != NULL) {
+                g_platform_cursors[slot] = SDL_CreateColorCursor(
+                    surface, image->hotspot_x, image->hotspot_y);
+                SDL_DestroySurface(surface);
+            }
+        }
+        cursor = g_platform_cursors[slot];
+    }
+    if (cursor == NULL) {
+        if (g_platform_arrow == NULL)
+            g_platform_arrow = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_DEFAULT);
+        cursor = g_platform_arrow;
+    }
+    if (cursor != NULL && cursor != g_platform_current_cursor) {
+        (void)SDL_SetCursor(cursor);
+        g_platform_current_cursor = cursor;
+    }
+}
+
+/* Before SDL_Quit. */
+static void platform_free_cursors(void)
+{
+    unsigned slot;
+    for (slot = 0; slot < PLATFORM_CURSOR_MAX; ++slot) {
+        if (g_platform_cursors[slot] != NULL) SDL_DestroyCursor(g_platform_cursors[slot]);
+        g_platform_cursors[slot] = NULL;
+        pe_cursor_free(&g_platform_cursor_images[slot]);
+    }
+    if (g_platform_arrow != NULL) SDL_DestroyCursor(g_platform_arrow);
+    g_platform_arrow = NULL;
+    g_platform_current_cursor = NULL;
+}
+
 enum { PLATFORM_PATH_MISSING, PLATFORM_PATH_FILE, PLATFORM_PATH_DIRECTORY };
 
 static int platform_path_kind(const char *path)
@@ -61,10 +163,17 @@ static int platform_rename_replace(const char *from, const char *to)
     return SDL_RenamePath(from, to);
 }
 
-/* SDL_GetBasePath ends with a separator; the callers add their own. */
+/* SDL_GetBasePath ends with a separator; the callers add their own. In the
+   browser the page puts the player's game files in /tone (THING1, THING2)
+   and keeps /tone/saves in IndexedDB: the usual search then finds them as
+   if /tone held the executable. */
 static int platform_executable_directory(char *out, size_t capacity)
 {
+#ifdef __EMSCRIPTEN__
+    const char *base = "/tone";
+#else
     const char *base = SDL_GetBasePath();
+#endif
     size_t length;
     if (base == NULL) return 0;
     length = strlen(base);
@@ -122,7 +231,7 @@ static int platform_each_file(const char *directory, const char *suffix,
     names = SDL_GlobDirectory(directory, pattern, SDL_GLOB_CASEINSENSITIVE, &count);
     if (names == NULL) return 0;
     for (index = 0; index < count && result == 0; ++index) {
-        if (snprintf(path, sizeof(path), "%s\\%s", directory, names[index]) <
+        if (snprintf(path, sizeof(path), "%s/%s", directory, names[index]) <
                 (int)sizeof(path) &&
             platform_path_kind(path) == PLATFORM_PATH_FILE)
             result = visit(path, context);

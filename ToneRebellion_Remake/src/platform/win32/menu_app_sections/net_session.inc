@@ -4,10 +4,12 @@
    so it carries the core NetLobby records over a plain TCP connection: one
    host socket accepts up to three guests, guests talk only to the host (the
    native send path FUN_00412d70 also routes non-host records to the host).
-   Sockets are non-blocking and post WM_NET_SOCKET to the window, so frames
-   are handled when they arrive rather than at the next 50 ms timer (that
-   polling alone added up to two frames to every round trip). After the
-   start, the same connections carry the NetLockstep turns. */
+   Sockets are non-blocking (net_socket.c). Under Win32 they post
+   WM_NET_SOCKET to the window, so frames are handled when they arrive
+   rather than at the next 50 ms timer (that polling alone added up to two
+   frames to every round trip); remake_sdl polls them on every 10 ms
+   iteration instead. After the start, the same connections carry the
+   NetLockstep turns. */
 
 enum { NET_MODE_NONE, NET_MODE_HOST, NET_MODE_CLIENT };
 enum { WM_NET_SOCKET = WM_APP + 1 };
@@ -17,9 +19,9 @@ static HWND g_net_window;
 static int g_net_mode;
 static int g_net_wsa_started;
 static int g_net_connecting;
-static SOCKET g_net_listen = INVALID_SOCKET;
-static SOCKET g_net_peers[NET_LOBBY_MAX_PLAYERS] = {
-    INVALID_SOCKET, INVALID_SOCKET, INVALID_SOCKET, INVALID_SOCKET};
+static NetSocket g_net_listen = NET_SOCKET_INVALID;
+static NetSocket g_net_peers[NET_LOBBY_MAX_PLAYERS] = {
+    NET_SOCKET_INVALID, NET_SOCKET_INVALID, NET_SOCKET_INVALID, NET_SOCKET_INVALID};
 static NetFrameReader g_net_readers[NET_LOBBY_MAX_PLAYERS];
 static NetLobby g_net_lobby;
 static char g_net_name[NET_LOBBY_NAME_CAPACITY];
@@ -55,11 +57,11 @@ static void net_notify_in_game(void)
     if (g_net_in_game) queue_island_message(g_net_status, 1);
 }
 
-static void net_close_socket(SOCKET *socket_handle)
+static void net_close_socket(NetSocket *socket_handle)
 {
-    if (*socket_handle != INVALID_SOCKET) {
-        (void)closesocket(*socket_handle);
-        *socket_handle = INVALID_SOCKET;
+    if (*socket_handle != NET_SOCKET_INVALID) {
+        net_socket_close(*socket_handle);
+        *socket_handle = NET_SOCKET_INVALID;
     }
 }
 
@@ -75,7 +77,7 @@ static void net_shutdown(void)
     g_net_connecting = 0;
     g_net_in_game = 0;
     if (g_net_wsa_started) {
-        (void)WSACleanup();
+        net_socket_cleanup();
         g_net_wsa_started = 0;
     }
 }
@@ -91,10 +93,14 @@ static void net_lobby_failed(const char *status)
 
 static int net_startup(void)
 {
-    WSADATA data;
     if (g_net_wsa_started) return 1;
-    if (WSAStartup(MAKEWORD(2, 2), &data) != 0) {
-        net_set_status("Winsock indisponible");
+    if (!net_socket_startup()) {
+#ifdef __EMSCRIPTEN__
+        /* The browser has no TCP (TODO_WEB.md step 8). */
+        net_set_status("Multijoueur indisponible dans cette version");
+#else
+        net_set_status("Reseau indisponible");
+#endif
         return 0;
     }
     g_net_wsa_started = 1;
@@ -110,28 +116,23 @@ static void net_default_name(void)
                    name != NULL && name[0] != '\0' ? name : "Joueur");
 }
 
-static void net_set_nonblocking(SOCKET socket_handle)
+/* Win32: readiness arrives as WM_NET_SOCKET. remake_sdl polls instead. */
+static void net_watch(NetSocket socket_handle)
 {
-    u_long enabled = 1;
-    /* WSAAsyncSelect also makes the socket non-blocking. */
-    if (g_net_window != NULL &&
-        WSAAsyncSelect(socket_handle, g_net_window, WM_NET_SOCKET,
-                       FD_ACCEPT | FD_CONNECT | FD_READ | FD_CLOSE) == 0) return;
-    (void)ioctlsocket(socket_handle, FIONBIO, &enabled);
+#ifdef TONE_PLATFORM_SDL
+    (void)socket_handle;
+#else
+    if (g_net_window != NULL)
+        (void)WSAAsyncSelect((SOCKET)socket_handle, g_net_window, WM_NET_SOCKET,
+                             FD_ACCEPT | FD_CONNECT | FD_READ | FD_CLOSE);
+#endif
 }
 
 /* Frames are a few hundred bytes; a full send buffer drops the peer. */
 static int net_send(unsigned slot, const uint8_t *bytes, size_t length)
 {
-    size_t sent = 0;
-    if (slot >= NET_LOBBY_MAX_PLAYERS || g_net_peers[slot] == INVALID_SOCKET) return 0;
-    while (sent < length) {
-        int result = send(g_net_peers[slot], (const char *)bytes + sent,
-                          (int)(length - sent), 0);
-        if (result <= 0) return 0;
-        sent += (size_t)result;
-    }
-    return 1;
+    if (slot >= NET_LOBBY_MAX_PLAYERS || g_net_peers[slot] == NET_SOCKET_INVALID) return 0;
+    return net_socket_send(g_net_peers[slot], bytes, length);
 }
 
 static void net_drop_peer(unsigned slot);
@@ -140,7 +141,7 @@ static void net_host_broadcast(const uint8_t *bytes, size_t length)
 {
     unsigned slot;
     for (slot = 1; slot < NET_LOBBY_MAX_PLAYERS; ++slot)
-        if (g_net_peers[slot] != INVALID_SOCKET && !net_send(slot, bytes, length))
+        if (g_net_peers[slot] != NET_SOCKET_INVALID && !net_send(slot, bytes, length))
             net_drop_peer(slot);
 }
 
@@ -195,24 +196,17 @@ static void net_drop_peer(unsigned slot)
 
 static int net_start_host(void)
 {
-    struct sockaddr_in address;
     net_shutdown();
     if (!net_startup()) return 0;
     net_default_name();
-    g_net_listen = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    memset(&address, 0, sizeof(address));
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = htonl(INADDR_ANY);
-    address.sin_port = htons(g_net_port);
-    if (g_net_listen == INVALID_SOCKET ||
-        bind(g_net_listen, (struct sockaddr *)&address, sizeof(address)) != 0 ||
-        listen(g_net_listen, 4) != 0) {
+    g_net_listen = net_socket_listen(g_net_port);
+    if (g_net_listen == NET_SOCKET_INVALID) {
         (void)snprintf(g_net_status, sizeof(g_net_status),
                        "Port %u indisponible", (unsigned)g_net_port);
         net_shutdown();
         return 0;
     }
-    net_set_nonblocking(g_net_listen);
+    net_watch(g_net_listen);
     /* Case 0x34 of FUN_00448e5a sends FUN_0041be72() (the low dword of
        QueryPerformanceCounter; here platform_counter) as the type-9 payload, and case 9 seeds the
        game RNG DAT_004a4b78 with it on every machine. */
@@ -228,37 +222,18 @@ static int net_start_host(void)
 
 static int net_start_join(void)
 {
-    struct sockaddr_in address;
-    int connected;
+    int lookup_failed;
     net_shutdown();
     if (!net_startup()) return 0;
     net_default_name();
-    memset(&address, 0, sizeof(address));
-    address.sin_family = AF_INET;
-    address.sin_port = htons(g_net_port);
-    address.sin_addr.s_addr = inet_addr(g_net_join_address);
-    if (address.sin_addr.s_addr == INADDR_NONE) {
-        /* Blocking name lookup; numeric addresses skip it. */
-        const struct hostent *host = gethostbyname(g_net_join_address);
-        if (host == NULL || host->h_addrtype != AF_INET || host->h_addr_list[0] == NULL) {
-            net_set_status("Adresse de l'hote introuvable");
-            net_shutdown();
-            return 0;
-        }
-        memcpy(&address.sin_addr, host->h_addr_list[0], sizeof(address.sin_addr));
-    }
-    g_net_peers[0] = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (g_net_peers[0] == INVALID_SOCKET) {
+    /* Blocking name lookup; numeric addresses skip it. */
+    g_net_peers[0] = net_socket_connect(g_net_join_address, g_net_port, &lookup_failed);
+    if (g_net_peers[0] == NET_SOCKET_INVALID) {
+        net_set_status(lookup_failed ? "Adresse de l'hote introuvable" : "Connexion refusee");
         net_shutdown();
         return 0;
     }
-    net_set_nonblocking(g_net_peers[0]);
-    connected = connect(g_net_peers[0], (struct sockaddr *)&address, sizeof(address)) == 0;
-    if (!connected && WSAGetLastError() != WSAEWOULDBLOCK) {
-        net_set_status("Connexion refusee");
-        net_shutdown();
-        return 0;
-    }
+    net_watch(g_net_peers[0]);
     net_lobby_client_init(&g_net_lobby);
     g_net_mode = NET_MODE_CLIENT;
     g_net_connecting = 1;
@@ -354,21 +329,20 @@ static void net_poll_peer(HWND window, unsigned slot)
     char buffer[512];
     NetFrame frame;
     for (;;) {
-        int received = recv(g_net_peers[slot], buffer, (int)sizeof(buffer), 0);
+        int received = net_socket_receive(g_net_peers[slot], buffer, sizeof(buffer));
         int status;
-        if (received == 0 ||
-            (received < 0 && WSAGetLastError() != WSAEWOULDBLOCK)) {
+        if (received == NET_SOCKET_WOULD_BLOCK) return;
+        if (received <= 0) {
             net_drop_peer(slot);
             return;
         }
-        if (received < 0) return;
         if (!net_frame_reader_push(&g_net_readers[slot], buffer, (size_t)received)) {
             net_drop_peer(slot);
             return;
         }
         while ((status = net_frame_reader_next(&g_net_readers[slot], &frame)) == 1) {
             if (g_net_mode == NET_MODE_HOST) {
-                SOCKET before = g_net_peers[slot];
+                NetSocket before = g_net_peers[slot];
                 net_host_handle_frame(slot, &frame);
                 /* A refused HELLO closes the socket. */
                 if (g_net_peers[slot] != before) return;
@@ -418,49 +392,41 @@ static int net_poll(HWND window)
     if (g_net_mode == NET_MODE_NONE) return 0;
     memcpy(before, g_net_status, sizeof(before));
     lobby_before = g_net_lobby;
-    if (g_net_mode == NET_MODE_HOST && g_net_listen != INVALID_SOCKET) {
-        SOCKET incoming;
-        while ((incoming = accept(g_net_listen, NULL, NULL)) != INVALID_SOCKET) {
+    if (g_net_mode == NET_MODE_HOST && g_net_listen != NET_SOCKET_INVALID) {
+        NetSocket incoming;
+        while ((incoming = net_socket_accept(g_net_listen)) != NET_SOCKET_INVALID) {
             unsigned free_slot = NET_LOBBY_MAX_PLAYERS;
             for (slot = 1; slot < NET_LOBBY_MAX_PLAYERS; ++slot)
-                if (g_net_peers[slot] == INVALID_SOCKET) { free_slot = slot; break; }
-            net_set_nonblocking(incoming);
+                if (g_net_peers[slot] == NET_SOCKET_INVALID) { free_slot = slot; break; }
             if (free_slot == NET_LOBBY_MAX_PLAYERS || g_net_lobby.started) {
                 uint8_t bytes[NET_FRAME_MAX_SIZE];
                 size_t length = net_lobby_encode_reject(bytes, sizeof(bytes),
                     g_net_lobby.started ? NET_REJECT_STARTED : NET_REJECT_FULL);
-                (void)send(incoming, (const char *)bytes, (int)length, 0);
-                (void)closesocket(incoming);
+                (void)net_socket_send(incoming, bytes, length);
+                net_socket_close(incoming);
                 continue;
             }
+            net_watch(incoming);
             g_net_peers[free_slot] = incoming;
             memset(&g_net_readers[free_slot], 0, sizeof(g_net_readers[free_slot]));
         }
     }
     if (g_net_mode == NET_MODE_CLIENT && g_net_connecting) {
-        fd_set writable;
-        fd_set failed;
-        struct timeval no_wait = {0, 0};
-        FD_ZERO(&writable);
-        FD_ZERO(&failed);
-        FD_SET(g_net_peers[0], &writable);
-        FD_SET(g_net_peers[0], &failed);
-        if (select(0, NULL, &writable, &failed, &no_wait) > 0) {
-            if (FD_ISSET(g_net_peers[0], &failed)) {
-                net_lobby_failed("Connexion refusee");
-                return 1;
-            }
-            if (FD_ISSET(g_net_peers[0], &writable)) {
-                uint8_t bytes[NET_FRAME_MAX_SIZE];
-                size_t length = net_lobby_encode_hello(bytes, sizeof(bytes), g_net_name);
-                g_net_connecting = 0;
-                if (!net_send(0, bytes, length)) net_drop_peer(0);
-                else net_set_status("Connecte, en attente de l'hote");
-            }
+        int connected = net_socket_connect_status(g_net_peers[0]);
+        if (connected < 0) {
+            net_lobby_failed("Connexion refusee");
+            return 1;
+        }
+        if (connected > 0) {
+            uint8_t bytes[NET_FRAME_MAX_SIZE];
+            size_t length = net_lobby_encode_hello(bytes, sizeof(bytes), g_net_name);
+            g_net_connecting = 0;
+            if (!net_send(0, bytes, length)) net_drop_peer(0);
+            else net_set_status("Connecte, en attente de l'hote");
         }
     } else {
         for (slot = 0; slot < NET_LOBBY_MAX_PLAYERS && g_net_mode != NET_MODE_NONE; ++slot)
-            if (g_net_peers[slot] != INVALID_SOCKET) net_poll_peer(window, slot);
+            if (g_net_peers[slot] != NET_SOCKET_INVALID) net_poll_peer(window, slot);
     }
     return memcmp(before, g_net_status, sizeof(before)) != 0 ||
            memcmp(&lobby_before, &g_net_lobby, sizeof(lobby_before)) != 0;

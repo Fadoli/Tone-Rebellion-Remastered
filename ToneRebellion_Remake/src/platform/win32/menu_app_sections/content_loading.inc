@@ -633,31 +633,16 @@ done:
     return success;
 }
 
-int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
-                   LPSTR command_line, int show_command)
+/* Startup shared by both shells: game files, cursors, catalogs, art, text
+   and settings. Returns 0 after showing the error. */
+static int app_load_content(const char *command_line)
 {
-    WNDCLASSA window_class;
-    HWND window;
-    MSG message;
     char error[256];
-    unsigned int cursor_index;
-    (void)previous_instance;
     game_directory_resolve(command_line);
-
-    /* Read the original PE cursor resources without executing FLOAT.EXE.
+    /* The original PE cursor resources, read without executing FLOAT.EXE.
        Resource IDs follow the 17-entry table at DAT_0049c950. */
-    g_original_cursor_module = LoadLibraryExA(
-        game_file_path("FLOAT.EXE"), NULL,
-        LOAD_LIBRARY_AS_DATAFILE);
-    if (g_original_cursor_module != NULL) {
-        for (cursor_index = 0; cursor_index < GAME_CURSOR_SLOT_COUNT;
-             ++cursor_index) {
-            g_interaction_cursors[cursor_index] = (HCURSOR)LoadImageA(
-                g_original_cursor_module,
-                MAKEINTRESOURCEA(g_cursor_resource_ids[cursor_index]),
-                IMAGE_CURSOR, 0, 0, LR_DEFAULTSIZE);
-        }
-    }
+    platform_load_cursors(game_file_path("FLOAT.EXE"), g_cursor_resource_ids,
+                          GAME_CURSOR_SLOT_COUNT);
 
     if (!load_world_map(error, sizeof(error)) ||
         !load_window_catalog(error, sizeof(error)) ||
@@ -674,7 +659,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
         !create_tribe_description_sheet(&g_tribe_descriptions,
                                         error, sizeof(error))) {
         platform_message_box(NULL, error, "Tone Rebellion remake - data error", 1);
-        return 1;
+        return 0;
     }
     g_resume_available = resume_header_is_valid();
     scan_load_slots();
@@ -685,39 +670,13 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     g_menu.selected_tribe = 0;
     g_menu.selected_map_island = -1;
     g_random_state = (uint32_t)platform_counter();
+    return 1;
+}
 
-#ifdef TONE_PLATFORM_SDL
-    (void)window_class;
-    message.wParam = 0;   /* the exit code returned below */
-    (void)instance;
-    window = sdl_create_window();
-    if (window == NULL) {
-        platform_message_box(NULL, SDL_GetError(), "Tone Rebellion remake - SDL",
-                             1);
-        return 1;
-    }
-#else
-    memset(&window_class, 0, sizeof(window_class));
-    window_class.lpfnWndProc = menu_window_proc;
-    window_class.hInstance = instance;
-    window_class.hCursor = LoadCursor(NULL, IDC_ARROW);
-    window_class.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
-    window_class.lpszClassName = "ToneRebellionRemakeMenu";
-    if (!RegisterClassA(&window_class)) {
-        platform_message_box(NULL, "Could not register the menu window class.",
-                             "Tone Rebellion remake", 1);
-        return 1;
-    }
-    window = CreateWindowExA(0, window_class.lpszClassName,
-                             "Tone Rebellion - New Game",
-                             WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
-                             1040, 820, NULL, NULL, instance, NULL);
-    if (window == NULL) {
-        platform_message_box(NULL, "Could not create the menu window.",
-                             "Tone Rebellion remake", 1);
-        return 1;
-    }
-#endif
+/* The first screen and tune once the window exists; --host / --join open
+   the lobby directly. */
+static void app_start(HWND window, const char *command_line)
+{
     add_scale_menu(window);
     g_net_window = window;
     {
@@ -747,54 +706,23 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
         g_menu.screen = SCREEN_LOGO;
     else
         set_background_tune_once("start");
-    /* frame_limit 20: frame_clock_due releases one frame per 50 ms; the
-       10 ms timer and 1 ms timer resolution only keep it punctual. */
-    (void)timeBeginPeriod(1);
-    if (command_line != NULL && strstr(command_line, "--bench") != NULL) {
-        int exit_code;
-        free(g_logo_pixels);
-        g_logo_pixels = NULL;
-        /* The dump set only renders: its window stays hidden. */
-        if (strstr(command_line, "--bench-dump-set") == NULL) {
-#ifdef TONE_PLATFORM_SDL
-            SDL_ShowWindow(g_sdl_window);
-#else
-            ShowWindow(window, show_command);
-            UpdateWindow(window);
-#endif
-        }
-        exit_code = bench_run(window, command_line);
-        (void)timeEndPeriod(1);
-        /* No DestroyWindow: WM_DESTROY would write the bench session over
-           the resume save. The process exit releases the window. */
-        return exit_code;
-    }
-#ifdef TONE_PLATFORM_SDL
-    (void)show_command;
-    sdl_run(window);
-    sdl_destroy_window();
-#else
-    (void)SetTimer(window, 1, 10, NULL);
-    (void)SetTimer(window, 2, 1000, NULL);
-    ShowWindow(window, show_command);
-    UpdateWindow(window);
-    while (GetMessageA(&message, NULL, 0, 0) > 0) {
-        TranslateMessage(&message);
-        DispatchMessageA(&message);
-    }
-#endif
-    (void)timeEndPeriod(1);
-    if (g_original_cursor_module != NULL) {
-        for (cursor_index = 0; cursor_index < GAME_CURSOR_SLOT_COUNT;
-             ++cursor_index) {
-            if (g_interaction_cursors[cursor_index] != NULL) {
-                DestroyCursor(g_interaction_cursors[cursor_index]);
-                g_interaction_cursors[cursor_index] = NULL;
-            }
-        }
-        FreeLibrary(g_original_cursor_module);
-        g_original_cursor_module = NULL;
-    }
+}
+
+/* --bench runs instead of the game: returns 1 and sets the exit code. */
+static int app_run_bench(HWND window, const char *command_line, int *exit_code)
+{
+    if (command_line == NULL || strstr(command_line, "--bench") == NULL) return 0;
+    free(g_logo_pixels);
+    g_logo_pixels = NULL;
+    *exit_code = bench_run(window, command_line);
+    /* No WM_DESTROY: it would write the bench session over the resume save.
+       The process exit releases the window. */
+    return 1;
+}
+
+static void app_release_content(void)
+{
+    platform_free_cursors();
     free_sprite_sheet(&g_title_art);
     free_sprite_sheet(&g_new_background);
     free_sprite_sheet(&g_new_buttons);
@@ -909,5 +837,64 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
             free(g_effect_sounds[cast_index]);
     }
     free(g_island_height_data);
+}
+
+#ifdef TONE_PLATFORM_SDL
+#include "../../sdl/sdl_main.inc"
+#else
+int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
+                   LPSTR command_line, int show_command)
+{
+    WNDCLASSA window_class;
+    HWND window;
+    MSG message;
+    int exit_code;
+    (void)previous_instance;
+    if (!app_load_content(command_line)) return 1;
+    memset(&window_class, 0, sizeof(window_class));
+    window_class.lpfnWndProc = menu_window_proc;
+    window_class.hInstance = instance;
+    window_class.hCursor = LoadCursor(NULL, IDC_ARROW);
+    window_class.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    window_class.lpszClassName = "ToneRebellionRemakeMenu";
+    if (!RegisterClassA(&window_class)) {
+        platform_message_box(NULL, "Could not register the menu window class.",
+                             "Tone Rebellion remake", 1);
+        return 1;
+    }
+    window = CreateWindowExA(0, window_class.lpszClassName,
+                             "Tone Rebellion - New Game",
+                             WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
+                             1040, 820, NULL, NULL, instance, NULL);
+    if (window == NULL) {
+        platform_message_box(NULL, "Could not create the menu window.",
+                             "Tone Rebellion remake", 1);
+        return 1;
+    }
+    app_start(window, command_line);
+    /* frame_limit 20: frame_clock_due releases one frame per 50 ms; the
+       10 ms timer and 1 ms timer resolution only keep it punctual. */
+    (void)timeBeginPeriod(1);
+    /* The dump set only renders: its window stays hidden. */
+    if (command_line != NULL && strstr(command_line, "--bench") != NULL &&
+        strstr(command_line, "--bench-dump-set") == NULL) {
+        ShowWindow(window, show_command);
+        UpdateWindow(window);
+    }
+    if (app_run_bench(window, command_line, &exit_code)) {
+        (void)timeEndPeriod(1);
+        return exit_code;
+    }
+    (void)SetTimer(window, 1, 10, NULL);
+    (void)SetTimer(window, 2, 1000, NULL);
+    ShowWindow(window, show_command);
+    UpdateWindow(window);
+    while (GetMessageA(&message, NULL, 0, 0) > 0) {
+        TranslateMessage(&message);
+        DispatchMessageA(&message);
+    }
+    (void)timeEndPeriod(1);
+    app_release_content();
     return (int)message.wParam;
 }
+#endif

@@ -4,7 +4,7 @@ static int save_directory(char *out, size_t capacity)
 {
     if (!platform_executable_directory(out, capacity) ||
         strlen(out) + 7U >= capacity) return 0;
-    (void)strcat(out, "\\saves");
+    (void)strcat(out, "/saves");
     platform_create_directory(out);
     return 1;
 }
@@ -27,7 +27,7 @@ static int resume_header_is_valid(void)
     char directory[MAX_PATH];
     char path[MAX_PATH];
     if (!save_directory(directory, sizeof(directory))) return 0;
-    (void)snprintf(path, sizeof(path), "%s\\resume.gam", directory);
+    (void)snprintf(path, sizeof(path), "%s/resume.gam", directory);
     return save_file_is_remake(path);
 }
 
@@ -87,7 +87,7 @@ static void scan_load_slots(void)
         g_load_slot_native[slot] = 0;
         g_load_slot_native_path[slot][0] = '\0';
         if (have_directory) {
-            (void)snprintf(path, sizeof(path), "%s\\%02d.sav", directory, slot);
+            (void)snprintf(path, sizeof(path), "%s/%02d.sav", directory, slot);
             if (save_header_is_valid(path) && save_file_is_remake(path)) {
                 g_load_slot_valid[slot] = 1;
                 read_slot_details(slot, path);

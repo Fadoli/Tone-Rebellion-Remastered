@@ -42,7 +42,7 @@ static void handle_click(HWND window, int x, int y)
                        control->send_message[1] == 4) {
                 g_menu.screen = SCREEN_LOAD_GAME;
             } else if (control->send_message[0] == 2) {
-                PostMessageA(window, WM_CLOSE, 0, 0);
+                platform_request_close(window);
             }
         } else if (control != NULL && strcmp(control->name, "RESUME") == 0 &&
                    g_resume_available) {
@@ -91,14 +91,14 @@ static void handle_click(HWND window, int x, int y)
             select_location_on_view(-1);
             g_selected_floater = -1;
             g_island_panel_mode = WINDOW_ISLAND_PANEL_GENERAL;
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
             return;
         }
         if (upgspread_button_at(x, y)) {
             (void)ISSUE_COMMAND(GAME_COMMAND_TOGGLE_UPGSPREAD, (uint8_t)g_menu.selected_tribe,
                 (uint8_t)selection_island(),
                 (uint16_t)g_selected_location);
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
             return;
         }
         {
@@ -107,7 +107,7 @@ static void handle_click(HWND window, int x, int y)
                 /* CLIPSEL msg 7001..7003: active group, repaint. */
                 game_session_clip_set_group(&g_game_session,
                                             (unsigned int)clip_control - 1U);
-                InvalidateRect(window, NULL, FALSE);
+                platform_invalidate(window);
                 return;
             }
             if (clip_control >= 11 && clip_control <= 13 &&
@@ -129,7 +129,7 @@ static void handle_click(HWND window, int x, int y)
                     select_building_warrior();
                     g_island_panel_mode = WINDOW_ISLAND_PANEL_LOCATION;
                 }
-                InvalidateRect(window, NULL, FALSE);
+                platform_invalidate(window);
                 return;
             }
         }
@@ -158,7 +158,7 @@ static void handle_click(HWND window, int x, int y)
                     select_location_anywhere(selection_island(), selection.location_index);
                     g_selected_floater = slot_floater;
                     g_hovered_location = -1;
-                    InvalidateRect(window, NULL, FALSE);
+                    platform_invalidate(window);
                     return;
                 }
             }
@@ -169,7 +169,7 @@ static void handle_click(HWND window, int x, int y)
                 (void)ISSUE_COMMAND(GAME_COMMAND_TOGGLE_TRAINING_STOCK, (uint8_t)g_menu.selected_tribe,
                     (uint8_t)selection_island(),
                     (uint16_t)g_selected_location, training_control - 1);
-                InvalidateRect(window, NULL, FALSE);
+                platform_invalidate(window);
                 return;
             }
         }
@@ -177,7 +177,7 @@ static void handle_click(HWND window, int x, int y)
             int cast_action = selected_cast_action_at(x, y);
             if (cast_action >= 0) {
                 press_cast_action(cast_action);
-                InvalidateRect(window, NULL, FALSE);
+                platform_invalidate(window);
                 return;
             }
         }
@@ -193,7 +193,7 @@ static void handle_click(HWND window, int x, int y)
                     (uint8_t)selection_island(), own->x, own->y);
                 g_defend_area_armed = 0;
                 update_interaction_cursor();
-                InvalidateRect(window, NULL, FALSE);
+                platform_invalidate(window);
                 return;
             }
             if (order_genre != 0) {
@@ -201,7 +201,7 @@ static void handle_click(HWND window, int x, int y)
                     g_defend_area_armed == order_genre ? 0 : order_genre;
                 g_armed_spell_action = 0;
                 update_interaction_cursor();
-                InvalidateRect(window, NULL, FALSE);
+                platform_invalidate(window);
                 return;
             }
         }
@@ -211,7 +211,7 @@ static void handle_click(HWND window, int x, int y)
                 (uint8_t)g_menu.selected_map_island,
                 (uint16_t)(x + g_island_scroll_x), (uint16_t)y);
             if (island_spell_target_click(clicked_floater, x, y)) {
-                InvalidateRect(window, NULL, FALSE);
+                platform_invalidate(window);
                 return;
             }
         }
@@ -240,7 +240,7 @@ static void handle_click(HWND window, int x, int y)
                 g_defend_area_armed = 0;
                 update_interaction_cursor();
             }
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
             return;
         }
         if (g_game_session.location_move_active && x >= 0 &&
@@ -253,7 +253,7 @@ static void handle_click(HWND window, int x, int y)
                 g_selected_floater = -1;
                 g_hovered_location = target_location;
             }
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
             return;
         }
         if (g_island_panel_mode == WINDOW_ISLAND_PANEL_INVENTORY) {
@@ -268,7 +268,7 @@ static void handle_click(HWND window, int x, int y)
                 g_selected_inventory_item = game_inventory_click_selection(
                     g_selected_inventory_item, clicked_item);
                 update_interaction_cursor();
-                InvalidateRect(window, NULL, FALSE);
+                platform_invalidate(window);
                 return;
             }
         }
@@ -300,7 +300,7 @@ static void handle_click(HWND window, int x, int y)
                             expected.payload_0c, expected.payload_0e,
                             expected.action_type, expected.payload_12)) {
                         if (subtype == 12) g_selected_task_slot = -1;
-                        InvalidateRect(window, NULL, FALSE);
+                        platform_invalidate(window);
                     }
                 }
                 /* Keep configured task controls modal even if the selected
@@ -331,7 +331,7 @@ static void handle_click(HWND window, int x, int y)
                 g_task_scroll_offset = window_catalog_scroll_step(
                     g_task_scroll_offset, (int)task_count, visible_rows,
                     direction);
-                InvalidateRect(window, NULL, FALSE);
+                platform_invalidate(window);
                 return;
             }
             {
@@ -360,7 +360,7 @@ static void handle_click(HWND window, int x, int y)
                     if (task_index >= 0) {
                         g_selected_task_slot = task_slots[task_index];
                     }
-                    InvalidateRect(window, NULL, FALSE);
+                    platform_invalidate(window);
                     return;
                 }
             }
@@ -380,7 +380,7 @@ static void handle_click(HWND window, int x, int y)
                 update_interaction_cursor();
                 /* FUN_0043dcae consumes an in-pane click even when
                    FUN_0043dd9d has no hovered ID to send. */
-                InvalidateRect(window, NULL, FALSE);
+                platform_invalidate(window);
                 return;
             }
         }
@@ -402,7 +402,7 @@ static void handle_click(HWND window, int x, int y)
                 (void)ISSUE_COMMAND(GAME_COMMAND_QUEUE_ONOFF_ACTION, (uint8_t)g_menu.selected_tribe,
                     (uint8_t)selection_island(),
                     (uint16_t)g_selected_location);
-                InvalidateRect(window, NULL, FALSE);
+                platform_invalidate(window);
                 return;
             }
             static const char *const upgrade_names[] = {"BC_Upgrade"};
@@ -423,7 +423,7 @@ static void handle_click(HWND window, int x, int y)
                     (void)ISSUE_COMMAND(GAME_COMMAND_CYCLE_SOURCE_CAPACITY, (uint8_t)selection_island(),
                         (uint16_t)g_selected_location);
                 }
-                InvalidateRect(window, NULL, FALSE);
+                platform_invalidate(window);
                 return;
             }
             static const char *const repair_names[] = {"BC_Repair"};
@@ -464,13 +464,13 @@ static void handle_click(HWND window, int x, int y)
                             (uint8_t)selection_island(),
                             (uint16_t)g_selected_location);
                     }
-                    InvalidateRect(window, NULL, FALSE);
+                    platform_invalidate(window);
                     return;
                 }
             }
         }
         if (adjust_trade_cell(x, y, 1)) {
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
             return;
         }
         const WindowTemplate *construct = window_catalog_find(
@@ -492,7 +492,7 @@ static void handle_click(HWND window, int x, int y)
         } else if (click_target == IW_CONSTRUCT_CLICK_GRID) {
             (void)update_iw_construct_hover(x, y);
             if (select_iw_construct_item()) {
-                InvalidateRect(window, NULL, FALSE);
+                platform_invalidate(window);
             }
         } else {
             /* IWConstruct overlaps the Hall's stock buttons in ISLETMP. Keep
@@ -606,14 +606,14 @@ static void handle_click(HWND window, int x, int y)
                     int over_location = island_location_at(x, y);
                     if (over_floater < 0 && over_location >= 0 &&
                         enter_bridge_destination(window, over_location)) {
-                        InvalidateRect(window, NULL, FALSE);
+                        platform_invalidate(window);
                         return;
                     }
                     g_island_panel_mode = WINDOW_ISLAND_PANEL_GENERAL;
                     handle_click(window, x, y);
                     return;
                 }
-                InvalidateRect(window, NULL, FALSE);
+                platform_invalidate(window);
                 return;
             } else if (hall_panel_mode != WINDOW_ISLAND_PANEL_NONE) {
                 g_iw_construct_open = 0;
@@ -664,7 +664,7 @@ static void handle_click(HWND window, int x, int y)
                     g_selected_floater = clicked_floater;
                     select_floater_source_building(clicked_floater);
                     g_hovered_location = -1;
-                    InvalidateRect(window, NULL, FALSE);
+                    platform_invalidate(window);
                 } else {
                     int clicked_location = island_location_at(x, y);
                     int clicked_ground_item = 0;
@@ -778,7 +778,7 @@ static void handle_click(HWND window, int x, int y)
                             select_building_warrior();
                             (void)open_iw_construct(clicked_location);
                         }
-                        InvalidateRect(window, NULL, FALSE);
+                        platform_invalidate(window);
                     } else if (clicked_location < 0) {
                         /* FUN_00435826 empty ground: msg 0x33 clears +0x16c and
                            +0x170, then FUN_0042f303(0) shows the player's Hall
@@ -791,7 +791,7 @@ static void handle_click(HWND window, int x, int y)
                             g_island_panel_mode = WINDOW_ISLAND_PANEL_GENERAL;
                             g_hovered_hall_command = -1;
                         }
-                        InvalidateRect(window, NULL, FALSE);
+                        platform_invalidate(window);
                     }
                 }
             }
@@ -852,6 +852,6 @@ static void handle_click(HWND window, int x, int y)
     (void)update_island_button_hover(x, y);
     (void)update_hall_command_hover(x, y);
     update_window_title(window);
-    InvalidateRect(window, NULL, FALSE);
+    platform_invalidate(window);
 }
 

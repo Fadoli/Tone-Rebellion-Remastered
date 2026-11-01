@@ -1,17 +1,16 @@
-/* SDL3 shell (TODO_WEB.md step 3), built as remake_sdl. SDL owns the
-   window, the event loop, the frame clock and the presentation of the
-   640x480 RenderSurface through a streaming texture. The game code still
-   reads Win32 window messages: SDL events are translated into the same
+/* SDL3 shell (TODO_WEB.md step 3), built as remake_sdl, on the desktop and
+   (under Emscripten) in the browser. SDL owns the window, the event loop,
+   the frame clock and the presentation of the 640x480 RenderSurface through
+   a streaming texture. The game code still reads Win32 window messages
+   (win32_compat.h): SDL events are translated into the same
    menu_window_proc calls the Win32 shell receives, so both shells share
-   every input path. Audio goes through SDL (sdl_audio.inc); files and
-   sockets stay on Win32 for now (step 2 of TODO_WEB.md). */
+   every input path. Platform services are in sdl_platform.inc, audio in
+   sdl_audio.inc and the entry point in sdl_main.inc. */
 
-/* g_sdl_window is declared in sdl_platform.inc. */
+/* g_sdl_window and g_sdl_dirty are declared in sdl_platform.inc. */
 static SDL_Renderer *g_sdl_renderer;
 static SDL_Texture *g_sdl_texture;
 static uint32_t *g_sdl_pixels;
-static WNDPROC g_sdl_window_proc;
-static int g_sdl_dirty = 1;
 
 static int sdl_ensure_back_buffer(void)
 {
@@ -61,42 +60,10 @@ static void sdl_redraw(void)
     g_sdl_dirty = 0;
 }
 
-/* Win32 messages SDL's own window procedure would not pass on: InvalidateRect
-   repaints, the original game's cursors, the scale entries of the system
-   menu and the socket notifications. */
-static LRESULT CALLBACK sdl_subclass_proc(HWND window, UINT message,
-                                          WPARAM wparam, LPARAM lparam)
-{
-    switch (message) {
-    case WM_PAINT:
-        g_sdl_dirty = 1;
-        break;
-    case WM_SETCURSOR:
-        if (LOWORD(lparam) == HTCLIENT) {
-            update_interaction_cursor();
-            return TRUE;
-        }
-        break;
-    case WM_SYSCOMMAND:
-        if ((wparam & 0xFFF0U) >= SYSCOMMAND_SCALE_FIRST &&
-            (wparam & 0xFFF0U) < SYSCOMMAND_SCALE_FIRST + 0x10 * SCALE_MODE_COUNT)
-            return menu_window_proc(window, message, wparam, lparam);
-        break;
-    case WM_NET_SOCKET:
-        return menu_window_proc(window, message, wparam, lparam);
-    default:
-        break;
-    }
-    return CallWindowProcW(g_sdl_window_proc, window, message, wparam, lparam);
-}
-
-/* Creates the hidden SDL window and returns its Win32 handle, which the
-   shared game code keeps using for titles, message boxes, mouse capture
-   and socket notifications. */
+/* Creates the hidden SDL window. The game code passes its handle around as
+   a window token; only the SDL services use it. */
 static HWND sdl_create_window(void)
 {
-    HWND window;
-    SDL_SetMainReady();
     if (!SDL_Init(SDL_INIT_VIDEO)) return NULL;
     g_sdl_window = SDL_CreateWindow("Tone Rebellion - New Game", 1024, 781,
                                     SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN);
@@ -107,23 +74,13 @@ static HWND sdl_create_window(void)
                                       SDL_TEXTUREACCESS_STREAMING,
                                       LOGICAL_WIDTH, LOGICAL_HEIGHT);
     if (g_sdl_texture == NULL) return NULL;
-    window = (HWND)SDL_GetPointerProperty(SDL_GetWindowProperties(g_sdl_window),
-                                          SDL_PROP_WINDOW_WIN32_HWND_POINTER,
-                                          NULL);
-    if (window == NULL) return NULL;
-    /* SDL's window is a Unicode window: an ANSI subclass would make Windows
-       convert its text messages (WM_SETTEXT, WM_CHAR) to the ANSI code page
-       and back. */
-    g_sdl_window_proc = (WNDPROC)SetWindowLongPtrW(window, GWLP_WNDPROC,
-                                                   (LONG_PTR)sdl_subclass_proc);
     if (!sdl_ensure_back_buffer()) return NULL;
-    return window;
+    return (HWND)g_sdl_window;
 }
 
+/* SDL_AppQuit: SDL itself calls SDL_Quit afterwards. */
 static void sdl_destroy_window(void)
 {
-    /* The audio streams go before SDL_Quit; the later shutdown calls of
-       content_loading.inc then find them closed. */
     stop_background_tune();
     sfx_close();
     sdl_audio_close();
@@ -135,7 +92,6 @@ static void sdl_destroy_window(void)
     g_sdl_window = NULL;
     free(g_sdl_pixels);
     g_sdl_pixels = NULL;
-    SDL_Quit();
 }
 
 /* The virtual-key codes the game tests (letters and digits are their
@@ -261,39 +217,4 @@ static int sdl_dispatch_event(HWND window, const SDL_Event *event)
         break;
     }
     return 1;
-}
-
-/* Main loop: the 20 Hz frame clock of WM_TIMER 1, the one-second tune
-   check of WM_TIMER 2, and a repaint whenever something changed. */
-static void sdl_run(HWND window)
-{
-    Uint64 tune_check = SDL_GetTicks();
-    int running = 1;
-    SDL_ShowWindow(g_sdl_window);
-    (void)SDL_StartTextInput(g_sdl_window);
-    while (running) {
-        SDL_Event event;
-        unsigned due;
-        if (SDL_WaitEventTimeout(&event, 10)) {
-            do {
-                if (!sdl_dispatch_event(window, &event)) running = 0;
-            } while (running && SDL_PollEvent(&event));
-        }
-        if (!running) break;
-        due = frame_clock_due();
-        while (due-- != 0U) run_ui_frame(window, 1);
-        if (SDL_GetTicks() - tune_check >= 1000U) {
-            tune_check = SDL_GetTicks();
-            run_ui_frame(window, 2);
-        }
-        /* The game asks for repaints with InvalidateRect, as on Win32. */
-        if (GetUpdateRect(window, NULL, FALSE)) {
-            ValidateRect(window, NULL);
-            g_sdl_dirty = 1;
-        }
-        if (g_sdl_dirty) sdl_redraw();
-    }
-    (void)SDL_StopTextInput(g_sdl_window);
-    /* WM_DESTROY: network shutdown, resume save, music stop. */
-    (void)menu_window_proc(window, WM_DESTROY, 0, 0);
 }

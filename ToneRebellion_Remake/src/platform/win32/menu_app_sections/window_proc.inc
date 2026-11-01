@@ -80,11 +80,11 @@ static void run_ui_frame(HWND window, WPARAM wparam)
 {
     if (wparam == 1) {
         e2e_write_state();
-        if (net_poll(window)) InvalidateRect(window, NULL, FALSE);
+        if (net_poll(window)) platform_invalidate(window);
     }
     if (wparam == 1 && g_menu.screen == SCREEN_NET_SETUP) {
         /* Caret blink. */
-        InvalidateRect(window, NULL, FALSE);
+        platform_invalidate(window);
         return;
     }
     if (wparam == 2) {
@@ -93,7 +93,7 @@ static void run_ui_frame(HWND window, WPARAM wparam)
     }
     if (wparam == 1 && g_menu.screen == SCREEN_END_GAME) {
         end_game_screen_tick();
-        InvalidateRect(window, NULL, FALSE);
+        platform_invalidate(window);
         return;
     }
     if (wparam == 1 && g_menu.screen == SCREEN_LOGO) {
@@ -106,7 +106,7 @@ static void run_ui_frame(HWND window, WPARAM wparam)
             g_menu.screen = SCREEN_MAIN_MENU;
             set_background_tune_once("start");
         }
-        InvalidateRect(window, NULL, FALSE);
+        platform_invalidate(window);
         return;
     }
     if (wparam == 1 && (g_menu.screen == SCREEN_NEW_GAME ||
@@ -198,7 +198,7 @@ static void run_ui_frame(HWND window, WPARAM wparam)
         }
         /* Redraw the full animated screen at every 20 Hz frame,
            including while the Tasks panel is open. */
-        InvalidateRect(window, NULL, FALSE);
+        platform_invalidate(window);
     }
 }
 
@@ -231,18 +231,27 @@ static const char *const g_scale_mode_labels[SCALE_MODE_COUNT] = {
     "Scale: fill window (smooth)"
 };
 
+/* remake_sdl has no system menu: F12 cycles the modes. */
 static void update_scale_menu(HWND window)
 {
+#ifdef TONE_PLATFORM_SDL
+    (void)window;
+#else
     HMENU menu = GetSystemMenu(window, FALSE);
     if (menu == NULL) return;
     (void)CheckMenuRadioItem(menu, SYSCOMMAND_SCALE_FIRST,
                              SYSCOMMAND_SCALE_FIRST + 0x10 * (SCALE_MODE_COUNT - 1),
                              SYSCOMMAND_SCALE_FIRST + 0x10 * (UINT)g_scale_mode,
                              MF_BYCOMMAND);
+#endif
 }
 
 static void add_scale_menu(HWND window)
 {
+#ifdef TONE_PLATFORM_SDL
+    (void)window;
+    (void)g_scale_mode_labels;
+#else
     HMENU menu = GetSystemMenu(window, FALSE);
     int mode;
     if (menu == NULL) return;
@@ -252,6 +261,7 @@ static void add_scale_menu(HWND window)
                           SYSCOMMAND_SCALE_FIRST + 0x10 * (UINT)mode,
                           g_scale_mode_labels[mode]);
     update_scale_menu(window);
+#endif
 }
 
 static void set_scale_mode(HWND window, int mode)
@@ -261,7 +271,7 @@ static void set_scale_mode(HWND window, int mode)
     save_video_settings();
     update_scale_menu(window);
     /* The bars change size: repaint the whole client. */
-    InvalidateRect(window, NULL, FALSE);
+    platform_invalidate(window);
 }
 
 static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
@@ -282,9 +292,11 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             return TRUE;
         }
         break;
+#ifndef TONE_PLATFORM_SDL
     case WM_PAINT:
         paint_window(window);
         return 0;
+#endif
     case WM_ERASEBKGND:
         return 1;
     case WM_TIMER:
@@ -298,12 +310,14 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
     case WM_MOUSEMOVE: {
         RECT client;
         RECT viewport;
+#ifndef TONE_PLATFORM_SDL
         TRACKMOUSEEVENT track;
+#endif
         int width;
         int height;
         int x;
         int y;
-        GetClientRect(window, &client);
+        platform_client_rect(window, &client);
         width = client.right - client.left;
         height = client.bottom - client.top;
         if (!logical_viewport(width, height, &viewport)) return 0;
@@ -366,20 +380,23 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                     g_hovered_hall_command = WINDOW_ISLAND_PANEL_NONE;
                     g_hovered_location_grab = 0; g_hovered_defend_area = 0; g_hovered_upgspread = 0; g_hovered_training_stock = 0;
                     g_hovered_location_action = ISLAND_LOCATION_ACTION_NONE;
-                    InvalidateRect(window, NULL, FALSE);
+                    platform_invalidate(window);
                 }
             }
-            if (construct_hover_changed) InvalidateRect(window, NULL, FALSE);
+            if (construct_hover_changed) platform_invalidate(window);
             return 0;
         }
         g_mouse_x = (x - viewport.left) * LOGICAL_WIDTH / (viewport.right - viewport.left);
         g_mouse_y = (y - viewport.top) * LOGICAL_HEIGHT / (viewport.bottom - viewport.top);
         g_mouse_inside = 1;
+#ifndef TONE_PLATFORM_SDL
+        /* WM_MOUSELEAVE (SDL sends SDL_EVENT_WINDOW_MOUSE_LEAVE itself). */
         ZeroMemory(&track, sizeof(track));
         track.cbSize = sizeof(track);
         track.dwFlags = TME_LEAVE;
         track.hwndTrack = window;
         (void)TrackMouseEvent(&track);
+#endif
         if (update_hover_help(g_mouse_x, g_mouse_y) |
             update_newgame_text(g_mouse_x, g_mouse_y) |
             update_world_map_hover(g_mouse_x, g_mouse_y) |
@@ -394,7 +411,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             update_diplomacy_hover(g_mouse_x, g_mouse_y) |
             update_iw_construct_hover(g_mouse_x, g_mouse_y) |
             update_net_setup_hover(g_mouse_x, g_mouse_y)) {
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
         }
         return 0;
     }
@@ -429,7 +446,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             g_hovered_location_action = ISLAND_LOCATION_ACTION_NONE;
             g_hovered_inventory_item = -1;
             g_diplomacy_hover_valid = 0;
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
         }
         return 0;
     }
@@ -440,7 +457,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         {
             RECT panel_client;
             RECT panel_viewport;
-            GetClientRect(window, &panel_client);
+            platform_client_rect(window, &panel_client);
             if ((g_menu.screen == SCREEN_WORLD_MAP || g_menu.screen == SCREEN_ISLAND) &&
                 logical_viewport(panel_client.right - panel_client.left,
                                  panel_client.bottom - panel_client.top,
@@ -457,7 +474,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                               (panel_viewport.bottom - panel_viewport.top);
                 if (slide_panel_press(window, panel_x, panel_y)) {
                     g_swallow_left_button_up = 1;
-                    InvalidateRect(window, NULL, FALSE);
+                    platform_invalidate(window);
                     return 0;
                 }
             }
@@ -469,7 +486,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         RECT viewport;
         int x;
         int y;
-        GetClientRect(window, &client);
+        platform_client_rect(window, &client);
         if (g_menu.screen == SCREEN_ISLAND &&
             logical_viewport(client.right - client.left,
                              client.bottom - client.top, &viewport) &&
@@ -485,7 +502,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 g_lilmap_drag = 1;
                 g_swallow_left_button_up = 1;
                 platform_capture_mouse(window, 1);
-                InvalidateRect(window, NULL, FALSE);
+                platform_invalidate(window);
                 return 0;
             }
         }
@@ -504,7 +521,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             g_swallow_left_button_up = 1;
             handle_click(window, x, y);
             update_interaction_cursor();
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
         }
         return 0;
     }
@@ -525,7 +542,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             g_swallow_left_button_up = 0;
             return 0;
         }
-        GetClientRect(window, &client);
+        platform_client_rect(window, &client);
         width = client.right - client.left;
         height = client.bottom - client.top;
         if (!logical_viewport(width, height, &viewport)) return 0;
@@ -550,7 +567,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         int height;
         int x;
         int y;
-        GetClientRect(window, &client);
+        platform_client_rect(window, &client);
         width = client.right - client.left;
         height = client.bottom - client.top;
         if (!logical_viewport(width, height, &viewport) ||
@@ -564,7 +581,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             (viewport.bottom - viewport.top);
         if (adjust_trade_cell(x, y, -1) ||
             click_diplomacy_action(x, y, selected_hall_player())) {
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
         } else if (g_menu.screen == SCREEN_ISLAND && g_game_session_valid &&
             x >= 0 && x < LOGICAL_WIDTH && y >= 0 && y < 320 &&
             g_menu.selected_map_island >= 0 &&
@@ -573,7 +590,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             int clicked_floater = game_session_floater_at(&g_game_session,
                 (uint8_t)g_menu.selected_map_island,
                 (uint16_t)(x + g_island_scroll_x), (uint16_t)y);
-            if ((GetKeyState(VK_SHIFT) & 0x8000) != 0 &&
+            if (platform_shift_down() &&
                 g_selected_floater >= 0 &&
                 g_selected_floater < g_game_session.floater_count &&
                 clicked_floater >= 0 && clicked_floater != g_selected_floater &&
@@ -587,7 +604,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             } else {
                 island_right_click(clicked_floater, x, y);
             }
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
         }
         return 0;
     }
@@ -597,7 +614,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             g_island_scroll_x += direction * 128;
             g_island_scroll_x = island_clamp_scroll(g_island_scroll_x);
             g_hovered_location = -1;
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
         }
         return 0;
     case WM_KEYDOWN:
@@ -612,7 +629,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             /* Typed text arrives as WM_CHAR; keys here only navigate. */
             net_setup_key(window, wparam);
             update_window_title(window);
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
             return 0;
         }
         if (g_menu.screen == SCREEN_ISLAND && !g_net_in_game &&
@@ -630,7 +647,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             /* Port shortcut for the Save screen (state 5); the native entry
                point is not established. */
             enter_save_screen();
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
             return 0;
         }
         if (wparam == 'H' && g_menu.screen == SCREEN_WORLD_MAP &&
@@ -641,7 +658,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                holding the player's Hall. */
             (void)open_island_view(window, g_game_session
                 .economy[g_menu.selected_tribe].hall_island_index);
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
             return 0;
         }
         if (wparam == 'C' && e2e_enabled() && g_game_session_valid &&
@@ -658,7 +675,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             /* Test aid (only with TONE_REBELLION_E2E_STATE): reopen the last
                island without aiming at its orbiting map icon. */
             (void)open_island_view(window, g_menu.selected_map_island);
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
             return 0;
         }
         if (wparam == VK_F9 && g_menu.screen == SCREEN_ISLAND && !g_net_in_game &&
@@ -714,7 +731,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                     }
                 }
             }
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
             return 0;
         }
         if (wparam == VK_F7 && g_menu.screen == SCREEN_ISLAND && !g_net_in_game &&
@@ -773,7 +790,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                     if (placed) select_location_on_view((int)location_index);
                 }
             }
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
             return 0;
         }
         if (wparam == VK_F8 && g_menu.screen == SCREEN_ISLAND && !g_net_in_game &&
@@ -808,45 +825,45 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                     select_location_on_view((int)location_index);
                 }
             }
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
             return 0;
         }
         if (wparam == VK_F11 && (g_menu.screen == SCREEN_WORLD_MAP ||
                                  g_menu.screen == SCREEN_ISLAND)) {
             /* Port-only preview: the native state-7 trigger is not established. */
-            if (enter_end_game_screen()) InvalidateRect(window, NULL, FALSE);
+            if (enter_end_game_screen()) platform_invalidate(window);
             return 0;
         }
         if (wparam == VK_ESCAPE && (g_defend_area_armed || g_armed_spell_action)) {
             g_defend_area_armed = 0;
             g_armed_spell_action = 0;
             update_interaction_cursor();
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
             return 0;
         }
         if (wparam == VK_ESCAPE && g_menu.screen == SCREEN_END_GAME) {
             g_menu.screen = SCREEN_WORLD_MAP;
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
             return 0;
         }
         if (wparam == VK_ESCAPE) {
             if (g_menu.screen == SCREEN_LOAD_GAME) {
                 leave_load_screen();
-                InvalidateRect(window, NULL, FALSE);
+                platform_invalidate(window);
             } else if (g_menu.screen == SCREEN_ISLAND) {
                 if (g_game_session.location_move_active) {
                     (void)issue_command(GAME_COMMAND_CANCEL_LOCATION_MOVE, 0, NULL);
                 }
                 g_menu.screen = SCREEN_WORLD_MAP;
                 g_hovered_location = -1;
-                InvalidateRect(window, NULL, FALSE);
+                platform_invalidate(window);
             } else if (g_menu.screen == SCREEN_WORLD_MAP) {
                 /* No native Esc on the world map. */
             } else if (g_menu.screen == SCREEN_NEW_GAME) {
                 leave_new_game_screen();
-                InvalidateRect(window, NULL, FALSE);
+                platform_invalidate(window);
             } else {
-                PostMessageA(window, WM_CLOSE, 0, 0);
+                platform_request_close(window);
             }
         } else if (wparam == VK_RETURN) {
             if (g_menu.screen == SCREEN_MAIN_MENU) {
@@ -858,10 +875,10 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             } else if (g_menu.screen == SCREEN_ISLAND) {
                 if (view_selected_location() >= 0) g_hovered_location = view_selected_location();
             }
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
         } else if (g_menu.screen == SCREEN_MAIN_MENU && wparam == 'N') {
             g_menu.screen = SCREEN_NEW_GAME;
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
         } else if (g_menu.screen == SCREEN_MAIN_MENU && (wparam == 'H' || wparam == 'J')) {
             /* Remake entry points: the native host/join property sheet
                (FUN_0044c2b9) has no screen in windows.txt. */
@@ -869,68 +886,77 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 g_menu.screen = SCREEN_NEW_GAME;
                 g_menu.setup_accepted = 0;
             }
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
         } else if (g_menu.screen == SCREEN_MAIN_MENU && wparam == 'M') {
             enter_net_setup_screen();
             g_net_setup_swallow_char = 1;
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
         } else if (g_menu.screen == SCREEN_MAIN_MENU && wparam == 'L') {
             g_menu.screen = SCREEN_LOAD_GAME;
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
         } else if (g_menu.screen == SCREEN_ISLAND &&
                    (wparam == VK_LEFT || wparam == VK_RIGHT)) {
             g_island_scroll_x += wparam == VK_RIGHT ? 160 : -160;
             g_island_scroll_x = island_clamp_scroll(g_island_scroll_x);
             g_hovered_location = -1;
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
         } else if (g_menu.screen == SCREEN_NEW_GAME && g_net_mode != NET_MODE_NONE &&
                    (wparam == VK_LEFT || wparam == VK_RIGHT)) {
             dispatch_newgame_master_message(window, 53);
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
         } else if (g_menu.screen == SCREEN_NEW_GAME &&
                    (wparam == VK_LEFT || wparam == VK_RIGHT)) {
             const int count = g_menu.world_map.world_count;
             g_menu.world_index = (g_menu.world_index + count +
                 (wparam == VK_RIGHT ? 1 : -1)) % count;
             g_menu.setup_accepted = 0;
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
         } else if (g_menu.screen == SCREEN_NEW_GAME && wparam == 'D') {
             dispatch_newgame_master_message(window, 55);
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
         } else if (g_menu.screen == SCREEN_NEW_GAME && wparam >= '1' && wparam <= '4') {
             dispatch_newgame_master_message(window, 60 + (int)(wparam - '1'));
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
         }
         if (g_mouse_inside && (update_hover_help(g_mouse_x, g_mouse_y) |
                                update_newgame_text(g_mouse_x, g_mouse_y) |
                                update_world_map_hover(g_mouse_x, g_mouse_y) |
                                update_island_location_hover(g_mouse_x, g_mouse_y))) {
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
         }
         update_window_title(window);
         update_interaction_cursor();
         return 0;
     case WM_CHAR:
         if (g_menu.screen == SCREEN_NET_SETUP && net_setup_char(wparam))
-            InvalidateRect(window, NULL, FALSE);
+            platform_invalidate(window);
         return 0;
     case WM_KEYUP:
         if (wparam == 'M') g_net_setup_swallow_char = 0;
         return 0;
     case WM_NET_SOCKET:
-        if (net_poll(window)) InvalidateRect(window, NULL, FALSE);
+        if (net_poll(window)) platform_invalidate(window);
         return 0;
     case WM_DESTROY:
         net_shutdown();
         write_resume_file();
+#ifndef TONE_PLATFORM_SDL
         destroy_paint_buffer();
+#endif
         stop_background_tune();
+#ifndef TONE_PLATFORM_SDL
         PostQuitMessage(0);
+#endif
         return 0;
     default:
         break;
     }
+#ifdef TONE_PLATFORM_SDL
+    /* SDL has handled the window itself. */
+    return 0;
+#else
     /* Cases that `break` (other system commands such as move, size and
        close; cursors outside the client area) get the default handling. */
     return DefWindowProcA(window, message, wparam, lparam);
+#endif
 }

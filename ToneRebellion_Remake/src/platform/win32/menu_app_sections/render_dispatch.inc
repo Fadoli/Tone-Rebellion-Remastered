@@ -271,9 +271,10 @@ static void render_back_buffer(RenderSurface *back)
         render_slide_panel(back);
 }
 
-/* Win32 presentation: the back buffer's pixels are a top-down 32-bit DIB
-   section, selected into a memory DC that StretchBlt reads. Rendering only
-   sees g_back_surface. */
+#ifndef TONE_PLATFORM_SDL
+/* Win32 presentation (remake_sdl presents in sdl_app.inc): the back
+   buffer's pixels are a top-down 32-bit DIB section, selected into a memory
+   DC that StretchBlt reads. Rendering only sees g_back_surface. */
 static int ensure_paint_buffer(HDC reference_dc)
 {
     BITMAPINFO info;
@@ -365,10 +366,11 @@ static void paint_window(HWND window)
     PAINTSTRUCT paint;
     HDC screen = BeginPaint(window, &paint);
     RECT client;
-    GetClientRect(window, &client);
+    platform_client_rect(window, &client);
     if (ensure_paint_buffer(screen)) {
         render_back_buffer(&g_back_surface);
         present_back_buffer(screen, &client);
     }
     EndPaint(window, &paint);
 }
+#endif

@@ -16,7 +16,7 @@ static int video_settings_path(char *path, size_t capacity)
 {
     char directory[MAX_PATH];
     if (!save_directory(directory, sizeof(directory))) return 0;
-    (void)snprintf(path, capacity, "%s\\video.cfg", directory);
+    (void)snprintf(path, capacity, "%s/video.cfg", directory);
     return 1;
 }
 

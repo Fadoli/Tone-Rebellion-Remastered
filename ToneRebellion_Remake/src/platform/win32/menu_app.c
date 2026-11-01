@@ -1,14 +1,16 @@
+#ifdef TONE_PLATFORM_SDL
+/* remake_sdl: SDL3 shell (src/platform/sdl/sdl_app.inc), without
+   <windows.h>; the same code builds for the web with Emscripten. */
+#define SDL_MAIN_USE_CALLBACKS 1 /* entry: ../sdl/sdl_main.inc */
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
+#include "../sdl/win32_compat.h"
+#else
 #define WIN32_LEAN_AND_MEAN
 /* Winsock 2 must precede windows.h (net_session.inc). */
 #include <winsock2.h>
 #include <windows.h>
 #include <windowsx.h>
-#ifdef TONE_PLATFORM_SDL
-/* remake_sdl: SDL3 shell (src/platform/sdl/sdl_app.inc). */
-#include <SDL3/SDL.h>
-/* WinMain stays the entry point; SDL_SetMainReady tells SDL so. */
-#define SDL_MAIN_HANDLED
-#include <SDL3/SDL_main.h>
 #endif
 
 #include "cob_archive.h"
@@ -37,7 +39,9 @@
 #include "tone_rng.h"
 #include "net_lobby.h"
 #include "net_lockstep.h"
+#include "../net_socket.h"
 #include "render_surface.h"
+#include "pe_cursor.h"
 
 #include <math.h>
 #include <limits.h>
@@ -45,7 +49,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef TONE_PLATFORM_SDL
 #include <mmsystem.h>
+#endif
 
 #ifdef TONE_PLATFORM_SDL
 #include "../sdl/sdl_platform.inc"
@@ -314,9 +320,7 @@ static int g_inventory_info_mode = ISLAND_PANEL_INFO_INVENTORY_DEFAULT;
 static int g_hovered_glyph = -1;
 static int g_selected_glyph = -1;
 static int g_glyph_info_default = 1;
-static HMODULE g_original_cursor_module;
 #define GAME_CURSOR_SLOT_COUNT 17
-static HCURSOR g_interaction_cursors[GAME_CURSOR_SLOT_COUNT];
 static const WORD g_cursor_resource_ids[GAME_CURSOR_SLOT_COUNT] = {
     0x84, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7a, 0x7b, 0x7c,
     0x7d, 0x7e, 0x7f, 0x74, 0x80, 0x81, 0x82, 0x83
@@ -372,9 +376,11 @@ static int g_mouse_inside;
 /* The 640x480 back buffer every screen is composed into. Its pixels live in
    a DIB section (render_dispatch.inc) that only present_back_buffer reads. */
 static RenderSurface g_back_surface;
+#ifndef TONE_PLATFORM_SDL
 static HDC g_paint_buffer_dc;
 static HBITMAP g_paint_buffer_bitmap;
 static HGDIOBJ g_paint_buffer_original_bitmap;
+#endif
 
 /* RenderSurface pixel (0x00RRGGBB, alpha 0 like GDI fills) of a colour. */
 static uint32_t colorref_pixel(COLORREF color)
