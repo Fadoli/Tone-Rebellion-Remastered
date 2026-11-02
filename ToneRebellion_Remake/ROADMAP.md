@@ -16,7 +16,7 @@
 
 ## Phase 1 — Boucle de jeu jouable
 
-1. ~~**Déplacement manuel**~~ (`TODO_MOVEMENT` l.9) : porté (`FUN_0043530b(0x13)` → `FUN_00435826` → `FUN_0042fa0f`, transfert inter-îles, défense/fusion au clic droit). Reste : origine des ordres recopiés par `FUN_0042219e`.
+1. ~~**Déplacement manuel**~~ (`TODO_MOVEMENT` l.9) : porté (`FUN_0043530b(0x13)` → `FUN_00435826` → `FUN_0042fa0f`, transfert inter-îles, défense/fusion au clic droit). Origine des ordres recopiés par `FUN_0042219e` établie : l'enregistrement du bâtiment (voir point 2).
 2. ~~**Ordres de bâtiment**~~ (`TODO_INTERFACE` l.22, l.27) : fait — enregistrement `B+0x28..0x32`, `BC_*` (Attack/Defend/Recall/TrnStk), clic droit filtré par `DAT_00619290`, adoption `FUN_0042219e` (genre 0 compris), routage interîles par pont, lien gardé à la traversée. Reste: vérification en jeu de l'interîles.
 3. ~~**Tâches**~~ : portées et testées — Obtain (tâche `0xd`, attache automatique comprise, traversée de pont), SUPPLY (stocks `TrnStkC/M`), UpgSpread (vérifié en jeu), Upgrade, Repair, Hall type 4, répartition des ouvriers (refonte `FUN_0042219e`/`FUN_00422031`/`FUN_004211bb` du 2026-11-01).
 4. **Fidélité des tâches** (règles du port sans preuve native, à trancher par REA) :
