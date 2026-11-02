@@ -288,6 +288,111 @@ int game_session_toggle_upgspread(GameSession *session, uint8_t player_slot,
     return 1;
 }
 
+static int repair_entry_matches(const GameSession *session,
+                                const GameRuntimeLocation *location,
+                                uint8_t player_slot, uint8_t island_index,
+                                uint16_t location_index)
+{
+    int16_t slot;
+    const GamePendingEvent *event;
+    if (location->repair_task_plus1[player_slot] == 0) return 0;
+    slot = (int16_t)(location->repair_task_plus1[player_slot] - 1U);
+    if (slot < 0 || slot >= GAME_SESSION_MAX_PENDING_EVENTS) return 0;
+    event = &session->pending_events[(uint8_t)slot];
+    return event->active != 0 && event->player_id == player_slot &&
+        event->action_type == 4 && event->payload_12 == 1 &&
+        event->payload_0a == (int16_t)island_index &&
+        event->payload_0e == (int16_t)location_index;
+}
+
+int game_session_repair_available(const GameSession *session,
+                                  const PadCatalog *catalog,
+                                  uint8_t player_slot, uint8_t island_index,
+                                  uint16_t location_index)
+{
+    const GameRuntimeLocation *location;
+    int32_t base_item_id;
+    int16_t maximum;
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count)
+        return 0;
+    location = &session->islands[island_index].locations[location_index];
+    /* FUN_00429f3a (owner = local player) and FUN_00452b67 (owner 0..3,
+       item 0x25..0x34, +0x34 < FUN_00450978()) gate the click. */
+    if (location->owner_id != (int32_t)player_slot) return 0;
+    base_item_id = game_session_base_item_id(location);
+    if (base_item_id < 0x25 || base_item_id > 0x34) return 0;
+    return game_session_source_value_34_max(catalog, location, &maximum) &&
+        location->source_value_34 < maximum;
+}
+
+int game_session_repair_listed(const GameSession *session,
+                               uint8_t player_slot, uint8_t island_index,
+                               uint16_t location_index)
+{
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT ||
+        island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count)
+        return 0;
+    return repair_entry_matches(session,
+        &session->islands[island_index].locations[location_index],
+        player_slot, island_index, location_index);
+}
+
+static void drop_repair_entry(GameSession *session,
+                              GameRuntimeLocation *location,
+                              uint8_t player_slot)
+{
+    int task_slot = (int)location->repair_task_plus1[player_slot] - 1;
+    location->repair_task_plus1[player_slot] = 0;
+    if (task_slot >= 0 && task_slot < GAME_SESSION_MAX_PENDING_EVENTS &&
+        session->pending_events[(uint8_t)task_slot].active != 0) {
+        /* FUN_0045ff9b -> FUN_00466533 frees the row and detaches its
+           workers. */
+        GamePendingEvent expected = session->pending_events[(uint8_t)task_slot];
+        (void)game_session_dispatch_task_command(session, (uint8_t)task_slot,
+                                                 12, &expected);
+    }
+}
+
+int game_session_toggle_repair(GameSession *session, const PadCatalog *catalog,
+                               uint8_t player_slot, uint8_t island_index,
+                               uint16_t location_index)
+{
+    GameRuntimeLocation *location;
+    int task_slot;
+    if (!game_session_repair_available(session, catalog, player_slot,
+                                       island_index, location_index)) return 0;
+    location = &session->islands[island_index].locations[location_index];
+    if (repair_entry_matches(session, location, player_slot, island_index,
+                             location_index)) {
+        drop_repair_entry(session, location, player_slot);
+        return 1;
+    }
+    task_slot = game_session_pending_event_add(session, (int16_t)player_slot,
+        (int16_t)island_index, 4, 0, (int16_t)location_index, 1);
+    if (task_slot < 0) return 0;
+    location->repair_task_plus1[player_slot] = (uint16_t)(task_slot + 1);
+    return 1;
+}
+
+void game_session_clear_repair_entries(GameSession *session,
+                                       uint8_t island_index,
+                                       uint16_t location_index)
+{
+    GameRuntimeLocation *location;
+    unsigned int player;
+    if (session == NULL || island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count)
+        return;
+    location = &session->islands[island_index].locations[location_index];
+    for (player = 0; player < GAME_START_PLAYER_COUNT; ++player) {
+        if (location->repair_task_plus1[player] != 0)
+            drop_repair_entry(session, location, (uint8_t)player);
+    }
+}
+
 int game_session_upgspread_task_target(const GameSession *session,
                                        uint8_t player_slot, int16_t task_slot,
                                        uint8_t *island_index,

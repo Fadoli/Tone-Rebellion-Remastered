@@ -435,6 +435,82 @@ static void test_inventory_action_reserves_source_payload_without_mutation(void)
     assert(session.pending_event_count == 2);
 }
 
+static void test_repair_list_heals_one_point_per_build_tone(void)
+{
+    GameSession session = {0};
+    PadCatalog catalog = {0};
+    GameRuntimeLocation *target;
+    GameFloaterStart *floater;
+    unsigned int tick;
+    int slot;
+
+    session.island_count = 1;
+    session.floater_count = 1;
+    session.islands[0].location_count = 1;
+    session.islands[0].floater_max_x[0] = 0x9ff;
+    target = &session.islands[0].locations[0];
+    target->renderer_class = 0;
+    target->record_value_10 = 0x25;
+    target->owner_id = 0;
+    target->source_value_34 = 1;
+    target->source_location_slot_18 = -1;
+    target->x = 100;
+    target->y = 120;
+    catalog.item_count = 0x26;
+    catalog.items[0x25].item_id = 0x25;
+    catalog.items[0x25].hit_points = 3;
+
+    /* FUN_00452b67: only an owned, damaged building can be listed. */
+    assert(!game_session_toggle_repair(&session, &catalog, 1, 0, 0));
+    assert(game_session_toggle_repair(&session, &catalog, 0, 0, 0));
+    assert(game_session_repair_listed(&session, 0, 0, 0));
+    slot = (int)target->repair_task_plus1[0] - 1;
+    assert(slot >= 0);
+    assert(session.pending_events[slot].action_type == 4);
+    assert(session.pending_events[slot].payload_12 == 1);
+    /* A second click removes the entry and frees its row (FUN_0045ff9b). */
+    assert(game_session_toggle_repair(&session, &catalog, 0, 0, 0));
+    assert(!game_session_repair_listed(&session, 0, 0, 0));
+    assert(session.pending_events[slot].active == 0);
+    assert(game_session_toggle_repair(&session, &catalog, 0, 0, 0));
+    slot = (int)target->repair_task_plus1[0] - 1;
+
+    floater = &session.floaters[0];
+    floater->is_active = 1;
+    floater->owner_slot = 0;
+    floater->island_index = 0;
+    floater->source_link_0c = -1;
+    floater->linked_task_slot = -1;
+    floater->carried_resource_code = 1;
+    floater->movement_speed = 3;
+    floater->x = target->x;
+    floater->y = target->y;
+    game_session_assign_local_resource_tasks(&session, &catalog);
+    assert(floater->linked_task_slot == slot);
+
+    /* FUN_004503bd: each delivered unit adds one hit point, not stock. */
+    for (tick = 1; tick < 80 && target->source_value_34 == 1; ++tick)
+        game_session_tick_floater_moves(&session, tick, &catalog);
+    assert(target->source_value_34 == 2);
+    assert(target->resource_stock[GAME_RESOURCE_BUILD_TONE] == 0);
+    assert(game_session_repair_listed(&session, 0, 0, 0));
+
+    /* At the maximum the entry and its row are retired. */
+    floater->carried_resource_code = 1;
+    floater->linked_task_slot = slot;
+    floater->active_order_action = 4;
+    floater->order_resource_code = 1;
+    floater->order_target_island = 0;
+    floater->order_target_location = 0;
+    floater->movement_state = 4;
+    floater->order_timer = 0;
+    for (tick = 100; tick < 200 && target->source_value_34 == 2; ++tick)
+        game_session_tick_floater_moves(&session, tick, &catalog);
+    assert(target->source_value_34 == 3);
+    assert(target->repair_task_plus1[0] == 0);
+    assert(session.pending_events[slot].active == 0);
+}
+
 static void test_repair_task_repeats_supply_and_heals_after_40_ticks(void)
 {
     GameSession session = {0};

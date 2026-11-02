@@ -31,6 +31,12 @@ enum {
     PLAYER_POLICY_ROW = 0xd8,    /* DAT_00619290 */
     PLAYER_RECIPIENT_ROW = 0xe8, /* DAT_006192a0 */
     PLAYER_STOCK_MODES = 0x13d0, /* DAT_0061a588: u16 per resource */
+    /* Tribe list (FUN_0045fd91 / FUN_0045fe62): 16 entries of 10 bytes,
+       island, site, mode (0 repair, 1 UpgSpread), task row (-1 free),
+       UpgSpread delivery count. */
+    PLAYER_SITE_LIST = 0x13dc,
+    PLAYER_SITE_LIST_COUNT = 16,
+    PLAYER_SITE_LIST_ENTRY = 10,
     ISLAND_WINDOW_BLOB = 0x408,  /* island +0x408: (min x, max x) per player */
     ISLAND_ACCESS_BLOB = 0x428,
     ISLAND_EVENT_BLOB = 0x438,
@@ -230,6 +236,38 @@ typedef struct PlayerMasks {
     uint8_t policy;
     uint8_t recipient;
 } PlayerMasks;
+
+/* Rebuilds the per-site repair / UpgSpread links from the tribe list; an
+   entry is kept only when its task row was restored as a live type-4
+   item-1 row on that site. */
+static void apply_site_list(GameSession *session, unsigned int player,
+                            const uint8_t *record)
+{
+    unsigned int entry;
+    for (entry = 0; entry < PLAYER_SITE_LIST_COUNT; ++entry) {
+        const uint8_t *e = record + PLAYER_SITE_LIST + entry * PLAYER_SITE_LIST_ENTRY;
+        int16_t island = (int16_t)u16_at(e);
+        int16_t site = (int16_t)u16_at(e + 2);
+        int16_t mode = (int16_t)u16_at(e + 4);
+        int16_t handle = (int16_t)u16_at(e + 6);
+        GameRuntimeLocation *location;
+        const GamePendingEvent *event;
+        if (handle < 0 || handle >= GAME_SESSION_MAX_PENDING_EVENTS ||
+            island < 0 || island >= session->island_count || site < 0 ||
+            (uint16_t)site >= session->islands[island].location_count) continue;
+        event = &session->pending_events[handle];
+        if (event->active == 0 || event->action_type != 4 ||
+            event->payload_12 != 1 || event->player_id != (int16_t)player ||
+            event->payload_0a != island || event->payload_0e != site) continue;
+        location = &session->islands[island].locations[site];
+        if (mode == 0) {
+            location->repair_task_plus1[player] = (uint16_t)(handle + 1);
+        } else if (mode == 1) {
+            location->spread_task_plus1[player] = (uint16_t)(handle + 1);
+            location->spread_count[player] = (uint8_t)u16_at(e + 8);
+        }
+    }
+}
 
 static void apply_player_record(GamePlayerEconomy *economy, PlayerMasks *economy_masks,
                                 const uint8_t *player)
@@ -825,6 +863,8 @@ int native_save_apply(const NativeSave *save, const FloaterCatalog *floaters,
                             save->player_offset + (size_t)slot * PLAYER_RECORD);
         next->diplomacy_policy_mask[slot] = masks.policy;
         next->message_recipient_mask[slot] = masks.recipient;
+        apply_site_list(next, slot, save->data +
+                        save->player_offset + (size_t)slot * PLAYER_RECORD);
     }
     rebuild_halls(next);
     link_hall_requests(next);

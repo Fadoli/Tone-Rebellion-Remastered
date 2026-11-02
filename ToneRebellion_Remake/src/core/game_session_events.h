@@ -67,6 +67,24 @@ int game_session_upgspread_active(const GameSession *session,
                                   uint16_t location_index);
 int game_session_toggle_upgspread(GameSession *session, uint8_t player_slot,
                                   uint8_t island_index, uint16_t location_index);
+/* Repair (BC_Repair, FUN_00465793 cat 1 code 3): an owned building of item
+   0x25..0x34 below its FUN_00450978 maximum toggles a repair entry; adding
+   it queues a type-4 item-1 (Build Tone) row (FUN_0045fd91 ->
+   FUN_004666c9), removing it frees that row (FUN_0045ff9b). */
+int game_session_repair_available(const GameSession *session,
+                                  const PadCatalog *catalog,
+                                  uint8_t player_slot, uint8_t island_index,
+                                  uint16_t location_index);
+int game_session_repair_listed(const GameSession *session,
+                               uint8_t player_slot, uint8_t island_index,
+                               uint16_t location_index);
+int game_session_toggle_repair(GameSession *session, const PadCatalog *catalog,
+                               uint8_t player_slot, uint8_t island_index,
+                               uint16_t location_index);
+/* FUN_00460029: drop every repair entry (and its row) of a location. */
+void game_session_clear_repair_entries(GameSession *session,
+                                       uint8_t island_index,
+                                       uint16_t location_index);
 /* Returns nonzero when the task slot is the player's UpgSpread entry on the
    location and fills island/location. */
 int game_session_upgspread_task_target(const GameSession *session,

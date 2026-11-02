@@ -65,6 +65,9 @@ typedef struct GameRuntimeLocation {
        task slot + 1 (0 = none) and the delivery counter (entry +8, done at 10). */
     uint16_t spread_task_plus1[4];
     uint8_t spread_count[4];
+    /* Repair entry per player (mode 0 of the tribe list at +0x13dc,
+       FUN_0045fd91): task slot + 1 (0 = none) of its type-4 item-1 row. */
+    uint16_t repair_task_plus1[4];
     uint8_t training_stock_crystal;
     uint8_t training_stock_magic;
     uint8_t building_order_genre;

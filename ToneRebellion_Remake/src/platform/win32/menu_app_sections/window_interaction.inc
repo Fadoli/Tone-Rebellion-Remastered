@@ -432,11 +432,11 @@ static void handle_click(HWND window, int x, int y)
                     repair_names,
                     sizeof(repair_names) / sizeof(repair_names[0])) : NULL;
             if (repair_control != NULL) {
-                /* FUN_004337d9 and FUN_004459e6 use +0x0a for island and
-                   +0x0e for location on repair task records. */
-                (void)ISSUE_COMMAND(GAME_COMMAND_PENDING_EVENT_ADD, (int16_t)g_menu.selected_tribe,
-                    (int16_t)selection_island(),
-                    0x12, 0, (int16_t)g_selected_location, 0);
+                /* BC_Repair sends cat 1 code 3 (FUN_0042fa0f 0x65 with
+                   table index 3): FUN_00465793 toggles the repair entry. */
+                (void)ISSUE_COMMAND(GAME_COMMAND_TOGGLE_REPAIR,
+                    (int16_t)g_menu.selected_tribe,
+                    (int16_t)selection_island(), (int16_t)g_selected_location);
                 return;
             }
         }

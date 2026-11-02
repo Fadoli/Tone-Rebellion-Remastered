@@ -228,6 +228,11 @@ unsigned int game_session_cancel_tasks_for_location(GameSession *session,
                 session, (uint8_t)slot, 12, &expected);
         }
     }
+    /* FUN_00460029 also frees the location's repair/UpgSpread list slots. */
+    memset(session->islands[island_index].locations[location_index]
+               .repair_task_plus1, 0,
+           sizeof(session->islands[island_index].locations[location_index]
+                      .repair_task_plus1));
     return cancelled;
 }
 

@@ -1074,9 +1074,41 @@ static GameRuntimeLocation *floater_training_supply_target(
 }
 
 static void credit_floater_delivery(GameSession *session,
+                                    const PadCatalog *catalog,
                                     GameFloaterStart *floater,
                                     int16_t resource_code)
 {
+    if (resource_code == 1 && floater->linked_task_slot >= 0 &&
+        floater->owner_slot < GAME_START_PLAYER_COUNT &&
+        floater->order_target_island < session->island_count &&
+        floater->order_target_location >= 0 &&
+        (uint16_t)floater->order_target_location <
+            session->islands[floater->order_target_island].location_count &&
+        session->islands[floater->order_target_island].locations[
+            (uint16_t)floater->order_target_location]
+            .repair_task_plus1[floater->owner_slot] ==
+            (uint16_t)(floater->linked_task_slot + 1)) {
+        /* FUN_004503bd action 1 on a building in the repair list
+           (FUN_0045ff3f): +1 to +0x34 instead of the +0x28 stock; at
+           FUN_00450978() the entry and its row go (FUN_0045ff9b). */
+        GameRuntimeLocation *building = &session->islands[
+            floater->order_target_island].locations[
+                (uint16_t)floater->order_target_location];
+        int16_t maximum;
+        floater->carried_resource_code = 0;
+        if (!game_session_source_value_34_max(catalog, building, &maximum))
+            return;
+        if (building->source_value_34 < maximum) ++building->source_value_34;
+        if (building->source_value_34 >= maximum) {
+            uint8_t owner = floater->owner_slot;
+            GamePendingEvent expected =
+                session->pending_events[(uint8_t)floater->linked_task_slot];
+            building->repair_task_plus1[owner] = 0;
+            (void)game_session_dispatch_task_command(session,
+                (uint8_t)floater->linked_task_slot, 12, &expected);
+        }
+        return;
+    }
     {
         /* FUN_004503bd codes 2 / 3 add the delivered amount (1) to the site's
            +0x2a / +0x2c pool; no cap is applied there. */
@@ -1578,7 +1610,7 @@ void game_session_advance_local_resource_task(GameSession *session,
             ++floater->order_timer;
             return;
         }
-        credit_floater_delivery(session, floater, code);
+        credit_floater_delivery(session, catalog, floater, code);
         if (planned_task(session, floater) != NULL) {
             end_task_leg(floater);
             return;
@@ -1589,7 +1621,7 @@ void game_session_advance_local_resource_task(GameSession *session,
 
     /* The other state-4 path finishes on exact arrival and attempts the same
        receiver without the 20-tick Hall wait. */
-    credit_floater_delivery(session, floater, code);
+    credit_floater_delivery(session, catalog, floater, code);
     /* An attached worker stays on its task: step 1 then decides between the
        next round trip and detaching (FUN_004211bb case 3, step +0x46). */
     if (planned_task(session, floater) != NULL) {

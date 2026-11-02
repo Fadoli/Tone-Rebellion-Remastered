@@ -592,6 +592,7 @@ int main(void)
     test_task_projection_matches_source_filter_and_cap();
     test_task_command_dispatch_guards_and_effects();
     test_inventory_action_reserves_source_payload_without_mutation();
+    test_repair_list_heals_one_point_per_build_tone();
     test_repair_task_repeats_supply_and_heals_after_40_ticks();
     test_site_damage_filters_player_variant_building_ids();
     test_code_five_delivery_starts_bridge_cons_for_its_owner();

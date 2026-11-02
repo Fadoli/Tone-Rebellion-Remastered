@@ -129,6 +129,9 @@ int game_command_apply(GameSession *session, const GameCommandContext *context,
     case GAME_COMMAND_ORDER_FLOATER_TO_MERGE:
         return game_session_order_floater_to_merge(session, (uint8_t)a[0], (uint8_t)a[1],
             (unsigned int)a[2], (unsigned int)a[3]);
+    case GAME_COMMAND_TOGGLE_REPAIR:
+        return game_session_toggle_repair(session, pads, (uint8_t)a[0],
+                                          (uint8_t)a[1], (uint16_t)a[2]);
     case GAME_COMMAND_HAND_BACK_PLAYER:
         if (a[0] < 0 || a[0] >= GAME_START_PLAYER_COUNT) return 0;
         game_session_hand_back_player_holdings(session, (unsigned int)a[0]);
