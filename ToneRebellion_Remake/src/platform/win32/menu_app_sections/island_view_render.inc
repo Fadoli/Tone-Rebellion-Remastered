@@ -2142,19 +2142,22 @@ static void draw_location_action_panel(RenderSurface *surface)
     /* IWTextInfo is the selected-location description pane. The source UI
        fills it for a selected building; the remake previously left it empty
        unless a move control was hovered. */
+    g_e2e_text_info[0] = '\0';
     if (island_floater_info_shown()) {
         /* IWTextInfo is hidden; the floater panel owns this pane. */
     } else if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL &&
                selected_location->renderer_class == 0 &&
-               selected_location->record_value_10 == 0x2a &&
+               location_base_item_id(selected_location) == 0x2a &&
                selected_location->owner_id >= 0 &&
                selected_location->owner_id < 4 &&
                selected_location->owner_id != g_menu.selected_tribe &&
                g_newgame_text[selected_location->owner_id][0] != '\0') {
-        /* FUN_00439673 mode 0 (ev_20a8dd58): another tribe's Hall (item 0x2a,
+        /* FUN_00439673 mode 0 (ev_20a8dd58): another tribe's Hall (base item 0x2a,
            +0x14 != DAT_0049f538) shows NEWGAME<owner>, the tribe name, centred
            like LEVNAME. */
         const char *tribe_name = g_newgame_text[selected_location->owner_id];
+        (void)snprintf(g_e2e_text_info, sizeof(g_e2e_text_info), "NEWGAME%d",
+                       (int)selected_location->owner_id);
         text_panel = window_catalog_find(&g_window_catalog, "IWTextInfo", 3);
         if (text_panel != NULL && text_panel->shape_frame >= 0 &&
             (uint32_t)text_panel->shape_frame < g_temp_hole_art.frame_count) {

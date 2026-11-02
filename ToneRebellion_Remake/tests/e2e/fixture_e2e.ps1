@@ -39,13 +39,19 @@ function Check($ok, $name, $detail) {
     if ($ok) { "PASS  $name" } else { "FAIL  $name  $detail"; $script:failures++ }
 }
 function State {
-    $st = @{ floaters = @() }
+    $st = @{ floaters = @(); locations = @() }
     foreach ($line in (Get-Content $statePath -ErrorAction SilentlyContinue)) {
         $t = $line -split ' '
         if ($t[0] -eq 'floater') {
             $f = @{ index = [int]$t[1]; x = [int]$t[2]; y = [int]$t[3] }
             foreach ($kv in $t[4..($t.Length - 1)]) { $k, $v = $kv -split '='; $f[$k] = [int]$v }
             $st.floaters += , $f
+        } elseif ($t[0] -eq 'location') {
+            $l = @{ index = [int]$t[1]; x = [int]$t[2]; y = [int]$t[3] }
+            foreach ($kv in $t[4..($t.Length - 1)]) { $k, $v = $kv -split '='; $l[$k] = [int]$v }
+            $st.locations += , $l
+        } elseif ($t[0] -eq 'text_info') {
+            $st.text_info = $t[1]
         } elseif ($t.Length -eq 2 -and $t[1] -match '^-?\d+$') {
             $st[$t[0]] = [int]$t[1]
         }
@@ -68,13 +74,26 @@ function Capture($name) {
     $bmp.Save((Join-Path $OutDir "$name.png")); $bmp.Dispose()
 }
 
-$proc = Start-Process -FilePath $Exe -WorkingDirectory (Split-Path $Exe) -PassThru
-try {
+function Launch($fixture) {
+    if (Test-Path $statePath) { Remove-Item $statePath }
+    $env:TONE_REBELLION_E2E_FIXTURE = $fixture
+    $script:proc = Start-Process -FilePath $Exe -WorkingDirectory (Split-Path $Exe) -PassThru
     $script:h = [IntPtr]::Zero
     for ($i = 0; $i -lt 60 -and $script:h -eq [IntPtr]::Zero; $i++) {
-        Start-Sleep -Milliseconds 250; $proc.Refresh(); $script:h = $proc.MainWindowHandle
+        Start-Sleep -Milliseconds 250; $script:proc.Refresh(); $script:h = $script:proc.MainWindowHandle
     }
     Start-Sleep -Seconds 2
+}
+function Quit {
+    if ($script:proc -and -not $script:proc.HasExited) {
+        [FixtureE2E]::PostMessage($script:h, 0x0010, [IntPtr]0, [IntPtr]0) | Out-Null
+        $script:proc.WaitForExit(10000) | Out-Null
+        if (-not $script:proc.HasExited) { Stop-Process -Id $script:proc.Id -Force }
+    }
+}
+
+try {
+    Launch "badges"
     $st = State
     Check ($st.screen -eq 3 -and $st.tribe -eq 0) "the fixture opens the island view" "screen $($st.screen) tribe $($st.tribe)"
     $warrior = $st.floaters | Where-Object { $_.owner -eq 0 -and $_.subtype -eq 4 } | Select-Object -First 1
@@ -97,13 +116,33 @@ try {
         Check ($sel.selected_floater -eq $warrior.index) "clicking the warrior selects it" "selected $($sel.selected_floater)"
         Capture "warrior_panel"
     }
+    Quit
+
+    # Another tribe's Hall (item 0x2a, raw 0x2a + owner * 16) shows that
+    # tribe's NEWGAME<owner> name in IWTextInfo (FUN_00439673 mode 0).
+    Launch "enemy_hall"
+    Start-Sleep -Seconds 5                      # the Hall placement ramp (100 ticks)
+    $st = State
+    $hall = $st.locations | Where-Object { $_.owner -eq 1 -and $_.class -eq 0 -and $_.item -eq 0x3a } | Select-Object -First 1
+    Check ($null -ne $hall) "the enemy_hall fixture shows tribe 1's Hall" "island $($st.island)"
+    if ($hall) {
+        $target = $null
+        foreach ($o in @(@(0, -6), @(10, -6), @(-10, -6), @(0, 2), @(15, -12), @(-15, -12), @(0, -15))) {
+            $px = $hall.x - $st.scroll + $o[0]; $py = $hall.y + $o[1]; $free = $true
+            foreach ($f in $st.floaters) {
+                if ([math]::Abs($f.x - $st.scroll - $px) -lt 18 -and [math]::Abs($f.y - $py) -lt 30) { $free = $false }
+            }
+            if ($free) { $target = @($px, $py); break }
+        }
+        if ($target) { Click $target[0] $target[1] }
+        Start-Sleep -Milliseconds 600
+        $sel = State
+        Check ($sel.selected_location -eq $hall.index -and $sel.text_info -eq "NEWGAME1") "another tribe's Hall shows its tribe name" "selected $($sel.selected_location) text $($sel.text_info)"
+        Capture "enemy_hall"
+    }
 }
 finally {
-    if ($proc -and -not $proc.HasExited) {
-        [FixtureE2E]::PostMessage($script:h, 0x0010, [IntPtr]0, [IntPtr]0) | Out-Null
-        $proc.WaitForExit(10000) | Out-Null
-        if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
-    }
+    Quit
 }
 "captures in $OutDir"
 if ($script:failures -gt 0) { "$($script:failures) check(s) failed"; exit 1 }

@@ -36,7 +36,8 @@ static int e2e_start_fixture(HWND window)
    instead (the bench's fixed world 0, tribe 0, difficulty 0 and seed), opens
    the Hall island and adds known units beside the Hall: an own warrior
    (subtype 4, full charge), an enemy subtype-1 unit and two Leviathans
-   (subtypes 12 and 9). Returns 1 when built. */
+   (subtypes 12 and 9). TONE_REBELLION_E2E_FIXTURE=enemy_hall builds the
+   same game and opens tribe 1's Hall island instead. Returns 1 when built. */
 static int e2e_build_fixture(HWND window)
 {
     char name[32];
@@ -49,7 +50,8 @@ static int e2e_build_fixture(HWND window)
     uint16_t y;
     if (!e2e_enabled() ||
         !platform_environment("TONE_REBELLION_E2E_FIXTURE", name, sizeof(name)) ||
-        strcmp(name, "badges") != 0) return 0;
+        (strcmp(name, "badges") != 0 && strcmp(name, "enemy_hall") != 0))
+        return 0;
     g_menu.world_index = 0;
     g_menu.selected_tribe = 0;
     g_menu.difficulty = 0;
@@ -79,6 +81,15 @@ static int e2e_build_fixture(HWND window)
     (void)native_save_add_fixture_floater(&g_game_session, &g_floater_catalog,
         GAME_START_PLAYER_COUNT, 9, island, (uint16_t)(x + 580),
         (uint16_t)(y - 10), 0, 0);
+    if (strcmp(name, "enemy_hall") == 0) {
+        economy = &g_game_session.economy[1];
+        if (economy->hall_island_index >= g_game_session.island_count) return 0;
+        island = (uint8_t)economy->hall_island_index;
+        x = g_game_session.islands[island]
+                .locations[economy->hall_location_index].x;
+        /* The fixture's tribe 0 has reached that island. */
+        g_game_session.islands[island].access_mask |= 1U;
+    }
     if (!open_island_view(window, island)) return 0;
     g_island_scroll_x = island_clamp_scroll((int)x - 0x140);
     return 1;
@@ -105,6 +116,8 @@ static void e2e_write_state(void)
             g_selected_floater, g_selected_location, g_island_panel_mode,
             g_menu.selected_tribe);
     fprintf(file, "hall_player %d\n", selected_hall_player());
+    fprintf(file, "text_info %s\n",
+            g_e2e_text_info[0] != '\0' ? g_e2e_text_info : "-");
     fprintf(file, "anim_ticks %u\nclock_ms %lu\n", g_menu.animation_ticks,
             (unsigned long)platform_ticks_ms());
     fprintf(file, "net_mode %d\nnet_slot %d\nnet_players %u\nnet_world %d\n",

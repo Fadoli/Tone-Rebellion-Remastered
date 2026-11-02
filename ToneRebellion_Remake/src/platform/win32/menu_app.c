@@ -237,6 +237,8 @@ static char g_move_button_text[128];
 /* gamey.txt BC0..BC20: IWTextInfo mode 5 captions of the BC_* controls,
    indexed like the 0x49e700 table (FUN_0042f150 fills DAT_0049e948). */
 static char g_bc_text[21][160];
+/* Test support: the text key IWTextInfo drew last (e2e state dump). */
+static char g_e2e_text_info[32];
 /* spells.txt rows (FUN_00463563 table at 0x6188c0, stride 0x2c): name,
    Level and description, read by IWTextInfo mode 4 (FUN_00439673). */
 enum { SPELL_TEXT_COUNT = 22 };
