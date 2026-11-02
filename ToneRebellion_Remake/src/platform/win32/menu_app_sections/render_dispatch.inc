@@ -309,6 +309,29 @@ static void render_back_buffer(RenderSurface *back)
     }
     if (g_menu.screen == SCREEN_WORLD_MAP || g_menu.screen == SCREEN_ISLAND)
         render_slide_panel(back);
+    /* End-sequence fade (FUN_00410765 through the screen palette): every
+       channel is scaled by (256 - level) / 256. The native fade starts from
+       the logo.pal buffer at 0x630730; the port darkens the frame as drawn. */
+    if (g_game_session_valid &&
+        (g_menu.screen == SCREEN_WORLD_MAP || g_menu.screen == SCREEN_ISLAND)) {
+        int level = game_session_world_fade_level(&g_game_session,
+            (uint8_t)g_game_session.config.selected_tribe);
+        if (level > 0) {
+            uint32_t keep = (uint32_t)(256 - level);
+            int row;
+            int column;
+            for (row = 0; row < back->height; ++row) {
+                uint32_t *pixel = back->pixels + (size_t)row * (size_t)back->stride;
+                for (column = 0; column < back->width; ++column) {
+                    uint32_t c = pixel[column];
+                    pixel[column] = (c & 0xff000000U) |
+                        ((((c >> 16) & 0xffU) * keep >> 8) << 16) |
+                        ((((c >> 8) & 0xffU) * keep >> 8) << 8) |
+                        (((c & 0xffU) * keep) >> 8);
+                }
+            }
+        }
+    }
 }
 
 #ifndef TONE_PLATFORM_SDL

@@ -546,6 +546,34 @@ void game_session_recalculate_leviathan_island(GameSession *session,
    tick-0/40 events run in game_session_world_sequence_state2_events. Not
    modelled: the palette fades, world events 0xb, and DAT_004bf120 = 0 (the caller stops
    the game instead). */
+int game_session_world_fade_level(const GameSession *session,
+                                  uint8_t local_tribe)
+{
+    int tick;
+    int latched;
+    if (session == NULL) return 0;
+    tick = session->world_sequence_tick;
+    latched = local_tribe < GAME_START_PLAYER_COUNT &&
+        session->economy[local_tribe].defeat_latched;
+    /* FUN_00410765 scales every palette byte by (256 - level) / 256
+       (ev_8521b214): state 3 and 5 darken over 100 ticks, state 3 lights
+       up again over ticks 101..149, state 5 over 101..199 when the latch is
+       clear (ev_77f7b1eb). */
+    if (session->world_sequence_state == 3) {
+        if (tick < 100) return tick * 256 / 99 > 256 ? 256 : tick * 256 / 99;
+        if (tick == 100) return 256;
+        if (tick < 0x96) return (0x95 - tick) * 256 / 0x31;
+        return 0;
+    }
+    if (session->world_sequence_state == 5) {
+        if (tick < 100) return tick * 256 / 99 > 256 ? 256 : tick * 256 / 99;
+        if (latched || tick == 100) return 256;
+        if (tick < 200) return (199 - tick) * 256 / 99;
+        return 0;
+    }
+    return 0;
+}
+
 int game_session_tick_world_sequence(GameSession *session)
 {
     int16_t state;

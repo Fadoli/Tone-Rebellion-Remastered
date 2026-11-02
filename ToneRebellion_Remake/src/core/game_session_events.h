@@ -253,6 +253,11 @@ void game_session_recalculate_leviathan_island(GameSession *session,
    states 2..5. Returns the queued window state (2 = world view at tick 100
    of state 3, 7 = end screen at tick 100 of state 5) or -1. */
 int game_session_tick_world_sequence(GameSession *session);
+/* FUN_00464e4d's FUN_00410765 fade level (0 = normal, 256 = black) for the
+   current world sequence state and tick; `local_tribe` selects the
+   DAT_00619248 + tribe * 0x14a0 latch tested in state 5. */
+int game_session_world_fade_level(const GameSession *session,
+                                  uint8_t local_tribe);
 /* FUN_00464e4d state 2 events, run before game_session_tick_world_sequence:
    tick 0 flags the last island's first seal site and kills its Leviathans;
    tick 40 pairs every player floater there (sub-type != 8) with a new
