@@ -56,12 +56,12 @@ la ligne aux sorties; l'argument `(10, 6)` est écrasé. `FUN_0043954d` sort `x 
 167) et `y_sortie = y + 1 + h` (h = hauteur de la police courante, `[police+8]`); le décalage s'accumule, donc la
 ligne k a son sommet en `6 + (k + 1) * (h + 1)` (pas de ligne `h + 1`). Les mots se mesurent par somme des
 avances de glyphes, coupure gloutonne au dernier espace qui tient, aucune limite de lignes; `y` est le haut
-de la rangée de glyphes. Avec `bgoutfnt.fnt` (hauteur 13 à l'octet 8; liaison à `DAT_005c30b8` inférée): lignes
+de la rangée de glyphes. Avec `bgoutfnt.fnt` (hauteur 13 à l'octet 8; inférence périmée: `DAT_005c30b8` est `smfont`, `bgoutfnt.fnt` va dans l'objet `0x4c2f30`, voir `ui-fonts.md`): lignes
 aux ordonnées 20, 34, 48… Modes simples: NEWGAME, LEVNAME et le mode 5 sont centrés sans rappel
 (`x = (droite-gauche-w)/2`, `y = (bas-haut)/2 - 10`); le mode niveau dessine en (10, 2) et (10, 11).
 Port: `hall_support_render.inc` utilise maintenant x = 6, largeur 167, première ligne à `haut + 6 + h + 1` et pas
 `h + 1` via `draw_wrapped_bitmap_label_pitch`; le renvoi partagé des autres écrans garde `h + 2`. Non porté: les
-modes centrés et niveau; liaison de `DAT_005c30b8` à `bgoutfnt.fnt` non tracée.
+modes centrés et niveau; `DAT_005c30b8` = `smfont` (tracé, `ui-fonts.md`).
 
 Contexte des appels à `FUN_004503bd` (REA, ev_377d36e5, ev_f5fa2b6f, ev_b1d53f56, ev_053a6cdd, ev_dccd5da0, ev_b943bfaa): 8 appels via le thunk `0x402347`, dans quatre fonctions:
 `FUN_0041e569` (phase livraison, objet porté, quantité 1, joueur `*rec`; 0x41ea31/0x41ea8f/0x41eaf3), `FUN_00425084` (dépôt dans un emplacement libre, 0x425157, sinon compteur d'attente),

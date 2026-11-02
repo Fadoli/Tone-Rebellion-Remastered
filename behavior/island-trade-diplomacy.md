@@ -75,8 +75,7 @@ de la classe (tribu) et du sous-type seulement (`+0` classe, `+4` sous-type, le 
 [6]) % ([5] - [4] + 1)`). Aucun floater vivant n'intervient.
 Port: un joueur sans floater actif affiche maintenant la pose de travailleur de sa tribu (frame 0 des jambes et du corps
 de `g_initial_floater_legs/bodies[tribu]`, non retourné) au lieu de rien. Inférence: ces feuilles correspondent à
-l'enregistrement de classe natif. Non établi: octet `+0x14`, source de la police de la légende (objet de police
-`FUN_0042de0d` non résolu; noms `smfont` et `bgfont` en `0x4a0308`), couleur native de la légende.
+l'enregistrement de classe natif. Non établi: octet `+0x14`, (police de la légende: `FUN_0042de0d` = `smfont` `DAT_005c30b8`, couleur 6 par `FUN_0042da69`, établies le 2026-11-02, voir `ui-fonts.md`).
 
 Passe Commerce (REA, `FUN_0043edac` dessin, `FUN_0043eab5` messages, `FUN_0043ec78` clic; ev_116199be…, ev_016c96cc…, ev_58dd79bd…): remise à zéro à l'ouverture
 (`memset(panel+0x74, 0, 0x12)` au message 1): portée. Texte des montants et légende en indice de palette 6 (objet `DAT_005c2870`): déjà couvert par `panel_text_color`.
