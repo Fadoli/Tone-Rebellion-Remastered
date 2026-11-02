@@ -171,6 +171,10 @@ int main(int argc, char **argv)
     assert(strcmp(task_row.label_key, "OARTIFACT") == 0 &&
            task_row.task_icon_frame == 4);
     assert(!island_panel_info_task_row(0xb, 0, &task_row));
+    /* A type without a branch shows its raw FA_* name, no icon. */
+    assert(island_panel_info_task_row(6, 0, &task_row));
+    assert(strcmp(task_row.label_key, "FA_AttackFlt") == 0);
+    assert(task_row.task_icon_frame == -1);
     info_panel.pane.top = 368;
     info_panel.pane.bottom = 471;
     assert(island_panel_info_task_row_position(&info_panel, 7, 0,

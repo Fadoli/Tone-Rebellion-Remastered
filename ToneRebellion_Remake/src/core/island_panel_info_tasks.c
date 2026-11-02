@@ -19,6 +19,15 @@ int island_panel_info_empty_task_label_position(const WindowTemplate *panel,
     return 1;
 }
 
+/* FA_* name table at 0x49d0b8 (stride 0x10), indexed by action code. */
+static const char *const fa_names[] = {
+    "FA_Nothing", "FA_Move", "FA_Recharge", "FA_Fetch", "FA_Deliver",
+    "FA_Build", "FA_AttackFlt", "FA_AttackLoc", "FA_DefendFlt",
+    "FA_DefendArea", "FA_Wait", "FA_Enlist", "FA_Train", "FA_ObtainObject",
+    "FA_Wander", "FA_ChaseFlt", "FA_ChaseLoc", "FA_UseBridge", "FA_Repair",
+    "FA_Cast", "FA_MergeWith", "FA_Ascend"
+};
+
 int island_panel_info_task_row(int16_t action_type, int16_t item_id,
                                IslandTaskRow *row)
 {
@@ -40,6 +49,11 @@ int island_panel_info_task_row(int16_t action_type, int16_t item_id,
     } else if (action_type == 0xd) {
         value.label_key = "OARTIFACT";
         value.task_icon_frame = 4;
+    } else if (action_type != 4 && action_type != 0xb && action_type >= 0 &&
+               (size_t)action_type < sizeof(fa_names) / sizeof(fa_names[0])) {
+        /* FUN_004459e6 without a branch: the raw FA_* name, no icon or gauge
+           (type 0xb rows never reach the list, FUN_004455d1). */
+        value.label_key = fa_names[action_type];
     } else {
         return 0;
     }
