@@ -103,6 +103,7 @@ static int load_game_session_for_selected_world(char *error, size_t error_capaci
     config.randomize_class0_assignment =
         float_cfg_has_keyword("easyplot") ? 0 : 1;
     config.random_seed = g_random_state;
+    config.multiplayer_session = g_net_mode != NET_MODE_NONE;
     if (!game_session_initialize(world, island_records, &g_pad_catalog,
                                  &g_floater_catalog, &config, &session,
                                  error, error_capacity)) {

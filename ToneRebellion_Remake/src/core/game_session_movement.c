@@ -1082,7 +1082,8 @@ static int game_session_find_birth_location(const GameSession *session,
 /* FUN_00462a87 (0x462b8d..0x462c2c, ev_736ded6a, ev_649d4571): a new floater
    of a player tribe becomes the glyph caster (subtype 8) when the owner's
    glyph word is nonzero, the owner has no subtype-8 floater yet
-   (FUN_0046562b) and, in solo, FUN_00467260(island count - 1) + 1 does not
+   (FUN_0046562b) and, unless DAT_004befe0 (multiplayer) is set,
+   FUN_00467260(island count - 1) + 1 does not
    exceed the number of glyph bits 0..13 (FUN_0045f0cd). It then gets
    FA_DefendArea (+0x3c = 9) on the owner's Hall, packed by FUN_0041e3eb
    (FUN_0045f807 / FUN_00452e2b, ev_49128cde, ev_e99830fa, ev_0f8903dc).
@@ -1110,7 +1111,9 @@ static void game_session_promote_glyph_caster(GameSession *session,
     for (index = 0; index < 14; ++index) {
         if ((mask & (1U << index)) != 0) ++glyph_count;
     }
-    if (tone_rng_bounded(&session->random_state,
+    /* In a network session the roll is skipped (no LCG step). */
+    if (!session->config.multiplayer_session &&
+        tone_rng_bounded(&session->random_state,
                          (int32_t)session->island_count - 1) + 1 >
         (int32_t)glyph_count) return;
 

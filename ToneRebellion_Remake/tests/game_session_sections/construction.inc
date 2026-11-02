@@ -814,6 +814,23 @@ static void test_birth_promotes_a_glyph_caster_once_per_tribe(void)
     assert(casters[0] == 1);
     for (index = 1; index < GAME_START_PLAYER_COUNT; ++index)
         assert(casters[index] == 0);
+
+    /* DAT_004befe0 set: one glyph is enough, without any roll. */
+    config.multiplayer_session = 1;
+    assert(game_session_initialize(&world, islands, &catalog, &floater_catalog,
+                                   &config, &session, error, sizeof(error)));
+    for (index = 0; index < GAME_START_PLAYER_COUNT; ++index) {
+        session.economy[index].glyph_mask = 1;
+        casters[index] = 0;
+    }
+    for (index = 0; index < 301; ++index)
+        game_session_tick_floater_moves(&session, index + 1U, &catalog);
+    for (index = 16; index < session.floater_count; ++index) {
+        if (session.floaters[index].source_subtype == 8)
+            ++casters[session.floaters[index].owner_slot];
+    }
+    for (index = 0; index < GAME_START_PLAYER_COUNT; ++index)
+        assert(casters[index] == 1);
 }
 
 static void test_initialized_workers_build_from_queued_selection(void)

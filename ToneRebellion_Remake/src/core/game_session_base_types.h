@@ -223,6 +223,8 @@ typedef struct GameSessionConfig {
     uint32_t alternate_island;
     uint8_t home_island_index;
     uint8_t randomize_class0_assignment;
+    /* DAT_004befe0: nonzero in a network session (FUN_0041c1d6). */
+    uint8_t multiplayer_session;
     uint32_t random_seed;
 } GameSessionConfig;
 
