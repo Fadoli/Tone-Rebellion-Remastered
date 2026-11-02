@@ -596,53 +596,43 @@ static void draw_hall_panel(RenderSurface *surface, int hall_player)
             &g_game_session.economy[(unsigned int)hall_player];
         unsigned int resource;
         unsigned int target;
-        {
-            /* FUN_0043edac shades the column heads (x 40+38c..68+38c, y 22..102)
-               and the three rows (x 40..190, y 37+24r, h 14) through
-               FUN_004109a6 with FUN_004106dd(1,0): destination pixels under
-               the pane background form's opaque spans are replaced by the
-               haze table (ev_0d583e26...). The island haze stands in for the
-               runtime-filled table. */
-            unsigned int shade_index;
-            for (shade_index = 0; shade_index < GAME_TRADE_TARGET_COUNT;
-                 ++shade_index) {
-                RECT head = {panel->pane.left + 40 + (int)shade_index * 38,
-                             panel->pane.top + 22,
-                             panel->pane.left + 68 + (int)shade_index * 38,
-                             panel->pane.top + 102};
-                recolor_under_sprite_clipped(surface, &g_temp_hole_art,
-                    (uint32_t)panel->shape_frame, panel->pane.left,
-                    panel->pane.top, 1, 0, &head);
-            }
-            for (shade_index = 0; shade_index < GAME_RESOURCE_TYPE_COUNT;
-                 ++shade_index) {
-                RECT row = {panel->pane.left + 40,
-                            panel->pane.top + 37 + (int)shade_index * 24,
-                            panel->pane.left + 190,
-                            panel->pane.top + 51 + (int)shade_index * 24};
-                recolor_under_sprite_clipped(surface, &g_temp_hole_art,
-                    (uint32_t)panel->shape_frame, panel->pane.left,
-                    panel->pane.top, 1, 0, &row);
-            }
-        }
+        /* FUN_0043edac (ev_0d583e26, asm ev_88f67c12) fetches the haze table
+           FUN_004106dd(1,0), then per column draws the emblem (0x43ef0b) and
+           shades the head x 40+38c..68+38c, y 22..102 (0x43ef4a); per row it
+           draws the Tone icon (0x43f04f), shades x 40..190, y 37+24r, h 14
+           (0x43f0aa), then prints the offers (0x43f15a). Shading replaces
+           the pixels under the pane form's opaque spans; the island haze
+           stands in for the runtime-filled table. */
         for (target = 0; target < GAME_TRADE_TARGET_COUNT; ++target) {
-            /* FUN_0043edac: FUN_00428191(class, 0, x = 55 + 38c, y = 12) with
-               class c, or c + 1 once c reaches the local player. */
+            /* FUN_00428191(class, 0, x = 55 + 38c, y = 12) with class c, or
+               c + 1 once c reaches the local player. */
             unsigned int tribe = target >= (unsigned int)hall_player
                 ? target + 1U : target;
+            RECT head = {panel->pane.left + 40 + (int)target * 38,
+                         panel->pane.top + 22,
+                         panel->pane.left + 68 + (int)target * 38,
+                         panel->pane.top + 102};
             draw_diplomacy_initial_worker_icon(surface, NULL, tribe,
                 panel->pane.left + 55 + (int)target * 38,
                 panel->pane.top + 12);
+            recolor_under_sprite_clipped(surface, &g_temp_hole_art,
+                (uint32_t)panel->shape_frame, panel->pane.left,
+                panel->pane.top, 1, 0, &head);
         }
         for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
+            RECT row = {panel->pane.left + 40,
+                        panel->pane.top + 37 + (int)resource * 24,
+                        panel->pane.left + 190,
+                        panel->pane.top + 51 + (int)resource * 24};
             if (resource_sheets[resource]->frame_count > 4U) {
                 /* FUN_0043edac draws frame 4 of each named Tone sheet. */
                 draw_sprite(surface, resource_sheets[resource], 4,
                             panel->pane.left + 30,
                             panel->pane.top + 52 + (int)resource * 24);
             }
-        }
-        for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
+            recolor_under_sprite_clipped(surface, &g_temp_hole_art,
+                (uint32_t)panel->shape_frame, panel->pane.left,
+                panel->pane.top, 1, 0, &row);
             for (target = 0; target < GAME_TRADE_TARGET_COUNT; ++target) {
                 char amount_text[8];
                 unsigned int amount = economy->trade_offer[resource][target];
