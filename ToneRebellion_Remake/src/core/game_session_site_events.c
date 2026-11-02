@@ -542,9 +542,9 @@ void game_session_recalculate_leviathan_island(GameSession *session,
 /* FUN_00464e4d with L == 0: state 2 ends at tick 1000, state 3 queues
    SetState(2) at 100 and moves to 4 above 599, state 4 moves to 5 at 350,
    state 5 queues SetState(7) at 100 and stops in 6 from 200. The tick
-   advances while the state holds and restarts at 0 on a change. Not
-   modelled: state 2's tick-0/40 Leviathan kills and floater pairing, the
-   palette fades, world events 0xb, and DAT_004bf120 = 0 (the caller stops
+   advances while the state holds and restarts at 0 on a change. State 2's
+   tick-0/40 events run in game_session_world_sequence_state2_events. Not
+   modelled: the palette fades, world events 0xb, and DAT_004bf120 = 0 (the caller stops
    the game instead). */
 int game_session_tick_world_sequence(GameSession *session)
 {

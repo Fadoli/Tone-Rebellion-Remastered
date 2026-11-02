@@ -196,6 +196,8 @@ static void run_ui_frame(HWND window, WPARAM wparam)
             if (g_game_session.world_sequence_state == 2 &&
                 g_game_session.world_sequence_tick == 0)
                 set_background_tune_once("winend");
+            game_session_world_sequence_state2_events(&g_game_session,
+                                                      &g_floater_catalog);
             request = game_session_tick_world_sequence(&g_game_session);
             if (request == 2 && g_menu.screen == SCREEN_ISLAND) {
                 g_menu.screen = SCREEN_WORLD_MAP;

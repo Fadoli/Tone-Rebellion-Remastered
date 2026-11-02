@@ -33,7 +33,7 @@
 
 ## Phase 3 — Fin de partie
 
-- Déclencheur natif de l'état 7 : porté (destruction des sceaux `PIT_LeviShield` de la dernière île → séquence `FUN_00464e4d` L = 0, voir `behavior/end-game.md`). Reste : évènements/jumelage de l'état 2, fondus, chemin multijoueur 0x15, vérification en jeu, relecture REA de `0x4239e9`/`0x46a92a`.
+- Déclencheur natif de l'état 7 : porté (destruction des sceaux `PIT_LeviShield` de la dernière île → séquence `FUN_00464e4d` L = 0, voir `behavior/end-game.md`). Évènements et jumelage de l'état 2 portés (2026-11-02). Reste : fondus, chemin multijoueur 0x15, vérification en jeu, relecture REA de `0x4239e9`/`0x46a92a`.
 - Sauvegarde/chargement : fonctionne. Sauvegarde du remake = copie brute de `GameSession` (presse-papiers et champs d'ordre compris), mode Sauvegarde (état 5) de l'écran Charger/Sauvegarder porté. Les sauvegardes d'origine se chargent par `native_save_parse`/`native_save_apply` (sites, sources et ordres de bâtiment `+0x28..0x30`, stocks `+0x58/+0x5c`, tâches, floaters). Limites : une sauvegarde du remake est refusée dès que `sizeof(GameSession)` change (aucune migration) et dépend de l'ABI (32/64 bits); le presse-papiers natif n'est pas relu des sauvegardes d'origine.
 
 ## Phase 4 — Parité d'interface

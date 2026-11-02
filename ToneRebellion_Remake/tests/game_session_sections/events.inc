@@ -435,6 +435,69 @@ static void test_inventory_action_reserves_source_payload_without_mutation(void)
     assert(session.pending_event_count == 2);
 }
 
+static void test_world_state2_kills_leviathans_then_pairs_floaters(void)
+{
+    GameSession session = {0};
+    FloaterCatalog catalog;
+    GameRuntimeIsland *island;
+    unsigned int row;
+    unsigned int index;
+
+    memset(&catalog, 0, sizeof(catalog));
+    for (row = 0; row < FLOATER_CATALOG_ROW_COUNT; ++row) {
+        catalog.rows[row].hit_points = 5;
+        catalog.rows[row].movement_speed = 2;
+    }
+    session.island_count = 2;
+    island = &session.islands[1];
+    island->location_count = 2;
+    island->locations[0].record_value_10 = 0x30;
+    island->locations[0].owner_id = -1;
+    island->locations[1].record_value_10 = 0x16;
+    island->locations[1].owner_id = 4;
+    island->locations[1].x = 200;
+    island->locations[1].y = 90;
+    session.floater_count = 4;
+    /* A Leviathan on the last island, one elsewhere, two player floaters. */
+    session.floaters[0] = (GameFloaterStart){0};
+    session.floaters[0].is_active = 1;
+    session.floaters[0].owner_slot = 4;
+    session.floaters[0].type_index = 4;
+    session.floaters[0].island_index = 1;
+    session.floaters[0].current_hit_points = 7;
+    session.floaters[1] = session.floaters[0];
+    session.floaters[1].island_index = 0;
+    session.floaters[2] = (GameFloaterStart){0};
+    session.floaters[2].is_active = 1;
+    session.floaters[2].owner_slot = 0;
+    session.floaters[2].island_index = 1;
+    session.floaters[2].source_subtype = 2;
+    session.floaters[2].linked_task_slot = -1;
+    session.floaters[3] = session.floaters[2];
+    session.floaters[3].source_subtype = 8;
+
+    session.world_sequence_state = 2;
+    session.world_sequence_tick = 0;
+    game_session_world_sequence_state2_events(&session, &catalog);
+    assert((island->locations[1].source_flags & 1U) != 0);
+    assert((session.floaters[0].source_runtime_flags & 0x008U) != 0);
+    assert((session.floaters[1].source_runtime_flags & 0x008U) == 0);
+
+    session.world_sequence_tick = 40;
+    game_session_world_sequence_state2_events(&session, &catalog);
+    /* Only the sub-type 2 floater is paired, with a new Leviathan. */
+    assert(session.floaters[2].active_order_action == 0x14);
+    assert(session.floaters[3].active_order_action == 0);
+    index = (unsigned int)session.floaters[2].order_target_floater;
+    assert(index < session.floater_count);
+    assert(session.floaters[index].owner_slot == 4);
+    assert(session.floaters[index].source_subtype >= 10 &&
+           session.floaters[index].source_subtype <= 17);
+    assert(session.floaters[index].x == 200 && session.floaters[index].y == 90);
+    assert(session.floaters[index].active_order_action == 0x14);
+    assert(session.floaters[index].order_target_floater == 2);
+}
+
 static void test_repair_list_heals_one_point_per_build_tone(void)
 {
     GameSession session = {0};

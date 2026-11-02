@@ -487,27 +487,35 @@ static int leviathan_spawn_gets_level_bonus(GameSession *session,
     return tone_rng_bounded(&session->random_state, 9) < chance_threshold;
 }
 
-static int spawn_leviathan_floater(GameSession *session,
-                                  const FloaterCatalog *catalog,
-                                  GameRuntimeIsland *island,
-                                  GameRuntimeLocation *site)
+static unsigned int count_leviathan_floaters(const GameSession *session)
 {
-    const FloaterStats *stats;
-    GameFloaterStart *floater;
     unsigned int index;
     unsigned int count = 0;
-    int subtype;
-
-    if (session == NULL || catalog == NULL || island == NULL || site == NULL)
-        return -1;
     for (index = 0; index < session->floater_count; ++index) {
         const GameFloaterStart *existing = &session->floaters[index];
         if (game_session_floater_is_active(existing) &&
             existing->type_index == 4) ++count;
     }
+    return count;
+}
+
+/* FUN_00462a87 for owner 4: a new Leviathan of `subtype` at (x, y) with
+   the given runtime flags (0x801 while a producer holds it). With roll_bonus,
+   the producer site's group rolls the 1.7x hit-point level bonus after the
+   animation seed, as FUN_00450a71 does. */
+static int create_leviathan_floater(GameSession *session,
+                                    const FloaterCatalog *catalog,
+                                    unsigned int island_index, int subtype,
+                                    uint16_t x, uint16_t y, int roll_bonus,
+                                    unsigned int bonus_group,
+                                    uint32_t runtime_flags)
+{
+    const FloaterStats *stats;
+    GameFloaterStart *floater;
+    unsigned int index;
+
     /* FUN_00462a87 refuses another category-4 floater above 128 records. */
-    if (count > 128U) return -1;
-    subtype = leviathan_spawn_subtype(session, catalog, island, site, count);
+    if (count_leviathan_floaters(session) > 128U) return -1;
     stats = floater_catalog_find(catalog, 4, subtype);
     if (stats == NULL || stats->hit_points <= 0 ||
         stats->hit_points > (int16_t)UINT8_MAX ||
@@ -523,7 +531,7 @@ static int spawn_leviathan_floater(GameSession *session,
     floater = &session->floaters[index];
     memset(floater, 0, sizeof(*floater));
     floater->is_active = 1;
-    floater->island_index = (uint8_t)(island - session->islands);
+    floater->island_index = (uint8_t)island_index;
     floater->type_index = 4;
     floater->source_subtype = (uint8_t)subtype;
     floater->owner_slot = 4;
@@ -547,8 +555,8 @@ static int spawn_leviathan_floater(GameSession *session,
                catalog->impact_frame_counts[stats->attack_realm],
                sizeof(floater->attack_impact_frame_counts));
     }
-    if (leviathan_spawn_gets_level_bonus(session, island,
-            (unsigned int)(site->record_value_10 - 6))) {
+    if (roll_bonus && leviathan_spawn_gets_level_bonus(session,
+            &session->islands[island_index], bonus_group)) {
         int32_t leveled_hit_points = ((int32_t)stats->hit_points * 17) / 10;
         floater->attack_level_flags = 1;
         if (leveled_hit_points > INT16_MAX) leveled_hit_points = INT16_MAX;
@@ -566,12 +574,12 @@ static int spawn_leviathan_floater(GameSession *session,
     floater->order_target_island = floater->island_index;
     floater->order_source_island = floater->island_index;
     floater->handoff_departure_location = -1;
-    floater->x = site->x;
-    floater->y = site->y;
-    floater->destination_x = site->x;
-    floater->destination_y = site->y;
+    floater->x = x;
+    floater->y = y;
+    floater->destination_x = x;
+    floater->destination_y = y;
     floater->movement_speed = (uint16_t)stats->movement_speed;
-    floater->source_runtime_flags = 0x801U;
+    floater->source_runtime_flags = runtime_flags;
     if (index >= session->floater_count)
         session->floater_count = (uint16_t)(index + 1U);
     /* FUN_00462a87 recalculates the source island immediately after creating
@@ -581,6 +589,110 @@ static int spawn_leviathan_floater(GameSession *session,
             session, GAME_SESSION_AUDIO_FLOATER_BIRTH, 4, floater->island_index))
         game_session_set_last_audio_x(session, floater->x);
     return (int)index;
+}
+
+/* FUN_00464e4d's scan: the last island's first site whose item +0x10 is 4
+   or 0x16 (ev_6ccb1810). The native code writes past the table when none
+   matches; the port skips the event instead. */
+static int world_sequence_seal_site(GameSession *session,
+                                    GameRuntimeIsland **island_out)
+{
+    GameRuntimeIsland *island;
+    unsigned int index;
+    if (session->island_count == 0) return -1;
+    island = &session->islands[session->island_count - 1U];
+    *island_out = island;
+    for (index = 0; index < island->location_count; ++index) {
+        int32_t item = game_session_base_item_id(&island->locations[index]);
+        if (item == 4 || item == 0x16) return (int)index;
+    }
+    return -1;
+}
+
+void game_session_world_sequence_state2_events(GameSession *session,
+                                               const FloaterCatalog *catalog)
+{
+    GameRuntimeIsland *island;
+    unsigned int last_island;
+    unsigned int index;
+    int site;
+
+    if (session == NULL || session->world_sequence_state != 2 ||
+        (session->world_sequence_tick != 0 &&
+         session->world_sequence_tick != 40)) return;
+    site = world_sequence_seal_site(session, &island);
+    if (site < 0) return;
+    last_island = session->island_count - 1U;
+    if (session->world_sequence_tick == 0) {
+        /* Tick 0: site +0x1c |= 1, then FUN_004656d6(I, 4) lists the
+           island's Leviathans and FUN_004204bc(own HP, -1) kills each one
+           through the normal death flag, without kill tallies. */
+        island->locations[site].source_flags |= 1U;
+        for (index = 0; index < session->floater_count; ++index) {
+            GameFloaterStart *floater = &session->floaters[index];
+            if (!game_session_floater_is_active(floater) ||
+                floater->owner_slot != 4 ||
+                floater->island_index != last_island) continue;
+            game_session_apply_floater_damage(session, floater,
+                floater->current_hit_points, -1);
+        }
+        return;
+    }
+    if (catalog == NULL) return;
+    /* Tick 40: each player floater of the island (owner 0..3, sub-type != 8,
+       no death check) gets a new Leviathan of sub-type rand(8) + 10 at the
+       seal site (FUN_00462a87, refused above 128), then both take FA_MergeWith
+       (+0x3c = 0x14) on each other after FUN_00421ec1(-1). */
+    for (index = 0; index < session->floater_count; ++index) {
+        GameFloaterStart *player = &session->floaters[index];
+        GameFloaterStart *leviathan;
+        int subtype;
+        int created;
+        if (!game_session_floater_is_active(player) ||
+            player->owner_slot >= GAME_START_PLAYER_COUNT ||
+            player->island_index != last_island ||
+            player->source_subtype == 8) continue;
+        subtype = tone_rng_bounded(&session->random_state, 8) + 10;
+        created = create_leviathan_floater(session, catalog, last_island,
+            subtype, island->locations[site].x, island->locations[site].y,
+            0, 0U, 0U);
+        if (created < 0) continue;
+        player = &session->floaters[index];
+        leviathan = &session->floaters[(unsigned int)created];
+        release_task_claim(session, player);
+        player->movement_state = 0;
+        player->has_move_order = 0;
+        player->has_wander_order = 0;
+        player->source_runtime_flags &= ~0x065U;
+        player->active_order_action = 0x14;
+        player->order_target_floater = (int16_t)created;
+        player->order_target_location = -1;
+        player->order_progress = 0;
+        player->source_order_pending = 0;
+        leviathan->active_order_action = 0x14;
+        leviathan->order_target_floater = (int16_t)index;
+        leviathan->order_target_location = -1;
+        leviathan->order_progress = 0;
+    }
+}
+
+static int spawn_leviathan_floater(GameSession *session,
+                                  const FloaterCatalog *catalog,
+                                  GameRuntimeIsland *island,
+                                  GameRuntimeLocation *site)
+{
+    unsigned int count;
+    int subtype;
+
+    if (session == NULL || catalog == NULL || island == NULL || site == NULL)
+        return -1;
+    count = count_leviathan_floaters(session);
+    /* FUN_00462a87 refuses another category-4 floater above 128 records. */
+    if (count > 128U) return -1;
+    subtype = leviathan_spawn_subtype(session, catalog, island, site, count);
+    return create_leviathan_floater(session, catalog,
+        (unsigned int)(island - session->islands), subtype, site->x, site->y,
+        1, (unsigned int)(site->record_value_10 - 6), 0x801U);
 }
 
 static void release_leviathan_floater(GameSession *session,
