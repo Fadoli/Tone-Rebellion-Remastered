@@ -1396,16 +1396,15 @@ void game_session_advance_local_resource_task(GameSession *session,
             return;
         source = &island->locations[(uint16_t)floater->order_source_location];
         if (location_is_player_hall(source) ||
-            ((source->source_location_slot_18 != -1 ||
-              (floater->source_runtime_flags & 1U) != 0) &&
-             !location_is_producer_for_resource(source,
-                 floater->owner_slot, code))) {
+            source->source_location_slot_18 != -1 ||
+            (floater->source_runtime_flags & 1U) != 0) {
             /* FUN_0041e569 state 3 (0x41eea4): a Hall (+0x10 == 0x2a), a site
                with +0x18 != -1, or flag bit 0 sets +0x34 = 1 on arrival and
-               counts to 0x14 before the withdraw (0x41ef07, 0x41ef1c). The
-               native also waits at a linked producer and only then skips the
-               withdraw when its +4 is nonzero (0x41ef4b); the port sends
-               producers to the +0x36 retry path instead (interpretation). */
+               counts to 0x14 before the withdraw (0x41ef07, 0x41ef1c); the
+               withdraw is skipped when site +4 is nonzero (0x41ef4b, writer
+               unknown, not modeled). Tone producers have +0x18 == -1 (only
+               items 0x2c..0x32 get a source row) and take the +0x36 retry
+               path below (ev_77f9f6b8). */
             if (floater->order_timer == 0) {
                 floater->source_runtime_flags |= 1U;
                 floater->order_timer = 1;
