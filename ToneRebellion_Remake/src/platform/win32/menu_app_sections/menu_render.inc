@@ -29,6 +29,7 @@ static void save_video_settings(void)
     if (file == NULL) return;
     (void)fprintf(file, "scale %d\n", g_scale_mode);
     (void)fclose(file);
+    platform_storage_changed();
 }
 
 static void load_video_settings(void)

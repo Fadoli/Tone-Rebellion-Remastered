@@ -163,6 +163,16 @@ static int platform_rename_replace(const char *from, const char *to)
     return SDL_RenamePath(from, to);
 }
 
+/* A file under the save directory was written. In the browser /tone lives
+   in memory until the page copies it to IndexedDB (web/shell.html,
+   toneStorageChanged); elsewhere the write is already on disk. */
+static void platform_storage_changed(void)
+{
+#ifdef __EMSCRIPTEN__
+    EM_ASM({ if (Module.toneStorageChanged) Module.toneStorageChanged(); });
+#endif
+}
+
 /* SDL_GetBasePath ends with a separator; the callers add their own. In the
    browser the page puts the player's game files in /tone (THING1, THING2)
    and keeps /tone/saves in IndexedDB: the usual search then finds them as

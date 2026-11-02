@@ -94,6 +94,7 @@ static int write_save_file(const char *path)
          fwrite(&g_game_session, 1, sizeof(g_game_session), file) ==
              sizeof(g_game_session);
     ok = (fclose(file) == 0) && ok;
+    platform_storage_changed();
     return ok;
 }
 

@@ -311,6 +311,10 @@ if(WIN32)
         if(NOT MSVC)
             target_link_libraries(remake_sdl PRIVATE m)
         endif()
+        # UTF-8 process code page, so fopen accepts the UTF-8 paths SDL
+        # returns (a game folder named with accents, for example).
+        enable_language(RC)
+        target_sources(remake_sdl PRIVATE src/platform/sdl/remake_sdl.rc)
         # The DLLs SDL3.dll itself needs are not in TARGET_RUNTIME_DLLS. The
         # MSYS2 build imports libiconv-2.dll; without its own copy beside the
         # executable, Windows takes the first one on PATH (Git's 1.16), which
@@ -358,7 +362,7 @@ if(EMSCRIPTEN)
         -sSTACK_SIZE=4MB
         -sINVOKE_RUN=0
         -sFORCE_FILESYSTEM=1
-        "-sEXPORTED_RUNTIME_METHODS=['callMain','FS']"
+        "-sEXPORTED_RUNTIME_METHODS=['callMain','FS','IDBFS']"
         -lidbfs.js
         "--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html")
     set_property(TARGET remake_sdl APPEND PROPERTY LINK_DEPENDS

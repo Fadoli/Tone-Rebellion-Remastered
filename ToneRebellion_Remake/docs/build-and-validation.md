@@ -18,7 +18,11 @@ cmake -S . -B build/ucrt64 -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build/ucrt64
 ```
 
-This builds 64-bit `remake_menu` and, when CMake finds SDL3, `remake_sdl` with `SDL3.dll` copied beside it. Each build also refreshes the ready-to-launch copies in `ToneRebellion_Remake/`: `ToneRebellion_Remake.exe` (`remake_menu`), and `ToneRebellion_Remake_sdl.exe` with `SDL3.dll` and the `libiconv-2.dll` it imports (`remake_sdl`; without that copy Windows would load another libiconv from PATH, such as Git's, which breaks SDL's UTF-16 conversions). Both executables need only system DLLs otherwise. The 32-bit MinGW.org build keeps working; 32-bit GCC builds use SSE math (`-msse2 -mfpmath=sse`) so every build places float-computed pixels identically. Remake saves go to `saves` beside each executable.
+This builds 64-bit `remake_menu` and, when CMake finds SDL3, `remake_sdl` with `SDL3.dll` copied beside it. Each build also refreshes the ready-to-launch copies in `ToneRebellion_Remake/`: `ToneRebellion_Remake.exe` (`remake_menu`), and `ToneRebellion_Remake_sdl.exe` with `SDL3.dll` and the `libiconv-2.dll` it imports (`remake_sdl`; without that copy Windows would load another libiconv from PATH, such as Git's, which breaks SDL's UTF-16 conversions). Both executables need only system DLLs otherwise. The 32-bit MinGW.org build keeps working; 32-bit GCC builds use SSE math (`-msse2 -mfpmath=sse`) so every build places float-computed pixels identically. Remake saves go to `saves` beside each executable. `remake_sdl` embeds a manifest (`src/platform/sdl/utf8.manifest`) that sets the process code page to UTF-8 (Windows 10 1903+), so `fopen` accepts the UTF-8 paths SDL returns, for example a game folder named `Tône`.
+
+## Web build
+
+From a UCRT64 shell with `mingw-w64-ucrt-x86_64-emscripten`: `tools/build_web.sh <SDL3 source directory>` builds SDL3 for Emscripten once (`build/web/sdl3`), then the game (`build/web/game`, or a second argument), and copies the page, script and wasm to `web/out/` (ignored by git). Later builds can pass `""` as the source directory. The script sets `BINARYEN_CORES=1`: with its default thread pool `wasm-opt` deadlocked during the link. Serve `web/out` as static files; the page asks for the game folder, or `?data=<url>` fetches the same `THING1/`/`THING2/` layout from a URL.
 
 ## Build status
 

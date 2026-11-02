@@ -160,6 +160,7 @@ static void save_audio_settings(void)
     (void)fprintf(file, "%d %d %d %d\n", g_music_enabled, g_music_volume,
                   g_sound_enabled, g_sound_volume);
     (void)fclose(file);
+    platform_storage_changed();
 }
 
 static void load_audio_settings(void)

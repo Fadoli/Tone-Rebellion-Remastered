@@ -96,6 +96,7 @@ static void net_setup_save_config(void)
     (void)fprintf(file, "name=%s\naddress=%s\nport=%u\n", g_net_name,
                   g_net_join_address, (unsigned)g_net_port);
     (void)fclose(file);
+    platform_storage_changed();
 }
 
 static void enter_net_setup_screen(void)

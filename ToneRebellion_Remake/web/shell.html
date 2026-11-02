@@ -38,6 +38,11 @@
     <label class="pick">Choisir le dossier du jeu…
       <input type="file" id="folder" webkitdirectory multiple></label>
   </div>
+  <div>
+    <button id="export">Exporter les sauvegardes</button>
+    <label class="pick">Importer des sauvegardes…
+      <input type="file" id="import" accept=".zip,.sav,.gam,.cfg" multiple></label>
+  </div>
   <div id="status">Chargement…</div>
 </div>
 <div id="game"><canvas id="canvas" tabindex="-1"></canvas></div>
@@ -132,22 +137,152 @@
     return true;
   }
 
+  /* The game calls this (platform_storage_changed) after writing a save or
+     a settings file in /tone/saves: copy /tone to IndexedDB once the burst
+     of writes is over, and again if more came in while copying. */
+  let syncTimer = 0;
+  let syncAgain = false;
+  function storageChanged() {
+    if (syncing) { syncAgain = true; return; }
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => {
+      syncing = true;
+      sync(false).catch((error) => console.warn("IndexedDB", error)).finally(() => {
+        syncing = false;
+        if (syncAgain) { syncAgain = false; storageChanged(); }
+      });
+    }, 250);
+  }
+
   function start() {
     document.getElementById("setup").style.display = "none";
     document.getElementById("game").style.display = "flex";
     canvas.focus();
     ensureDirectory("/tone/saves");
+    Module.toneStorageChanged = storageChanged;
+    /* A tab closed inside the 250 ms delay would lose the last write. */
+    addEventListener("pagehide", () => { if (syncTimer || syncAgain) sync(false); });
     Module.callMain([]);
-    /* Saves and settings are written to /tone/saves: keep IndexedDB in step. */
-    setInterval(() => {
-      if (syncing) return;
-      syncing = true;
-      sync(false).catch(() => {}).finally(() => { syncing = false; });
-    }, 5000);
+  }
+
+  /* Saves: one stored (uncompressed) ZIP of /tone/saves, and back. */
+  const CRC_TABLE = new Uint32Array(256).map((_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; ++k) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  function crc32(bytes) {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; ++i) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  function zipStore(entries) {
+    const encoder = new TextEncoder();
+    const local = [];
+    const central = [];
+    let offset = 0;
+    for (const [name, data] of entries) {
+      const nameBytes = encoder.encode(name);
+      const crc = crc32(data);
+      const header = new DataView(new ArrayBuffer(30));
+      header.setUint32(0, 0x04034B50, true);
+      header.setUint16(4, 10, true);
+      header.setUint16(12, 0x21, true);  /* 1980-01-01 */
+      header.setUint32(14, crc, true);
+      header.setUint32(18, data.length, true);
+      header.setUint32(22, data.length, true);
+      header.setUint16(26, nameBytes.length, true);
+      local.push(new Uint8Array(header.buffer), nameBytes, data);
+      const record = new DataView(new ArrayBuffer(46));
+      record.setUint32(0, 0x02014B50, true);
+      record.setUint16(4, 10, true);
+      record.setUint16(6, 10, true);
+      record.setUint16(14, 0x21, true);
+      record.setUint32(16, crc, true);
+      record.setUint32(20, data.length, true);
+      record.setUint32(24, data.length, true);
+      record.setUint16(28, nameBytes.length, true);
+      record.setUint32(42, offset, true);
+      central.push(new Uint8Array(record.buffer), nameBytes);
+      offset += 30 + nameBytes.length + data.length;
+    }
+    const centralSize = central.reduce((total, part) => total + part.length, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054B50, true);
+    end.setUint16(8, entries.length, true);
+    end.setUint16(10, entries.length, true);
+    end.setUint32(12, centralSize, true);
+    end.setUint32(16, offset, true);
+    return new Blob([...local, ...central, new Uint8Array(end.buffer)],
+                    { type: "application/zip" });
+  }
+
+  /* Reads back what zipStore wrote; compressed entries are refused. */
+  function zipEntries(bytes) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const decoder = new TextDecoder();
+    const entries = [];
+    let at = 0;
+    while (at + 30 <= bytes.length && view.getUint32(at, true) === 0x04034B50) {
+      const method = view.getUint16(at + 8, true);
+      const size = view.getUint32(at + 18, true);
+      const nameLength = view.getUint16(at + 26, true);
+      const extraLength = view.getUint16(at + 28, true);
+      const name = decoder.decode(bytes.subarray(at + 30, at + 30 + nameLength));
+      const start = at + 30 + nameLength + extraLength;
+      if (method !== 0 || (view.getUint16(at + 6, true) & 8) !== 0)
+        throw new Error(name + " : entrée compressée, non prise en charge");
+      entries.push([name, bytes.slice(start, start + size)]);
+      at = start + size;
+    }
+    return entries;
+  }
+
+  /* Names the game writes in /tone/saves (save_game.inc and the *.cfg). */
+  function isSaveName(name) {
+    return /^(0[0-7]\.sav|resume\.gam|(video|audio|network)\.cfg)$/i.test(name);
+  }
+
+  function exportSaves() {
+    const entries = [];
+    if (FS.analyzePath("/tone/saves").exists)
+      for (const name of FS.readdir("/tone/saves"))
+        if (isSaveName(name)) entries.push([name, FS.readFile("/tone/saves/" + name)]);
+    if (entries.length === 0) { setStatus("Aucune sauvegarde à exporter."); return; }
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(zipStore(entries));
+    link.download = "tone-saves.zip";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    setStatus(entries.length + " fichier(s) exporté(s).");
+  }
+
+  async function importSaves(files) {
+    const entries = [];
+    for (const file of files) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      if (/\.zip$/i.test(file.name)) entries.push(...zipEntries(bytes));
+      else entries.push([file.name, bytes]);
+    }
+    const kept = entries.filter(([name]) => isSaveName(name.split("/").pop()));
+    if (kept.length === 0) { setStatus("Aucune sauvegarde reconnue."); return; }
+    ensureDirectory("/tone/saves");
+    for (const [name, bytes] of kept)
+      FS.writeFile("/tone/saves/" + name.split("/").pop().toLowerCase(), bytes);
+    await sync(false);
+    setStatus(kept.length + " fichier(s) importé(s).");
   }
 
   canvas.addEventListener("contextmenu", (event) => event.preventDefault());
   playButton.addEventListener("click", start);
+  document.getElementById("export").addEventListener("click", () => {
+    try { exportSaves(); } catch (error) { setStatus("Erreur : " + error); }
+  });
+  document.getElementById("import").addEventListener("change", async (event) => {
+    try { await importSaves(event.target.files); } catch (error) { setStatus("Erreur : " + error); }
+    event.target.value = "";
+  });
   folderInput.addEventListener("change", async () => {
     playButton.hidden = true;
     try {

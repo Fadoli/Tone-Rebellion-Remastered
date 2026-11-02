@@ -133,6 +133,11 @@ static int platform_rename_replace(const char *from, const char *to)
     return MoveFileExA(from, to, MOVEFILE_REPLACE_EXISTING) != 0;
 }
 
+/* A file under the save directory was written; nothing to flush here. */
+static void platform_storage_changed(void)
+{
+}
+
 /* The executable's directory, without a trailing separator. */
 static int platform_executable_directory(char *out, size_t capacity)
 {
