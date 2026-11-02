@@ -325,8 +325,6 @@ int game_session_finish_location_move(GameSession *session,
     unsigned int task_type;
     uint16_t target_x;
     uint16_t target_y;
-    uint16_t old_hall_x = 0;
-    uint16_t old_hall_y = 0;
     uint8_t target_class;
     uint8_t target_site_size;
     int moves_hall;
@@ -360,8 +358,6 @@ int game_session_finish_location_move(GameSession *session,
                      session->location_move_source_index;
     if (moves_hall) {
         unsigned int resource;
-        old_hall_x = player_economy->hall_x;
-        old_hall_y = player_economy->hall_y;
         for (resource = 0; resource < GAME_RESOURCE_TYPE_COUNT; ++resource) {
             int16_t task_slot = player_economy->resource_task_slot[resource];
             if (task_slot >= 0 && task_slot < GAME_SESSION_MAX_PENDING_EVENTS) {
@@ -441,13 +437,31 @@ int game_session_finish_location_move(GameSession *session,
                 floater->destination_x = target_x;
                 floater->destination_y = target_y;
             }
-            if (moves_hall && floater->owner_slot == player_slot &&
-                floater->source_subtype == 8 && floater->movement_state == 9 &&
-                floater->has_move_order && floater->destination_x == old_hall_x &&
-                floater->destination_y == old_hall_y) {
-                floater->destination_x = target_x;
-                floater->destination_y = target_y;
-            }
+        }
+    }
+    if (moves_hall) {
+        /* FUN_0045f5c5 for a moved Hall: when FUN_0046562b(player, 8) finds
+           the glyph caster, its record gets +0x3c = 9 with +0x42 = the new
+           Hall packed by FUN_0041e3eb, +0x46 = 0 and state +0x2c = 0, so
+           FA_DefendArea restarts on the new Hall. */
+        unsigned int floater_index;
+        for (floater_index = 0; floater_index < session->floater_count;
+             ++floater_index) {
+            GameFloaterStart *floater = &session->floaters[floater_index];
+            if (!game_session_floater_is_active(floater) ||
+                floater->owner_slot != player_slot ||
+                floater->source_subtype != 8) continue;
+            floater->movement_state = 0;
+            floater->has_move_order = 0;
+            floater->order_progress = 0;
+            floater->source_order_state_2c = 9;
+            floater->source_order_island_28 = island_index;
+            floater->source_order_coordinate_30 = (uint16_t)(
+                (((uint32_t)target_x + 5U) / 10U) << 8 |
+                (((uint32_t)target_y + 5U) / 10U));
+            floater->source_order_parameter_32 = 0;
+            floater->source_order_pending = 1;
+            break;
         }
     }
 
