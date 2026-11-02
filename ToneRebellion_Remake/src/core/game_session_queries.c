@@ -243,6 +243,24 @@ void game_session_clip_auto_register(GameSession *session, uint8_t player_slot)
     }
 }
 
+unsigned int game_session_clip_building_count(const GameSession *session,
+                                              uint8_t player_slot)
+{
+    unsigned int island_index;
+    unsigned int count = 0;
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT) return 0;
+    for (island_index = 0; island_index < session->island_count; ++island_index) {
+        unsigned int location_index;
+        for (location_index = 0;
+             location_index < session->islands[island_index].location_count;
+             ++location_index) {
+            if (game_session_clip_building(session, player_slot,
+                    (uint8_t)island_index, (uint16_t)location_index)) ++count;
+        }
+    }
+    return count;
+}
+
 void game_session_clip_set_group(GameSession *session, unsigned int group)
 {
     if (session != NULL && group < 3U) session->clip_group = (uint8_t)group;

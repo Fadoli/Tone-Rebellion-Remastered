@@ -2054,8 +2054,19 @@ static void draw_clipboard_strip(RenderSurface *surface)
         unsigned int index;
         /* FUN_0042f755 -> FUN_00438120: each selection refresh remembers the
            selected training building in the active group. */
-        game_session_clip_auto_register(&g_game_session,
-                                        (uint8_t)g_menu.selected_tribe);
+        {
+            /* Remake shortcut fill, only when the training building count
+               changes: re-running it each frame refilled the cell a right
+               click (FUN_0043822b) had just emptied. */
+            static int registered_count = -1;
+            int count = (int)game_session_clip_building_count(&g_game_session,
+                (uint8_t)g_menu.selected_tribe);
+            if (count != registered_count) {
+                game_session_clip_auto_register(&g_game_session,
+                                                (uint8_t)g_menu.selected_tribe);
+                registered_count = count;
+            }
+        }
         if (g_selected_location >= 0 && selection_island() >= 0)
             game_session_clip_remember(&g_game_session,
                 (uint8_t)g_menu.selected_tribe,

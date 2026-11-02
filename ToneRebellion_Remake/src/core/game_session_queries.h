@@ -54,6 +54,11 @@ int game_session_end_game_score(const GameSession *session, uint8_t player_slot,
    building remembers it in the first empty slot of the active group
    (FUN_00438120 via FUN_0042f755; no duplicates, silent when full). */
 void game_session_clip_auto_register(GameSession *session, uint8_t player_slot);
+/* Training buildings (0x2c..0x32 with a staff record) the player owns; the
+   remake re-runs the auto-registration only when this count changes, so a
+   cell emptied by a right click stays empty. */
+unsigned int game_session_clip_building_count(const GameSession *session,
+                                              uint8_t player_slot);
 void game_session_clip_remember(GameSession *session, uint8_t player_slot,
                                 uint8_t island_index, uint16_t location_index);
 void game_session_clip_set_group(GameSession *session, unsigned int group);
