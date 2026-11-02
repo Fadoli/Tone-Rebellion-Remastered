@@ -222,6 +222,12 @@ int game_session_cast_effect_visual(const GameSession *session,
 int game_session_queue_cast_audio(GameSession *session, uint8_t island,
                                   uint8_t sound);
 /* spells.txt MagCost/CryCost for a native spell kind 0..21. */
+/* FUN_0045d8f4 >= 0: a linked floater of the player can cast spell `kind`
+   from that building (IWTextInfo mode 4 draws the name in colour 2 when
+   not). */
+int game_session_spell_has_caster(const GameSession *session,
+                                  uint8_t island_index, uint16_t location_index,
+                                  uint8_t player_slot, unsigned int kind);
 int game_session_cast_kind_costs(int kind, uint16_t *magic_cost,
                                  uint16_t *crystal_cost);
 unsigned int game_session_dispatch_cast_actions(GameSession *session);

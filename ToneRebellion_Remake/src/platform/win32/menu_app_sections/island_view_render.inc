@@ -740,6 +740,105 @@ static int hovered_control_caption_index(void)
     return -1;
 }
 
+/* spells.txt (TONE00.COB): entries of a name line, "Level n", "MagCost n",
+   "CryCost n", description lines and END; ';' lines are comments. The
+   description lines are joined with spaces, as FUN_00428baa re-wraps them. */
+static void load_spell_text(void)
+{
+    CobArchive archive;
+    const CobMember *member;
+    unsigned char *bytes;
+    char error[256];
+    size_t cursor = 0;
+    int entry = 0;
+    int state = 0;
+
+    if (g_spell_text_loaded) return;
+    g_spell_text_loaded = 1;
+    if (!cob_archive_open(game_file_path("TONE00.COB"), &archive,
+                          error, sizeof(error))) return;
+    member = cob_archive_find(&archive, "spells.txt");
+    bytes = member == NULL ? NULL : (unsigned char *)malloc(member->length + 1);
+    if (bytes != NULL &&
+        cob_archive_read_member(&archive, member, bytes, member->length,
+                                error, sizeof(error))) {
+        while (cursor < member->length && entry < SPELL_TEXT_COUNT) {
+            char line[256];
+            size_t length = 0;
+            while (cursor < member->length && bytes[cursor] != '\n') {
+                if (bytes[cursor] != '\r' && length + 1 < sizeof(line))
+                    line[length++] = (char)bytes[cursor];
+                ++cursor;
+            }
+            ++cursor;
+            while (length > 0 && line[length - 1] == ' ') --length;
+            line[length] = '\0';
+            if (length == 0 || line[0] == ';') continue;
+            if (state == 0) {
+                (void)snprintf(g_spell_names[entry], sizeof(g_spell_names[entry]),
+                               "%s", line);
+                g_spell_descriptions[entry][0] = '\0';
+                state = 1;
+            } else if (strncmp(line, "Level", 5) == 0) {
+                g_spell_levels[entry] = atoi(line + 5);
+            } else if (strncmp(line, "MagCost", 7) == 0 ||
+                       strncmp(line, "CryCost", 7) == 0) {
+            } else if (strcmp(line, "END") == 0) {
+                ++entry;
+                state = 0;
+            } else {
+                size_t used = strlen(g_spell_descriptions[entry]);
+                (void)snprintf(g_spell_descriptions[entry] + used,
+                               sizeof(g_spell_descriptions[entry]) - used,
+                               used != 0 ? " %s" : "%s", line);
+            }
+        }
+    }
+    free(bytes);
+    cob_archive_close(&archive);
+}
+
+/* FUN_00439673 mode 4 (ev_4a8e68ad): the hovered spell's spells.txt row
+   (FUN_00450070 = the 0x4a2878 table entry of the world and button). Name
+   at (10, 2), "Niveau <Level>" at (10, 11), both in SMFONT, the name in
+   palette index 2 when no linked floater can cast it (FUN_0045d8f4 < 0),
+   then the description in index 6 wrapped like the building texts from
+   y = 13 + h. */
+static int draw_spell_hover_info(RenderSurface *surface)
+{
+    const WindowTemplate *text_panel;
+    COLORREF name_color = native_text_color(g_island_palette, 6);
+    char level_text[64];
+    int kind = g_hovered_spell_kind;
+    int h = (int)g_small_font.height;
+    if (kind < 0 || kind >= SPELL_TEXT_COUNT) return 0;
+    load_spell_text();
+    if (g_spell_names[kind][0] == '\0') return 0;
+    text_panel = window_catalog_find(&g_window_catalog, "IWTextInfo", 3);
+    if (text_panel == NULL || text_panel->shape_frame < 0 ||
+        (uint32_t)text_panel->shape_frame >= g_temp_hole_art.frame_count) return 0;
+    draw_sprite(surface, &g_temp_hole_art, (uint32_t)text_panel->shape_frame,
+                text_panel->pane.left, text_panel->pane.top);
+    if (selection_island() >= 0 && g_selected_location >= 0 &&
+        g_menu.selected_tribe >= 0 &&
+        g_menu.selected_tribe < GAME_START_PLAYER_COUNT &&
+        !game_session_spell_has_caster(&g_game_session,
+            (uint8_t)selection_island(), (uint16_t)g_selected_location,
+            (uint8_t)g_menu.selected_tribe, (unsigned int)kind))
+        name_color = native_text_color(g_island_palette, 2);
+    draw_small_label(surface, g_spell_names[kind], text_panel->pane.left + 10,
+                     text_panel->pane.top + 2, name_color);
+    (void)snprintf(level_text, sizeof(level_text), "%s %d",
+                   g_unit_label_text[2], g_spell_levels[kind]);
+    draw_small_label(surface, level_text, text_panel->pane.left + 10,
+                     text_panel->pane.top + 11, name_color);
+    draw_wrapped_small_label(surface, g_spell_descriptions[kind],
+        text_panel->pane.left + 10, text_panel->pane.top + 13 + h + h + 1,
+        173 - 10, (LOGICAL_HEIGHT - text_panel->pane.top) / (h + 1), h + 1,
+        native_text_color(g_island_palette, 6));
+    return 1;
+}
+
 /* FUN_00439673 mode 5: the BC<index> caption centred in IWTextInfo with
    BIGFONT, palette index 6, at y = (bottom - top) / 2 - 10. */
 static void draw_control_hover_caption(RenderSurface *surface)
@@ -750,6 +849,8 @@ static void draw_control_hover_caption(RenderSurface *surface)
     int width;
     int x;
     int y;
+    /* Spell buttons (0x15..0x1c) take mode 4 instead of mode 5. */
+    if (draw_spell_hover_info(surface)) return;
     if (index < 0) return;
     caption = g_bc_text[index];
     if (caption[0] == '\0') return;

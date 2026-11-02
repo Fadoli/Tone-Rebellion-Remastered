@@ -703,6 +703,47 @@ int game_session_queue_cast_action_at(GameSession *session,
     return 1;
 }
 
+/* FUN_0045d8f4: the first of the building's eight linked floaters of the
+   player that is not already casting and whose level reaches the spell's
+   spells.txt Level - 1 (0 for kinds 0..10, 1 for 11..17, 2 for 18..21);
+   class 1 casting kind 15 and class 2 casting kind 17 skip the level test.
+   The image's threshold table DAT_006188e0 is zero; the loader fills it. */
+static GameFloaterStart *find_spell_caster(GameSession *session,
+                                           const GameRuntimeLocation *building,
+                                           uint8_t player_slot,
+                                           unsigned int kind)
+{
+    unsigned int slot;
+    for (slot = 0; slot < 8; ++slot) {
+        int16_t linked = building->charge_floater_slots[slot];
+        GameFloaterStart *floater;
+        if (linked < 0 || (unsigned int)linked >= session->floater_count)
+            continue;
+        floater = &session->floaters[(unsigned int)linked];
+        if (!game_session_floater_is_active(floater) ||
+            floater->owner_slot != player_slot ||
+            floater->active_order_action == 0x13) continue;
+        if (!((floater->type_index == 1U && kind == 15U) ||
+              (floater->type_index == 2U && kind == 17U)) &&
+            (kind >= 18U ? 2U : kind >= 11U ? 1U : 0U) >
+                (floater->attack_level_flags & 0x0fU)) continue;
+        return floater;
+    }
+    return NULL;
+}
+
+int game_session_spell_has_caster(const GameSession *session,
+                                  uint8_t island_index, uint16_t location_index,
+                                  uint8_t player_slot, unsigned int kind)
+{
+    if (session == NULL || island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count ||
+        player_slot >= GAME_START_PLAYER_COUNT) return 0;
+    return find_spell_caster((GameSession *)session,
+        &session->islands[island_index].locations[location_index],
+        player_slot, kind) != NULL;
+}
+
 unsigned int game_session_dispatch_cast_actions(GameSession *session)
 {
     unsigned int dispatched = 0;
@@ -718,7 +759,6 @@ unsigned int game_session_dispatch_cast_actions(GameSession *session)
         uint8_t kind;
         uint32_t magic_cost;
         uint32_t crystal_cost;
-        unsigned int slot;
         if (request.player_slot >= GAME_START_PLAYER_COUNT ||
             request.island_index >= session->island_count ||
             request.location_index >=
@@ -749,29 +789,8 @@ unsigned int game_session_dispatch_cast_actions(GameSession *session)
         if ((session->economy[request.player_slot].glyph_mask & 0x0100U) != 0)
             magic_cost = (magic_cost * 2U) / 3U;
 
-        /* FUN_0045d8f4 scans the building's eight floater links in order and
-           skips a unit already executing FA_Cast. The source level thresholds
-           are held in an unresolved table; the image values are zero. */
-        for (slot = 0; slot < 8; ++slot) {
-            int16_t linked = building->charge_floater_slots[slot];
-            GameFloaterStart *floater;
-            if (linked < 0 || (unsigned int)linked >= session->floater_count)
-                continue;
-            floater = &session->floaters[(unsigned int)linked];
-            if (!game_session_floater_is_active(floater) ||
-                floater->owner_slot != request.player_slot ||
-                floater->active_order_action == 0x13) continue;
-            /* FUN_0045d8f4 tests DAT_006188e0[kind] <= worker level L (low
-               nibble of +0xa). The table is spells.txt Level - 1 (REA, loader
-               FUN_00463563): 0 for kinds 0..10, 1 for 11..17, 2 for 18..21.
-               Class 1 casting kind 15 and class 2 casting kind 17 skip it. */
-            if (!((floater->type_index == 1U && kind == 15U) ||
-                  (floater->type_index == 2U && kind == 17U)) &&
-                (kind >= 18U ? 2U : kind >= 11U ? 1U : 0U) >
-                    (floater->attack_level_flags & 0x0fU)) continue;
-            caster = floater;
-            break;
-        }
+        caster = find_spell_caster(session, building, request.player_slot,
+                                   kind);
         if (caster == NULL) continue;
 
         /* FUN_0045da2a (gate) and FUN_0045da80 (debit) use the casting
