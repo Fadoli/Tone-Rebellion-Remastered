@@ -115,12 +115,21 @@ unsigned int game_session_resolve_cast_effect_step(
     GameSession *session, const PadCatalog *catalog,
     unsigned int caster_index, uint8_t step,
     int16_t target_location_index);
-/* Reserve a source effect slot. A positive delay counts odd effect updates;
-   case 0x16 with delay 0 runs ASCEND, UPGRADE travel and the FREEZESC impact
-   transition from the loaded source descriptors. */
+/* FUN_0041660b at cast tick 10: reserve a shared effect slot at the
+   caster. The slot plays the start sprite, travels to the target site and
+   plays the finish sprite of its spell (FUN_0041760b); FUN_004239e9 applies
+   the spell at the end of that animation. */
+enum {
+    GAME_CAST_PHASE_START = 0,
+    GAME_CAST_PHASE_TRAVEL = 1,
+    GAME_CAST_PHASE_FINISH = 2,
+    GAME_CAST_PHASE_DESTSUPP_TRAVEL = 3,
+    GAME_CAST_PHASE_FAROBT = 4,
+    GAME_CAST_PHASE_KILLBEAS = 5
+};
 int game_session_schedule_cast_effect_step(
     GameSession *session, unsigned int caster_index, uint8_t step,
-    int16_t target_location_index, uint8_t odd_updates_until_impact);
+    int16_t target_location_index);
 /* FUN_0041760b advances scheduled cast impacts on odd source ticks. */
 void game_session_tick_cast_effects(GameSession *session,
                                     uint32_t source_tick,
@@ -175,11 +184,10 @@ enum {
 int game_session_cast_sound_id(uint8_t kind, uint8_t owner);
 /* Cast visuals: effects.txt SPECIAL records. Indices 0..9 share the order of
    game_session_cast_sound_id (PCAST/SCAST/MCAST/LCAST, SPL6E, SPL13, SPL20,
-   SPL5, SPL04, ACAST); 10 is UPGRADE (SPL8B, travel), 11 FREEZESC (SPL21).
-   Evidence: FUN_0041660b picks the effect name, FUN_004153b8/FUN_00415063
-   step one frame per two updates. World anchor and level frame range are
-   interpretations (see docs/building-rendering.md). */
-enum { GAME_CAST_VISUAL_COUNT = 12 };
+   SPL5, SPL04, ACAST); then UPGRADE (SPL8B), FREEZESC (SPL21), FREEZELB,
+   LOCPROT, BUILDTON, HYPERHEAL, REPAIR, STOCKUP, BLDARMOR, REVPLOT, FASTFLT,
+   BLASTWB and FAROBT. Frames step once per odd update (FUN_00415063). */
+enum { GAME_CAST_VISUAL_COUNT = 23 };
 /* fltinf atteff visual (FUN_00415fc6 path A): def index into
    attack_effect_defs, absolute frame in that def's shape, world position.
    After arrival the slot turns into the realm IMPACT: `impact_realm` is then

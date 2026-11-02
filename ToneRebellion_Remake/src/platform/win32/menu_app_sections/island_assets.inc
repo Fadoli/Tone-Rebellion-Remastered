@@ -44,7 +44,11 @@ static int load_island_surface(int island_id, int map_island_index,
         "data\\pcast.shp", "data\\scast.shp", "data\\mcast.shp",
         "data\\lcast.shp", "data\\spl6e.shp", "data\\spl13.shp",
         "data\\spl20.shp", "data\\spl5.shp", "data\\spl04.shp",
-        "data\\acast.shp", "data\\spl8b.shp", "data\\spl21.shp"
+        "data\\acast.shp", "data\\spl8b.shp", "data\\spl21.shp",
+        "data\\spl12b.shp", "data\\spl19e.shp", "data\\spl14.shp",
+        "data\\spl7.shp", "data\\spl16.shp", "data\\spl10.shp",
+        "data\\spl17c.shp", "data\\spl15.shp", "data\\spl18c.shp",
+        "data\\spl03.shp", "data\\spl9b.shp"
     };
     SpriteSheet floater_info_candidate = {0};
     SpriteSheet building_candidates[PAD_CATALOG_MAX_ITEMS] = {{0}};

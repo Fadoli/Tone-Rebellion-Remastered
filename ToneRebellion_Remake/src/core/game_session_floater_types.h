@@ -216,8 +216,9 @@ typedef struct GameSession {
         uint8_t active;
         uint8_t caster_index;
         uint8_t step;
+        /* FAROBT tick counter. */
         uint8_t odd_updates_remaining;
-        /* Zero is the fixed-delay path; 1/2/3 model ASCEND, travel, FREEZESC. */
+        /* GAME_CAST_PHASE_*; the pass counter below counts odd updates. */
         uint8_t animation_phase;
         uint8_t phase_odd_updates_remaining;
         int16_t target_location_index;

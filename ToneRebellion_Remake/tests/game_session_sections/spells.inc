@@ -556,14 +556,14 @@ static void test_cast_visual_uses_owner_effect_and_one_frame_per_two_ticks(void)
     }
     /* Kind 0 uses the owner's own PCAST/SCAST/MCAST/LCAST effect (0..3). */
     for (owner = 0; owner < 4; ++owner) {
-        assert(game_session_schedule_cast_effect_step(&session, owner, 3, -1, 40)
+        assert(game_session_schedule_cast_effect_step(&session, owner, 3, -1)
                == 0); /* kind 3 needs a valid target site: refused */
     }
     session.islands[0].location_count = 1;
     for (owner = 0; owner < 4; ++owner) {
         session.floaters[owner].cast_spell_kind = 4;
         assert(game_session_schedule_cast_effect_step(
-                   &session, owner, 4, 0, 40));
+                   &session, owner, 4, 0));
     }
     for (tick = 0; tick < 5; ++tick) game_session_tick_cast_effects(&session, tick + 1, NULL);
     for (owner = 0; owner < 4; ++owner) {
@@ -576,15 +576,16 @@ static void test_cast_visual_uses_owner_effect_and_one_frame_per_two_ticks(void)
     /* Frame never passes the last frame of LEVELFRAMES (PCAST has 17). */
     session.cast_effects[0].active = 1;
     session.cast_effects[0].animation_ticks = 500;
+    session.cast_effects[0].animation_phase = GAME_CAST_PHASE_START;
     assert(game_session_cast_effect_visual(&session, 0, &visual, &frame));
     assert(visual == 0 && frame == 16);
-    /* UPGRADE travel loops its six frames; FREEZESC impact clamps at 16. */
-    session.cast_effects[0].animation_phase = 2;
+    /* UPGRADE travel loops its six frames; kind 4 finishes on BLDARMOR. */
+    session.cast_effects[0].animation_phase = GAME_CAST_PHASE_TRAVEL;
     assert(game_session_cast_effect_visual(&session, 0, &visual, &frame));
     assert(visual == 10 && frame < 6);
-    session.cast_effects[0].animation_phase = 3;
+    session.cast_effects[0].animation_phase = GAME_CAST_PHASE_FINISH;
     assert(game_session_cast_effect_visual(&session, 0, &visual, &frame));
-    assert(visual == 11 && frame == 16);
+    assert(visual == 18 && frame == 17);
     /* Inactive slots and out-of-range slots draw nothing. */
     assert(!game_session_cast_effect_visual(&session, 31, &visual, &frame));
     assert(!game_session_cast_effect_visual(&session, 32, &visual, &frame));

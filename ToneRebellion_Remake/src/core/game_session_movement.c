@@ -2000,8 +2000,7 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
                             floater->island_index, (uint8_t)cast_sound);
                     (void)game_session_schedule_cast_effect_step(
                         session, i, floater->cast_spell_kind,
-                        floater->order_target_location,
-                        floater->cast_spell_kind == 0x16 ? 0 : 1);
+                        floater->order_target_location);
                 }
                 else if (floater->order_timer > 399U)
                     floater->source_runtime_flags |= 0x200U;

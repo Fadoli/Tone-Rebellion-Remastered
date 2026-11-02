@@ -116,35 +116,83 @@ int game_session_cast_effect_visual(const GameSession *session,
                                     unsigned int slot, int *visual,
                                     unsigned int *frame)
 {
-    /* Zero-based [first, last] frames of LEVELFRAMES level 1 (effects.txt). */
-    static const uint8_t last_frame[GAME_CAST_VISUAL_COUNT] = {
-        16, 15, 16, 23, 14, 7, 16, 16, 3, 41, 5, 16
+    /* Zero-based last frame of LEVELFRAMES level 1 (effects.txt). */
+    static const uint8_t last_frame[10] = {
+        16, 15, 16, 23, 14, 7, 16, 16, 3, 41
     };
     const struct GameCastEffectState *effect;
+    const GameFloaterStart *caster;
+    unsigned int odd_steps = 0;
     int id;
-    unsigned int index;
+    int first = 0;
+    int count = 1;
+    int loop = 0;
+    int index;
 
     if (session == NULL || visual == NULL || frame == NULL ||
         slot >= GAME_SESSION_MAX_CAST_EFFECTS) return 0;
     effect = &session->cast_effects[slot];
     if (!effect->active || effect->caster_index >= session->floater_count)
         return 0;
-    if (effect->animation_phase == 2) {
-        id = 10;
-    } else if (effect->animation_phase == 3) {
-        id = 11;
-    } else {
-        const GameFloaterStart *caster = &session->floaters[effect->caster_index];
+    caster = &session->floaters[effect->caster_index];
+    switch (effect->animation_phase) {
+    case GAME_CAST_PHASE_START:
+    case GAME_CAST_PHASE_KILLBEAS:
         id = game_session_cast_sound_id(effect->step, caster->owner_slot);
         if (id < 0 || id >= 10) return 0;
+        count = last_frame[id] + 1;
+        break;
+    case GAME_CAST_PHASE_TRAVEL:
+        loop = 1;
+        switch (effect->step) {
+        case 1: id = 12; count = 10; break;           /* FREEZELB */
+        case 5: id = 13; break;                       /* LOCPROT 1..1 */
+        case 6: id = 14; break;                       /* BUILDTON 1..1 */
+        case 9: id = 15; count = 7; break;            /* HYPERHEAL 1..7 */
+        default: id = 10; count = 6; break;           /* UPGRADE */
+        }
+        break;
+    case GAME_CAST_PHASE_DESTSUPP_TRAVEL:
+        id = 8; count = 4; loop = 1;
+        break;
+    case GAME_CAST_PHASE_FINISH:
+        switch (effect->step) {
+        case 0: id = 16; count = 17; break;           /* REPAIR */
+        case 1: id = 4; count = 15; break;            /* FLTARMOR */
+        case 3: id = 17; count = 9; break;            /* STOCKUP */
+        case 4: id = 18; count = 18; break;           /* BLDARMOR */
+        case 5: id = 13; first = 1; count = 21; break; /* LOCPROT 2..22 */
+        case 6: id = 14; first = 1; count = 31; break; /* BUILDTON 2..32 */
+        case 9: id = 15; first = 7; count = 16; break; /* HYPERHEAL 8..23 */
+        case 0x0b: id = 19; count = 17; break;        /* REVPLOT */
+        case 0x0c: id = 20; count = 15; break;        /* FASTFLT */
+        case 0x0d: case 0x13: id = 11; count = 17; break; /* FREEZESC */
+        case 0x10: id = 8; first = 14; count = 4; break;  /* DESTSUPP 15..18 */
+        default: id = 21; count = 17; break;          /* BLASTWB */
+        }
+        break;
+    case GAME_CAST_PHASE_FAROBT:
+        /* Frame 0, never stepped; FUN_004182c8 has its own FAROBT branch
+           (not ported), drawn here at the target site. */
+        *visual = 22;
+        *frame = 0;
+        return effect->odd_updates_remaining < 0x44;
+    default:
+        return 0;
     }
-    index = effect->animation_ticks / 2U; /* one frame per two updates */
-    if (id == 10) index %= (unsigned int)last_frame[id] + 1U; /* travel loops */
-    else if (index > last_frame[id]) index = last_frame[id];
+    /* One frame per odd update (FUN_00415063); animation_ticks counts every
+       update since the phase began. */
+    odd_steps = effect->animation_ticks / 2U;
+    if (loop) index = (int)(odd_steps % (unsigned int)count);
+    else index = odd_steps >= (unsigned int)count ? count - 1 : (int)odd_steps;
+    /* Spell 0x13 plays FREEZESC backwards from its last frame. */
+    if (effect->animation_phase == GAME_CAST_PHASE_FINISH && effect->step == 0x13)
+        index = count - 1 - index;
     *visual = id;
-    *frame = index;
+    *frame = (unsigned int)(first + index);
     return 1;
 }
+
 
 int game_session_queue_cast_audio(GameSession *session, uint8_t island,
                                   uint8_t sound)

@@ -1403,77 +1403,104 @@ unsigned int game_session_resolve_cast_effect_step(
         target->source_value_34) != 0 ? 1U : 0U;
 }
 
+/* FUN_0041760b (ev_821b6030, ev_9605cef5): effects.txt pass lengths in odd
+   updates (LEVELFRAMES frame counts) and travel SPEEDs. The loader
+   FUN_004153b8 stores SPEED 5 for a def without a SPEED line. */
+static unsigned int cast_start_pass_length(uint8_t step, uint8_t owner)
+{
+    static const uint8_t frames[10] = { 17, 16, 17, 24, 15, 8, 17, 17, 4, 42 };
+    int id = game_session_cast_sound_id(step, owner);
+    return id >= 0 && id < 10 ? frames[id] : 17U;
+}
+
+/* The phase 0x400 sprite by spell, or -1 for a spell applied after its
+   start pass. Spells 5, 6 and 9 play their second LEVELFRAMES level. */
+static int cast_finish_pass_length(uint8_t step)
+{
+    switch (step) {
+    case 0: return 17;          /* REPAIR */
+    case 1: return 15;          /* FLTARMOR */
+    case 3: return 9;           /* STOCKUP */
+    case 4: return 18;          /* BLDARMOR */
+    case 5: return 21;          /* LOCPROT 2..22 */
+    case 6: return 31;          /* BUILDTON 2..32 */
+    case 7: case 0x12: return 17; /* BLASTWB, no travel */
+    case 9: return 16;          /* HYPERHEAL 8..23 */
+    case 0x0b: return 17;       /* REVPLOT */
+    case 0x0c: return 15;       /* FASTFLT */
+    case 0x0d: case 0x13: return 17; /* FREEZESC (0x13 backwards) */
+    case 0x0f: return 17;       /* BLASTWB */
+    default: return -1;
+    }
+}
+
+static int cast_travel_speed(uint8_t step)
+{
+    switch (step) {
+    case 1: return 15;          /* FREEZELB */
+    case 5: case 6: return 5;   /* LOCPROT, BUILDTON: loader default */
+    case 9: return 20;          /* HYPERHEAL */
+    default: return 8;          /* UPGRADE */
+    }
+}
+
 int game_session_schedule_cast_effect_step(
     GameSession *session, unsigned int caster_index, uint8_t step,
-    int16_t target_location_index, uint8_t odd_updates_until_impact)
+    int16_t target_location_index)
 {
     unsigned int slot;
+    const GameFloaterStart *caster;
 
     if (session == NULL || caster_index >= session->floater_count ||
-        (step != 0 && step != 1 && step != 2 && step != 3 && step != 4 && step != 5 && step != 6 &&
-         step != 7 && step != 8 && step != 9 &&
-         step != 0x0a && step != 0x0b && step != 0x0c && step != 0x0d && step != 0x0e && step != 0x0f &&
-         step != 0x10 &&
-         step != 0x11 && step != 0x12 && step != 0x13 &&
-         step != 0x14 && step != 0x15 && step != 0x16) ||
-        (odd_updates_until_impact == 0 && step != 0x16) ||
+        step > 0x16 ||
         (unsigned int)session->active_cast_effect_count +
                 session->active_attack_effect_count >=
             GAME_SESSION_MAX_CAST_EFFECTS) {
         return 0;
     }
+    caster = &session->floaters[caster_index];
     if (step == 1 || step == 3 || step == 4 || step == 5 || step == 6 ||
-        step == 8 || step == 0x10 || step == 0x12 || step == 0x13) {
-        const GameFloaterStart *caster = &session->floaters[caster_index];
-        if (caster->island_index >= session->island_count ||
-            target_location_index < 0 ||
-            (uint16_t)target_location_index >=
-                session->islands[caster->island_index].location_count) {
-            return 0;
-        }
-    } else if (step == 9) {
-        const GameFloaterStart *caster = &session->floaters[caster_index];
+        step == 8 || step == 9 || step == 0x10 || step == 0x12 ||
+        step == 0x13 || step == 0x16) {
         if (caster->island_index >= session->island_count ||
             target_location_index < 0 ||
             (uint16_t)target_location_index >=
                 session->islands[caster->island_index].location_count ||
             /* FUN_004239e9's kind-9 target guard is renderer class zero. */
-            session->islands[caster->island_index]
-                .locations[(uint16_t)target_location_index].renderer_class != 0) {
+            (step == 9 && session->islands[caster->island_index]
+                .locations[(uint16_t)target_location_index].renderer_class != 0)) {
             return 0;
         }
-    } else if (step == 0x16) {
-        const GameFloaterStart *caster = &session->floaters[caster_index];
-        if (caster->island_index >= session->island_count ||
-            target_location_index < 0 ||
-            (uint16_t)target_location_index >=
-                session->islands[caster->island_index].location_count) {
-            return 0;
-        }
-    } else {
+    } else if (step == 2 || step == 7 || step == 0x0e || step == 0x11 ||
+               step == 0x14 || step == 0x15 ||
+               caster->island_index >= session->island_count ||
+               target_location_index < 0 ||
+               (uint16_t)target_location_index >=
+                   session->islands[caster->island_index].location_count) {
+        /* FUN_0041660b stores no target for these; kinds 0, 0xa..0xd and
+           0xf keep the caster's +0x32 site as their travel target. */
         target_location_index = -1;
     }
 
     for (slot = 0; slot < GAME_SESSION_MAX_CAST_EFFECTS; ++slot) {
         struct GameCastEffectState *effect = &session->cast_effects[slot];
         if (effect->active) continue;
+        memset(effect, 0, sizeof(*effect));
         effect->active = 1;
         effect->caster_index = (uint8_t)caster_index;
         effect->step = step;
-        effect->odd_updates_remaining = odd_updates_until_impact;
         effect->target_location_index = target_location_index;
-        effect->animation_phase = 0;
-        effect->phase_odd_updates_remaining = 0;
-        effect->animation_ticks = 0;
-        effect->visual_phase = 0;
-        effect->effect_x = session->floaters[caster_index].x;
-        effect->effect_y = session->floaters[caster_index].y;
-        if (step == 0x16 && odd_updates_until_impact == 0) {
-            /* TONE00.COB effects.txt: ASCEND has 42 frames. FUN_00415063
-               checks completion only after advancing once past the last. */
-            effect->animation_phase = 1;
-            effect->visual_phase = 1;
-            effect->phase_odd_updates_remaining = 43;
+        effect->effect_x = caster->x;
+        effect->effect_y = caster->y;
+        if (step == 0x10) {
+            /* DESTSUPP has no 0x100 start pass: it travels at once. */
+            effect->animation_phase = GAME_CAST_PHASE_DESTSUPP_TRAVEL;
+        } else if (step == 0x0a) {
+            effect->animation_phase = GAME_CAST_PHASE_KILLBEAS;
+        } else {
+            effect->animation_phase = GAME_CAST_PHASE_START;
+            effect->phase_odd_updates_remaining = (uint8_t)
+                cast_start_pass_length(step, caster->owner_slot);
         }
         ++session->active_cast_effect_count;
         return 1;
@@ -1481,87 +1508,181 @@ int game_session_schedule_cast_effect_step(
     return 0;
 }
 
+/* FUN_00414fbf with flag 2: the target site's x/y. Returns 0 without one. */
+static int cast_effect_target(const GameSession *session,
+                              const struct GameCastEffectState *effect,
+                              int32_t *x, int32_t *y)
+{
+    const GameFloaterStart *caster = &session->floaters[effect->caster_index];
+    const GameRuntimeLocation *site;
+
+    if (caster->island_index >= session->island_count ||
+        effect->target_location_index < 0 ||
+        (uint16_t)effect->target_location_index >=
+            session->islands[caster->island_index].location_count) return 0;
+    site = &session->islands[caster->island_index]
+                .locations[(uint16_t)effect->target_location_index];
+    *x = site->x;
+    *y = site->y;
+    return 1;
+}
+
+/* FUN_0041511b steps `speed` along the normalized vector, rounding each
+   coordinate via __ftol, then FUN_004672a6 tests the Chebyshev distance:
+   returns 1 on arrival (under 6). */
+static int cast_effect_travel(struct GameCastEffectState *effect,
+                              int32_t target_x, int32_t target_y, int speed)
+{
+    int32_t dx = target_x - effect->effect_x;
+    int32_t dy = target_y - effect->effect_y;
+    double distance = sqrt((double)dx * dx + (double)dy * dy);
+
+    if (distance <= (double)speed) {
+        effect->effect_x = (uint16_t)target_x;
+        effect->effect_y = (uint16_t)target_y;
+    } else {
+        effect->effect_x = (uint16_t)((int32_t)effect->effect_x +
+            cast_round_to_even((double)dx * speed / distance));
+        effect->effect_y = (uint16_t)((int32_t)effect->effect_y +
+            cast_round_to_even((double)dy * speed / distance));
+    }
+    dx = target_x - effect->effect_x;
+    dy = target_y - effect->effect_y;
+    return (dx < 0 ? -dx : dx) < 6 && (dy < 0 ? -dy : dy) < 6;
+}
+
+static void cast_effect_enter_phase(struct GameCastEffectState *effect,
+                                    uint8_t phase, unsigned int pass_length)
+{
+    effect->animation_phase = phase;
+    effect->phase_odd_updates_remaining = (uint8_t)pass_length;
+    effect->odd_updates_remaining = 0;
+}
+
+/* FUN_004239e9 runs only while the caster still casts (+0x2c == 0x13,
+   flag 0x200 clear); the slot is freed either way. */
+static void cast_effect_apply(GameSession *session, const PadCatalog *catalog,
+                              struct GameCastEffectState *effect)
+{
+    const GameFloaterStart *caster = &session->floaters[effect->caster_index];
+
+    if (caster->active_order_action == 0x13 &&
+        (caster->source_runtime_flags & 0x200U) == 0)
+        (void)game_session_resolve_cast_effect_step(
+            session, catalog, effect->caster_index, effect->step,
+            effect->target_location_index);
+}
+
+static void cast_effect_free(GameSession *session,
+                             struct GameCastEffectState *effect)
+{
+    effect->active = 0;
+    if (session->active_cast_effect_count > 0)
+        --session->active_cast_effect_count;
+}
+
 void game_session_tick_cast_effects(GameSession *session,
                                     uint32_t source_tick,
                                     const PadCatalog *catalog)
 {
     unsigned int slot;
+    int odd = (source_tick & 1U) != 0;
 
     if (session == NULL) return;
     for (slot = 0; slot < GAME_SESSION_MAX_CAST_EFFECTS; ++slot) {
         struct GameCastEffectState *effect = &session->cast_effects[slot];
+        int32_t target_x;
+        int32_t target_y;
+
         if (!effect->active) continue;
+        if (effect->caster_index >= session->floater_count) {
+            cast_effect_free(session, effect);
+            continue;
+        }
         if (effect->visual_phase != effect->animation_phase) {
             effect->visual_phase = effect->animation_phase;
             effect->animation_ticks = 0;
         }
         if (effect->animation_ticks < UINT16_MAX) ++effect->animation_ticks;
-        if (effect->animation_phase == 0) {
-            if ((source_tick & 1U) == 0) continue;
-            if (effect->odd_updates_remaining > 0)
-                --effect->odd_updates_remaining;
-            if (effect->odd_updates_remaining != 0) continue;
-        } else if (effect->animation_phase == 1) {
-            if ((source_tick & 1U) == 0) continue;
-            if (effect->phase_odd_updates_remaining > 0)
-                --effect->phase_odd_updates_remaining;
-            if (effect->phase_odd_updates_remaining != 0) continue;
-            effect->animation_phase = 2;
-            continue;
-        } else if (effect->animation_phase == 2) {
-            const GameFloaterStart *caster =
-                &session->floaters[effect->caster_index];
-            const GameRuntimeIsland *island;
-            int32_t dx;
-            int32_t dy;
-            double distance;
-
-            if (caster->island_index >= session->island_count ||
-                effect->target_location_index < 0 ||
-                (uint16_t)effect->target_location_index >=
-                    session->islands[caster->island_index].location_count) {
-                effect->animation_phase = 3;
-                continue;
-            }
-            island = &session->islands[caster->island_index];
-            dx = (int32_t)island->locations[
-                (uint16_t)effect->target_location_index].x - effect->effect_x;
-            dy = (int32_t)island->locations[
-                (uint16_t)effect->target_location_index].y - effect->effect_y;
-            distance = sqrt((double)dx * dx + (double)dy * dy);
-            /* The UPGRADE descriptor uses SPEED 8. FUN_0041511b advances
-               along the normalized vector, rounding each coordinate via
-               source __ftol, then FUN_004672a6 tests Chebyshev distance. */
-            if (distance <= 8.0) {
-                effect->effect_x = island->locations[
-                    (uint16_t)effect->target_location_index].x;
-                effect->effect_y = island->locations[
-                    (uint16_t)effect->target_location_index].y;
+        switch (effect->animation_phase) {
+        case GAME_CAST_PHASE_START: {
+            int finish = cast_finish_pass_length(effect->step);
+            if (!odd || --effect->phase_odd_updates_remaining != 0) break;
+            if (finish < 0) {
+                /* 2, 8 aside, 0xe, 0x11, 0x14..0x16: one pass, then apply. */
+                if (effect->step == 8) {
+                    /* FAROBT: a tick counter replaces the frame stepping. */
+                    if (cast_effect_target(session, effect, &target_x,
+                                           &target_y)) {
+                        effect->effect_x = (uint16_t)target_x;
+                        effect->effect_y = (uint16_t)target_y;
+                    }
+                    cast_effect_enter_phase(effect, GAME_CAST_PHASE_FAROBT, 0);
+                    break;
+                }
+                cast_effect_apply(session, catalog, effect);
+                cast_effect_free(session, effect);
+            } else if (effect->step == 7 || effect->step == 0x12) {
+                /* SACRIF then BLASTWB in place. */
+                cast_effect_enter_phase(effect, GAME_CAST_PHASE_FINISH,
+                                        (unsigned int)finish);
             } else {
-                effect->effect_x = (uint16_t)((int32_t)effect->effect_x +
-                    cast_round_to_even((double)dx * 8.0 / distance));
-                effect->effect_y = (uint16_t)((int32_t)effect->effect_y +
-                    cast_round_to_even((double)dy * 8.0 / distance));
+                cast_effect_enter_phase(effect, GAME_CAST_PHASE_TRAVEL, 0);
             }
-            dx = (int32_t)island->locations[
-                (uint16_t)effect->target_location_index].x - effect->effect_x;
-            dy = (int32_t)island->locations[
-                (uint16_t)effect->target_location_index].y - effect->effect_y;
-            if ((dx < 0 ? -dx : dx) < 6 && (dy < 0 ? -dy : dy) < 6)
-                effect->animation_phase = 3;
-            continue;
-        } else if ((source_tick & 1U) == 0) {
-            continue;
+            break;
         }
-
-        (void)game_session_resolve_cast_effect_step(
-            session, catalog, effect->caster_index, effect->step,
-            effect->target_location_index);
-        effect->active = 0;
-        if (session->active_cast_effect_count > 0)
-            --session->active_cast_effect_count;
+        case GAME_CAST_PHASE_TRAVEL:
+            /* Every tick, not only odd ones (FUN_0041521a). */
+            if (!cast_effect_target(session, effect, &target_x, &target_y) ||
+                cast_effect_travel(effect, target_x, target_y,
+                                   cast_travel_speed(effect->step)))
+                cast_effect_enter_phase(effect, GAME_CAST_PHASE_FINISH,
+                    (unsigned int)cast_finish_pass_length(effect->step));
+            break;
+        case GAME_CAST_PHASE_DESTSUPP_TRAVEL:
+            /* Frames 0..3 loop at the default SPEED 5; arrival switches to
+               frames 14..17, a four-update pass. */
+            if (!cast_effect_target(session, effect, &target_x, &target_y) ||
+                cast_effect_travel(effect, target_x, target_y, 5))
+                cast_effect_enter_phase(effect, GAME_CAST_PHASE_FINISH, 4);
+            break;
+        case GAME_CAST_PHASE_FINISH:
+            if (!odd || --effect->phase_odd_updates_remaining != 0) break;
+            cast_effect_apply(session, catalog, effect);
+            cast_effect_free(session, effect);
+            break;
+        case GAME_CAST_PHASE_FAROBT:
+            /* Counter from the transition: apply at 0x44, free at 0x7a. */
+            ++effect->odd_updates_remaining;
+            if (effect->odd_updates_remaining == 0x44)
+                cast_effect_apply(session, catalog, effect);
+            else if (effect->odd_updates_remaining >= 0x7a)
+                cast_effect_free(session, effect);
+            break;
+        case GAME_CAST_PHASE_KILLBEAS:
+            if (effect->phase_odd_updates_remaining == 0) {
+                /* The first call draws three -rand(30) counters; each later
+                   tick raises them and all must pass 75. */
+                int32_t highest = 0;
+                unsigned int draw;
+                for (draw = 0; draw < 3; ++draw) {
+                    int32_t value = tone_rng_bounded(&session->random_state, 30);
+                    if (value > highest) highest = value;
+                }
+                effect->phase_odd_updates_remaining = (uint8_t)(76 + highest);
+                break;
+            }
+            if (--effect->phase_odd_updates_remaining != 0) break;
+            cast_effect_apply(session, catalog, effect);
+            cast_effect_free(session, effect);
+            break;
+        default:
+            cast_effect_free(session, effect);
+            break;
+        }
     }
 }
+
 
 #include "game_session.h"
 #include "game_session_combat_internal.h"
