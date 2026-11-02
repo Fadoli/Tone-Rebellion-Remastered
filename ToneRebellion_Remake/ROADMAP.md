@@ -1,27 +1,29 @@
 # Feuille de route
 
-État au 2026-10-27. Détail des items dans le [backlog](TODO_BACKLOG_INDEX.md); portage acquis dans [implemented.md](docs/implemented.md).
+État au 2026-11-02. Détail des items dans le [backlog](TODO_BACKLOG_INDEX.md); portage acquis dans [implemented.md](docs/implemented.md).
 
 ## Constat
 
 - Décompilation : `index.jsonl` couvre 2410 procédures (1493 internes, 780 thunks, 123 externes, 14 runtime); 1507 décompilées, 903 exclues avec motif. L'inventaire est clos; le travail REA restant est ciblé (questions ouvertes ci-dessous), pas un balayage.
-- Remake : ~36 k lignes C11, 27 tests unitaires + `tests/e2e/island_e2e.ps1`. Backlog : 31 items cochés, 26 ouverts (Interface 13, Tâches 7, Mouvement 4, Autres 4).
-- Le rendu et l'interface de l'île sont avancés; la boucle de jeu ne l'est pas : ordres de bâtiment, déplacement manuel, IA adverse et condition de fin restent partiels. Une partie solo complète n'est pas encore jouable.
+- Remake : ~44 k lignes C11 (`src/`), 27 programmes de test C + `tests/test_docs_integrity.mjs` + `tests/e2e/island_e2e.ps1`. Backlog : 38 items cochés, 34 ouverts (Interface 19, Tâches 8, Mouvement 4, Autres 3); la plupart des ouverts sont des écarts de fidélité ou des « porté, non vérifié en jeu », pas des fonctions absentes.
+- Boucle de jeu : déplacement manuel, ordres de bâtiment, tâches (CONSTR, CHARGE, Obtain, SUPPLY, UpgSpread, Upgrade, Repair, Hall type 4), IA Léviathan et victoire par les sceaux sont portés. Restent des règles sans preuve native (voir Phase 1) et la vérification en jeu.
 
 ## Phase 0 — Hygiène (immédiat)
 
-1. Valider le diff en cours (sélection floater/bâtiment `IWFltInfo`/`IWLocInfo`, `MOVEMENT_HALL_INPUT.md`).
-2. Corriger le commentaire du champ 7 de `game_diplomacy.h` (sens inversé selon `MOVEMENT_HALL_INPUT.md`).
-3. Ménage local hors dépôt : copies `ToneRebellion_Remake - Copie*.exe`, zips, `hs_err_pid*.log`, `mci_debug.log`.
+1. ~~Valider le diff en cours~~ : fait (arbre propre).
+2. ~~Commentaire du champ 7 de `game_diplomacy.h`~~ : corrigé le 2026-11-02 (`+0xd8` = politique `DAT_00619290`, `+0xe8` = destinataires `DAT_006192a0`).
+3. Ménage local (ignoré par git) : copies `ToneRebellion_Remake_sdl - Copie*.exe`, `ToneRebellion_Remake*.zip`, `../hs_err_pid*.log`, `mci_debug.log`.
 
 ## Phase 1 — Boucle de jeu jouable
 
-Ordre choisi : chaque étape débloque la suivante.
-
-1. **Déplacement manuel** (`TODO_MOVEMENT` l.9) : chemin `FUN_0043530b(0x13)` → `FUN_00435826` (pas de 10, msg `0x4c`) → `FUN_0042fa0f`. Prérequis de tous les ordres.
+1. ~~**Déplacement manuel**~~ (`TODO_MOVEMENT` l.9) : porté (`FUN_0043530b(0x13)` → `FUN_00435826` → `FUN_0042fa0f`, transfert inter-îles, défense/fusion au clic droit). Reste : origine des ordres recopiés par `FUN_0042219e`.
 2. ~~**Ordres de bâtiment**~~ (`TODO_INTERFACE` l.22, l.27) : fait — enregistrement `B+0x28..0x32`, `BC_*` (Attack/Defend/Recall/TrnStk), clic droit filtré par `DAT_00619290`, adoption `FUN_0042219e` (genre 0 compris), routage interîles par pont, lien gardé à la traversée. Reste: vérification en jeu de l'interîles.
-3. **Tâches restantes** : `Obtain` (tâche `0xd`, état 13), `SUPPLY`/`UPGSPREAD` (table genre 0/1 de `FUN_0045fcbe`), Hall type 4, gardes type 5 ↔ `FA_Build`, transition native vers `REPAIR`, cas de `FUN_00450385`.
-4. **Producteur de `PIT_Object`** : contexte des appels à `FUN_004503bd` (TODO_OTHER l.4, TODO_TASKS l.8).
+3. ~~**Tâches**~~ : portées et testées — Obtain (tâche `0xd`, attache automatique comprise, traversée de pont), SUPPLY (stocks `TrnStkC/M`), UpgSpread (vérifié en jeu), Upgrade, Repair, Hall type 4, répartition des ouvriers (refonte `FUN_0042219e`/`FUN_00422031`/`FUN_004211bb` du 2026-11-01).
+4. **Fidélité des tâches** (règles du port sans preuve native, à trancher par REA) :
+   - Hall type 4 : « dix producteurs les plus proches » et crédit à 20 ticks non localisés dans `FUN_00453958`/`FUN_004539e9`/`FUN_00453a5f` (`TODO_MOVEMENT` l.17).
+   - Repair : aucun écrivain de l'état `0x12`; le soin à 40 ticks est une politique du port (`TODO_TASKS` l.5).
+   - Gardes type 5 ↔ `FA_Build`, cas de `FUN_00450385`, écrivain du mot de mode `+0x13d0`.
+5. **Producteur de `PIT_Object`** : contexte des appels à `FUN_004503bd` (`TODO_OTHER` l.4, `TODO_TASKS` l.8).
 
 ## Phase 2 — Adversaires
 
@@ -32,7 +34,7 @@ Ordre choisi : chaque étape débloque la suivante.
 ## Phase 3 — Fin de partie
 
 - Déclencheur natif de l'état 7 : porté (destruction des sceaux `PIT_LeviShield` de la dernière île → séquence `FUN_00464e4d` L = 0, voir `behavior/end-game.md`). Reste : évènements/jumelage de l'état 2, fondus, chemin multijoueur 0x15, vérification en jeu, relecture REA de `0x4239e9`/`0x46a92a`.
-- Sauvegarde/chargement : presse-papiers, mode Sauvegarde de l'écran de chargement, aller-retour `native_save` après les nouveaux champs d'ordre.
+- Sauvegarde/chargement : fonctionne. Sauvegarde du remake = copie brute de `GameSession` (presse-papiers et champs d'ordre compris), mode Sauvegarde (état 5) de l'écran Charger/Sauvegarder porté. Les sauvegardes d'origine se chargent par `native_save_parse`/`native_save_apply` (sites, sources et ordres de bâtiment `+0x28..0x30`, stocks `+0x58/+0x5c`, tâches, floaters). Limites : une sauvegarde du remake est refusée dès que `sizeof(GameSession)` change (aucune migration) et dépend de l'ABI (32/64 bits); le presse-papiers natif n'est pas relu des sauvegardes d'origine.
 
 ## Phase 4 — Parité d'interface
 
@@ -40,11 +42,11 @@ Items à faible risque, parallélisables : polices (`bigfont` des étiquettes), 
 
 ## Phase 5 — Audio
 
-Porté : volume/pan par distance (`FUN_0045b24d`), bullets/impacts des producteurs (items Léviathan 0x0a..0x15, seuls appelants de `FUN_00416342`), sons d'île `FEATnn`. Reste : `CRUMBLE` (émetteur de `FUN_0042fa0f` 5/7 inconnu) et phases SPECIAL de `FUN_0041760b`.
+Porté : volume/pan par distance (`FUN_0045b24d`), bullets/impacts des producteurs (items Léviathan 0x0a..0x15, seuls appelants de `FUN_00416342`), sons d'île `FEATnn`, `CRUMBLE` (émetteur `FUN_00450847`, message 7 → `FUN_0042fa0f` 5 → évènement monde 7, île vue seulement). Reste : phases upgrade/repair/stockup/buildton de `FUN_0041760b`.
 
 ## Phase 6 — Portage Web (dernière priorité)
 
-Seulement après les phases 1 à 5. Surface de rendu portable, adaptateur SDL3, cible Emscripten, données fournies par l'utilisateur. Plan : [TODO_WEB.md](TODO_WEB.md).
+Plan : [TODO_WEB.md](TODO_WEB.md). Déjà fait : surface `RenderSurface`, services `platform_*`, shell `remake_sdl` (rendu, audio, curseurs `FLOAT.EXE`, sockets TCP), cible Emscripten ajoutée (`tools/build_web.sh`, `web/shell.html`; taille et chargement non mesurés). Reste : données utilisateur (`IDBFS`), sauvegardes/options, audio navigateur, multijoueur Web.
 
 ## Transverse — Vérification
 
@@ -55,7 +57,7 @@ Plusieurs items sont « portés, non vérifiés en jeu » (ordre des panneaux Ha
 À trancher par sous-agent avant le port concerné :
 
 - Boucle de distribution souris des panneaux Hall; index d'état actif en vue île; route mode 0/1/2 `FUN_0042970c` → `FUN_0042fa0f`.
-- Expéditeur du paquet de clic Repair, `FUN_00429f3a`, `FUN_00452b67`, attache automatique (`FUN_0041e569`).
+- Expéditeur du paquet de clic Repair, `FUN_00429f3a`, `FUN_00452b67`.
 - Paquet natif de `IWMove`.
 
 ## Audit REA du 2026-10-27

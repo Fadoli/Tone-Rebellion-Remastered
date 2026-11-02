@@ -4,9 +4,12 @@
 #include <stdint.h>
 
 typedef enum GameDiplomacyAction {
-    /* FUN_00465793 stores source subtype 10 / field 7 = 0 at player +0xd8. */
+    /* FUN_00465793 subcode 10 with field 7 != 0 toggles player +0xe8
+       (DAT_006192a0, message recipients). */
     GAME_DIPLOMACY_RECIPIENT = 0,
-    /* FUN_00465793 stores source subtype 10 / field 7 = 1 at player +0xe8. */
+    /* FUN_00465793 subcode 10 with field 7 == 0 toggles player +0xd8
+       (DAT_00619290, policy, set = friend). The enum values are the port's own
+       and do not encode field 7. */
     GAME_DIPLOMACY_POLICY = 1
 } GameDiplomacyAction;
 
