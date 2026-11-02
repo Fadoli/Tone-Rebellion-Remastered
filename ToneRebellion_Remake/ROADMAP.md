@@ -42,7 +42,7 @@ Items à faible risque, parallélisables : polices (`bigfont` des étiquettes), 
 
 ## Phase 5 — Audio
 
-Porté : volume/pan par distance (`FUN_0045b24d`), bullets/impacts des producteurs (items Léviathan 0x0a..0x15, seuls appelants de `FUN_00416342`), sons d'île `FEATnn`, `CRUMBLE` (émetteur `FUN_00450847`, message 7 → `FUN_0042fa0f` 5 → évènement monde 7, île vue seulement). Reste : phases upgrade/repair/stockup/buildton de `FUN_0041760b`.
+Porté : volume/pan par distance (`FUN_0045b24d`), bullets/impacts des producteurs (items Léviathan 0x0a..0x15, seuls appelants de `FUN_00416342`), sons d'île `FEATnn`, `CRUMBLE` (émetteur `FUN_00450847`, message 7 → `FUN_0042fa0f` 5 → évènement monde 7, île vue seulement). Reste : l'animation d'application des sorts (`FUN_0041760b`, effets de type 5 `UPGRADE`/`REPAIR`/`STOCKUP`/`BUILDTON`…, avec leurs sons), voir `TODO_OTHER` l.6.
 
 ## Phase 6 — Portage Web (dernière priorité)
 
