@@ -33,6 +33,15 @@ static void simulate_session_tick(uint32_t source_tick)
             GAME_SESSION_WORLD_EVENT_FLOATER_ADVANCED) {
             queue_floater_advance_notice(world_event.payload);
         } else if (world_event.kind ==
+            GAME_SESSION_WORLD_EVENT_ISLAND_REACHED) {
+            char tune_id[16];
+            if (game_music_island_reached(&g_game_music, world_event.payload,
+                    (uint8_t)g_game_session.config.selected_tribe,
+                    g_net_in_game ? &g_net_local_rng
+                                  : &g_game_session.random_state,
+                    tune_id, sizeof(tune_id)))
+                set_background_tune(tune_id);
+        } else if (world_event.kind ==
             GAME_SESSION_WORLD_EVENT_BUILDING_DESTROYED) {
             /* FUN_0042fa0f message 5, event 8: only a selected destroyed
                site matters; FUN_0042f303(0) returns to the Hall default. */

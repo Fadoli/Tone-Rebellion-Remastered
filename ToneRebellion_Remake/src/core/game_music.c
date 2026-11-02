@@ -91,3 +91,24 @@ int game_music_enter_realm(GameMusicState *state, uint8_t realm_id,
     state->pending_realms = (uint16_t)(state->pending_realms & ~realm_bit);
     return 1;
 }
+
+int game_music_island_reached(GameMusicState *state, int32_t shape_id,
+                              uint8_t player_tribe, ToneRng *random_state,
+                              char *out_tune_id, size_t out_capacity)
+{
+    if (out_tune_id != NULL && out_capacity > 0) out_tune_id[0] = '\0';
+    if (state == NULL || out_tune_id == NULL || out_capacity == 0 ||
+        player_tribe >= 4) return 0;
+    if (shape_id >= 0 && shape_id < 4) {
+        (void)snprintf(out_tune_id, out_capacity, "act%d", (int)shape_id + 1);
+        return 1;
+    }
+    if (shape_id == 0xe) {
+        copy_tune(out_tune_id, out_capacity, "levi");
+        return 1;
+    }
+    if (random_state == NULL ||
+        (tone_rng_next15(random_state) & 1U) == 0) return 0;
+    return choose_random_realm_tune(state, player_tribe, random_state,
+                                    out_tune_id, out_capacity);
+}

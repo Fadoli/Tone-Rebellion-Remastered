@@ -23,4 +23,13 @@ int game_music_enter_realm(GameMusicState *state, uint8_t realm_id,
                            uint8_t player_tribe, ToneRng *random_state,
                            char *out_tune_id, size_t out_capacity);
 
+/* FUN_004334ce world event 0xc (island reached, FUN_00466b09): the
+   argument is the island's WORLDPOS shape. Below 4 it names act<arg + 1>,
+   0xe names levi; otherwise bit 0 of one LCG value decides whether
+   FUN_0046ff6f(0) picks a random track. Returns 1 when out_tune_id names a
+   track (ev_73dc398c). */
+int game_music_island_reached(GameMusicState *state, int32_t shape_id,
+                              uint8_t player_tribe, ToneRng *random_state,
+                              char *out_tune_id, size_t out_capacity);
+
 #endif
