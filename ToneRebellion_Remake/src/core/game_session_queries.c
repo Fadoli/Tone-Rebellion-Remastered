@@ -248,6 +248,13 @@ void game_session_clip_set_group(GameSession *session, unsigned int group)
     if (session != NULL && group < 3U) session->clip_group = (uint8_t)group;
 }
 
+void game_session_clip_clear_cell(GameSession *session, unsigned int column)
+{
+    if (session == NULL || column >= 3U) return;
+    session->clip_slot_used[(unsigned int)(session->clip_group % 3U) * 3U +
+                            column] = 0;
+}
+
 unsigned int game_session_clip_slot(GameSession *session, uint8_t player_slot,
                                     unsigned int column, uint8_t *island_index,
                                     uint16_t *location_index)

@@ -595,6 +595,15 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             click_diplomacy_action(x, y, selected_hall_player())) {
             platform_invalidate(window);
         } else if (g_menu.screen == SCREEN_ISLAND && g_game_session_valid &&
+                   clipboard_control_at(x, y) >= 11 &&
+                   clipboard_control_at(x, y) <= 13) {
+            /* FUN_0043913c message 7 -> FUN_0043822b: a right click on
+               CLIPBD<n> empties that cell of the active group, filled or
+               not (ev_19419676, ev_9d39a1dd). */
+            game_session_clip_clear_cell(&g_game_session,
+                (unsigned int)clipboard_control_at(x, y) - 11U);
+            platform_invalidate(window);
+        } else if (g_menu.screen == SCREEN_ISLAND && g_game_session_valid &&
             x >= 0 && x < LOGICAL_WIDTH && y >= 0 && y < 320 &&
             g_menu.selected_map_island >= 0 &&
             g_menu.selected_map_island < g_game_session.island_count &&

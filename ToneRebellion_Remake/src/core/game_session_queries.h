@@ -56,6 +56,9 @@ void game_session_clip_auto_register(GameSession *session, uint8_t player_slot);
 void game_session_clip_remember(GameSession *session, uint8_t player_slot,
                                 uint8_t island_index, uint16_t location_index);
 void game_session_clip_set_group(GameSession *session, unsigned int group);
+/* FUN_0043822b (right click on CLIPBD<col + 1>): empty that column's cell
+   of the active group. */
+void game_session_clip_clear_cell(GameSession *session, unsigned int column);
 /* Column 0..2 of the active group; drops stale slots (the building was lost
    or changed hands). Returns the dot count (source subslot + 1) or 0 if empty. */
 unsigned int game_session_clip_slot(GameSession *session, uint8_t player_slot,
