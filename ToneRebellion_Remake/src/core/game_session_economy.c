@@ -210,6 +210,9 @@ static int location_move_source_valid(const GameRuntimeLocation *location,
     if (location == NULL || location->owner_id != player_slot ||
         !location_visible_to_player(location, player_slot) ||
         (location->source_flags & 0x90U) != 0) return 0;
+    /* FUN_0045f337 refuses a building in the tribe's repair list
+       (FUN_0045ff3f). */
+    if (location->repair_task_plus1[player_slot] != 0) return 0;
     item_id = location->record_value_10 - (int32_t)player_slot * 16;
     return item_id >= 0x25 && item_id <= 0x34 && item_id != 0x28;
 }
