@@ -23,7 +23,7 @@
    - Hall type 4 : dix candidats (`FUN_00420a55`) et attente de 20 ticks (`FUN_0041e569` états 3/4) confirmés par REA le 2026-11-02. Garde d'attente de l'état 3 et garde de classe `site+4` alignées (`TODO_MOVEMENT` l.17).
    - Repair : aucun écrivain de l'état `0x12`; le soin à 40 ticks est une politique du port (`TODO_TASKS` l.5).
    - Type 5 ↔ `FA_Build` établi (action 5, état 5 → `FUN_004527ee`); le port garde l'action 4. Cas de `FUN_00450385` = états `FA_Enlist`/`FA_Train` (portés); le mot de mode `+0x13d0` est écrit par `FUN_0045f755` (porté).
-5. **Producteur de `PIT_Object`** : les 8 appels de `FUN_004503bd` sont résolus (livraison, dépôt `FUN_00425084`, messages `FUN_00465793`/`FUN_004672ef`) et suivis par le port. Reste : expéditeur du message `FUN_00465793` sous-type 4 (`TODO_OTHER` l.4, `TODO_TASKS` l.8).
+5. **Producteur de `PIT_Object`** : les 8 appels de `FUN_004503bd` sont résolus (livraison, dépôt `FUN_00425084`, messages `FUN_00465793`/`FUN_004672ef`) et suivis par le port. La pose directe (`FUN_00465793` catégorie 3 / sous-type 4) n'a pas de constructeur local, seulement le relais réseau `FUN_00412eac`; traitée comme inutilisée (`TODO_OTHER` l.4).
 
 ## Phase 2 — Adversaires
 
