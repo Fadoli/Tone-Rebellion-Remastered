@@ -178,3 +178,16 @@ Rectification 5 (lecture de `game_session_combat.c:662-1060`): le port **implém
 et la minuterie de site (`game_session_site_events.c:274-279`). Les affirmations « le port n'a pas ces dégâts / ce bouclier / ces compteurs » des paragraphes précédents sont donc fausses; les écarts réels restent: portes de cible de lancement (genres 4/5/6/12/13/19) et mode curseur de cible, choix du lanceur par classe (genre 15/17), dispatch immédiat/curseur.
 
 Correction (REA 2026-11-02, haiku 5.5, `ev_1f76cc3b…`, `ev_4b7d318e…`): le paquet `{op 1, joueur, code 0, île, emplacement}` de la branche 0x65 sous-code 0 n'est pas une réparation: `FUN_00465793` catégorie 1 sous-type 0 lit seulement île et emplacement, teste le bit `0x400` de `site+0x1c` et appelle `FUN_00453bf6` qui l'efface (arg 0) ou le pose si le budget d'entretien le permet: c'est la bascule On/Off (`BC_OnOff`, déjà portée). Les lignes de tâche (`+0x10` = type) ne sont créées que par `FUN_004662b7`, appelée via 0x401d1b depuis 0x45d283 (`FUN_0045cd75`), 0x45eda4 (`FUN_0045eaa7`), 0x465a7f (`FUN_00465793` catégorie 0, paquets d'interface) et 0x466727 (non lu). Une tâche Repair (type 0x12) viendrait donc d'un paquet catégorie 0 type 0x12 de l'interface; son expéditeur reste à identifier.
+
+## Chemin natif de Repair (REA sonnet, 2026-11-02)
+
+Conclusion: Repair est atteignable et fonctionne, mais pas par `FA_Repair` (action/état/type 0x12, vestigiaux, sans créateur trouvé).
+- `FUN_0042f150` (`ev_f158bdbb…`, table `ev_0e0cbca6…`) écrit l'indice de la table `0x49e700` dans `fenêtre+0x64`: `BC_Repair` = 3 (le `SENDMESSAGE 101 0 0` de `windows.txt` est réécrit).
+- `FUN_00442c21` (`ev_2d4e15f4…`): évènements 6/7, portes `FUN_00429f3a` (propriétaire = joueur local) et `FUN_00452b67` (`ev_c58c7735…`: propriétaire 0..3, item 0x25..0x34, `+0x34 < FUN_00450978()`), puis `FUN_0042970c` → message (0x65, 3).
+- `FUN_0042fa0f` cas 0x65 code 3: paquet `{catégorie 1, joueur, 3, île, FUN_0045035a()}` via `FUN_00414081`.
+- `FUN_00465793` catégorie 1 code 3 (`ev_755e1288…`): si `FUN_0045ff3f` trouve le bâtiment dans la liste de réparation, `FUN_0045ff9b` le retire (bascule); sinon `FUN_0045fd91` (0x4659ac).
+- `FUN_0045fd91` (`ev_54b49564…`): entrée en mode 0 dans la liste de la tribu (`+0x13dc`, 16 × 10 octets, `FUN_0045fd43`), puis `FUN_004666c9(bâtiment, 1, tribu)` (`ev_be357318…`): tâche type 4 sous-type 1 (livrer du Build Tone). `FUN_0045fe62` fait de même pour la liste UpgSpread (mode 1).
+- Livraison: `FUN_0041e569` → `FUN_004503bd(stock, 1, tribu)` (`ev_a294ffae…`): action 1 et bâtiment dans la liste → `+0x34 += 1` (PV) au lieu du crédit de stock `+0x28`; à `+0x34 >= FUN_00450978()`, retrait de la liste.
+- Affichage: `FUN_004459e6` montre `REPAIR` pour une ligne type 4 sous-type 1 listée (0x445e56) et pour le type 0x12 (0x445d6e).
+Inconnues: autres appelants de `FUN_00414081` (réseau), formule de `FUN_00450978`, condition d'affichage du bouton au-delà de `FUN_00452b67`.
+Port (à aligner): tâche `0x12`, livraisons de Build Tone vers le site puis soin de 1 PV toutes les 40 ticks; le natif crédite 1 PV par unité livrée, sans attente, et le bouton bascule l'entrée.
