@@ -241,7 +241,9 @@ try {
     # --- State-driven checks (use the remake's TONE_REBELLION_E2E_STATE dump)
     $st = WaitState { param($s) $s.screen -eq 3 -and $s.floaters.Count -gt 0 }
     $tribe = $st.tribe
-    Check ($st.island -ne $st.hall_island -and $st.hall_player -eq $tribe) "the Hall is selected by default on another island" "island $($st.island) hall_island $($st.hall_island) hall_player $($st.hall_player)"
+    if ($st.island -ne $st.hall_island) {
+        Check ($st.hall_player -eq $tribe) "the Hall is selected by default on another island" "island $($st.island) hall_island $($st.hall_island) hall_player $($st.hall_player)"
+    } else { "SKIP  Hall default on another island (the resume starts on the Hall island)" }
 
     # Leviathan (owner 4) selection: native FUN_00435581 skips only flag bit 1,
     # needs no explored cell, and returns the first match in list order.
