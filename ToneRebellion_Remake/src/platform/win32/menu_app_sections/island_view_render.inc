@@ -1809,6 +1809,7 @@ static void render_island_view(RenderSurface *surface)
             }
         }
     }
+    roll_cryptic_message();
     draw_island_message(surface);
 }
 

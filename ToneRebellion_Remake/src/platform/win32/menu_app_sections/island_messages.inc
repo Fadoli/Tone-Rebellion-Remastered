@@ -116,6 +116,38 @@ static void queue_floater_advance_notice(int32_t owner)
     queue_island_message(g_island_notice_fltadv, 1);
 }
 
+/* FUN_00435f4d (IsleWindow paint, ev_2e9357b2, 0x436b83): every paint bumps
+   DAT_005dc68c; past 600 it rolls rand() * 1000 / 32768 and, on 0, resets the
+   counter and picks rand() * 21 / 32768. The first success only fills the
+   cryptic%d cache (gamey.txt CRYPTIC0..20, loaded into g_cryptic_text at
+   startup); later ones queue the text. The
+   native rand() is the CRT LCG shared with FUN_00467260; the port keeps a
+   separate UI generator so painting never moves the session RNG. The outer
+   guard on window fields +0x34/+0x3c is not modelled. */
+static int g_cryptic_cached;
+static uint32_t g_cryptic_counter;
+static uint32_t g_cryptic_rand = 1U;
+
+static int cryptic_rand(void)
+{
+    g_cryptic_rand = g_cryptic_rand * 0x343fdU + 0x269ec3U;
+    return (int)((g_cryptic_rand >> 16) & 0x7fffU);
+}
+
+static void roll_cryptic_message(void)
+{
+    int index;
+    if (++g_cryptic_counter <= 600U) return;
+    if (cryptic_rand() * 1000 / 32768 != 0) return;
+    g_cryptic_counter = 0;
+    index = cryptic_rand() * 21 / 32768;
+    if (!g_cryptic_cached) {
+        g_cryptic_cached = 1;
+        return;
+    }
+    queue_island_message(g_cryptic_text[index], 1);
+}
+
 static void draw_island_message(RenderSurface *surface)
 {
     IslandMessage *head;
