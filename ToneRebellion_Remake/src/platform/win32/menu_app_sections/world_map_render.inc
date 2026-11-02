@@ -35,7 +35,12 @@ static int world_island_at(int x, int y)
 
 static int update_world_map_hover(int x, int y)
 {
-    int island = g_menu.screen == SCREEN_WORLD_MAP ? world_island_at(x, y) : -1;
+    /* FUN_00470f67 (0x470f70) hit-tests only while DAT_006191b4 == 0;
+       otherwise the hovered index is -1, which also blocks the click-enter
+       of FUN_00470fe7 and the name label of FUN_004711e2 (ev_1f14e1d2). */
+    int island = g_menu.screen == SCREEN_WORLD_MAP &&
+        (!g_game_session_valid || g_game_session.world_sequence_state == 0)
+        ? world_island_at(x, y) : -1;
     if (island == g_hovered_island) return 0;
     g_hovered_island = island;
     return 1;

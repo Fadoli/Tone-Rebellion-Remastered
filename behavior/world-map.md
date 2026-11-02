@@ -37,6 +37,8 @@ le port (absent des chaînes de l'exécutable) est retiré. Entrée au clavier i
 dessin ponts/îles (ordre des enregistrements), étiquette de débogage `%d` (touche 'N'), le
 re-test de survol à chaque tick du port (non vu dans le natif).
 
+REA 2026-11-02 (`ev_1f14e1d2…`, `ev_78bb7097…`, `ev_84f76b04…`, `ev_9540dff3…`, xrefs `ev_18c6e193…`): l'île survolée `+0x76` n'est écrite que par `FUN_00470f67` (test `FUN_00472013(x, y)`, -1 si aucune île ou `DAT_006191b4 != 0`), appelée par le cas 10 de `FUN_004702d9`; aucun recalcul par tick. Le clic `FUN_00470fe7` exige `DAT_006191b4 == 0`, `+0x76 != -1` et l'accès (`FUN_0047117d`); la peinture `FUN_004711e2` n'écrit le nom qu'en état 0 et dessine `paradise`/`paraglow` aux états > 3 (paraglow à l'état 4 tant que `DAT_006191b6 < 0x50`). Port: garde d'état portée sur le survol; re-test par tick conservé.
+
 ### Positions, ponts et message de clic (REA, ev_b56fc9b6…, ev_425a59e3…, ev_b9ab52f4…, ev_23872f34…)
 
 Observation: `FUN_004718eb` reconstruit les enregistrements: d'abord une entrée de type 0 par île,
