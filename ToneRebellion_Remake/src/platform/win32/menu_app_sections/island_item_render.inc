@@ -1127,11 +1127,14 @@ static void draw_hall_stock_summary(RenderSurface *surface, int hall_player,
                               info->pane.left + 0xb6,
                               info->pane.top + 0x29,
                               RGB(230, 238, 255));
-            /* WORKSTR is drawn unconditionally in the binary (no total > 0
-               branch in the FUN_00440567 pseudocode). */
+            /* WORKSTR "%s %d (%d%%)" is drawn unconditionally: the percent
+               is __ftol(count * 100.0 / total) with no zero guard, so a
+               zero total prints __ftol's 0x80000000 (ev_671a1431, asm
+               0x4412a2..0x4412d9). */
             (void)snprintf(work_summary, sizeof(work_summary),
-                           "%s %u (%u%%)",
-                           g_hall_work_label, count, percentage);
+                           "%s %d (%ld%%)",
+                           g_hall_work_label, (int)count,
+                           total == 0 ? -2147483647L - 1L : (long)percentage);
             draw_bitmap_label(surface, work_summary,
                               info->pane.left + 0xb6,
                               info->pane.top + 0x33,

@@ -144,8 +144,7 @@ ev_fccc3ec3…): lignes bildtone/tonecrys/magctone (icônes et montants), SURPFL
 WORKSTR n'a pas de garde `total>0`; le résumé exige `P+0x10==0x2a`. Non porté:
 grille `ACTICON` (bit i de l'ushort joueur `+0x4a`, i < `DAT_006136b0`),
 `bldgage`, icônes de queue, variante `P+0x18 != -1` (bildicon/taskicon/slots).
-Inconnues: formule du pourcentage WORKSTR (ST0 hors pseudocode), identité de
-`DAT_006191f8` (+0) face à `source_maintenance_budget` (+0x3c), couleur du texte,
+Résolu (REA haiku 2026-11-02, `ev_671a1431…`, asm 0x4412a2..0x4412d9, 0x441225): WORKSTR `"%s %d (%d%%)"` = compte, `__ftol(compte * 100.0 / total)` sans garde de division (total 0 donne 0x80000000); POPSTR `"%s %d"` = total; SURPFLOW `"%s %d"` = `DAT_006191f8 + propriétaire(+0x14)*0x14a0`, le `source_maintenance_budget` du port. Restant de l'ancienne liste: couleur du texte,
 appelant `0x40234c`.
 
 ### ACTICON du Hall (port)

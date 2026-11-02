@@ -16,7 +16,8 @@ unsigned int game_session_count_player_floaters(const GameSession *session,
                                                 uint8_t player_slot);
 /* FUN_00440567 displays WORKSTR from FUN_0046562b(category, 0) and
    FUN_0046562b(category, -1). `count` is subtype 0 and `total` is all modeled
-   subtypes; percentage is meaningful only when total is nonzero. */
+   subtypes; percentage is (int)(count * 100.0 / total), 0 when total is 0
+   (the source has no guard there; the caller draws __ftol's result). */
 int game_session_workstr_summary(const GameSession *session,
                                  uint8_t type_index,
                                  unsigned int *count,
