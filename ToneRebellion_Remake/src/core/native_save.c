@@ -841,6 +841,41 @@ static int apply_floater(GameSession *session, const FloaterCatalog *catalog,
     return 1;
 }
 
+int native_save_add_fixture_floater(GameSession *session,
+                                    const FloaterCatalog *floaters,
+                                    int owner, unsigned int subtype,
+                                    uint8_t island, uint16_t x, uint16_t y,
+                                    uint8_t level, int16_t charge)
+{
+    uint8_t rec[0x4c];
+    unsigned int slot;
+    char error[96];
+
+    if (session == NULL || floaters == NULL ||
+        session->floater_count >= GAME_SESSION_MAX_FLOATERS) return -1;
+    slot = session->floater_count;
+    memset(rec, 0, sizeof(rec));
+    rec[0x00] = (uint8_t)owner;
+    rec[0x04] = (uint8_t)subtype;
+    rec[0x0a] = level;
+    rec[0x0c] = 0xff;
+    rec[0x0d] = 0xff;
+    rec[0x0e] = island;
+    rec[0x10] = (uint8_t)x;
+    rec[0x11] = (uint8_t)(x >> 8);
+    rec[0x12] = (uint8_t)y;
+    rec[0x13] = (uint8_t)(y >> 8);
+    /* +0x20 current hit points: full (clamped to the level maximum). */
+    rec[0x20] = 0xff;
+    rec[0x21] = 0x7f;
+    rec[0x22] = (uint8_t)charge;
+    rec[0x23] = (uint8_t)((uint16_t)charge >> 8);
+    if (!apply_floater(session, floaters, slot, rec, error, sizeof(error)))
+        return -1;
+    session->floater_count = (uint16_t)(slot + 1U);
+    return (int)slot;
+}
+
 int native_save_apply(const NativeSave *save, const FloaterCatalog *floaters,
                       GameSession *session, char *error, size_t error_capacity)
 {

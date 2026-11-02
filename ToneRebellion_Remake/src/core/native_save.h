@@ -50,4 +50,13 @@ int native_save_find_world(const NativeSave *save, const WorldMap *worlds);
 int native_save_apply(const NativeSave *save, const FloaterCatalog *floaters,
                       GameSession *session, char *error, size_t error_capacity);
 
+/* Test fixtures: appends one idle floater built like a save record (owner 4
+   = Leviathan, catalog stats for `subtype`, no building link). Returns its
+   index, or -1. */
+int native_save_add_fixture_floater(GameSession *session,
+                                    const FloaterCatalog *floaters,
+                                    int owner, unsigned int subtype,
+                                    uint8_t island, uint16_t x, uint16_t y,
+                                    uint8_t level, int16_t charge);
+
 #endif

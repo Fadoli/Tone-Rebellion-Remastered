@@ -11,11 +11,14 @@ static int e2e_enabled(void)
 /* Test support: with the state file set, TONE_REBELLION_E2E_LOAD names a
    static original save (.SAV) to start from, loaded with a fixed seed, and
    TONE_REBELLION_E2E_ISLAND the island to open. Returns 1 when loaded. */
+static int e2e_build_fixture(HWND window);
+
 static int e2e_start_fixture(HWND window)
 {
     char path[MAX_PATH];
     char value[16];
     char error[160];
+    if (e2e_build_fixture(window)) return 1;
     if (!e2e_enabled() ||
         !platform_environment("TONE_REBELLION_E2E_LOAD", path, sizeof(path)))
         return 0;
@@ -26,6 +29,58 @@ static int e2e_start_fixture(HWND window)
     }
     if (platform_environment("TONE_REBELLION_E2E_ISLAND", value, sizeof(value)))
         (void)open_island_view(window, atoi(value));
+    return 1;
+}
+
+/* Test support: TONE_REBELLION_E2E_FIXTURE=badges builds a static game
+   instead (the bench's fixed world 0, tribe 0, difficulty 0 and seed), opens
+   the Hall island and adds known units beside the Hall: an own warrior
+   (subtype 4, full charge), an enemy subtype-1 unit and two Leviathans
+   (subtypes 12 and 9). Returns 1 when built. */
+static int e2e_build_fixture(HWND window)
+{
+    char name[32];
+    char error[256];
+    const GamePlayerEconomy *economy;
+    const GameRuntimeLocation *hall;
+    const FloaterStats *warrior;
+    uint8_t island;
+    uint16_t x;
+    uint16_t y;
+    if (!e2e_enabled() ||
+        !platform_environment("TONE_REBELLION_E2E_FIXTURE", name, sizeof(name)) ||
+        strcmp(name, "badges") != 0) return 0;
+    g_menu.world_index = 0;
+    g_menu.selected_tribe = 0;
+    g_menu.difficulty = 0;
+    g_random_state = 0x13572468U;
+    g_sim_speed = 1U;
+    if (!load_game_session_for_selected_world(error, sizeof(error))) {
+        platform_message_box(window, error, "Tone Rebellion remake - e2e fixture", 0);
+        return 0;
+    }
+    g_menu.setup_accepted = 1;
+    economy = &g_game_session.economy[0];
+    if (economy->hall_island_index >= g_game_session.island_count) return 0;
+    island = (uint8_t)economy->hall_island_index;
+    hall = &g_game_session.islands[island].locations[economy->hall_location_index];
+    x = hall->x;
+    y = hall->y;
+    warrior = floater_catalog_find(&g_floater_catalog,
+        g_game_session.player_starts.players[0].floater_type_index, 4);
+    (void)native_save_add_fixture_floater(&g_game_session, &g_floater_catalog,
+        0, 4, island, (uint16_t)(x + 70), (uint16_t)(y - 20), 0,
+        warrior != NULL ? warrior->max_attack_points : 0);
+    (void)native_save_add_fixture_floater(&g_game_session, &g_floater_catalog,
+        1, 1, island, (uint16_t)(x + 130), (uint16_t)(y - 30), 0, 0);
+    (void)native_save_add_fixture_floater(&g_game_session, &g_floater_catalog,
+        GAME_START_PLAYER_COUNT, 12, island, (uint16_t)(x + 520),
+        (uint16_t)(y - 60), 1, 0);
+    (void)native_save_add_fixture_floater(&g_game_session, &g_floater_catalog,
+        GAME_START_PLAYER_COUNT, 9, island, (uint16_t)(x + 580),
+        (uint16_t)(y - 10), 0, 0);
+    if (!open_island_view(window, island)) return 0;
+    g_island_scroll_x = island_clamp_scroll((int)x - 0x140);
     return 1;
 }
 
