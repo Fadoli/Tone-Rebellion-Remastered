@@ -128,8 +128,19 @@ static void render_world_map(RenderSurface *surface)
                 (uint8_t)island_index, world_map_player_mask())) {
             int name_index = world->islands[island_index].shape_id;
             if (name_index >= 0 && name_index < ISLAND_NAME_COUNT) {
-                /* FUN_004711e2 centers the current island name at y=0x3c. */
-                draw_sprite(surface, &g_island_names_art, (uint32_t)name_index, 0, 48);
+                /* FUN_004711e2 draws the hovered island's name with BIGFONT
+                   (ECX = FUN_0042de03, 0x471424..0x47148a, ev_1fee9279),
+                   centred on 640 at y = 0x3c, in the font's current colour;
+                   the port takes the default index 6 of the map palette. */
+                const char *name = g_island_names[name_index];
+                if (g_big_font.bytes != NULL && name[0] != '\0') {
+                    int width = measure_big_text(name, strlen(name));
+                    draw_big_label(surface, name, (LOGICAL_WIDTH - width) / 2,
+                                   0x3c, g_map_palette[6]);
+                } else {
+                    draw_sprite(surface, &g_island_names_art,
+                                (uint32_t)name_index, 0, 48);
+                }
             }
         }
     }
