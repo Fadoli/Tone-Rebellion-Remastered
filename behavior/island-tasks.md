@@ -201,7 +201,7 @@ règlent seulement le curseur (`FUN_0043530b`); le clic de carte suivant (messag
 catégorie 1 (sous-type = mode) que `FUN_0045d867` (cibles floater, genres 6 attaque et 8 défense) et `FUN_0045d8b2`
 (cibles de lieu, genres 7 et 9) transforment en ordre en attente; `Recall` (`p1` 0xf) passe par `FUN_0045dcf4`
 (genre 9, île du bâtiment), même genre que `DefendArea`.
-Port: pas de drapeaux d'entraînement (`TrnStk`), pas de `Recall`, pas de bouton `Obtain`, pas de `UpgSpread`,
+Port (état du 2026-10-21, périmé : `TrnStk`, `Recall`, `Obtain`, `UpgSpread` et `HallStk` sont portés depuis, voir `TODO_INTERFACE`): pas de drapeaux d'entraînement (`TrnStk`), pas de `Recall`, pas de bouton `Obtain`, pas de `UpgSpread`,
 `defend_target_floater` jamais affecté. Non résolu: sens des modes de pile 0/1/2 et lecteurs de `+0x13d0`, `+0x58` et
 `+0x5c`, exécuteur de la tâche 0xd, table de cibles à pas 0x4c, ambiguïté du genre 9 (Recall et DefendArea).
 
