@@ -62,6 +62,10 @@ typedef struct GameSessionAudioEvent {
 } GameSessionAudioEvent;
 
 typedef enum GameSessionWorldEventKind {
+    /* FUN_0045cd75 0x45cff6: an already trained floater gains a level;
+       payload = owner. FUN_004334ce shows newtext.txt FLTADV for the local
+       player only. */
+    GAME_SESSION_WORLD_EVENT_FLOATER_ADVANCED = 6,
     GAME_SESSION_WORLD_EVENT_BUILDING_DESTROYED = 8,
     /* FUN_00460989: every 6000 ticks, payload n = tick / 6000 - 1 (0..7);
        FUN_004334ce shows newtext.txt LEVIBRK + BOND<n> + ".". */

@@ -1342,6 +1342,10 @@ static void tick_source_staff_cycle(GameSession *session,
             else level = 5U;
             floater->attack_level_flags = (uint16_t)(
                 (floater->attack_level_flags & 0xfff0U) | level);
+            /* 0x45cff6: world event 6 with the owner (FLTADV notice). */
+            (void)game_session_queue_world_event(session,
+                GAME_SESSION_WORLD_EVENT_FLOATER_ADVANCED,
+                (uint8_t)island_index, floater->owner_slot);
         }
 
         stats = floater_catalog_find(floater_catalog, floater->type_index,

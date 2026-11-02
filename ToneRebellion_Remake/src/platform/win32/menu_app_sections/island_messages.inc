@@ -23,6 +23,8 @@ static int g_island_message_count;
 static char g_island_notice_awake[GAME_START_PLAYER_COUNT][ISLAND_MESSAGE_TEXT];
 static char g_island_notice_levibrk[ISLAND_MESSAGE_TEXT];
 static char g_island_notice_bond[8][ISLAND_MESSAGE_TEXT];
+/* FUN_004334ce event 6: FLTADV for the local player's floater. */
+static char g_island_notice_fltadv[ISLAND_MESSAGE_TEXT];
 static int g_island_notice_loaded;
 
 static void queue_island_message(const char *text, int16_t selector)
@@ -71,6 +73,9 @@ static void load_island_notice_text(void)
                                      g_island_notice_awake[index],
                                      sizeof(g_island_notice_awake[index]));
         }
+        (void)extract_help_entry(bytes, member->length, "FLTADV",
+                                 g_island_notice_fltadv,
+                                 sizeof(g_island_notice_fltadv));
         (void)extract_help_entry(bytes, member->length, "LEVIBRK",
                                  g_island_notice_levibrk,
                                  sizeof(g_island_notice_levibrk));
@@ -100,6 +105,15 @@ static void queue_leviathan_bond_notice(int32_t bond)
                        g_island_notice_bond[bond]);
         queue_island_message(text, 1);
     }
+}
+
+/* FUN_004334ce event 6 (ev_73dc398c): FLTADV when the owner is the local
+   player (DAT_0049f538); no sound. */
+static void queue_floater_advance_notice(int32_t owner)
+{
+    if (owner != g_menu.selected_tribe) return;
+    load_island_notice_text();
+    queue_island_message(g_island_notice_fltadv, 1);
 }
 
 static void draw_island_message(RenderSurface *surface)
