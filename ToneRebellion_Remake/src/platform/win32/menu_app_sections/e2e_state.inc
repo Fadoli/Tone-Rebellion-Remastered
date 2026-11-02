@@ -8,6 +8,27 @@ static int e2e_enabled(void)
     return path != NULL && path[0] != '\0';
 }
 
+/* Test support: with the state file set, TONE_REBELLION_E2E_LOAD names a
+   static original save (.SAV) to start from, loaded with a fixed seed, and
+   TONE_REBELLION_E2E_ISLAND the island to open. Returns 1 when loaded. */
+static int e2e_start_fixture(HWND window)
+{
+    char path[MAX_PATH];
+    char value[16];
+    char error[160];
+    if (!e2e_enabled() ||
+        !platform_environment("TONE_REBELLION_E2E_LOAD", path, sizeof(path)))
+        return 0;
+    g_random_state = 0x13572468U;
+    if (!read_native_save_file(window, path, error, sizeof(error))) {
+        platform_message_box(window, error, "Tone Rebellion remake - e2e fixture", 0);
+        return 0;
+    }
+    if (platform_environment("TONE_REBELLION_E2E_ISLAND", value, sizeof(value)))
+        (void)open_island_view(window, atoi(value));
+    return 1;
+}
+
 static void e2e_write_state(void)
 {
     static const char *path;

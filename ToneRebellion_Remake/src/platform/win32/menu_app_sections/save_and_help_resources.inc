@@ -2,6 +2,12 @@
    directory is read-only (AGENTS.md). */
 static int save_directory(char *out, size_t capacity)
 {
+    /* Test support: TONE_REBELLION_SAVE_DIR moves every remake save and
+       resume.gam elsewhere, so end-to-end runs never touch the player's. */
+    if (platform_environment("TONE_REBELLION_SAVE_DIR", out, capacity)) {
+        platform_create_directory(out);
+        return 1;
+    }
     if (!platform_executable_directory(out, capacity) ||
         strlen(out) + 7U >= capacity) return 0;
     (void)strcat(out, "/saves");

@@ -734,6 +734,10 @@ static void app_start(HWND window, const char *command_line)
             g_menu.screen = SCREEN_NEW_GAME;
         }
     }
+    if (e2e_start_fixture(window)) {
+        free(g_logo_pixels);
+        g_logo_pixels = NULL;
+    }
     update_window_title(window);
     /* The original main loop requests `start` without a repeat flag before
        the title menu settles on `ambi1`, after the logo when float.cfg has
