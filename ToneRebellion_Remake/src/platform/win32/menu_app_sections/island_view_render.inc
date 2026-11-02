@@ -1736,6 +1736,37 @@ static void render_island_view(RenderSurface *surface)
                                     badge_x, badge_y);
                     }
                 }
+                /* FUN_0042704b's third badge (charge, FLTINFO 10 - stat) for
+                   a non-Leviathan of subtype >= 1, beside the health one;
+                   FUN_0044338b enables it here like the other two. */
+                if (g_floater_info_art.frame_count >= 26 && body_frame != NULL) {
+                    uint32_t charge_frame;
+                    int32_t badge_x;
+                    int32_t badge_y;
+                    int16_t charge_now;
+                    int16_t charge_max;
+                    int32_t body_left = sprite_x + body_frame->x_offset +
+                                        body_frame->hit_left;
+                    int32_t body_top = sprite_y + body_frame->y_offset +
+                                       body_frame->hit_top;
+                    int32_t body_right = sprite_x + body_frame->x_offset +
+                                         body_frame->hit_right;
+                    if (game_session_floater_charge_values(selected_floater,
+                            &g_floater_catalog, &charge_now, &charge_max) &&
+                        charge_max > 0 &&
+                        island_worker_charge_badge_layout(
+                            selected_floater->type_index,
+                            selected_floater->source_subtype,
+                            (int16_t)(((int32_t)(charge_now > 0 ? charge_now : 0) *
+                                       10) / charge_max),
+                            selected_floater->facing_left,
+                            body_left, body_top, body_right,
+                            &charge_frame, &badge_x, &badge_y) &&
+                        charge_frame < g_floater_info_art.frame_count) {
+                        draw_sprite(surface, &g_floater_info_art, charge_frame,
+                                    badge_x, badge_y);
+                    }
+                }
             }
             if (saved_info_dc != 0) render_surface_restore(surface, saved_info_dc);
         }
