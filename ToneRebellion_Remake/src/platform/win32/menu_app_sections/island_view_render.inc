@@ -1689,16 +1689,24 @@ static void render_island_view(RenderSurface *surface)
             caption = g_site_class_label_text[5];
         }
         if (info != NULL && caption != NULL && caption[0] != 0) {
-            int width = measure_bitmap_text(NULL, caption, strlen(caption));
+            /* FUN_00441b36 draws the caption with BIGFONT (ECX = 0x5c2870 at
+               0x441ca0, ev_1202ec55) in the font's current colour, the panel
+               default index 6. */
+            int use_big = g_big_font.bytes != NULL;
+            int width = use_big ? measure_big_text(caption, strlen(caption))
+                                : measure_bitmap_text(NULL, caption, strlen(caption));
+            int x = info->pane.left +
+                ((info->pane.right - info->pane.left) - width) / 2;
+            int y = info->pane.top +
+                (info->pane.bottom - info->pane.top) / 2 - 10;
             if (g_temp_hole_art.frame_count > 1)
                 draw_sprite(surface, &g_temp_hole_art, 1,
                             info->pane.left, info->pane.top);
-            draw_bitmap_label(surface, caption,
-                info->pane.left +
-                    ((info->pane.right - info->pane.left) - width) / 2,
-                info->pane.top +
-                    (info->pane.bottom - info->pane.top) / 2 - 10,
-                RGB(230, 238, 255));
+            if (use_big)
+                draw_big_label(surface, caption, x, y,
+                               native_text_color(g_island_palette, 6));
+            else
+                draw_bitmap_label(surface, caption, x, y, RGB(230, 238, 255));
         }
     }
     /* IWLocInfo's selected-building painter clears and redraws this pane, so

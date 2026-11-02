@@ -795,13 +795,21 @@ static void draw_hall_panel(RenderSurface *surface, int hall_player)
         draw_diplomacy_panel(surface, panel, hall_player);
     }
     if (empty_message != NULL && empty_message[0] != '\0') {
-        int width = measure_bitmap_text(NULL, empty_message, strlen(empty_message));
+        /* FUN_0043dee3 draws NOKNOW with BIGFONT in palette index 6,
+           centred, at y = (bottom - top) / 2 - 6 (no text-height term). */
+        int use_big = g_big_font.bytes != NULL;
+        int width = use_big
+            ? measure_big_text(empty_message, strlen(empty_message))
+            : measure_small_text(empty_message, strlen(empty_message));
         int x = panel->pane.left +
             ((panel->pane.right - panel->pane.left) - width) / 2;
-        int y = panel->pane.top +
-            ((panel->pane.bottom - panel->pane.top) -
-             (int)g_small_font.height) / 2 - 6;
-        draw_bitmap_label(surface, empty_message, x, y, RGB(185, 205, 220));
+        int y = panel->pane.top + (panel->pane.bottom - panel->pane.top) / 2 - 6;
+        if (use_big)
+            draw_big_label(surface, empty_message, x, y,
+                           native_text_color(g_island_palette, 6));
+        else
+            draw_small_label(surface, empty_message, x, y,
+                             native_text_color(g_island_palette, 6));
     }
     if (panel_state == WINDOW_ISLAND_PANEL_TRADE) {
         static const char *const trade_names[] = {"TradeZERO", "TradeDOIT"};
