@@ -473,7 +473,7 @@ static void draw_island_worker_birth(RenderSurface *surface,
    (no per-kind cap in the source), where the kind is the low nibble of the
    floater's +0x0a (the port's unit level). FUN_00440567 then draws each
    present floater through FUN_0042704b at the fixed pane offsets below; the
-   selected-floater highlight path is not ported. */
+   selected floater goes through the FUN_004106dd(1, 1) table. */
 static int building_slot_floater_layout(const GameRuntimeLocation *location,
                                         int16_t slots[6], const int **xs,
                                         const int **ys)

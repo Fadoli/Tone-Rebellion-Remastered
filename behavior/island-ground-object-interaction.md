@@ -373,10 +373,11 @@ de changement de frame. Les crochets d'angle dépendent de `DAT_005dc668`, pas d
 `param_8`. Dans `FUN_00440567`, la surbrillance d'un slot vaut
 `*(DAT_005dc64c+0x170) == &0x6137b8[id]` (le floater sélectionné); le port a
 `g_selected_floater` pour cela.
-Non porté: les couleurs dépendent du contenu de `DAT_004b20f0` (non lu) et le port
-dessine des bitmaps alpha sans palette indexée; `FUN_00404c5a` n'est pas décompilée
-(l'usage de `DAT_0049a610` est déduit des xrefs). Un contour ou une teinte inventés
-ne seraient pas observés. Inconnue: le test `entity[0xe] == DAT_005e16ec`.
+Mise à jour: `DAT_004b20f0` est la banque blanche des tables HZT lue par `FUN_00410510`
+(`island_haze.c`). Le port dessine corps et jambes du floater sélectionné à travers
+`FUN_004106dd(1, 1)` (`draw_building_slot_floaters`, `g_sprite_haze_selector/level`);
+les surcouches restent sans remappage. `FUN_00404c5a` n'est pas décompilée (l'usage de
+`DAT_0049a610` est déduit des xrefs). Inconnue: le test `entity[0xe] == DAT_005e16ec`.
 
 ### Borne de la grille ACTICON: `DAT_006136b0` = nombre d'îles (REA)
 
