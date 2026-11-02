@@ -3,6 +3,11 @@
 #include <string.h>
 
 #ifdef _WIN32
+/* MinGW.org's ws2tcpip.h declares getaddrinfo only from Windows XP on. */
+#if !defined(_WIN32_WINNT) || _WIN32_WINNT < 0x0501
+#undef _WIN32_WINNT
+#define _WIN32_WINNT 0x0501
+#endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
 typedef int socklen_t;
