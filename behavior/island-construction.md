@@ -84,7 +84,7 @@ l'inventaire), avant l'objet de la colonne. La description passe par `FUN_00428b
 (corps identique à `FUN_0043954d`): `x = 6`, borne droite 173 (largeur 167), première ligne en `0x58 + 1 + h`, pas `h + 1`.
 Port: découpe en colonnes par `(x - gauche) / (W >> 2)` (colonne 5 sans survol), cadre en indice de palette 1, description en
 `x = 6`, largeur 167, première ligne `haut + 0x58 + h + 1`, pas `h + 1` (`draw_wrapped_bitmap_label_pitch`).
-Écart restant: couleur de texte de la description non décodée (ordre cadre/objet aligné).
+Couleur (REA 2026-11-02, `ev_6c84c0be…`, `ev_f7656d6c…`): `FUN_0043b369` dessine le nombre en (0x25, 0x2d) et la description en (10, 0x58) avec l'objet police `0x5c30b8` sans couleur explicite; le seul écrivain de sa couleur `+8`, `FUN_0042da69`, y met `DAT_0049e140[6] = 6`. Port aligné (indice 6, petite police pour les deux).
 
 ## Ordre de dessin et coordonnées (revue REA, sous-agent, non relue)
 

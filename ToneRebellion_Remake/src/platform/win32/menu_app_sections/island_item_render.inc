@@ -93,15 +93,17 @@ static void draw_iw_construct(RenderSurface *surface)
             }
             {
                 /* FUN_0043b369 also prints the cost with the "%d" format at
-                   (0x25, 0x2d) (ev_16025862, ev_b8912db6). The text colour
-                   is not decoded. */
+                   (0x25, 0x2d) (ev_16025862, ev_b8912db6), through the same
+                   font object 0x5c30b8 as the description; its only colour
+                   writer, FUN_0042da69, stores palette index 6 (ev_f7656d6c,
+                   ev_6c84c0be). */
                 char cost_text[16];
                 (void)snprintf(cost_text, sizeof(cost_text), "%d",
                                (int)info_item->building_tone_cost);
-                draw_bitmap_label(surface, cost_text,
-                                  info_window->pane.left + 0x25,
-                                  info_window->pane.top + 0x2d,
-                                  RGB(185, 205, 220));
+                draw_small_label(surface, cost_text,
+                                 info_window->pane.left + 0x25,
+                                 info_window->pane.top + 0x2d,
+                                 native_text_color(g_island_palette, 6));
             }
         }
         if (item_id < PAD_CATALOG_MAX_ITEMS &&
