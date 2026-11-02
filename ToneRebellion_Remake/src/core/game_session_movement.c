@@ -1168,10 +1168,12 @@ static void place_hand_back_object(GameRuntimeLocation *site, int32_t object)
    7+2i on two picked sites; the bit is cleared. Each inventory count of item
    c is then emptied onto sites of the island whose index is the player
    index (0x460244..0x46025f, as in the binary). */
-static void game_session_hand_back_player_holdings(GameSession *session,
-                                                   unsigned int player_slot)
+void game_session_hand_back_player_holdings(GameSession *session,
+                                            unsigned int player_slot)
 {
-    GamePlayerEconomy *economy = &session->economy[player_slot];
+    GamePlayerEconomy *economy;
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT) return;
+    economy = &session->economy[player_slot];
     unsigned int bit;
     unsigned int item;
 

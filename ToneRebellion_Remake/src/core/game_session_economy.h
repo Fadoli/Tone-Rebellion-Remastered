@@ -49,6 +49,10 @@ int game_session_finish_location_move(GameSession *session,
                                       uint16_t location_index);
 int game_session_cancel_location_move(GameSession *session,
                                       const PadCatalog *catalog);
+/* FUN_00460072 (multiplayer): hand a leaving or floater-less player's glyphs
+   and inventory artifacts back to world sites. */
+void game_session_hand_back_player_holdings(GameSession *session,
+                                            unsigned int player_slot);
 /* FUN_0045f755: advance one Hall resource mode modulo three. Returns the new
    raw mode, or -1 for an invalid player/resource. */
 int game_session_cycle_resource_stock_mode(GameSession *session,

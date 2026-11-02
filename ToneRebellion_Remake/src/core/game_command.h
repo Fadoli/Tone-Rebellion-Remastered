@@ -38,6 +38,7 @@ typedef enum GameCommandKind {
     GAME_COMMAND_QUEUE_GLYPH_ACTION,      /* player, island, location, glyph */
     GAME_COMMAND_QUEUE_INVENTORY_ACTION,  /* player, island, location, item */
     GAME_COMMAND_ORDER_FLOATER_TO_MERGE,  /* player, island, floater, target floater */
+    GAME_COMMAND_HAND_BACK_PLAYER,        /* player (FUN_004121b7 case 2) */
     GAME_COMMAND_KIND_COUNT
 } GameCommandKind;
 

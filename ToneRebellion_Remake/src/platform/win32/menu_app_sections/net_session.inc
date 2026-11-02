@@ -171,7 +171,23 @@ static void net_drop_peer(unsigned slot)
     memset(&g_net_readers[slot], 0, sizeof(g_net_readers[slot]));
     if (g_net_mode == NET_MODE_HOST) {
         if (g_net_in_game) {
-            /* The departed player's tribe stays in the world, idle. */
+            /* The departed player's tribe stays in the world, idle. As in
+               FUN_004121b7 case 2 (FUN_00460072), its glyphs and artifacts
+               go back to the world unless another player shares the tribe;
+               the host queues it so every machine applies it on one turn. */
+            uint8_t tribe = g_net_lobby.players[slot].tribe;
+            unsigned other;
+            int shared = 0;
+            for (other = 0; other < NET_LOBBY_MAX_PLAYERS; ++other) {
+                if (other != slot && g_net_lobby.players[other].connected &&
+                    g_net_lobby.players[other].tribe == tribe) shared = 1;
+            }
+            if (!shared && tribe < GAME_START_PLAYER_COUNT) {
+                int32_t arg = tribe;
+                GameCommand command =
+                    game_command_make(GAME_COMMAND_HAND_BACK_PLAYER, 1, &arg);
+                (void)net_lockstep_queue_command(&g_net_lockstep, &command);
+            }
             net_lockstep_drop_peer(&g_net_lockstep, (uint8_t)slot);
             (void)snprintf(g_net_status, sizeof(g_net_status), "%s a quitte la partie",
                            g_net_lobby.players[slot].name);
