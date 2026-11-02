@@ -291,9 +291,12 @@ static void draw_island_floater_overlays(RenderSurface *surface, const GameFloat
     body_left = x + body_frame->x_offset + body_frame->hit_left;
     body_top = y + body_frame->y_offset + body_frame->hit_top;
     body_right = x + body_frame->x_offset + body_frame->hit_right;
+    /* FUN_0042003c: the fltinf row realm (not the tribe), with the linked
+       source site shift; Leviathans get it too (ev_fe27bac4). */
     if (island_worker_realm_overlay_enabled(g_floater_overlay_flags, 1) &&
         island_worker_realm_badge_layout(
-            floater->type_index, 0, 0, floater->facing_left,
+            (uint8_t)game_session_floater_realm(&g_game_session, floater), 0, 0,
+            floater->facing_left,
             body_left, body_top, body_right, &frame, &badge_x, &badge_y) &&
         frame < g_floater_info_art.frame_count) {
         draw_sprite(surface, &g_floater_info_art, frame, badge_x, badge_y);
@@ -302,8 +305,7 @@ static void draw_island_floater_overlays(RenderSurface *surface, const GameFloat
        FUN_00466fe4/FUN_0041e4e4, so their world badge is eligible. */
     if (island_worker_health_overlay_enabled(g_floater_overlay_flags, 1) &&
         island_worker_stat_badge_layout(
-            floater->type_index < 4U ? floater->source_subtype
-                                     : floater->type_index,
+            floater->source_subtype,
             island_floater_health_stat(floater),
             floater->facing_left, body_left, body_top, body_right,
             &frame, &badge_x, &badge_y) &&
@@ -1687,18 +1689,12 @@ static void render_island_view(RenderSurface *surface)
                     sprite_y -= lift;
                 }
                 /* FUN_0044338b enables the info flags around this sprite.
-                   FUN_0042003c maps the startup *work row's realm to frames
-                   22..25 and adjusts it from the retained current-location
-                   flags when that location context is available. */
+                   FUN_0042003c maps the floater's fltinf row realm to
+                   frames 22..25, shifted by its linked source site flags. */
                 if (g_floater_info_art.frame_count >= 26 && body_frame != NULL) {
                     uint32_t realm_frame;
                     int32_t badge_x;
                     int32_t badge_y;
-                    const GameRuntimeLocation *current_location = NULL;
-                    if (runtime_island != NULL && view_selected_location() >= 0 &&
-                        view_selected_location() < runtime_island->location_count) {
-                        current_location = &runtime_island->locations[view_selected_location()];
-                    }
                     int32_t body_left = sprite_x + body_frame->x_offset +
                                         body_frame->hit_left;
                     int32_t body_top = sprite_y + body_frame->y_offset +
@@ -1706,10 +1702,9 @@ static void render_island_view(RenderSurface *surface)
                     int32_t body_right = sprite_x + body_frame->x_offset +
                                          body_frame->hit_right;
                     if (island_worker_realm_badge_layout(
-                            selected_floater->type_index,
-                            current_location != NULL,
-                            current_location == NULL ? 0 : current_location->source_flags,
-                            selected_floater->facing_left,
+                            (uint8_t)game_session_floater_realm(
+                                &g_game_session, selected_floater),
+                            0, 0, selected_floater->facing_left,
                             body_left, body_top, body_right,
                             &realm_frame, &badge_x, &badge_y) &&
                         realm_frame < g_floater_info_art.frame_count) {
@@ -1731,7 +1726,7 @@ static void render_island_view(RenderSurface *surface)
                     int32_t body_right = sprite_x + body_frame->x_offset +
                                          body_frame->hit_right;
                     if (island_worker_stat_badge_layout(
-                            selected_floater->type_index,
+                            selected_floater->source_subtype,
                             island_floater_health_stat(selected_floater),
                             selected_floater->facing_left,
                             body_left, body_top, body_right,

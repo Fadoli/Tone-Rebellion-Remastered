@@ -98,8 +98,10 @@ int main(void)
         assert(frame == 11);
         assert(!island_worker_stat_badge_layout(0, 3, 0, 12, 27, 12,
                                                   &frame, &x, &y));
-        assert(!island_worker_stat_badge_layout(9, 3, 0, 12, 27, 33,
-                                                 &frame, &x, &y));
+        /* Leviathan subtypes (10..17) take the +5 offset too. */
+        assert(island_worker_stat_badge_layout(12, 3, 0, 12, 27, 33,
+                                               &frame, &x, &y));
+        assert(frame == 0x12 && x == 9 && y == 27);
     }
     {
         uint32_t frame = 0;

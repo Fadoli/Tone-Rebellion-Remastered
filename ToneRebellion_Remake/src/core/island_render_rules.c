@@ -235,7 +235,7 @@ int island_worker_stat_badge_layout(uint8_t worker_type,
 {
     int32_t stat = combat_stat;
     int horizontal_offset;
-    if (worker_type > 8U || frame == NULL || x == NULL || y == NULL ||
+    if (frame == NULL || x == NULL || y == NULL ||
         body_hit_right_exclusive <= body_hit_left) return 0;
     if (stat > 10) stat = 10;
     horizontal_offset = worker_type == 0U || worker_type == 8U

@@ -67,9 +67,10 @@ uint32_t island_worker_attack_legs_frame(uint16_t first_frame,
                                          int ping_pong,
                                          uint32_t attack_progress);
 
-/* FUN_0042704b draws a class-0 worker's combat-stat badge using
-   FUN_00420f28: FLTINFO frame 0x15-stat, with stat capped at ten. Type 0/8
-   uses a +2 X offset; other types use +5 when normal and +0 when mirrored. */
+/* FUN_0042704b draws every floater's health badge (Leviathans included)
+   using FUN_00420f28: FLTINFO frame 0x15-stat, with stat capped at ten.
+   `worker_type` is the subtype (+4): 0 and 8 use a +2 X offset; any other
+   subtype uses +5 when normal and +0 when mirrored. */
 int island_worker_stat_badge_layout(uint8_t worker_type,
                                     int16_t combat_stat, int facing_left,
                                     int32_t body_hit_left,

@@ -294,6 +294,13 @@ static int32_t floater_combat_realm(const GameSession *session,
     return realm & 3;
 }
 
+int game_session_floater_realm(const GameSession *session,
+                               const GameFloaterStart *floater)
+{
+    if (session == NULL || floater == NULL) return 0;
+    return (int)floater_combat_realm(session, floater, 0);
+}
+
 static int floater_attack_hits(GameSession *session,
                                const GameFloaterStart *attacker,
                                const GameFloaterStart *target,

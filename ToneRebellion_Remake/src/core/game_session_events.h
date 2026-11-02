@@ -225,6 +225,11 @@ int game_session_attack_effect_visual(const GameSession *session,
 int game_session_cast_effect_visual(const GameSession *session,
                                     unsigned int slot, int *visual,
                                     unsigned int *frame);
+/* FUN_0042003c(own subtype): the realm 0..3 of the floater's fltinf row
+   (Leviathans included, row subtype + 0x1b), shifted by its linked source
+   site's 0x10000 / 0x20000 flags. FUN_0042704b draws FLTINFO 0x16 + realm. */
+int game_session_floater_realm(const GameSession *session,
+                               const GameFloaterStart *floater);
 /* FUN_004182c8's KILLBEAS and FAROBT branches: up to three sprites in world
    coordinates. `visual` is a cast visual or GAME_CAST_SPRITE_OBJECT (the
    TRIGGERS object sheet); `stipple` 1..7 draws through the FUN_00410bd2
