@@ -640,6 +640,34 @@ done:
     return success;
 }
 
+/* FUN_0041c1d6: with float.cfg `sound_on`, a failed DirectSound start
+   (FUN_00459e84) shows newtext.txt DXSOUND with OK/Cancel; Cancel ends the
+   program, OK goes on without sound (ev_0ac1485a). The remake opens its
+   effect device here instead of on the first sound. */
+static int confirm_sound_device(void)
+{
+    CobArchive archive;
+    const CobMember *member;
+    unsigned char *bytes = NULL;
+    char text[256] = "DirectX cannot initialise your sound system.";
+    char error[256];
+
+    if (!float_cfg_has_keyword("sound_on") || sfx_open()) return 1;
+    if (cob_archive_open(game_file_path("TONE00.COB"), &archive,
+                         error, sizeof(error))) {
+        member = cob_archive_find(&archive, "newtext.txt");
+        bytes = member == NULL ? NULL : (unsigned char *)malloc(member->length + 1);
+        if (bytes != NULL &&
+            cob_archive_read_member(&archive, member, bytes, member->length,
+                                    error, sizeof(error)))
+            (void)extract_help_entry(bytes, member->length, "DXSOUND",
+                                     text, sizeof(text));
+        free(bytes);
+        cob_archive_close(&archive);
+    }
+    return platform_confirm(NULL, text, "Tone Rebellion");
+}
+
 /* Startup shared by both shells: game files, cursors, catalogs, art, text
    and settings. Returns 0 after showing the error. */
 static int app_load_content(const char *command_line)
@@ -672,6 +700,7 @@ static int app_load_content(const char *command_line)
     scan_load_slots();
     load_audio_settings();
     load_video_settings();
+    if (!confirm_sound_device()) return 0;
     g_menu.world_index = 0;
     g_menu.difficulty = 0;
     g_menu.selected_tribe = 0;

@@ -35,6 +35,12 @@ static void platform_message_box(HWND window, const char *text,
                       MB_OK | (error ? MB_ICONERROR : 0U));
 }
 
+/* OK/Cancel question; returns 1 for OK. */
+static int platform_confirm(HWND window, const char *text, const char *caption)
+{
+    return MessageBoxA(window, text, caption, MB_OKCANCEL | MB_ICONWARNING) == IDOK;
+}
+
 static void platform_set_title(HWND window, const char *title)
 {
     (void)SetWindowTextA(window, title);

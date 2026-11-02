@@ -67,6 +67,27 @@ static void platform_message_box(HWND window, const char *text,
                                    caption, text, g_sdl_window);
 }
 
+/* OK/Cancel question; returns 1 for OK. */
+static int platform_confirm(HWND window, const char *text, const char *caption)
+{
+    static const SDL_MessageBoxButtonData buttons[2] = {
+        {SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 1, "OK"},
+        {SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Cancel"}
+    };
+    SDL_MessageBoxData data;
+    int choice = 0;
+    (void)window;
+    memset(&data, 0, sizeof(data));
+    data.flags = SDL_MESSAGEBOX_WARNING;
+    data.window = g_sdl_window;
+    data.title = caption;
+    data.message = text;
+    data.numbuttons = 2;
+    data.buttons = buttons;
+    if (!SDL_ShowMessageBox(&data, &choice)) return 1;
+    return choice == 1;
+}
+
 static void platform_set_title(HWND window, const char *title)
 {
     (void)window;
