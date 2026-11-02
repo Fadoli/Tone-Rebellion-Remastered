@@ -63,7 +63,7 @@ détail (objet en `(W-0x37, 0x55)` à pleine échelle, icône de coût en `(0x2d
 Corrigé: centres de colonne `W/8 + k * (W >> 2)` (31, 94, 157, 220 pour W = 255) au lieu de `W * k / 4`; cadre de survol
 centré sur la colonne (`cx - W/8 + 5` à `cx + W/8 - 5`, `haut + 0x1a` à `bas - 10`) au lieu de la colonne entière;
 nombre du coût `"%d"` dessiné en `(0x25, 0x2d)` dans le détail (`FUN_00472ca0`, `FUN_004289c0`; couleur non décodée).
-Écarts restants: le natif dessine le cadre de survol avant l'objet (le port après), couleur du cadre inconnue (le port
+Écarts restants: (ordre cadre/objet aligné depuis, le port dessine le cadre avant l'objet) couleur du cadre inconnue (le port
 garde RGB(119, 199, 234)), condition de l'icône de coût `>= 0` natif contre `> 0` dans le port, formule du test de
 survol natif non décompilée (le port utilise `W + 1`), fermeture inconditionnelle au clic (le port reste ouvert si la
 file refuse, écart assumé), largeur et lignes du renvoi de la description non établies.
@@ -84,7 +84,7 @@ l'inventaire), avant l'objet de la colonne. La description passe par `FUN_00428b
 (corps identique à `FUN_0043954d`): `x = 6`, borne droite 173 (largeur 167), première ligne en `0x58 + 1 + h`, pas `h + 1`.
 Port: découpe en colonnes par `(x - gauche) / (W >> 2)` (colonne 5 sans survol), cadre en indice de palette 1, description en
 `x = 6`, largeur 167, première ligne `haut + 0x58 + h + 1`, pas `h + 1` (`draw_wrapped_bitmap_label_pitch`).
-Écarts restants: le cadre est dessiné après l'objet (natif avant), couleur de texte de la description non décodée.
+Écart restant: couleur de texte de la description non décodée (ordre cadre/objet aligné).
 
 ## Ordre de dessin et coordonnées (revue REA, sous-agent, non relue)
 
