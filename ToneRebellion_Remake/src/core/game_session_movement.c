@@ -1128,6 +1128,93 @@ static void game_session_promote_glyph_caster(GameSession *session,
     floater->source_order_pending = 1;
 }
 
+/* FUN_00460072's site picker: FUN_00467260(location count) until a site is
+   free (class 0, no object, no owner) or owned by 4 (0x4601af..0x4601c7).
+   The native loop never gives up; the port stops when no site qualifies. */
+static int pick_hand_back_site(GameSession *session, GameRuntimeIsland *island)
+{
+    unsigned int k;
+    int any = 0;
+
+    for (k = 0; k < island->location_count; ++k) {
+        const GameRuntimeLocation *site = &island->locations[k];
+        if ((site->renderer_class == 0 && site->record_value_24 == 0 &&
+             site->owner_id == -1) || site->owner_id == 4) {
+            any = 1;
+            break;
+        }
+    }
+    if (!any) return -1;
+    for (;;) {
+        const GameRuntimeLocation *site;
+        k = (unsigned int)tone_rng_bounded(&session->random_state,
+                                           (int32_t)island->location_count);
+        site = &island->locations[k];
+        if ((site->renderer_class == 0 && site->record_value_24 == 0 &&
+             site->owner_id == -1) || site->owner_id == 4) return (int)k;
+    }
+}
+
+static void place_hand_back_object(GameRuntimeLocation *site, int32_t object)
+{
+    site->record_value_24 = object;
+    if (site->record_value_10 == 0) site->record_value_10 = 1;
+}
+
+/* FUN_00460072 (ev_5cabff24, asm ev_160fda2c), multiplayer only: a player
+   who leaves or has no floater hands back its glyphs and artifacts. For each
+   glyph bit i, every island whose pair id (+0x29e0) equals i (0x4600ee)
+   resets its glyph site's +0x4a and flag bit 0, then gets objects 6+2i and
+   7+2i on two picked sites; the bit is cleared. Each inventory count of item
+   c is then emptied onto sites of the island whose index is the player
+   index (0x460244..0x46025f, as in the binary). */
+static void game_session_hand_back_player_holdings(GameSession *session,
+                                                   unsigned int player_slot)
+{
+    GamePlayerEconomy *economy = &session->economy[player_slot];
+    unsigned int bit;
+    unsigned int item;
+
+    for (bit = 0; bit < 14; ++bit) {
+        unsigned int island_index;
+        if ((economy->glyph_mask & (1U << bit)) == 0) continue;
+        for (island_index = 0; island_index < session->island_count;
+             ++island_index) {
+            GameRuntimeIsland *island = &session->islands[island_index];
+            unsigned int k;
+            int side;
+            if (island->leviathan_marker_shape_id != (int16_t)bit) continue;
+            for (k = 0; k < island->location_count; ++k) {
+                GameRuntimeLocation *feature = &island->locations[k];
+                if (feature->renderer_class != 3 ||
+                    feature->record_value_10 != 4) continue;
+                feature->source_capacity_4a = 0;
+                feature->source_flags &= ~1U;
+            }
+            for (side = 0; side < 2; ++side) {
+                int site = pick_hand_back_site(session, island);
+                if (site < 0) break;
+                place_hand_back_object(&island->locations[site],
+                                       (int32_t)(6 + 2 * bit) + side);
+            }
+        }
+        economy->glyph_mask &= (uint16_t)~(1U << bit);
+        economy->special_feature_island_mask &= (uint16_t)~(1U << bit);
+    }
+
+    if (player_slot >= session->island_count) return;
+    for (item = 0; item < GAME_INVENTORY_ITEM_COUNT; ++item) {
+        GameRuntimeIsland *island = &session->islands[player_slot];
+        while (economy->inventory_count[item] != 0) {
+            int site = pick_hand_back_site(session, island);
+            if (site < 0) return;
+            place_hand_back_object(&island->locations[site],
+                                   (int32_t)(GAME_INVENTORY_ITEM_FIRST_ID + item));
+            --economy->inventory_count[item];
+        }
+    }
+}
+
 static int game_session_create_recruited_worker(GameSession *session,
                                                  uint8_t player_slot,
                                                  uint8_t island_index,
@@ -1248,11 +1335,13 @@ static void game_session_tick_floater_recruitment(
            count. A class-1 recruiter marker must also be available. */
         /* 0x45eaf5..0x45eb50: no floaters or +0x3c < 1 sets the +0x90 latch
            in solo (DAT_004befe0 == 0). In a network game the latch is never
-           set: FUN_00460072 runs instead (not modeled) and both paths skip
-           the recruiter for this tick (ev_3de14804). */
+           set: FUN_00460072 runs instead and both paths skip the recruiter
+           for this tick (ev_3de14804). */
         if (owned_count == 0 || economy->source_maintenance_capacity < 1) {
             if (!session->config.multiplayer_session)
                 economy->defeat_latched = 1;
+            else
+                game_session_hand_back_player_holdings(session, player_slot);
             continue;
         }
         if (island_index >= session->island_count) continue;

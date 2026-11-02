@@ -860,10 +860,21 @@ static void test_defeat_latch_is_solo_only(void)
             if (session.floaters[index].owner_slot == 1)
                 session.floaters[index].is_active = 0;
         }
+        session.economy[1].inventory_count[0] = 1;
         game_session_tick_floater_moves(&session, 1U, &catalog);
         /* FUN_0045eaa7 0x45eb10: only the solo path writes +0x90. */
         assert(session.economy[1].defeat_latched == (pass == 0));
         assert(!session.economy[0].defeat_latched);
+        /* The network path runs FUN_00460072: item 5 lands on island 1. */
+        assert(session.economy[1].inventory_count[0] == (pass == 0));
+        if (pass == 1) {
+            unsigned int placed = 0;
+            for (index = 0; index < session.islands[1].location_count; ++index) {
+                if (session.islands[1].locations[index].record_value_24 == 5)
+                    ++placed;
+            }
+            assert(placed == 1);
+        }
     }
 }
 
