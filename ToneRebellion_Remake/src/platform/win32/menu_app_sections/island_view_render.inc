@@ -1338,7 +1338,8 @@ static void render_island_view(RenderSurface *surface)
                 }
                 (void)snprintf(row, sizeof(row), "%s %u", g_unit_label_text[2],
                                level + 1U);
-                draw_bitmap_label(surface, row, info->pane.left + 5, row_y,
+                /* FUN_0044338b draws the linked rows at x = 4 (ev_347b34f6). */
+                draw_bitmap_label(surface, row, info->pane.left + 4, row_y,
                                   RGB(230, 238, 255));
                 row_y += 10;
                 if (level < 2 && selected_floater->source_subtype < 6) {
@@ -1354,7 +1355,7 @@ static void render_island_view(RenderSurface *surface)
                     (void)snprintf(row, sizeof(row), "EXP %u",
                         (unsigned int)selected_floater->source_progress_08);
                 }
-                draw_bitmap_label(surface, row, info->pane.left + 5, row_y,
+                draw_bitmap_label(surface, row, info->pane.left + 4, row_y,
                                   RGB(230, 238, 255));
                 row_y += 10;
                 if (game_session_floater_charge_values(selected_floater,
@@ -1362,7 +1363,7 @@ static void render_island_view(RenderSurface *surface)
                     (void)snprintf(row, sizeof(row), "%s %d/%d",
                         g_unit_label_text[5], (int)current_charge,
                         (int)maximum_charge);
-                    draw_bitmap_label(surface, row, info->pane.left + 5, row_y,
+                    draw_bitmap_label(surface, row, info->pane.left + 4, row_y,
                                       RGB(230, 238, 255));
                 }
                 row_y += 10;
@@ -1370,13 +1371,13 @@ static void render_island_view(RenderSurface *surface)
                     g_unit_label_text[3],
                     (unsigned int)selected_floater->current_hit_points,
                     (unsigned int)selected_floater->max_hit_points);
-                draw_bitmap_label(surface, row, info->pane.left + 5, row_y,
+                draw_bitmap_label(surface, row, info->pane.left + 4, row_y,
                                   RGB(230, 238, 255));
                 row_y += 10;
                 (void)snprintf(row, sizeof(row), "%s %u",
                     g_unit_label_text[4],
                     (unsigned int)selected_floater->attack_strength);
-                draw_bitmap_label(surface, row, info->pane.left + 5, row_y,
+                draw_bitmap_label(surface, row, info->pane.left + 4, row_y,
                                   RGB(230, 238, 255));
             } else {
             {
