@@ -62,12 +62,14 @@ int main(int argc, char **argv)
     assert(!island_panel_location_control_visible(WINDOW_ISLAND_PANEL_TASKS));
     assert(!island_panel_location_control_visible(WINDOW_ISLAND_PANEL_EFFECT_DEBUG));
     assert(!island_panel_location_control_visible(WINDOW_ISLAND_PANEL_CONSTRUCTION));
-    assert(island_panel_repair_button_visible(0x25, 0, 0, 9, 10));
-    assert(island_panel_repair_button_visible(0x35, 1, 1, 9, 10));
-    assert(!island_panel_repair_button_visible(0x25, 0, 0, 10, 10));
-    assert(!island_panel_repair_button_visible(0x25, 1, 0, 9, 10));
-    assert(!island_panel_repair_button_visible(0x24, 0, 0, 9, 10));
-    assert(!island_panel_repair_button_visible(0x35, 1, 1, 10, 10));
+    /* FUN_0045302a: any class-0 building above 0x24 except the Hall. */
+    assert(island_panel_repair_button_visible(0x25, 0, 0));
+    assert(island_panel_repair_button_visible(0x35, 1, 0));
+    assert(island_panel_repair_button_visible(0x25, 4, 0));
+    assert(!island_panel_repair_button_visible(0x24, 0, 0));
+    assert(!island_panel_repair_button_visible(0x2a, -1, 0));
+    assert(!island_panel_repair_button_visible(0x3a, 1, 0));
+    assert(!island_panel_repair_button_visible(0x25, 0, 1));
     assert(island_panel_onoff_button_visible(0x25, 0, 0, 0));
     /* Runtime item IDs include the owner's 16-item block (FUN_004641de). */
     assert(island_panel_onoff_button_visible(0x36, 0, 1, 1));

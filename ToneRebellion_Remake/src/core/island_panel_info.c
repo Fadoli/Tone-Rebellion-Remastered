@@ -39,18 +39,13 @@ int island_panel_location_control_visible(int panel_mode)
 }
 
 int island_panel_repair_button_visible(int item_id, int owner_id,
-                                       int current_player_id,
-                                       int current_hit_points,
-                                       int maximum_hit_points)
+                                       int renderer_class)
 {
-    int player_item_id;
-    if (current_player_id < 0 || current_player_id >= GAME_START_PLAYER_COUNT ||
-        owner_id != current_player_id || current_hit_points < 0 ||
-        maximum_hit_points <= 0 || current_hit_points >= maximum_hit_points) {
-        return 0;
-    }
-    player_item_id = item_id - owner_id * 16;
-    return player_item_id >= 0x25 && player_item_id <= 0x34;
+    int base_item_id = item_id;
+    if (renderer_class != 0) return 0;
+    if (owner_id >= 0 && owner_id < GAME_START_PLAYER_COUNT && item_id > 1)
+        base_item_id -= owner_id * 16;
+    return base_item_id > 0x24 && base_item_id != 0x2a;
 }
 
 int island_panel_onoff_button_visible(int item_id, int renderer_class,

@@ -54,12 +54,12 @@ int island_panel_player_for_mode(int panel_mode, int active_player,
 int island_panel_location_info_visible(int panel_mode);
 int island_panel_location_control_visible(int panel_mode);
 
-/* The source repair route accepts owned item IDs 0x25..0x34 and checks
-   current +0x34 against FUN_00450978's maximum before routing. */
+/* FUN_0045302a lists command 3 (BC_Repair) for any class-0 site whose base
+   item is above 0x24 and not the Hall 0x2a, whatever its owner or hit
+   points; ownership and damage are only checked on click (FUN_00429f3a,
+   FUN_00452b67). */
 int island_panel_repair_button_visible(int item_id, int owner_id,
-                                       int current_player_id,
-                                       int current_hit_points,
-                                       int maximum_hit_points);
+                                       int renderer_class);
 
 /* FUN_0045302a lists BC_OnOff for class-0 sites with owned types 0x25..0x27. */
 int island_panel_onoff_button_visible(int item_id, int renderer_class,

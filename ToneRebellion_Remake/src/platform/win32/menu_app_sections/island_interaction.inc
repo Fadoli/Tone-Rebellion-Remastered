@@ -279,23 +279,16 @@ static IslandLocationActionControl selected_location_action(void)
 static int selected_repair_button_visible(void)
 {
     const GameRuntimeIsland *island;
-    int16_t current_hit_points;
-    int16_t maximum_hit_points;
     if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
         selection_island() < 0 ||
         selection_island() >= g_game_session.island_count ||
         g_selected_location < 0) return 0;
     island = &g_game_session.islands[selection_island()];
     if (g_selected_location >= island->location_count) return 0;
-    if (!game_session_repair_location_values(&g_game_session, &g_pad_catalog,
-            (uint8_t)selection_island(),
-            (uint16_t)g_selected_location,
-            &current_hit_points, &maximum_hit_points)) return 0;
     return island_panel_repair_button_visible(
         island->locations[g_selected_location].record_value_10,
         island->locations[g_selected_location].owner_id,
-        g_game_session.config.selected_tribe,
-        current_hit_points, maximum_hit_points);
+        island->locations[g_selected_location].renderer_class);
 }
 
 static int selected_onoff_button_visible(void)
