@@ -289,15 +289,16 @@ try {
         if (-not $near) { $bridge = $l; break }
     }
     if ($bridge) {
-        # Open the Tasks panel first: native bridge entry runs no mode switch.
+        # Open the Tasks panel first: the crossing re-selects the kept location
+        # through FUN_0042f755(rec, 1), the building panel (mode 3).
         Click 130 450
         $pre = WaitState { param($s) $s.panel_mode -eq 2 } 2
         $st2 = State
         ClickBridge $st2 $bridge | Out-Null
         $in = WaitState { param($s) $s.island -ne $startIsland } 4
         Check ($in.island -eq $bridge.neighbor) "clicking a built bridge enters the partner island" "wanted $($bridge.neighbor) got $($in.island)"
-        if ($pre.panel_mode -eq 2) {
-            Check ($in.panel_mode -eq 2) "the open panel survives the bridge crossing" "panel_mode $($in.panel_mode)"
+        if ($pre.selected_location -ge 0) {
+            Check ($in.panel_mode -eq 3 -and $in.selected_location -eq $pre.selected_location) "the bridge crossing keeps the selection in the building panel" "panel_mode $($in.panel_mode) selected $($in.selected_location) was $($pre.selected_location)"
         }
         $partner = $null
         foreach ($l in $in.locations) { if ($l.class -eq 2 -and $l.neighbor -eq $startIsland) { $partner = $l; break } }

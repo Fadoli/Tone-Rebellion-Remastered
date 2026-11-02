@@ -595,8 +595,9 @@ static void handle_click(HWND window, int x, int y)
                 /* FUN_0042f303 hides IWLocInfo/IWLocControl in these states;
                    consume clicks outside the visible task/effect panels. The
                    island view itself (y < 320) keeps receiving clicks: a
-                   constructed bridge still switches island with the panel
-                   open (no mode switch on that path); any other pick returns
+                   constructed bridge still switches island, then
+                   re-selects the kept location in the building panel (mode
+                   3, FUN_0042f755(rec, 1)); any other pick returns
                    to mode 0 (FUN_0042f8f7 / FUN_0042f303(0)) and is handled
                    as a normal click. */
                 if (y < 320 && x >= 0 && x < LOGICAL_WIDTH) {
@@ -769,7 +770,7 @@ static void handle_click(HWND window, int x, int y)
                             update_interaction_cursor();
                         } else if (enter_bridge_destination(window,
                                                             clicked_location)) {
-                            /* island changed; selection already reset */
+                            /* island changed; selection kept (mode 3) */
                         } else if (open_construction_task(clicked_location)) {
                             /* Remake addition: pending build site opens its
                                task in the Tasks view. */

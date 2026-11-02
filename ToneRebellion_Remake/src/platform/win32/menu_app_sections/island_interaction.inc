@@ -120,6 +120,8 @@ static int enter_bridge_destination(HWND window, int location_index)
     int partner_x = -1;
     int saved_panel_mode = g_island_panel_mode;
     int saved_hovered_hall = g_hovered_hall_command;
+    int saved_selection_island = selection_island();
+    int saved_selection = g_selected_location;
     int saved_scroll_target;
     if (!g_game_session_valid || origin < 0 ||
         origin >= g_game_session.island_count || location_index < 0) return 0;
@@ -142,6 +144,16 @@ static int enter_bridge_destination(HWND window, int location_index)
     if (!open_island_view(window, bridge->bridge_neighbor_island)) return 0;
     g_island_panel_mode = saved_panel_mode;
     g_hovered_hall_command = saved_hovered_hall;
+    /* FUN_0042fa0f 0x4d keeps +0x16c across the reload; the 0x32 caller then
+       re-selects IWLocInfo's +0x70 (the last record sent by 0x350b, the
+       same selection) through FUN_0042f755(rec, 1): building panel mode 3
+       (FUN_0042f303(3)) on the origin-island record (ev_ed75141a,
+       ev_c6e68143, ev_6a86d6f2). */
+    if (saved_selection >= 0 && saved_selection_island >= 0) {
+        select_location_anywhere(saved_selection_island, saved_selection);
+        select_building_warrior();
+        g_island_panel_mode = WINDOW_ISLAND_PANEL_LOCATION;
+    }
     if (partner_x >= 0) {
         saved_scroll_target = partner_x - 0x140;
         g_island_scroll_x = island_clamp_scroll(saved_scroll_target);
