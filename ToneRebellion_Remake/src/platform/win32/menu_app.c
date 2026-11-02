@@ -157,6 +157,7 @@ static SpriteSheet g_diplomacy_art;
 static SpriteSheet g_leviathan_projectile_art[4];
 static SpriteSheet g_leviathan_impact_art[4];
 static SpriteSheet g_cast_effect_art[GAME_CAST_VISUAL_COUNT];
+static SpriteSheet g_cast_effect_art_flipped[GAME_CAST_VISUAL_COUNT];
 static SpriteSheet g_attack_effect_art[FLOATER_EFFECT_MAX];
 static SpriteSheet g_attack_effect_art_flipped[FLOATER_EFFECT_MAX];
 static SpriteSheet g_attack_impact_art_flipped[4];

@@ -1267,12 +1267,41 @@ static void render_island_view(RenderSurface *surface)
             const SpriteSheet *cast_art;
             int x;
             int y;
+            GameCastSprite specials[3];
+            int special_count = game_session_cast_special_sprites(
+                &g_game_session, projectile_index, specials);
+            if (special_count >= 0) {
+                int special;
+                if (g_game_session.floaters[g_game_session.cast_effects[
+                        projectile_index].caster_index].island_index !=
+                    g_menu.selected_map_island) continue;
+                for (special = 0; special < special_count; ++special) {
+                    const GameCastSprite *sprite = &specials[special];
+                    cast_art = sprite->visual == GAME_CAST_SPRITE_OBJECT
+                        ? &g_inventory_item_art
+                        : &g_cast_effect_art[sprite->visual];
+                    x = (int)sprite->x - g_island_scroll_x;
+                    y = image_top + (int)sprite->y;
+                    if (sprite->frame >= cast_art->frame_count ||
+                        x < -64 || x >= LOGICAL_WIDTH + 64) continue;
+                    if (sprite->stipple >= 8)
+                        draw_sprite(surface, cast_art, sprite->frame, x, y);
+                    else
+                        draw_feature_reveal(surface, cast_art, g_island_surface_id,
+                                            sprite->frame, x, y, sprite->stipple);
+                }
+                continue;
+            }
             if (!game_session_cast_effect_visual(&g_game_session,
                     projectile_index, &visual, &cast_frame)) continue;
             if (g_game_session.floaters[g_game_session.cast_effects[
                     projectile_index].caster_index].island_index !=
                 g_menu.selected_map_island) continue;
-            cast_art = &g_cast_effect_art[visual];
+            /* FUN_004182c8 draws with x scale -1.0 when flag bit 0 is set. */
+            cast_art = g_game_session.cast_effects[projectile_index].mirrored &&
+                    g_cast_effect_art_flipped[visual].frame_count != 0
+                ? &g_cast_effect_art_flipped[visual]
+                : &g_cast_effect_art[visual];
             if (cast_frame >= cast_art->frame_count) continue;
             x = (int)g_game_session.cast_effects[projectile_index].effect_x -
                 g_island_scroll_x;

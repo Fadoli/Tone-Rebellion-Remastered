@@ -780,7 +780,10 @@ static void app_release_content(void)
         free_sprite_sheet(&g_leviathan_impact_art[effect_index]);
     }
     for (unsigned int effect_index = 0; effect_index < GAME_CAST_VISUAL_COUNT; ++effect_index)
+    {
         free_sprite_sheet(&g_cast_effect_art[effect_index]);
+        free_sprite_sheet(&g_cast_effect_art_flipped[effect_index]);
+    }
     for (unsigned int effect_index = 0; effect_index < FLOATER_EFFECT_MAX; ++effect_index) {
         free_sprite_sheet(&g_attack_effect_art[effect_index]);
         free_sprite_sheet(&g_attack_effect_art_flipped[effect_index]);

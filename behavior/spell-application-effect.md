@@ -24,7 +24,18 @@ Observations Ghidra (REA sonnet/haiku 2026-11-02; `ev_821b6030…`, `ev_9605cef5
 
 Port: `game_session_schedule_cast_effect_step` / `game_session_tick_cast_effects` (`game_session_combat.c`) et `game_session_cast_effect_visual` (`game_session_build_events.c`), avec 23 visuels chargés par `island_assets.inc`.
 
+Dessin (`FUN_004182c8`, REA haiku 2026-11-02, `ev_3d2e004f…`):
+- Cas général: frame [3] en ([5], [6]), miroir si bit 0 de [8] (lanceur tourné à gauche).
+- `KILLBEAS`: trois sprites à x = flotteur cible [1] − 5 + 5k, compteurs [5], [6], [3]. Pour c ≤ 63: y = cible − 320 + 5c, frame (c non signé mod 13) + 13 quand le bit k de [2] est nul. Pour 64..73: y = cible, frame c − 38. Pas de miroir.
+- `FAROBT`: sur le site cible, compteur c = [5]:
+  - 3..23: frame 0, y − 80, masque `FUN_00410bd2` niveau c/3.
+  - 24..53: frame 0, y − 128 + 2c.
+  - 54..67: frames 1..7, y − 20.
+  - 68..97: frame 7, y + 116 − 2c.
+  - 98..121: frame 7, y − 80, niveau 8 − (c − 98)/3.
+  - À c = 0x44, [2] = site +0x24; l'objet (`FUN_0040adb5`, TRIGGERS frame sel − 5) est dessiné 20 plus bas avec le même niveau.
+
 Limites et interprétations:
-- Les branches de dessin propres à `KILLBEAS` et `FAROBT` dans `FUN_004182c8` ne sont pas portées. Le port dessine `KILLBEAS` comme sprite de départ, et `FAROBT` (frame 0) sur le site cible jusqu'à l'application.
-- Le miroir (bit 0, lanceur +0x1c & 2) n'est pas appliqué.
-- La plage exacte de `FUN_00467260(30)` est reprise de `tone_rng_bounded`.
+- Les formes fixes de `FUN_0040adb5` pour les sélecteurs 1..3 (`DAT_0049aca8..acb0`) ne sont pas résolues; le port ne les dessine pas.
+- Le port suppose que [2] reste à 0 pour `KILLBEAS` (frames +13).
+- La plage exacte de `FUN_00467260(30)` est reprise de `tone_rng_bounded`; l'ordre des tirages ([5], [6], [3]) suit le rapport.

@@ -227,6 +227,8 @@ typedef struct GameSession {
         /* Draw-only clock: ticks spent in `visual_phase` (reset on change). */
         uint16_t animation_ticks;
         uint8_t visual_phase;
+        /* Flag bit 0 at creation: the caster faces left (+0x1c & 2). */
+        uint8_t mirrored;
     } cast_effects[GAME_SESSION_MAX_CAST_EFFECTS];
     uint8_t active_cast_effect_count;
     /* Draw-only random stream (FUN_004152bd draws rand(0x8000) every tick);

@@ -137,7 +137,6 @@ int game_session_cast_effect_visual(const GameSession *session,
     caster = &session->floaters[effect->caster_index];
     switch (effect->animation_phase) {
     case GAME_CAST_PHASE_START:
-    case GAME_CAST_PHASE_KILLBEAS:
         id = game_session_cast_sound_id(effect->step, caster->owner_slot);
         if (id < 0 || id >= 10) return 0;
         count = last_frame[id] + 1;
@@ -171,12 +170,6 @@ int game_session_cast_effect_visual(const GameSession *session,
         default: id = 21; count = 17; break;          /* BLASTWB */
         }
         break;
-    case GAME_CAST_PHASE_FAROBT:
-        /* Frame 0, never stepped; FUN_004182c8 has its own FAROBT branch
-           (not ported), drawn here at the target site. */
-        *visual = 22;
-        *frame = 0;
-        return effect->odd_updates_remaining < 0x44;
     default:
         return 0;
     }
@@ -193,6 +186,100 @@ int game_session_cast_effect_visual(const GameSession *session,
     return 1;
 }
 
+
+int game_session_cast_special_sprites(const GameSession *session,
+                                      unsigned int slot,
+                                      GameCastSprite out[3])
+{
+    const struct GameCastEffectState *effect;
+    const GameFloaterStart *caster;
+    int count = 0;
+
+    if (session == NULL || out == NULL ||
+        slot >= GAME_SESSION_MAX_CAST_EFFECTS) return -1;
+    effect = &session->cast_effects[slot];
+    if (!effect->active || effect->caster_index >= session->floater_count)
+        return -1;
+    caster = &session->floaters[effect->caster_index];
+    if (effect->animation_phase == GAME_CAST_PHASE_KILLBEAS) {
+        /* Three KILLBEAS sprites 5 apart over target floater [1]: counter c
+           <= 63 falls from 320 above it at 5 per tick on frame
+           (unsigned c mod 13) + 13 (level 0 bits clear); 64..73 lands on
+           frames 26..35. */
+        const int32_t counters[3] = {
+            (int16_t)effect->effect_x, (int16_t)effect->effect_y,
+            (int8_t)effect->odd_updates_remaining
+        };
+        const GameFloaterStart *target;
+        unsigned int k;
+        if (effect->phase_odd_updates_remaining == 0 ||
+            caster->order_target_floater < 0 ||
+            (unsigned int)caster->order_target_floater >= session->floater_count)
+            return 0;
+        target = &session->floaters[(unsigned int)caster->order_target_floater];
+        for (k = 0; k < 3; ++k) {
+            int32_t c = counters[k];
+            GameCastSprite *sprite = &out[count];
+            sprite->visual = 7;
+            sprite->x = (int32_t)target->x - 5 + 5 * (int32_t)k;
+            sprite->stipple = 8;
+            if (c <= 63) {
+                sprite->y = (int32_t)target->y - 320 + 5 * c;
+                sprite->frame = (uint32_t)c % 13U + 13U;
+            } else {
+                if (c - 38 >= 36) continue;
+                sprite->y = target->y;
+                sprite->frame = (unsigned int)(c - 38);
+            }
+            ++count;
+        }
+        return count;
+    }
+    if (effect->animation_phase == GAME_CAST_PHASE_FAROBT) {
+        /* FAROBT at the target site: fades in 80 above it, dips to the site,
+           grabs, then carries the site's object back up and fades out
+           (stipple level 8 is opaque). */
+        unsigned int c = effect->odd_updates_remaining;
+        int16_t selector = (int16_t)effect->effect_y;
+        const GameRuntimeLocation *site;
+        int32_t y0;
+        int32_t y;
+        int level;
+        unsigned int frame;
+        if (caster->island_index >= session->island_count ||
+            effect->target_location_index < 0 ||
+            (uint16_t)effect->target_location_index >=
+                session->islands[caster->island_index].location_count)
+            return 0;
+        site = &session->islands[caster->island_index]
+                    .locations[(uint16_t)effect->target_location_index];
+        y0 = site->y;
+        if (c < 24) { frame = 0; y = y0 - 80; level = (int)(c / 3U); }
+        else if (c < 54) { frame = 0; y = y0 - 128 + 2 * (int32_t)c; level = 8; }
+        else if (c < 68) { frame = 1 + (c - 54) / 2; y = y0 - 20; level = 8; }
+        else if (c < 98) { frame = 7; y = y0 + 116 - 2 * (int32_t)c; level = 8; }
+        else { frame = 7; y = y0 - 80; level = 8 - (int)((c - 98) / 3U); }
+        if (level <= 0) return 0;
+        out[count].visual = 22;
+        out[count].frame = frame;
+        out[count].x = site->x;
+        out[count].y = y;
+        out[count].stipple = (uint8_t)level;
+        ++count;
+        /* FUN_0040adb5: selectors 5.. are TRIGGERS frames sel - 5; 1..3
+           use fixed shapes that are not resolved, and are skipped. */
+        if (selector >= 5) {
+            out[count].visual = GAME_CAST_SPRITE_OBJECT;
+            out[count].frame = (unsigned int)(selector - 5);
+            out[count].x = site->x;
+            out[count].y = y + 20;
+            out[count].stipple = (uint8_t)level;
+            ++count;
+        }
+        return count;
+    }
+    return -1;
+}
 
 int game_session_queue_cast_audio(GameSession *session, uint8_t island,
                                   uint8_t sound)

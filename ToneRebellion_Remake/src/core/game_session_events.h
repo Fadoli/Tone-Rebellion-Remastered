@@ -225,6 +225,22 @@ int game_session_attack_effect_visual(const GameSession *session,
 int game_session_cast_effect_visual(const GameSession *session,
                                     unsigned int slot, int *visual,
                                     unsigned int *frame);
+/* FUN_004182c8's KILLBEAS and FAROBT branches: up to three sprites in world
+   coordinates. `visual` is a cast visual or GAME_CAST_SPRITE_OBJECT (the
+   TRIGGERS object sheet); `stipple` 1..7 draws through the FUN_00410bd2
+   reveal mask, 8 is opaque. Returns -1 for a slot drawn by
+   game_session_cast_effect_visual. */
+enum { GAME_CAST_SPRITE_OBJECT = -1 };
+typedef struct GameCastSprite {
+    int visual;
+    unsigned int frame;
+    int32_t x;
+    int32_t y;
+    uint8_t stipple;
+} GameCastSprite;
+int game_session_cast_special_sprites(const GameSession *session,
+                                      unsigned int slot,
+                                      GameCastSprite out[3]);
 /* `island` is the caster's island: the sound is only audible while that island
    is being viewed. */
 int game_session_queue_cast_audio(GameSession *session, uint8_t island,

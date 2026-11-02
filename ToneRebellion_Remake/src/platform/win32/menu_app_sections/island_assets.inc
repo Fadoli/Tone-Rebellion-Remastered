@@ -39,6 +39,7 @@ static int load_island_surface(int island_id, int map_island_index,
     SpriteSheet defense_projectile_candidates[4] = {{0}};
     SpriteSheet defense_impact_candidates[4] = {{0}};
     SpriteSheet cast_effect_candidates[GAME_CAST_VISUAL_COUNT] = {{0}};
+    SpriteSheet cast_effect_flipped_candidates[GAME_CAST_VISUAL_COUNT] = {{0}};
     /* effects.txt SPECIAL SHAPE names, in game_session_cast_effect_visual order. */
     static const char *const cast_effect_names[GAME_CAST_VISUAL_COUNT] = {
         "data\\pcast.shp", "data\\scast.shp", "data\\mcast.shp",
@@ -233,7 +234,10 @@ static int load_island_surface(int island_id, int map_island_index,
     for (hall_index = 0; hall_index < GAME_CAST_VISUAL_COUNT; ++hall_index) {
         if (!load_sprite_sheet(&archive, cast_effect_names[hall_index], palette,
                                &cast_effect_candidates[hall_index], error,
-                               error_capacity)) goto done;
+                               error_capacity) ||
+            !mirror_sprite_sheet_horizontally(&cast_effect_candidates[hall_index],
+                                              &cast_effect_flipped_candidates[hall_index],
+                                              error, error_capacity)) goto done;
     }
     if (leviathan_reveal_candidate.frame_count == 0) {
         (void)snprintf(error, error_capacity,
@@ -626,6 +630,11 @@ static int load_island_surface(int island_id, int map_island_index,
         g_cast_effect_art[hall_index] = cast_effect_candidates[hall_index];
         memset(&cast_effect_candidates[hall_index], 0,
                sizeof(cast_effect_candidates[hall_index]));
+        free_sprite_sheet(&g_cast_effect_art_flipped[hall_index]);
+        g_cast_effect_art_flipped[hall_index] =
+            cast_effect_flipped_candidates[hall_index];
+        memset(&cast_effect_flipped_candidates[hall_index], 0,
+               sizeof(cast_effect_flipped_candidates[hall_index]));
     }
     for (hall_index = 0; hall_index < 4; ++hall_index) {
         free_sprite_sheet(&g_initial_floater_bodies[hall_index]);
@@ -808,8 +817,10 @@ done:
         free_sprite_sheet(&defense_projectile_candidates[hall_index]);
     for (hall_index = 0; hall_index < 4; ++hall_index)
         free_sprite_sheet(&defense_impact_candidates[hall_index]);
-    for (hall_index = 0; hall_index < GAME_CAST_VISUAL_COUNT; ++hall_index)
+    for (hall_index = 0; hall_index < GAME_CAST_VISUAL_COUNT; ++hall_index) {
         free_sprite_sheet(&cast_effect_candidates[hall_index]);
+        free_sprite_sheet(&cast_effect_flipped_candidates[hall_index]);
+    }
     for (item_id = 0; item_id < PAD_CATALOG_MAX_ITEMS; ++item_id) {
         free_sprite_sheet(&building_candidates[item_id]);
     }

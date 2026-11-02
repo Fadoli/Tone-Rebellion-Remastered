@@ -1492,6 +1492,7 @@ int game_session_schedule_cast_effect_step(
         effect->target_location_index = target_location_index;
         effect->effect_x = caster->x;
         effect->effect_y = caster->y;
+        effect->mirrored = caster->facing_left ? 1U : 0U;
         if (step == 0x10) {
             /* DESTSUPP has no 0x100 start pass: it travels at once. */
             effect->animation_phase = GAME_CAST_PHASE_DESTSUPP_TRAVEL;
@@ -1611,12 +1612,9 @@ void game_session_tick_cast_effects(GameSession *session,
             if (finish < 0) {
                 /* 2, 8 aside, 0xe, 0x11, 0x14..0x16: one pass, then apply. */
                 if (effect->step == 8) {
-                    /* FAROBT: a tick counter replaces the frame stepping. */
-                    if (cast_effect_target(session, effect, &target_x,
-                                           &target_y)) {
-                        effect->effect_x = (uint16_t)target_x;
-                        effect->effect_y = (uint16_t)target_y;
-                    }
+                    /* FAROBT: a tick counter replaces the frame stepping;
+                       effect_y keeps the overlay selector ([2], -1). */
+                    effect->effect_y = UINT16_MAX;
                     cast_effect_enter_phase(effect, GAME_CAST_PHASE_FAROBT, 0);
                     break;
                 }
@@ -1654,25 +1652,41 @@ void game_session_tick_cast_effects(GameSession *session,
         case GAME_CAST_PHASE_FAROBT:
             /* Counter from the transition: apply at 0x44, free at 0x7a. */
             ++effect->odd_updates_remaining;
-            if (effect->odd_updates_remaining == 0x44)
+            if (effect->odd_updates_remaining == 0x44) {
+                /* [2] = the site's +0x24 object, drawn over the sprite. */
+                const GameFloaterStart *caster =
+                    &session->floaters[effect->caster_index];
+                if (cast_effect_target(session, effect, &target_x, &target_y))
+                    effect->effect_y = (uint16_t)(int16_t)session->islands[
+                        caster->island_index].locations[
+                        (uint16_t)effect->target_location_index].record_value_24;
                 cast_effect_apply(session, catalog, effect);
+            }
             else if (effect->odd_updates_remaining >= 0x7a)
                 cast_effect_free(session, effect);
             break;
         case GAME_CAST_PHASE_KILLBEAS:
+            /* [5], [6] and [3] are the three counters, kept in effect_x,
+               effect_y and odd_updates_remaining. The first call sets them
+               to -rand(30); each later tick raises them and all must pass
+               75. */
             if (effect->phase_odd_updates_remaining == 0) {
-                /* The first call draws three -rand(30) counters; each later
-                   tick raises them and all must pass 75. */
-                int32_t highest = 0;
-                unsigned int draw;
-                for (draw = 0; draw < 3; ++draw) {
-                    int32_t value = tone_rng_bounded(&session->random_state, 30);
-                    if (value > highest) highest = value;
-                }
-                effect->phase_odd_updates_remaining = (uint8_t)(76 + highest);
+                effect->effect_x = (uint16_t)(int16_t)
+                    -tone_rng_bounded(&session->random_state, 30);
+                effect->effect_y = (uint16_t)(int16_t)
+                    -tone_rng_bounded(&session->random_state, 30);
+                effect->odd_updates_remaining = (uint8_t)(int8_t)
+                    -tone_rng_bounded(&session->random_state, 30);
+                effect->phase_odd_updates_remaining = 1;
                 break;
             }
-            if (--effect->phase_odd_updates_remaining != 0) break;
+            effect->effect_x = (uint16_t)((int16_t)effect->effect_x + 1);
+            effect->effect_y = (uint16_t)((int16_t)effect->effect_y + 1);
+            effect->odd_updates_remaining =
+                (uint8_t)((int8_t)effect->odd_updates_remaining + 1);
+            if ((int16_t)effect->effect_x <= 75 ||
+                (int16_t)effect->effect_y <= 75 ||
+                (int8_t)effect->odd_updates_remaining <= 75) break;
             cast_effect_apply(session, catalog, effect);
             cast_effect_free(session, effect);
             break;
