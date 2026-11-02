@@ -1,12 +1,31 @@
+/* PARADISE (data\end.shp) and PARAGLOW (data\endglw.shp), loaded with the
+   map palette; FUN_004702d9 case 1 preloads them in world state 3. */
+static SpriteSheet g_paradise_art;
+static SpriteSheet g_paraglow_art;
+/* DAT_006324b8: post-incremented on every PARADISE paint. */
+static uint32_t g_paradise_paint_count;
+
 static void render_world_map(RenderSurface *surface)
 {
     const WorldDefinition *world;
     size_t island_index;
+    /* FUN_004711e2 (ev_c734e7a6): islands and bridges (FUN_00471e66) are
+       drawn while DAT_006191b4 < 4, while state 4 has DAT_006191b6 < 0x3c,
+       or while the word at 0x619248 (player 0 +0x90) is set. */
+    int sequence_state = g_game_session_valid
+        ? g_game_session.world_sequence_state : 0;
+    int sequence_tick = g_game_session_valid
+        ? g_game_session.world_sequence_tick : 0;
+    int player0_latched = g_game_session_valid &&
+        g_game_session.economy[0].defeat_latched;
+    int draw_records = sequence_state < 4 ||
+        (sequence_state == 4 && sequence_tick < 0x3c) || player0_latched;
 
     fill_rect(surface, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
     draw_sprite(surface, &g_map_background, 0, 0, 0);
     if (g_menu.world_index < 0 || g_menu.world_index >= g_menu.world_map.world_count) return;
     world = &g_menu.world_map.worlds[g_menu.world_index];
+    if (!draw_records) goto paradise;
     /* WorldWindow display type 1 (FUN_00471b74) renders explicit bridge pairs
        as animated palette-color pixels. They are drawn after the islands
        (see below), as in the original record order. */
@@ -112,6 +131,27 @@ static void render_world_map(RenderSurface *surface)
                 /* FUN_004711e2 centers the current island name at y=0x3c. */
                 draw_sprite(surface, &g_island_names_art, (uint32_t)name_index, 0, 48);
             }
+        }
+    }
+paradise:
+    /* FUN_004711e2, state > 3 with 0x619248 clear: PARADISE frame
+       DAT_006324b8 % 21 when state != 4 or DAT_006191b6 > 0x3b; PARAGLOW
+       frame DAT_006191b6 ping-pong (v <= 61 ? v : 122 - v) while state 4 has
+       DAT_006191b6 < 0x50. Both at the map centre (+0x784, +0x786) that
+       FUN_00470259 sets to (639 / 2, 479 / 2 + 15). */
+    if (sequence_state > 3 && !player0_latched) {
+        if ((sequence_state != 4 || sequence_tick > 0x3b) &&
+            g_paradise_art.frame_count != 0) {
+            draw_sprite(surface, &g_paradise_art,
+                        (g_paradise_paint_count++) % 21U % g_paradise_art.frame_count,
+                        319, 254);
+        }
+        if (sequence_state == 4 && sequence_tick < 0x50 &&
+            g_paraglow_art.frame_count != 0) {
+            uint32_t frame = (uint32_t)(sequence_tick <= 61
+                ? sequence_tick : 122 - sequence_tick);
+            if (frame < g_paraglow_art.frame_count)
+                draw_sprite(surface, &g_paraglow_art, frame, 319, 254);
         }
     }
 }

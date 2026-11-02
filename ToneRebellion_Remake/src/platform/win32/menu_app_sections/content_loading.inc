@@ -383,7 +383,11 @@ static int load_menu_art(char *error, size_t error_capacity)
         !load_sprite_sheet(&archive, "data\\mapback.shp", mainmap_palette,
                            &g_map_background, error, error_capacity) ||
         !load_sprite_sheet(&archive, "data\\smisle.shp", mainmap_palette,
-                           &g_small_islands, error, error_capacity)) {
+                           &g_small_islands, error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\end.shp", mainmap_palette,
+                           &g_paradise_art, error, error_capacity) ||
+        !load_sprite_sheet(&archive, "data\\endglw.shp", mainmap_palette,
+                           &g_paraglow_art, error, error_capacity)) {
         goto done;
     }
     {
@@ -587,6 +591,8 @@ done:
         free_sprite_sheet(&g_difficulty_art);
         free_sprite_sheet(&g_map_background);
         free_sprite_sheet(&g_small_islands);
+        free_sprite_sheet(&g_paradise_art);
+        free_sprite_sheet(&g_paraglow_art);
         free_sprite_sheet(&g_load_save_art);
         free_sprite_sheet(&g_load_title_art);
         free_sprite_sheet(&g_load_endgame_art);
@@ -733,6 +739,8 @@ static void app_release_content(void)
     free_sprite_sheet(&g_difficulty_art);
     free_sprite_sheet(&g_map_background);
     free_sprite_sheet(&g_small_islands);
+    free_sprite_sheet(&g_paradise_art);
+    free_sprite_sheet(&g_paraglow_art);
     free_sprite_sheet(&g_island_surface_art);
     free_sprite_sheet(&g_island_template_art);
     free_sprite_sheet(&g_island_lilmap_art);
