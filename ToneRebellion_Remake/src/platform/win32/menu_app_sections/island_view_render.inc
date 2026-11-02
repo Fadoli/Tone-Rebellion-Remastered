@@ -2113,6 +2113,32 @@ static void draw_location_action_panel(RenderSurface *surface)
     if (island_floater_info_shown()) {
         /* IWTextInfo is hidden; the floater panel owns this pane. */
     } else if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL &&
+               selected_location->renderer_class == 0 &&
+               selected_location->record_value_10 == 0x2a &&
+               selected_location->owner_id >= 0 &&
+               selected_location->owner_id < 4 &&
+               selected_location->owner_id != g_menu.selected_tribe &&
+               g_newgame_text[selected_location->owner_id][0] != '\0') {
+        /* FUN_00439673 mode 0 (ev_20a8dd58): another tribe's Hall (item 0x2a,
+           +0x14 != DAT_0049f538) shows NEWGAME<owner>, the tribe name, centred
+           like LEVNAME. */
+        const char *tribe_name = g_newgame_text[selected_location->owner_id];
+        text_panel = window_catalog_find(&g_window_catalog, "IWTextInfo", 3);
+        if (text_panel != NULL && text_panel->shape_frame >= 0 &&
+            (uint32_t)text_panel->shape_frame < g_temp_hole_art.frame_count) {
+            int pane_width = text_panel->pane.right - text_panel->pane.left;
+            int pane_height = text_panel->pane.bottom - text_panel->pane.top;
+            int name_width = measure_bitmap_text(NULL, tribe_name,
+                                                 strlen(tribe_name));
+            draw_sprite(surface, &g_temp_hole_art,
+                        (uint32_t)text_panel->shape_frame,
+                        text_panel->pane.left, text_panel->pane.top);
+            draw_bitmap_label(surface, tribe_name,
+                text_panel->pane.left + (pane_width - name_width) / 2,
+                text_panel->pane.top + pane_height / 2 - 10,
+                RGB(230, 238, 255));
+        }
+    } else if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL &&
         selected_location->record_value_10 >= 0x25 &&
         selected_location->record_value_10 < PAD_CATALOG_MAX_ITEMS &&
         g_building_descriptions[selected_location->record_value_10][0] != '\0') {
