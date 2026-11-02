@@ -21,6 +21,7 @@ enum {
     FLOATER_RECORD = 0x4c,
     FLOATER_SLOTS = 0x100,
     STREAM3_SIZE = 4 + 0x280,
+    CLIPBOARD_SIZE = 3 * 4 * 4,
     /* Offsets inside a player record (P = 0x6191b8 + player * 0x14a0). */
     PLAYER_COUNT_TABLE = 0x44, /* DAT_006191fc: u16 per item id */
     PLAYER_GLYPH_WORD = 0x8a,  /* DAT_00619242 */
@@ -121,6 +122,7 @@ int native_save_parse(const uint8_t *data, size_t size, NativeSave *out,
         set_error(error, error_capacity, "save is truncated after the floater table");
         return 0;
     }
+    save.clipboard_offset = cursor + CLIPBOARD_SIZE <= size ? cursor : 0;
     *out = save;
     return 1;
 }
@@ -266,6 +268,41 @@ static void apply_site_list(GameSession *session, unsigned int player,
             location->spread_task_plus1[player] = (uint16_t)(handle + 1);
             location->spread_count[player] = (uint8_t)u16_at(e + 8);
         }
+    }
+}
+
+/* FUN_004393ab read side: object k (CLIPBD<k+1>, column k) holds the row
+   index of slot g * 3 + k for groups g = 0..2, then DAT_005e16a8. A row
+   index names the local tribe's source row (+0 island, +2 site). */
+static void apply_clipboard(const NativeSave *save, GameSession *session)
+{
+    const uint8_t *rows;
+    unsigned int column;
+    unsigned int group;
+    if (save->clipboard_offset == 0 || save->tribe >= GAME_START_PLAYER_COUNT)
+        return;
+    rows = save->data + save->player_offset + (size_t)save->tribe * PLAYER_RECORD +
+           ROW_BASE;
+    memset(session->clip_slot_used, 0, sizeof(session->clip_slot_used));
+    for (column = 0; column < 3; ++column) {
+        const uint8_t *object = save->data + save->clipboard_offset + column * 16U;
+        for (group = 0; group < 3; ++group) {
+            int32_t index = (int32_t)u32_at(object + group * 4U);
+            unsigned int slot = group * 3U + column;
+            const uint8_t *row;
+            int16_t island;
+            int16_t site;
+            if (index < 0 || index >= 48) continue;
+            row = rows + (size_t)index * ROW_SIZE;
+            island = (int16_t)u16_at(row);
+            site = (int16_t)u16_at(row + 2);
+            if (island < 0 || island >= session->island_count || site < 0 ||
+                (uint16_t)site >= session->islands[island].location_count) continue;
+            session->clip_slot_used[slot] = 1;
+            session->clip_slot_island[slot] = (uint8_t)island;
+            session->clip_slot_location[slot] = (uint16_t)site;
+        }
+        session->clip_group = (uint8_t)(u32_at(object + 12U) % 3U);
     }
 }
 
@@ -868,6 +905,7 @@ int native_save_apply(const NativeSave *save, const FloaterCatalog *floaters,
     }
     rebuild_halls(next);
     link_hall_requests(next);
+    apply_clipboard(save, next);
     memset(next->floaters, 0, sizeof(next->floaters));
     for (slot = 0; slot < FLOATER_SLOTS; ++slot) {
         const uint8_t *rec = save->data + save->floater_offset +

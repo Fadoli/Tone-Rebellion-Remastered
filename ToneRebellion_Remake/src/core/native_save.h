@@ -30,6 +30,10 @@ typedef struct NativeSave {
     size_t player_offset;  /* 4 x 0x14a0 records */
     size_t global_offset;  /* 0x1614-byte block */
     size_t floater_offset; /* 256 x 0x4c records */
+    /* Stream 4 (FUN_0046ea1c -> FUN_004393ab per IsleClipBd): 3 objects x
+       {3 row indices (-1 empty), active group}; 0 when the file ends
+       before it. */
+    size_t clipboard_offset;
 } NativeSave;
 
 /* Validates the header and the stream framing against `size`. The pointers in
