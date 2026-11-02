@@ -147,6 +147,16 @@ static void draw_hall_panel(RenderSurface *surface, int hall_player)
                                 .location_count)
                         upgrade_site = &g_game_session.islands[event->payload_0a]
                             .locations[event->payload_0e];
+                    /* FUN_004459e6 tests the repair list first
+                       (FUN_0045ff3f): a listed building's type-4 sub-type-1
+                       row is REPAIR, icon 1, gauge +0x34 over FUN_00450978. */
+                    const int repair_row = upgrade_site != NULL &&
+                        event->player_id >= 0 &&
+                        event->player_id < GAME_START_PLAYER_COUNT &&
+                        upgrade_site->repair_task_plus1[event->player_id] ==
+                            (uint16_t)(task_slots[(size_t)offset +
+                                                  visible_index] + 1U);
+                    if (repair_row) upgrade_site = NULL;
                     /* UPGSPREAD (FUN_004459e6): the same type-4 sub-type-1
                        task on another tribe's block; icon 2, label
                        UPGSPREAD, gauge entry counter over 10. */
@@ -178,7 +188,7 @@ static void draw_hall_panel(RenderSurface *surface, int hall_player)
                        FUN_0045cd27 = 50 + 25 * its +0x4a. */
                     const GameRuntimeLocation *supply_site = NULL;
                     if (stock_resource < 0 && upgrade_site == NULL &&
-                        event->action_type == 4 &&
+                        !repair_row && event->action_type == 4 &&
                         (event->payload_12 >= 2 || sub1_supply) &&
                         event->payload_12 <= GAME_RESOURCE_TYPE_COUNT &&
                         event->payload_0a >= 0 &&
@@ -197,7 +207,13 @@ static void draw_hall_panel(RenderSurface *surface, int hall_player)
                        so a sub-type-1 fallback reads the magic stock. */
                     const int supply_resource = supply_site != NULL
                         ? (event->payload_12 == 2 ? 1 : 2) : -1;
-                    if (!(upgrade_site != NULL ? 1 : stock_resource >= 0
+                    if (repair_row) {
+                        row.label_key = "REPAIR";
+                        row.task_icon_frame = 1;
+                        row.secondary_task_icon_frame = -1;
+                        row.resource_icon_type = -1;
+                    }
+                    if (!(upgrade_site != NULL || repair_row ? 1 : stock_resource >= 0
                             ? island_panel_info_stock_task_row(
                                   (unsigned int)stock_resource, &row)
                             : supply_site != NULL
@@ -318,7 +334,7 @@ static void draw_hall_panel(RenderSurface *surface, int hall_player)
                                 (int16_t)capacity, 0x46U - 4U, &supply_fill))
                             draw_task_gauge(surface, task_list_panel, position.y,
                                             supply_fill);
-                    } else if (event->action_type == 0x12) {
+                    } else if (event->action_type == 0x12 || repair_row) {
                         draw_task_repair_gauge(surface, task_list_panel, event,
                                                position.y);
                     } else if (event->action_type == 5) {

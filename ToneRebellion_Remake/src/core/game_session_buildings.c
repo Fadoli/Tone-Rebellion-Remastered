@@ -69,7 +69,10 @@ int game_session_repair_task_values(const GameSession *session,
 {
     if (session == NULL || pad_catalog == NULL || event == NULL ||
         current == NULL || maximum == NULL || event->active == 0 ||
-        event->action_type != 0x12 || event->payload_0a < 0 ||
+        /* REPAIR rows: legacy type 0x12, or the type-4 Build Tone row of a
+           building in the repair list (FUN_004459e6 reads +0x34 / max). */
+        (event->action_type != 0x12 && event->action_type != 4) ||
+        event->payload_0a < 0 ||
         event->payload_0a >= session->island_count || event->payload_0e < 0) return 0;
     return game_session_repair_location_values(session, pad_catalog,
         (uint8_t)event->payload_0a, (uint16_t)event->payload_0e,
