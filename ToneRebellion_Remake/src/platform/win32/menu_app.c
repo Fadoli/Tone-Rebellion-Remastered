@@ -530,10 +530,23 @@ static int view_selected_location(void)
         ? g_selected_location : -1;
 }
 
+/* FUN_0042f755 -> FUN_00438120 on each selection: an owned training
+   building goes into the first empty cell of the active shortcut group. */
+static void remember_selected_clip(void)
+{
+    int island = selection_island();
+    if (!g_game_session_valid || g_selected_location < 0 || island < 0 ||
+        g_menu.selected_tribe < 0 ||
+        g_menu.selected_tribe >= GAME_START_PLAYER_COUNT) return;
+    game_session_clip_remember(&g_game_session, (uint8_t)g_menu.selected_tribe,
+                               (uint8_t)island, (uint16_t)g_selected_location);
+}
+
 static void select_location_on_view(int location)
 {
     g_selected_location = location;
     g_selected_location_island = -1;
+    remember_selected_clip();
 }
 
 static void select_location_anywhere(int island, int location)
@@ -541,6 +554,7 @@ static void select_location_anywhere(int island, int location)
     g_selected_location = location;
     g_selected_location_island =
         location < 0 || island == g_menu.selected_map_island ? -1 : island;
+    remember_selected_clip();
 }
 
 /* A floater's +0x0c link names its source building, kept here as

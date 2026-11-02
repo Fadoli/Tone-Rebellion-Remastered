@@ -2052,8 +2052,8 @@ static void draw_clipboard_strip(RenderSurface *surface)
         static const char *const tabs[3] = {"CLIPSEL1", "CLIPSEL2", "CLIPSEL3"};
         static const char *const slots[3] = {"CLIPBD1", "CLIPBD2", "CLIPBD3"};
         unsigned int index;
-        /* FUN_0042f755 -> FUN_00438120: each selection refresh remembers the
-           selected training building in the active group. */
+        /* FUN_0042f755 -> FUN_00438120 runs on selection
+           (remember_selected_clip), not here. */
         {
             /* Remake shortcut fill, only when the training building count
                changes: re-running it each frame refilled the cell a right
@@ -2067,11 +2067,6 @@ static void draw_clipboard_strip(RenderSurface *surface)
                 registered_count = count;
             }
         }
-        if (g_selected_location >= 0 && selection_island() >= 0)
-            game_session_clip_remember(&g_game_session,
-                (uint8_t)g_menu.selected_tribe,
-                (uint8_t)selection_island(),
-                (uint16_t)g_selected_location);
         for (index = 0; index < 3U; ++index) {
             const WindowTemplate *tab = window_catalog_find(&g_window_catalog, tabs[index], 3);
             const WindowTemplate *slot = window_catalog_find(&g_window_catalog, slots[index], 3);
