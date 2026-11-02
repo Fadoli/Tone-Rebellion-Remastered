@@ -36,6 +36,6 @@ Dessin (`FUN_004182c8`, REA haiku 2026-11-02, `ev_3d2e004f…`):
   - À c = 0x44, [2] = site +0x24; l'objet (`FUN_0040adb5`, TRIGGERS frame sel − 5) est dessiné 20 plus bas avec le même niveau.
 
 Limites et interprétations:
-- Les formes fixes de `FUN_0040adb5` pour les sélecteurs 1..3 (`DAT_0049aca8..acb0`) ne sont pas résolues; le port ne les dessine pas.
-- Le port suppose que [2] reste à 0 pour `KILLBEAS` (frames +13).
-- La plage exacte de `FUN_00467260(30)` est reprise de `tone_rng_bounded`; l'ordre des tirages ([5], [6], [3]) suit le rapport.
+- `FUN_0040adb5` (`ev_2500d2d1…`): les sélecteurs 1..3 lisent `DAT_0049aca8..acb0`, qui valent 0xffff dans l'image (`ev_d189bd05…`); aucun écrivain n'a été trouvé, seulement trois lecteurs (`FUN_0040adb5`, `FUN_0040bf98`, `FUN_0040d48c`). Aucune valeur 2 ou 3 de site +0x24 n'est connue. Le port ne dessine rien pour ces sélecteurs.
+- `KILLBEAS` (`ev_4615c5ce…`, `ev_8072182a…`): [2] = 0 à la création; au premier appel, `FUN_0041760b` tire [2] = `FUN_00467260(8)` avant les trois `-rand(30)` ([5], [6], [3]).
+- Les plages de `FUN_00467260(8)` et `FUN_00467260(30)` sont reprises de `tone_rng_bounded`.

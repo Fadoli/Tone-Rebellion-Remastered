@@ -204,13 +204,14 @@ int game_session_cast_special_sprites(const GameSession *session,
     if (effect->animation_phase == GAME_CAST_PHASE_KILLBEAS) {
         /* Three KILLBEAS sprites 5 apart over target floater [1]: counter c
            <= 63 falls from 320 above it at 5 per tick on frame
-           (unsigned c mod 13) + 13 (level 0 bits clear); 64..73 lands on
-           frames 26..35. */
+           (unsigned c mod 13), + 13 when bit k of the level [2] is clear;
+           64..73 lands on frames 26..35. */
         const int32_t counters[3] = {
             (int16_t)effect->effect_x, (int16_t)effect->effect_y,
             (int8_t)effect->odd_updates_remaining
         };
         const GameFloaterStart *target;
+        unsigned int level = effect->phase_odd_updates_remaining - 1U;
         unsigned int k;
         if (effect->phase_odd_updates_remaining == 0 ||
             caster->order_target_floater < 0 ||
@@ -225,7 +226,8 @@ int game_session_cast_special_sprites(const GameSession *session,
             sprite->stipple = 8;
             if (c <= 63) {
                 sprite->y = (int32_t)target->y - 320 + 5 * c;
-                sprite->frame = (uint32_t)c % 13U + 13U;
+                sprite->frame = (uint32_t)c % 13U +
+                    (((level >> k) & 1U) != 0 ? 0U : 13U);
             } else {
                 if (c - 38 >= 36) continue;
                 sprite->y = target->y;
@@ -266,8 +268,9 @@ int game_session_cast_special_sprites(const GameSession *session,
         out[count].y = y;
         out[count].stipple = (uint8_t)level;
         ++count;
-        /* FUN_0040adb5: selectors 5.. are TRIGGERS frames sel - 5; 1..3
-           use fixed shapes that are not resolved, and are skipped. */
+        /* FUN_0040adb5: selectors 5.. are TRIGGERS frames sel - 5. The
+           shape handles for 1..3 (DAT_0049aca8..acb0) hold 0xffff in the
+           image and have no writer, so those draw nothing here. */
         if (selector >= 5) {
             out[count].visual = GAME_CAST_SPRITE_OBJECT;
             out[count].frame = (unsigned int)(selector - 5);

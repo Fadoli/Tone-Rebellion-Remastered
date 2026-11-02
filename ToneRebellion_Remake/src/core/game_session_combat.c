@@ -1667,17 +1667,19 @@ void game_session_tick_cast_effects(GameSession *session,
             break;
         case GAME_CAST_PHASE_KILLBEAS:
             /* [5], [6] and [3] are the three counters, kept in effect_x,
-               effect_y and odd_updates_remaining. The first call sets them
-               to -rand(30); each later tick raises them and all must pass
-               75. */
+               effect_y and odd_updates_remaining. The first call draws the
+               level [2] = rand(8) (kept + 1 in phase_odd_updates_remaining),
+               then sets them to -rand(30); each later tick raises them and
+               all must pass 75. */
             if (effect->phase_odd_updates_remaining == 0) {
+                effect->phase_odd_updates_remaining = (uint8_t)
+                    (tone_rng_bounded(&session->random_state, 8) + 1);
                 effect->effect_x = (uint16_t)(int16_t)
                     -tone_rng_bounded(&session->random_state, 30);
                 effect->effect_y = (uint16_t)(int16_t)
                     -tone_rng_bounded(&session->random_state, 30);
                 effect->odd_updates_remaining = (uint8_t)(int8_t)
                     -tone_rng_bounded(&session->random_state, 30);
-                effect->phase_odd_updates_remaining = 1;
                 break;
             }
             effect->effect_x = (uint16_t)((int16_t)effect->effect_x + 1);
