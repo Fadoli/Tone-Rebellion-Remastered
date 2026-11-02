@@ -1302,6 +1302,9 @@ static void render_island_view(RenderSurface *surface)
                 static const int16_t exp_t1[18] = {
                     0, 0, 0, 25, 100, 0, 30, 120, 0, 40, -1, 0, 25, 100, 0,
                     25, 100, 0};
+                static const int16_t exp_t2[18] = {
+                    0, 0, 0, 75, 200, 0, 90, 240, 0, 120, -1, 0, 75, 200, 0,
+                    75, 200, 0};
                 const GameRuntimeLocation *linked = NULL;
                 char row[48];
                 int16_t current_charge = 0;
@@ -1343,9 +1346,13 @@ static void render_island_view(RenderSurface *surface)
                                   RGB(230, 238, 255));
                 row_y += 10;
                 if (level < 2 && selected_floater->source_subtype < 6) {
-                    /* DAT_004a424a[L + 3 * subtype]; the blend with
-                       DAT_004a4282 uses DAT_004bf11c (0 in the image). */
-                    exp_cap = exp_t1[level + 3U * selected_floater->source_subtype];
+                    /* ((4 - D) * DAT_004a424a[i] + D * DAT_004a4282[i]) / 4
+                       with D = DAT_004bf11c, the game difficulty, as in the
+                       FUN_0045cd75 promotion test (ev_347b34f6, ev_aad45101). */
+                    unsigned int i = level + 3U * selected_floater->source_subtype;
+                    int difficulty = g_game_session.config.difficulty;
+                    exp_cap = ((4 - difficulty) * exp_t1[i] +
+                               difficulty * exp_t2[i]) / 4;
                 }
                 if (exp_cap >= 1) {
                     (void)snprintf(row, sizeof(row), "EXP %u/%d",
