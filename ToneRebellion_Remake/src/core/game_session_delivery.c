@@ -1401,8 +1401,9 @@ void game_session_advance_local_resource_task(GameSession *session,
             /* FUN_0041e569 state 3 (0x41eea4): a Hall (+0x10 == 0x2a), a site
                with +0x18 != -1, or flag bit 0 sets +0x34 = 1 on arrival and
                counts to 0x14 before the withdraw (0x41ef07, 0x41ef1c); the
-               withdraw is skipped when site +4 is nonzero (0x41ef4b, writer
-               unknown, not modeled). Tone producers have +0x18 == -1 (only
+               withdraw is skipped when site +4 (the site class, 2 = bridge,
+               set at world start) is nonzero (0x41ef4b). Tone producers have
+               +0x18 == -1 (only
                items 0x2c..0x32 get a source row) and take the +0x36 retry
                path below (ev_77f9f6b8). */
             if (floater->order_timer == 0) {
@@ -1412,7 +1413,8 @@ void game_session_advance_local_resource_task(GameSession *session,
                 ++floater->order_timer;
             }
             if (floater->order_timer < 20) return;
-            if (!game_session_location_resource_available(session,
+            if (source->renderer_class != 0 ||
+                !game_session_location_resource_available(session,
                     floater->island_index,
                     (uint16_t)floater->order_source_location, code) ||
                 !game_session_consume_location_resource(session,

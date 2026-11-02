@@ -20,7 +20,7 @@
 2. ~~**Ordres de bâtiment**~~ (`TODO_INTERFACE` l.22, l.27) : fait — enregistrement `B+0x28..0x32`, `BC_*` (Attack/Defend/Recall/TrnStk), clic droit filtré par `DAT_00619290`, adoption `FUN_0042219e` (genre 0 compris), routage interîles par pont, lien gardé à la traversée. Reste: vérification en jeu de l'interîles.
 3. ~~**Tâches**~~ : portées et testées — Obtain (tâche `0xd`, attache automatique comprise, traversée de pont), SUPPLY (stocks `TrnStkC/M`), UpgSpread (vérifié en jeu), Upgrade, Repair, Hall type 4, répartition des ouvriers (refonte `FUN_0042219e`/`FUN_00422031`/`FUN_004211bb` du 2026-11-01).
 4. **Fidélité des tâches** (règles du port sans preuve native, à trancher par REA) :
-   - Hall type 4 : dix candidats (`FUN_00420a55`) et attente de 20 ticks (`FUN_0041e569` états 3/4) confirmés par REA le 2026-11-02. Garde d'attente de l'état 3 alignée; reste la garde `site+4` (écrivain inconnu) (`TODO_MOVEMENT` l.17).
+   - Hall type 4 : dix candidats (`FUN_00420a55`) et attente de 20 ticks (`FUN_0041e569` états 3/4) confirmés par REA le 2026-11-02. Garde d'attente de l'état 3 et garde de classe `site+4` alignées (`TODO_MOVEMENT` l.17).
    - Repair : aucun écrivain de l'état `0x12`; le soin à 40 ticks est une politique du port (`TODO_TASKS` l.5).
    - Gardes type 5 ↔ `FA_Build`, cas de `FUN_00450385`, écrivain du mot de mode `+0x13d0`.
 5. **Producteur de `PIT_Object`** : contexte des appels à `FUN_004503bd` (`TODO_OTHER` l.4, `TODO_TASKS` l.8).
