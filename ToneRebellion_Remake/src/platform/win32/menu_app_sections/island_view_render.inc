@@ -709,6 +709,70 @@ static int island_floater_info_shown(void)
             &g_game_session.floaters[g_selected_floater]);
 }
 
+/* FUN_0042fa0f message 7 (control hover): IWMove/IWHallMove give index 1,
+   other BC_* buttons their 0x49e700 index (spells 0x15..0x1c use mode 4);
+   IWTextInfo mode 5 then shows gamey.txt BC<index>. Returns -1 when no
+   BC_* control is hovered. */
+static int hovered_control_caption_index(void)
+{
+    static const int order_genre_index[5] = {16, 17, 18, 19, 15};
+    IslandLocationActionControl action = selected_location_action();
+    if (action != ISLAND_LOCATION_ACTION_NONE &&
+        g_hovered_location_action == action) return 1;
+    if (g_hovered_onoff_control) return 0;
+    if (g_hovered_upgrade_control) return 2;
+    if (g_hovered_repair_control) return 3;
+    if (g_hovered_training_stock == 1 || g_hovered_training_stock == 2)
+        return 4 + g_hovered_training_stock;
+    if (g_hovered_hall_stock >= 0 && g_hovered_hall_stock < 3)
+        return 7 + g_hovered_hall_stock;
+    switch (g_hovered_hall_command) {
+    case WINDOW_ISLAND_PANEL_GENERAL: return 10;
+    case WINDOW_ISLAND_PANEL_INVENTORY: return 11;
+    case WINDOW_ISLAND_PANEL_GLYPHS: return 12;
+    case WINDOW_ISLAND_PANEL_TRADE: return 13;
+    case WINDOW_ISLAND_PANEL_DIPLOMACY: return 14;
+    default: break;
+    }
+    if (g_hovered_defend_area >= 6 && g_hovered_defend_area <= 10)
+        return order_genre_index[g_hovered_defend_area - 6];
+    if (g_hovered_upgspread) return 20;
+    return -1;
+}
+
+/* FUN_00439673 mode 5: the BC<index> caption centred in IWTextInfo with
+   BIGFONT, palette index 6, at y = (bottom - top) / 2 - 10. */
+static void draw_control_hover_caption(RenderSurface *surface)
+{
+    const WindowTemplate *text_panel;
+    const char *caption;
+    int index = hovered_control_caption_index();
+    int width;
+    int x;
+    int y;
+    if (index < 0) return;
+    caption = g_bc_text[index];
+    if (caption[0] == '\0') return;
+    text_panel = window_catalog_find(&g_window_catalog, "IWTextInfo", 3);
+    if (text_panel == NULL || text_panel->shape_frame < 0 ||
+        (uint32_t)text_panel->shape_frame >= g_temp_hole_art.frame_count) return;
+    draw_sprite(surface, &g_temp_hole_art, (uint32_t)text_panel->shape_frame,
+                text_panel->pane.left, text_panel->pane.top);
+    width = g_big_font.bytes != NULL
+        ? measure_big_text(caption, strlen(caption))
+        : measure_bitmap_text(NULL, caption, strlen(caption));
+    x = text_panel->pane.left +
+        ((text_panel->pane.right - text_panel->pane.left) - width) / 2;
+    y = text_panel->pane.top +
+        (text_panel->pane.bottom - text_panel->pane.top) / 2 - 10;
+    if (g_big_font.bytes != NULL)
+        draw_big_label(surface, caption, x, y,
+                       native_text_color(g_island_palette, 6));
+    else
+        draw_bitmap_label(surface, caption, x, y,
+                          native_text_color(g_island_palette, 6));
+}
+
 static void render_island_view(RenderSurface *surface)
 {
     const int image_top = 0;
@@ -1790,6 +1854,7 @@ static void render_island_view(RenderSurface *surface)
     }
     draw_clipboard_strip(surface);
     draw_location_action_panel(surface);
+    draw_control_hover_caption(surface);
 
     /* IWLocControl's backdrop overlaps the Hall command buttons. Draw the
        THALL button frames last so the selected Hall's five commands remain
@@ -2124,23 +2189,8 @@ static void draw_location_action_panel(RenderSurface *surface)
         draw_sprite(surface, &g_hall_stock_art, (uint32_t)button->shape_frame,
                     button->pane.left, button->pane.top);
     }
-    if (g_hovered_location_action != action) return;
-    text_panel = window_catalog_find(&g_window_catalog, "IWTextInfo", 3);
-    if (text_panel == NULL || text_panel->shape_frame < 0 ||
-        (uint32_t)text_panel->shape_frame >= g_temp_hole_art.frame_count) return;
-    draw_sprite(surface, &g_temp_hole_art, (uint32_t)text_panel->shape_frame,
-                text_panel->pane.left, text_panel->pane.top);
-    if (g_move_button_text[0] != '\0') {
-        size_t text_length = strlen(g_move_button_text);
-        int text_width = measure_bitmap_text(NULL, g_move_button_text, text_length);
-        int text_height = (int)g_small_font.height;
-        int pane_width = text_panel->pane.right - text_panel->pane.left;
-        int pane_height = text_panel->pane.bottom - text_panel->pane.top;
-        draw_bitmap_label(surface, g_move_button_text,
-            text_panel->pane.left + (pane_width - text_width) / 2,
-            text_panel->pane.top + (pane_height - text_height) / 2,
-            native_text_color(g_island_palette, 6));
-    }
+    /* The hovered move control's BC1 caption is drawn by
+       draw_control_hover_caption. */
 }
 
 /* The x87 helpers called by FUN_00471536 continue past Ghidra's short

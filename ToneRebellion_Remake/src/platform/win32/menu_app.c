@@ -233,6 +233,9 @@ static char g_hall_work_label[64];
 static char g_hall_surplus_label[64];
 /* gamey.txt BC1: caption of the Move button (FUN_0042f150 index 1). */
 static char g_move_button_text[128];
+/* gamey.txt BC0..BC20: IWTextInfo mode 5 captions of the BC_* controls,
+   indexed like the 0x49e700 table (FUN_0042f150 fills DAT_0049e948). */
+static char g_bc_text[21][160];
 /* gamey.txt WORKER, AWAKE, LEVEL, HITS, STRENGTH, CHARGE (FUN_00429ebe). */
 static char g_unit_label_text[6][64];
 /* gamey.txt INFECT, BEASTI, PRIMED, UNPRIM, CBRIDGE, MYSTLOC (FUN_00441b36). */
