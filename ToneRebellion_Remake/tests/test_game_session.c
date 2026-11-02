@@ -628,6 +628,7 @@ int main(void)
     test_tone_maintenance_surplus_tracks_regions_and_workers();
     test_recruitment_waits_for_surplus_then_creates_animated_worker();
     test_birth_promotes_a_glyph_caster_once_per_tribe();
+    test_defeat_latch_is_solo_only();
     test_initialized_workers_build_from_queued_selection();
     test_construction_completes_on_native_empty_status_one_site();
     test_wandering_worker_with_stale_delivery_claim_rejoins_pool();

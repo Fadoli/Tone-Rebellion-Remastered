@@ -833,6 +833,40 @@ static void test_birth_promotes_a_glyph_caster_once_per_tribe(void)
         assert(casters[index] == 1);
 }
 
+static void test_defeat_latch_is_solo_only(void)
+{
+    WorldDefinition world;
+    IslandData islands[5];
+    GameSessionConfig config = {0};
+    GameSession session;
+    PadCatalog catalog;
+    FloaterCatalog floater_catalog;
+    unsigned int pass;
+    unsigned int index;
+    char error[160];
+
+    make_world(&world, islands);
+    make_pad_catalog(&catalog);
+    make_floater_catalog(&floater_catalog);
+    config.world_index = 1;
+    config.home_island_index = 0;
+    config.random_seed = 1;
+    for (pass = 0; pass < 2; ++pass) {
+        config.multiplayer_session = (uint8_t)pass;
+        assert(game_session_initialize(&world, islands, &catalog,
+                                       &floater_catalog, &config, &session,
+                                       error, sizeof(error)));
+        for (index = 0; index < session.floater_count; ++index) {
+            if (session.floaters[index].owner_slot == 1)
+                session.floaters[index].is_active = 0;
+        }
+        game_session_tick_floater_moves(&session, 1U, &catalog);
+        /* FUN_0045eaa7 0x45eb10: only the solo path writes +0x90. */
+        assert(session.economy[1].defeat_latched == (pass == 0));
+        assert(!session.economy[0].defeat_latched);
+    }
+}
+
 static void test_initialized_workers_build_from_queued_selection(void)
 {
     WorldDefinition world;

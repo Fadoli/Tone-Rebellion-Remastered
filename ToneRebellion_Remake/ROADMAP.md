@@ -73,7 +73,7 @@ Corrigés le 2026-10-31 (REA `ev_7393f2a9`, `ev_9994f35e`, `ev_3cb7946b`, `ev_1b
 Écarts confirmés, non corrigés :
 
 - Traversée de pont : le port garde l'ordre dans `handoff_resume_action` et force `+0x3c = 9` pendant la traversée, puis l'état 9 pour l'action 9 (et l'action 0); le natif n'écrit jamais `+0x3c` (`FUN_004210a9`) et finit en état 0 (0x41f928) en laissant `FUN_004211bb` relancer l'action. Bloc sous-type 4 (0x41fa33..0x41fa44, `+0x3c = 9` après 0x4023bf) non tracé.
-- Latch `+0x90` : en multijoueur (`DAT_004befe0 != 0`) le natif appelle 0x401d9d sans latch; le cœur du port n'a pas ce drapeau et verrouille toujours. Évènement 0xb (texte/son via 0x4013c0) non résolu.
+- Latch `+0x90` : corrigé le 2026-11-02 — en multijoueur (`multiplayer_session`, `DAT_004befe0`) le port ne verrouille plus et saute seulement le recruteur; `0x401d9d` = `FUN_00460072` (attribution des objets de glyphe, non modélisée; `ev_3de14804…`, `ev_5cabff24…`). Évènement 0xb (texte/son via 0x4013c0) non résolu.
 - Presse-papiers : enregistrement automatique de tous les bâtiments d'entraînement (natif : seulement le bâtiment sélectionné).
 - `IWFltInfo` affiché seulement en modes général/lieu (natif : tout mode après 0x3f); masquage d'un floater mourant (0x8, timer >= 40) non testé au rendu.
 

@@ -1246,11 +1246,13 @@ static void game_session_tick_floater_recruitment(
         /* FUN_0045eaa7 gates on positive total count, then compares subtype-0
            count with floor(gross capacity / 2), not half the current unit
            count. A class-1 recruiter marker must also be available. */
-        /* 0x45eaf5..0x45eb1c: no floaters or +0x3c < 1 sets the +0x90 latch
-           (solo path, DAT_004befe0 == 0; the remake core has no multiplayer
-           flag and latches in both modes). */
+        /* 0x45eaf5..0x45eb50: no floaters or +0x3c < 1 sets the +0x90 latch
+           in solo (DAT_004befe0 == 0). In a network game the latch is never
+           set: FUN_00460072 runs instead (not modeled) and both paths skip
+           the recruiter for this tick (ev_3de14804). */
         if (owned_count == 0 || economy->source_maintenance_capacity < 1) {
-            economy->defeat_latched = 1;
+            if (!session->config.multiplayer_session)
+                economy->defeat_latched = 1;
             continue;
         }
         if (island_index >= session->island_count) continue;
