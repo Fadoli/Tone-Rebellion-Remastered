@@ -189,5 +189,5 @@ Conclusion: Repair est atteignable et fonctionne, mais pas par `FA_Repair` (acti
 - `FUN_0045fd91` (`ev_54b49564…`): entrée en mode 0 dans la liste de la tribu (`+0x13dc`, 16 × 10 octets, `FUN_0045fd43`), puis `FUN_004666c9(bâtiment, 1, tribu)` (`ev_be357318…`): tâche type 4 sous-type 1 (livrer du Build Tone). `FUN_0045fe62` fait de même pour la liste UpgSpread (mode 1).
 - Livraison: `FUN_0041e569` → `FUN_004503bd(stock, 1, tribu)` (`ev_a294ffae…`): action 1 et bâtiment dans la liste → `+0x34 += 1` (PV) au lieu du crédit de stock `+0x28`; à `+0x34 >= FUN_00450978()`, retrait de la liste.
 - Affichage: `FUN_004459e6` montre `REPAIR` pour une ligne type 4 sous-type 1 listée (0x445e56) et pour le type 0x12 (0x445d6e).
-Inconnues: autres appelants de `FUN_00414081` (réseau), formule de `FUN_00450978`, condition d'affichage du bouton au-delà de `FUN_00452b67`.
+Inconnues: autres appelants de `FUN_00414081` (réseau), condition d'affichage du bouton au-delà de `FUN_00452b67`. Le maximum `FUN_00450978` est déjà modélisé par le port (`game_session_source_value_34_max`).
 Port (à aligner): tâche `0x12`, livraisons de Build Tone vers le site puis soin de 1 PV toutes les 40 ticks; le natif crédite 1 PV par unité livrée, sans attente, et le bouton bascule l'entrée.
