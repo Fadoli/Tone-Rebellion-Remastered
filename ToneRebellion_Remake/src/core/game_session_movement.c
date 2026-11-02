@@ -1079,6 +1079,52 @@ static int game_session_find_birth_location(const GameSession *session,
     return best_location;
 }
 
+/* FUN_00462a87 (0x462b8d..0x462c2c, ev_736ded6a, ev_649d4571): a new floater
+   of a player tribe becomes the glyph caster (subtype 8) when the owner's
+   glyph word is nonzero, the owner has no subtype-8 floater yet
+   (FUN_0046562b) and, in solo, FUN_00467260(island count - 1) + 1 does not
+   exceed the number of glyph bits 0..13 (FUN_0045f0cd). It then gets
+   FA_DefendArea (+0x3c = 9) on the owner's Hall, packed by FUN_0041e3eb
+   (FUN_0045f807 / FUN_00452e2b, ev_49128cde, ev_e99830fa, ev_0f8903dc).
+   The order is armed as a pending building-style order, adopted once the
+   held floater is released. */
+static void game_session_promote_glyph_caster(GameSession *session,
+                                              unsigned int floater_index)
+{
+    GameFloaterStart *floater = &session->floaters[floater_index];
+    const GamePlayerEconomy *economy;
+    unsigned int glyph_count = 0;
+    unsigned int index;
+    uint16_t mask;
+
+    if (floater->owner_slot >= GAME_START_PLAYER_COUNT) return;
+    economy = &session->economy[floater->owner_slot];
+    mask = economy->glyph_mask;
+    if (mask == 0) return;
+    for (index = 0; index < session->floater_count; ++index) {
+        const GameFloaterStart *other = &session->floaters[index];
+        if (index != floater_index && game_session_floater_is_active(other) &&
+            other->owner_slot == floater->owner_slot &&
+            other->source_subtype == 8) return;
+    }
+    for (index = 0; index < 14; ++index) {
+        if ((mask & (1U << index)) != 0) ++glyph_count;
+    }
+    if (tone_rng_bounded(&session->random_state,
+                         (int32_t)session->island_count - 1) + 1 >
+        (int32_t)glyph_count) return;
+
+    floater->source_subtype = 8;
+    if (economy->hall_island_index >= session->island_count) return;
+    floater->source_order_state_2c = 9;
+    floater->source_order_island_28 = economy->hall_island_index;
+    floater->source_order_coordinate_30 = (uint16_t)(
+        (((uint32_t)economy->hall_x + 5U) / 10U) << 8 |
+        (((uint32_t)economy->hall_y + 5U) / 10U));
+    floater->source_order_parameter_32 = 0;
+    floater->source_order_pending = 1;
+}
+
 static int game_session_create_recruited_worker(GameSession *session,
                                                  uint8_t player_slot,
                                                  uint8_t island_index,
@@ -1162,6 +1208,7 @@ static int game_session_create_recruited_worker(GameSession *session,
     location->source_flags |= 0x002U;
     location->production_progress = 0;
     location->source_value_42 = 0;
+    game_session_promote_glyph_caster(session, floater_index);
     game_session_refresh_player_maintenance_budgets(session);
     if (game_session_queue_audio_event_at(
             session, GAME_SESSION_AUDIO_FLOATER_BIRTH, player_slot,

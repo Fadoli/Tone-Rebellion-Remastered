@@ -772,6 +772,50 @@ static void test_recruitment_waits_for_surplus_then_creates_animated_worker(void
     assert(!game_session_pop_audio_event(&session, &audio_event));
 }
 
+static void test_birth_promotes_a_glyph_caster_once_per_tribe(void)
+{
+    WorldDefinition world;
+    IslandData islands[5];
+    GameSessionConfig config = {0};
+    GameSession session;
+    PadCatalog catalog;
+    FloaterCatalog floater_catalog;
+    unsigned int index;
+    unsigned int casters[GAME_START_PLAYER_COUNT] = {0};
+    char error[160];
+
+    make_world(&world, islands);
+    make_pad_catalog(&catalog);
+    make_floater_catalog(&floater_catalog);
+    config.world_index = 1;
+    config.home_island_index = 0;
+    config.random_seed = 1;
+    assert(game_session_initialize(&world, islands, &catalog, &floater_catalog,
+                                   &config, &session, error, sizeof(error)));
+    /* Every glyph bit set: the FUN_00467260 roll can never exceed the count. */
+    session.economy[0].glyph_mask = 0x3fff;
+    for (index = 0; index < 301; ++index)
+        game_session_tick_floater_moves(&session, index + 1U, &catalog);
+    assert(session.floater_count == 20);
+
+    for (index = 16; index < session.floater_count; ++index) {
+        const GameFloaterStart *floater = &session.floaters[index];
+        assert(floater->owner_slot < GAME_START_PLAYER_COUNT);
+        if (floater->source_subtype != 8) continue;
+        ++casters[floater->owner_slot];
+        assert(floater->source_order_pending);
+        assert(floater->source_order_state_2c == 9);
+        assert(floater->source_order_island_28 ==
+               session.economy[0].hall_island_index);
+        assert(floater->source_order_coordinate_30 == (uint16_t)(
+            ((session.economy[0].hall_x + 5U) / 10U) << 8 |
+            ((session.economy[0].hall_y + 5U) / 10U)));
+    }
+    assert(casters[0] == 1);
+    for (index = 1; index < GAME_START_PLAYER_COUNT; ++index)
+        assert(casters[index] == 0);
+}
+
 static void test_initialized_workers_build_from_queued_selection(void)
 {
     WorldDefinition world;
