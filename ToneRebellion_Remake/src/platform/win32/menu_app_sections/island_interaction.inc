@@ -323,7 +323,6 @@ static int selected_upgrade_button_visible(void)
 {
     const GameRuntimeIsland *island;
     const GameRuntimeLocation *location;
-    int32_t base_item_id;
 
     if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
         g_menu.selected_tribe < 0 ||
@@ -340,12 +339,10 @@ static int selected_upgrade_button_visible(void)
     if (location->renderer_class != 0 ||
         location->owner_id != g_menu.selected_tribe ||
         location->source_location_slot_18 == -1) return 0;
-    base_item_id = location->record_value_10 -
-        (int32_t)g_menu.selected_tribe * 16;
-
-    /* Source buildings 0x2c..0x30 only: the Hall tier is raised automatically
-       by update_player_hall_tier, so its Upgrade button stays hidden. */
-    return base_item_id >= 0x2c && base_item_id <= 0x30;
+    /* Every kind gets the button ("TrnStkC et Upgrade pour tout genre");
+       a click on anything but 0x2c..0x2f does nothing, as FUN_0045c89b
+       rejects it (staff_upgrade_eligible). */
+    return 1;
 }
 
 static const char *const k_spell_button_names[8] = {
