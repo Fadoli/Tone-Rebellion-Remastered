@@ -144,9 +144,12 @@ static int staff_upgrade_eligible(const GameSession *session,
     if (base_item_id < 0x2c || base_item_id > 0x2f) return 0;
     type_index = (unsigned int)(base_item_id - 0x2c);
     next_tier = (int32_t)location->source_capacity_4a + 1;
-    world_index = session->config.world_index;
-    if (next_tier < 1 || next_tier > staff_upgrade_max_tier[type_index] ||
-        world_index >= 3) return 0;
+    /* FUN_0045c89b picks the threshold table by DAT_006136b2: 0, 1, and
+       every other world together. */
+    world_index = session->config.world_index >= 2U
+        ? 2U : (unsigned int)session->config.world_index;
+    if (next_tier < 1 || next_tier > staff_upgrade_max_tier[type_index])
+        return 0;
 
     for (i = 0; i < session->island_count; ++i) {
         if ((session->islands[i].access_mask &

@@ -103,7 +103,7 @@ niveau L = `+0x4a + 1` ≤ `{2,2,1,2}[T]`, N = nombre d'îles où l'entier par p
 `DAT_005eebc4` est non nul, vrai si `seuil[L + 3T] <= N` avec les tables de seuils par
 `DAT_006136b2` (0 / 1 / autre): le port les reproduit (`staff_upgrade_eligible`), à ces écarts
 près: il exige propriétaire = joueur et classe 0 (absents du natif), utilise l'item de base, et
-rejette `world >= 3` alors que le natif range `>= 2` ensemble; `FUN_0045c9b5` ne fait que créer
+rejetait `world >= 3` alors que le natif range `>= 2` ensemble (aligné le 2026-11-03: table 2 pour tout monde >= 2); `FUN_0045c9b5` ne fait que créer
 la requête (le port peut aussi l'annuler).
 `FUN_00452bc5(p)` (porte UPGSPREAD): bloc de type `0x28`, propriétaire 0..3, bit p de `+0x22`,
 drapeau `0x800<<p` absent; `FUN_0045fe62` crée l'entrée de genre 1 (île, site, 1, tâche, 0);
