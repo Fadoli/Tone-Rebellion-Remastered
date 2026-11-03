@@ -298,7 +298,7 @@ if(WIN32)
         VERBATIM
     )
 
-    # SDL3 shell over the same game code (TODO_WEB.md step 3); built when
+    # SDL3 shell over the same game code (Web port step 3); built when
     # an SDL3 package is found (MSYS2: mingw-w64-ucrt-x86_64-sdl3).
     find_package(SDL3 CONFIG QUIET)
     if(SDL3_FOUND)
@@ -342,7 +342,7 @@ if(WIN32)
     endif()
 endif()
 
-# Web build (TODO_WEB.md step 4, tools/build_web.sh): the SDL shell under
+# Web build (Web port step 4, tools/build_web.sh): the SDL shell under
 # Emscripten, drawn through SDL's WebGL renderer. The page (web/shell.html)
 # asks for the player's own game folder and copies it to /tone before
 # starting the game; no original data is part of the build.

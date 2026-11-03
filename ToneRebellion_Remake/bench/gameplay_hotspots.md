@@ -102,7 +102,7 @@ background and template frames have no transparent pixels.
 
 ## RenderSurface (2026-10-31)
 
-Step 1 of [TODO_WEB.md](../TODO_WEB.md): every renderer draws into a
+Step 1 of the Web port ([ROADMAP.md](../ROADMAP.md)): every renderer draws into a
 `RenderSurface` (`src/render/render_surface.c`); sprite frames are plain
 pixel arrays and the region clips of the stipple reveals are per-pixel
 masks. GDI only presents the back buffer.

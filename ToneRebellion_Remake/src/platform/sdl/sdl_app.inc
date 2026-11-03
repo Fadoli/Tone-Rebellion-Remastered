@@ -1,4 +1,4 @@
-/* SDL3 shell (TODO_WEB.md step 3), built as remake_sdl, on the desktop and
+/* SDL3 shell (Web port step 3), built as remake_sdl, on the desktop and
    (under Emscripten) in the browser. SDL owns the window, the event loop,
    the frame clock and the presentation of the 640x480 RenderSurface through
    a streaming texture. The game code still reads Win32 window messages

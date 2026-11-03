@@ -1,4 +1,4 @@
-/* SDL3 audio for remake_sdl (TODO_WEB.md step 3): one playback device with
+/* SDL3 audio for remake_sdl (Web port step 3): one playback device with
    two streams, each filled from SDL's audio thread by a get-callback so a
    modal Win32 loop (window drag, message box) does not starve them.
    - Effects: the sfx_mixer.inc voices, mixed to 16-bit stereo at SFX_RATE.

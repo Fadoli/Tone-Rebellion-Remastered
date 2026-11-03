@@ -1,4 +1,4 @@
-/* Platform services, Win32 shell (TODO_WEB.md step 2). remake_sdl defines
+/* Platform services, Win32 shell (Web port step 2). remake_sdl defines
    the same functions in ../sdl/sdl_platform.inc. The window parameter stays
    an HWND until the remaining Win32 uses (cursors, sockets) move too. */
 

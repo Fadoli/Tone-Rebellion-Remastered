@@ -1,4 +1,4 @@
-/* Platform services, SDL3 shell (TODO_WEB.md step 2): the functions of
+/* Platform services, SDL3 shell (Web port step 2): the functions of
    ../win32/platform_win32.inc on SDL. The window parameter is ignored; the
    SDL window is the one sdl_app.inc creates. */
 

@@ -96,7 +96,7 @@ static int net_startup(void)
     if (g_net_wsa_started) return 1;
     if (!net_socket_startup()) {
 #ifdef __EMSCRIPTEN__
-        /* The browser has no TCP (TODO_WEB.md step 8). */
+        /* The browser has no TCP (Web port step 8). */
         net_set_status("Multijoueur indisponible dans cette version");
 #else
         net_set_status("Reseau indisponible");

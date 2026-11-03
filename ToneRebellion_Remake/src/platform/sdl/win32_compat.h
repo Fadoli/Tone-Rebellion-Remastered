@@ -1,5 +1,5 @@
 /* The Win32 vocabulary the shared game code still speaks, for remake_sdl
-   without <windows.h> (TODO_WEB.md steps 2-4). The game code handles its
+   without <windows.h> (Web port step 2-4). The game code handles its
    input as Win32 window messages; sdl_app.inc translates SDL events into
    them. Only types, constants and macros live here: the few functions the
    code calls are implemented on SDL in sdl_platform.inc. */

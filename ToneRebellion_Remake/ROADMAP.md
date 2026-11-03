@@ -1,6 +1,6 @@
 # Feuille de route
 
-État au 2026-11-03. Reste à faire et limites connues : [TODO](TODO.md); portage acquis : [implemented.md](docs/implemented.md); preuves : `../behavior/` et [FUNCTION_GUIDE.md](../FUNCTION_GUIDE.md).
+État au 2026-11-03. Reste à faire : [TODO](TODO.md); portage acquis : [implemented.md](docs/implemented.md); preuves : `../behavior/` et [FUNCTION_GUIDE.md](../FUNCTION_GUIDE.md).
 
 ## Constat
 
@@ -15,17 +15,8 @@
 - **Sauvegarde** : sauvegardes du remake et du jeu d'origine; une partie chargée ou reprise s'ouvre en pause, panneau d'options ouvert (choix du remake).
 - **Interface** : parité des panneaux, polices, carte du monde, badges FLTINFO (dont badge d'état et scintillement des sorts), pause (île et carte figées, œil fermé), bâtiments de départ déjà construits.
 - **Audio** : volume/pan par distance, sons de producteurs, d'île et d'écroulement.
-- **Web et SDL** : [TODO_WEB.md](TODO_WEB.md) (toutes les étapes faites; build Web mono-joueur); partie réseau SDL↔SDL vérifiée en jeu.
+- **Web et SDL** : portage Web fait en 8 étapes (1 surface portable `RenderSurface`, 2 services `platform_*`, 3 adaptateur SDL3, 4 cible Emscripten, 5 données utilisateur, 6 sauvegardes `IDBFS`, 7 audio navigateur, 8 build Web mono-joueur); partie réseau SDL↔SDL vérifiée en jeu.
 - **Vérification** : fixtures statiques (`TONE_REBELLION_E2E_FIXTURE` : badges, enemy_hall, spell, obtain, dying, victory, messages, return) avec `TONE_REBELLION_SAVE_DIR`; `tests/e2e/fixture_e2e.ps1` et `tests/e2e/island_e2e.ps1` ([validation](docs/build-and-validation.md)).
-
-## Reste
-
-- Vérifier en jeu : Repair par liste, Léviathan (contamination de marqueur classe 1), séquence de victoire complète, survol des déclencheurs de trait (aucun atteignable dans les fixtures).
-- Fin de partie : chemin multijoueur 0x15; relecture REA de `0x4239e9`/`0x46a92a`.
-- Doutes REA : gardes CONSTR supplémentaires (`payload_12`, taille, réservation), `renderer_class != 0` refusant une tâche CONSTR, cas 1..0xd et 0x10..0x14 de `FUN_0041e569` non relus.
-- Latch `+0x90` : évènement 0xb (texte/son via 0x4013c0) non résolu; le port s'arrête quand aucun site n'est libre (le natif boucle).
-- Sauvegardes : celle du remake est refusée dès que `sizeof(GameSession)` change (pas de migration, dépend de l'ABI); le presse-papiers natif n'est pas relu des sauvegardes d'origine.
-- Ménage local (ignoré par git) : copies `ToneRebellion_Remake_sdl - Copie*.exe`, `ToneRebellion_Remake*.zip`, `../hs_err_pid*.log`, `mci_debug.log`.
 
 ## Écarts gardés
 
@@ -35,6 +26,4 @@
 - Presse-papiers : rempli avec tous les bâtiments d'entraînement possédés (`game_session_clip_auto_register`); natif : seulement le bâtiment sélectionné. Retirer l'appel dans `island_view_render.inc` rend le comportement natif.
 - Chargement en pause : choix du remake, `FUN_004576c7` ne pause pas.
 
-## Hors périmètre
-
-Multijoueur natif exact (canaux DirectPlay, chat, cartes `ENDGNONP`; le lobby, la coopération et la synchronisation par tours du remake sont portés, voir [multijoueur](../behavior/multiplayer.md)), `intro.avi` et commandes `nevada` (rotation/zoom clavier).
+Hors périmètre et questions ouvertes : [TODO](TODO.md).
