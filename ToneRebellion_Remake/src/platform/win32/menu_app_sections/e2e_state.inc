@@ -55,7 +55,7 @@ static int e2e_build_fixture(HWND window)
         !platform_environment("TONE_REBELLION_E2E_FIXTURE", name, sizeof(name)) ||
         (strcmp(name, "badges") != 0 && strcmp(name, "enemy_hall") != 0 &&
          strcmp(name, "spell") != 0 && strcmp(name, "dying") != 0 &&
-         strcmp(name, "obtain") != 0))
+         strcmp(name, "obtain") != 0 && strcmp(name, "victory") != 0))
         return 0;
     g_menu.world_index = 0;
     g_menu.selected_tribe = 0;
@@ -138,6 +138,18 @@ static int e2e_build_fixture(HWND window)
         /* The fixture's tribe 0 has reached that island. A Leviathan placed
            here made the Hall's workers react and broke the click checks. */
         g_game_session.islands[island].access_mask |= 1U;
+    }
+    if (strcmp(name, "victory") == 0 && g_game_session.island_count > 0) {
+        /* Every PIT_LeviShield seal (0x17..0x24) of the last island gone:
+           FUN_00460460 starts sequence state 2 on its next pass. Speed 3. */
+        GameRuntimeIsland *last =
+            &g_game_session.islands[g_game_session.island_count - 1U];
+        uint16_t location;
+        for (location = 0; location < last->location_count; ++location)
+            if (last->locations[location].record_value_10 >= 0x17 &&
+                last->locations[location].record_value_10 <= 0x24)
+                last->locations[location].record_value_10 = 0;
+        g_sim_speed = 3U;
     }
     if (strcmp(name, "obtain") == 0) {
         /* A PIT_Object (+0x10 == 1, artifact id 6 at +0x24, no owner) on the
@@ -236,6 +248,9 @@ static void e2e_write_state(void)
             g_selected_floater, g_selected_location, g_island_panel_mode,
             g_menu.selected_tribe);
     fprintf(file, "hall_player %d\n", selected_hall_player());
+    fprintf(file, "sequence %d\nsequence_tick %d\n",
+            g_game_session_valid ? (int)g_game_session.world_sequence_state : -1,
+            g_game_session_valid ? (int)g_game_session.world_sequence_tick : -1);
     fprintf(file, "cast_effects %u\n",
             (unsigned int)g_game_session.active_cast_effect_count);
     fprintf(file, "text_info %s\n",

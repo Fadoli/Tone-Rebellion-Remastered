@@ -207,6 +207,23 @@ try {
         if ($carrier -or ($site -and $site.item -ne 1)) { $picked = $true; Capture "obtain_pickup" }
     }
     Check $picked "BC_Obtain sends a worker that picks the object up" ""
+    Quit
+
+    # Victory: with every seal of the last island gone, FUN_00460460 starts
+    # sequence state 2; the map follows (state 2 -> SetState 2) and then the
+    # end screen (SetState 7, screen 6). The fixture runs at speed 3.
+    Launch "victory"
+    $seq = $false; $map = $false; $end = $false
+    for ($i = 0; $i -lt 450 -and -not $end; $i++) {
+        Start-Sleep -Milliseconds 200
+        $now = State
+        if (-not $seq -and $now.sequence -ge 2) { $seq = $true; Capture "victory_sequence" }
+        if ($seq -and -not $map -and $now.screen -eq 2) { $map = $true; Capture "victory_map" }
+        if ($now.screen -eq 6) { $end = $true; Start-Sleep -Seconds 1; Capture "victory_end" }
+    }
+    Check $seq "removing the last seals starts the end sequence" ""
+    Check $map "the end sequence returns to the world map" ""
+    Check $end "the end sequence opens the end screen" ""
 }
 finally {
     Quit
