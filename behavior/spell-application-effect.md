@@ -39,3 +39,11 @@ Limites et interprétations:
 - `FUN_0040adb5` (`ev_2500d2d1…`): les sélecteurs 1..3 lisent `DAT_0049aca8..acb0`, qui valent 0xffff dans l'image (`ev_d189bd05…`); aucun écrivain n'a été trouvé, seulement trois lecteurs (`FUN_0040adb5`, `FUN_0040bf98`, `FUN_0040d48c`). Aucune valeur 2 ou 3 de site +0x24 n'est connue. Le port ne dessine rien pour ces sélecteurs.
 - `KILLBEAS` (`ev_4615c5ce…`, `ev_8072182a…`): [2] = 0 à la création; au premier appel, `FUN_0041760b` tire [2] = `FUN_00467260(8)` avant les trois `-rand(30)` ([5], [6], [3]).
 - Les plages de `FUN_00467260(8)` et `FUN_00467260(30)` sont reprises de `tone_rng_bounded`.
+
+## Floater sous effet de sort
+
+Observations (REA haiku 2026-11-03, `ev_70c91b7b…` `FUN_004239e9`, `ev_5cc7f5cc…` `FUN_0042704b`, `ev_450fd5fa…` `FUN_00411478`, `ev_8578fcc7…` `FUN_0041e569`):
+- Drapeaux posés sur la cible: 0x2000 (sorts 0, 2, 3, 0xb, 0xf, 0x15, compteur `+0x24` remis à 0), 0x100 (0xe, plus 0x1000 au niveau 2; 1 via 0x453ade). 0xd/0x13: 0x10000 et `+0x38`, sans lecteur trouvé dans le dessin.
+- `FUN_0042704b`, après le corps et avant les badges: `FUN_00411478` (scintillement tramé, graine `DAT_00618e44 >> 1`) sur (x−18, y−12)..(x+18, y+24) si 0x2000, ou 0x100 avec `+0x24 < FUN_00425296(0x2000)` = 45; seulement si `param_5 != 0` (vue d'île). Aucune teinte ni clignotement liés aux sorts.
+- Durées (`FUN_0041e569`): 0x2000 effacé après 45 ticks; 0x100 après 2000, 3500 avec 0x1000.
+Port: `draw_floater_spell_shimmer` (`island_view_render.inc`, ouvriers et Léviathans de la vue d'île), même tramage que le scintillement des sites (`draw_site_shimmer`). Vérifié en jeu (fixture `spell`, sort 14: quatre ouvriers 0x100 scintillent). Inconnues: badges `fltinfo` 0x1c/0x1f/0x1e/0x1b liés à ces drapeaux non relus ici.

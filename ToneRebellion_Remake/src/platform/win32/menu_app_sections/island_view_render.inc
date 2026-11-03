@@ -311,6 +311,22 @@ static void draw_floater_death_cells(RenderSurface *surface,
     }
 }
 
+/* FUN_0042704b (fltdraw.cpp, after the body and before the badges): a spell
+   boost shimmers over (x-18, y-12)..(x+18, y+24) through FUN_00411478 while
+   +0x1c has 0x2000, or 0x100 with the +0x24 counter below FUN_00425296(0x2000)
+   = 45; drawn only in the island view (param_5 != 0). REA haiku 2026-11-03,
+   ev_5cc7f5cc, ev_450fd5fa. */
+static void draw_floater_spell_shimmer(RenderSurface *surface,
+                                       const GameFloaterStart *floater,
+                                       int x, int y)
+{
+    if ((floater->source_runtime_flags & 0x2000U) == 0 &&
+        ((floater->source_runtime_flags & 0x100U) == 0 ||
+         floater->source_death_timer >= 45U)) return;
+    draw_site_shimmer(surface, x - 0x12, y - 0x0c, x + 0x12, y + 0x18,
+                      g_game_session.simulation_tick >> 1);
+}
+
 static void draw_island_floater_overlays(RenderSurface *surface, const GameFloaterStart *floater,
                                          const SpriteSheet *body_art,
                                          uint32_t body_frame_index,
@@ -1189,6 +1205,7 @@ static void render_island_view(RenderSurface *surface)
             floater_y = image_top + (int)floater->y;
             if (floater->type_index == 4) {
                 draw_island_leviathan_floater(surface, floater, floater_x, floater_y);
+                draw_floater_spell_shimmer(surface, floater, floater_x, floater_y);
                 /* Overlays need the body shape (local_c != 0): subtype 9
                    has legs only and gets none. */
                 if (floater->source_subtype >= 10U &&
@@ -1243,6 +1260,7 @@ static void render_island_view(RenderSurface *surface)
                     }
                 }
                 body_art = island_floater_body_art(floater);
+                draw_floater_spell_shimmer(surface, floater, floater_x, floater_y);
                 draw_island_floater_overlays(surface, floater, body_art,
                                              body_frame_index,
                                              floater_x, floater_y);
