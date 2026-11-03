@@ -121,21 +121,18 @@ try {
     # Another tribe's Hall (item 0x2a, raw 0x2a + owner * 16) shows that
     # tribe's NEWGAME<owner> name in IWTextInfo (FUN_00439673 mode 0).
     Launch "enemy_hall"
-    Start-Sleep -Seconds 5                      # the Hall placement ramp (100 ticks)
     $st = State
     $hall = $st.locations | Where-Object { $_.owner -eq 1 -and $_.class -eq 0 -and $_.item -eq 0x3a } | Select-Object -First 1
     Check ($null -ne $hall) "the enemy_hall fixture shows tribe 1's Hall" "island $($st.island)"
+    Quit
     if ($hall) {
-        $target = $null
-        foreach ($o in @(@(0, -6), @(10, -6), @(-10, -6), @(0, 2), @(15, -12), @(-15, -12), @(0, -15))) {
-            $px = $hall.x - $st.scroll + $o[0]; $py = $hall.y + $o[1]; $free = $true
-            foreach ($f in $st.floaters) {
-                if ([math]::Abs($f.x - $st.scroll - $px) -lt 18 -and [math]::Abs($f.y - $py) -lt 30) { $free = $false }
-            }
-            if ($free) { $target = @($px, $py); break }
-        }
-        if ($target) { Click $target[0] $target[1] }
-        Start-Sleep -Milliseconds 600
+        # Its workers stand on it, so a click would pick one of them: start
+        # again with the Hall selected (TONE_REBELLION_E2E_SELECT); this checks
+        # what IWTextInfo draws, not click hit-testing.
+        $env:TONE_REBELLION_E2E_SELECT = [string]$hall.index
+        Launch "enemy_hall"
+        Remove-Item Env:TONE_REBELLION_E2E_SELECT
+        Start-Sleep -Seconds 1
         $sel = State
         Check ($sel.selected_location -eq $hall.index -and $sel.text_info -eq "NEWGAME1") "another tribe's Hall shows its tribe name" "selected $($sel.selected_location) text $($sel.text_info)"
         Capture "enemy_hall"

@@ -83,6 +83,33 @@ static int e2e_build_fixture(HWND window)
         GAME_START_PLAYER_COUNT, 9, island, (uint16_t)(x + 580),
         (uint16_t)(y - 10), 0, 0);
     if (strcmp(name, "enemy_hall") == 0) {
+        /* A built bridge out of tribe 0's and tribe 1's Hall islands, each
+           partner island reachable by tribe 0. */
+        uint8_t halls[2];
+        unsigned int h;
+        halls[0] = island;
+        halls[1] = (uint8_t)g_game_session.economy[1].hall_island_index;
+        for (h = 0; h < 2U; ++h) {
+            GameRuntimeIsland *bridge_island;
+            uint16_t location;
+            if (halls[h] >= g_game_session.island_count) continue;
+            bridge_island = &g_game_session.islands[halls[h]];
+            for (location = 0; location < bridge_island->location_count;
+                 ++location) {
+                const GameRuntimeLocation *marker =
+                    &bridge_island->locations[location];
+                if (marker->renderer_class != 2 ||
+                    marker->bridge_neighbor_island < 0 ||
+                    marker->bridge_neighbor_island >= g_game_session.island_count)
+                    continue;
+                if (game_session_mark_bridge_constructed_at(&g_game_session,
+                        halls[h], location)) {
+                    g_game_session.islands[marker->bridge_neighbor_island]
+                        .access_mask |= 1U;
+                    break;
+                }
+            }
+        }
         economy = &g_game_session.economy[1];
         if (economy->hall_island_index >= g_game_session.island_count) return 0;
         island = (uint8_t)economy->hall_island_index;
@@ -94,6 +121,12 @@ static int e2e_build_fixture(HWND window)
     }
     if (!open_island_view(window, island)) return 0;
     g_island_scroll_x = island_clamp_scroll((int)x - 0x140);
+    /* TONE_REBELLION_E2E_SELECT: a site of the opened island to select, for
+       checks of what the panels draw rather than of click hit-testing. */
+    if (platform_environment("TONE_REBELLION_E2E_SELECT", name, sizeof(name)) &&
+        atoi(name) >= 0 &&
+        atoi(name) < (int)g_game_session.islands[island].location_count)
+        select_location_on_view(atoi(name));
     return 1;
 }
 
