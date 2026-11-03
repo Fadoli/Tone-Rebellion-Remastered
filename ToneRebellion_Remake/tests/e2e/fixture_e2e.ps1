@@ -12,6 +12,7 @@ Add-Type @"
 using System; using System.Runtime.InteropServices;
 public class FixtureE2E {
   [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
   [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
   [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
@@ -83,6 +84,9 @@ function Launch($fixture) {
         Start-Sleep -Milliseconds 250; $script:proc.Refresh(); $script:h = $script:proc.MainWindowHandle
     }
     Start-Sleep -Seconds 2
+    # Arrow-key scrolling reads the live key state: the window needs focus.
+    [FixtureE2E]::SetForegroundWindow($script:h) | Out-Null
+    Start-Sleep -Milliseconds 300
 }
 function Quit {
     if ($script:proc -and -not $script:proc.HasExited) {
@@ -106,6 +110,32 @@ try {
     Click 30 450                                   # TOGREALM: world badges on
     Start-Sleep -Milliseconds 600
     Capture "badges_world"
+
+    # The Leviathan (FUN_00435581 picks the first unflagged floater within
+    # 20 of the click): scroll it into view, then click it where it stands.
+    if ($leviathan) {
+        $picked = $false
+        for ($try = 0; $try -lt 12 -and -not $picked; $try++) {
+            $st = State
+            $l = $st.floaters | Where-Object { $_.index -eq $leviathan.index }
+            if ($null -eq $l) { break }
+            $sx = $l.x - $st.scroll
+            if ($sx -lt 25 -or $sx -gt 615) {
+                $vk = if ($sx -gt 615) { 0x27 } else { 0x25 }
+                for ($k = 0; $k -lt 6; $k++) {
+                    [FixtureE2E]::PostMessage($script:h, 0x100, [IntPtr]$vk, [IntPtr]0) | Out-Null; Start-Sleep -Milliseconds 40
+                    [FixtureE2E]::PostMessage($script:h, 0x101, [IntPtr]$vk, [IntPtr]0) | Out-Null; Start-Sleep -Milliseconds 40
+                }
+                Start-Sleep -Milliseconds 300
+                continue
+            }
+            Click $sx $l.y
+            Start-Sleep -Milliseconds 300
+            if ((State).selected_floater -eq $leviathan.index) { $picked = $true }
+        }
+        Check $picked "clicking the Leviathan selects it" "selected $((State).selected_floater)"
+        if ($picked) { Capture "leviathan_panel" }
+    }
 
     if ($warrior) {
         $st = State

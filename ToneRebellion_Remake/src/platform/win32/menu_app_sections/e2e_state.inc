@@ -78,12 +78,20 @@ static int e2e_build_fixture(HWND window)
         warrior != NULL ? warrior->max_attack_points : 0);
     (void)native_save_add_fixture_floater(&g_game_session, &g_floater_catalog,
         1, 1, island, (uint16_t)(x + 130), (uint16_t)(y - 30), 0, 0);
-    (void)native_save_add_fixture_floater(&g_game_session, &g_floater_catalog,
-        GAME_START_PLAYER_COUNT, 12, island, (uint16_t)(x + 520),
-        (uint16_t)(y - 60), 1, 0);
-    (void)native_save_add_fixture_floater(&g_game_session, &g_floater_catalog,
-        GAME_START_PLAYER_COUNT, 9, island, (uint16_t)(x + 580),
-        (uint16_t)(y - 10), 0, 0);
+    if (strcmp(name, "badges") == 0) {
+        /* The Leviathans keep to the island's floater range (the Hall
+           island of this world does not scroll). Only this fixture: on
+           the others they fight on the island the bridge test reaches. */
+        int far_x = (int)x + 240;
+        int max_x = g_game_session.islands[island].floater_max_x[0];
+        if (max_x > (int)x && far_x > max_x - 20) far_x = max_x - 20;
+        (void)native_save_add_fixture_floater(&g_game_session,
+            &g_floater_catalog, GAME_START_PLAYER_COUNT, 12, island,
+            (uint16_t)far_x, (uint16_t)(y - 60), 1, 0);
+        (void)native_save_add_fixture_floater(&g_game_session,
+            &g_floater_catalog, GAME_START_PLAYER_COUNT, 9, island,
+            (uint16_t)(far_x - 40), (uint16_t)(y - 10), 0, 0);
+    }
     if (strcmp(name, "enemy_hall") == 0) {
         /* A built bridge out of tribe 0's and tribe 1's Hall islands, each
            partner island reachable by tribe 0. */
