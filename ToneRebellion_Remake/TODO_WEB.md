@@ -43,7 +43,7 @@
    - Fait : export (`tone-saves.zip`, ZIP non compressé, CRC32 contrôlé, relu par `zipfile` Python) et import (`.zip` exporté ou fichiers `0n.sav`/`resume.gam`/`*.cfg`, autres noms ignorés) depuis l'écran d'accueil, avant de lancer la partie.
 7. [x] **Audio navigateur.** Démarrage du contexte audio au premier geste utilisateur; vérifier la latence du mixeur.
    - Constat : SDL3 3.4.18 (`SDL_emscriptenaudio.c`) reprend lui-même un `AudioContext` suspendu dès que `navigator.userActivation.hasBeenActive`; aucun code ajouté. Vérifié après clic « Jouer » : contexte `running`, 44 100 Hz, `ScriptProcessorNode` de 2048 trames (46 ms) + sortie 40 ms; musique `START.WAV` du titre audible (crête 0,85 mesurée par `AnalyserNode`). Le mixeur Win32 met jusqu'à 4×1024 trames en file : pas de réglage nécessaire.
-8. [ ] **Multijoueur (optionnel).** Transport WebSocket derrière l'interface réseau + relais (type websockify) côté serveur, ou désactiver le multijoueur dans la build Web.
+8. [x] **Multijoueur (optionnel).** Réglé par l'option « désactiver » prévue ici: la build Web se déclare sans multijoueur (état au 2026-11-03); un relais WebSocket reste possible sur demande. Transport WebSocket derrière l'interface réseau + relais (type websockify) côté serveur, ou désactiver le multijoueur dans la build Web.
 
 ## Estimation
 
