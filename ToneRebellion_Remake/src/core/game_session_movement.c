@@ -1874,6 +1874,30 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
             floater->active_order_action != 9U &&
             !floater->source_order_pending && !floater->has_move_order)
             (void)game_session_order_floater_home(session, i);
+        /* Same block, subtype 4 (0x41f9ba..0x41fa7b): outside FA_Cast, or
+           with flag 0x200 set, it clears 0x200 and takes action 9 toward the
+           site of its building row +0x0c (FUN_0045c3bb, any island). */
+        if (floater->source_subtype == 4U &&
+            floater->previous_movement_state != 0 &&
+            floater->movement_state == 0 &&
+            (floater->active_order_action != 0x13U ||
+             (floater->source_runtime_flags & 0x200U) != 0) &&
+            floater->active_order_action != 9U &&
+            !floater->source_order_pending && !floater->has_move_order &&
+            floater->source_link_0c >= 0 &&
+            floater->charge_source_island < session->island_count &&
+            floater->charge_source_location <
+                session->islands[floater->charge_source_island].location_count) {
+            const GameRuntimeLocation *building =
+                &session->islands[floater->charge_source_island]
+                     .locations[floater->charge_source_location];
+            floater->source_runtime_flags &= ~0x200U;
+            floater->has_wander_order = 0;
+            floater->wander_timer = 0;
+            (void)game_session_order_floater_to_coordinate(
+                session, floater->owner_slot, floater->charge_source_island,
+                i, building->x, building->y);
+        }
         floater->previous_movement_state = floater->movement_state;
         if (game_session_tick_ground_object_pickup(session, floater, 0))
             continue;
