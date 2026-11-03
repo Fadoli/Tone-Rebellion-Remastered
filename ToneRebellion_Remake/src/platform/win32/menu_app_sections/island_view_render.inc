@@ -327,6 +327,60 @@ static void draw_floater_spell_shimmer(RenderSurface *surface,
                       g_game_session.simulation_tick >> 1);
 }
 
+/* FUN_0042704b status badge (DAT_005c37f8, island view, 0x427d5c..0x427f2a,
+   REA haiku 2026-11-03 ev_5cc7f5cc): the first match of
+   0x1e Leviathan on an island whose DAT_0061fa2e entry exceeds 100,
+   0x1c subtype 0 under flag 0x100, 0x1f subtype 0 while the owner's
+   DAT_00618f5a speed timer runs, 0x1b linked building flagged 0x8000,
+   0x1d charge +0x22 above the catalog maximum (row +8), 0x1a hit points above
+   FUN_00420f28's maximum. Returns 0 when none applies. */
+static int floater_status_badge_frame(const GameFloaterStart *floater,
+                                      uint32_t *frame)
+{
+    const FloaterStats *stats;
+    if (floater->type_index == 4U) {
+        if (floater->island_index < g_game_session.island_count &&
+            g_game_session.islands[floater->island_index].source_level > 100) {
+            *frame = 0x1e;
+            return 1;
+        }
+    } else if (floater->source_subtype == 0U &&
+               (floater->source_runtime_flags & 0x100U) != 0) {
+        *frame = 0x1c;
+        return 1;
+    } else if (floater->source_subtype == 0U &&
+               floater->owner_slot < GAME_START_PLAYER_COUNT &&
+               g_game_session.economy[floater->owner_slot]
+                   .floater_speed_boost_timer > 0) {
+        *frame = 0x1f;
+        return 1;
+    }
+    if (floater->source_link_0c >= 0 &&
+        floater->charge_source_island < g_game_session.island_count &&
+        floater->charge_source_location <
+            g_game_session.islands[floater->charge_source_island].location_count) {
+        const GameRuntimeLocation *building =
+            &g_game_session.islands[floater->charge_source_island]
+                 .locations[floater->charge_source_location];
+        if (building->source_location_slot_18 == floater->source_link_0c &&
+            (building->source_flags & 0x8000U) != 0) {
+            *frame = 0x1b;
+            return 1;
+        }
+    }
+    stats = floater_catalog_find(&g_floater_catalog, floater->type_index,
+                                 floater->source_subtype);
+    if (stats != NULL && floater->charge_current > stats->max_attack_points) {
+        *frame = 0x1d;
+        return 1;
+    }
+    if (floater->current_hit_points > floater->max_hit_points) {
+        *frame = 0x1a;
+        return 1;
+    }
+    return 0;
+}
+
 static void draw_island_floater_overlays(RenderSurface *surface, const GameFloaterStart *floater,
                                          const SpriteSheet *body_art,
                                          uint32_t body_frame_index,
@@ -370,6 +424,13 @@ static void draw_island_floater_overlays(RenderSurface *surface, const GameFloat
             &frame, &badge_x, &badge_y) &&
         frame < g_floater_info_art.frame_count) {
         draw_sprite(surface, &g_floater_info_art, frame, badge_x, badge_y);
+    }
+    if (island_worker_health_overlay_enabled(g_floater_overlay_flags, 1) &&
+        body_right > body_left && floater_status_badge_frame(floater, &frame) &&
+        frame < g_floater_info_art.frame_count) {
+        draw_sprite(surface, &g_floater_info_art, frame,
+                    floater->facing_left ? body_right - 1 : body_left - 8,
+                    body_top - 10);
     }
     /* Charge gauge beside the health one, for any owner: FUN_0042704b gates
        it on DAT_005c37fc, type != 4 and subtype >= 1 only (all tribes
