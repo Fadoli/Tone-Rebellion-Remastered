@@ -603,7 +603,7 @@ static int obtain_button_at(int x, int y)
 {
     RECT rect;
     return obtain_button_rect(&rect) && x >= rect.left &&
-        x < rect.right && y >= rect.top && y < rect.bottom;
+        x <= rect.right && y >= rect.top && y <= rect.bottom;
 }
 
 /* BC_DefendArea (TRAINB frame 0, pane 453,438..507,471): offered by
@@ -638,8 +638,8 @@ static int building_order_button_at(int x, int y)
         const WindowTemplate *control = window_catalog_find(
             &g_window_catalog, k_building_order_buttons[index], 3);
         if (control != NULL && x >= control->pane.left &&
-            x < control->pane.right && y >= control->pane.top &&
-            y < control->pane.bottom) return (int)(6U + index);
+            x <= control->pane.right && y >= control->pane.top &&
+            y <= control->pane.bottom) return (int)(6U + index);
     }
     return 0;
 }
@@ -660,8 +660,8 @@ static int training_stock_control_at(int x, int y)
         const WindowTemplate *control = window_catalog_find(
             &g_window_catalog, names[index], 3);
         if (control != NULL && x >= control->pane.left &&
-            x < control->pane.right && y >= control->pane.top &&
-            y < control->pane.bottom &&
+            x <= control->pane.right && y >= control->pane.top &&
+            y <= control->pane.bottom &&
             game_session_training_stock_visible(&g_game_session,
                 (uint8_t)g_menu.selected_tribe,
                 (uint8_t)selection_island(),
@@ -681,10 +681,10 @@ static int clipboard_control_at(int x, int y)
     for (index = 0; index < 3U; ++index) {
         const WindowTemplate *tab = window_catalog_find(&g_window_catalog, tabs[index], 3);
         const WindowTemplate *slot = window_catalog_find(&g_window_catalog, slots[index], 3);
-        if (tab != NULL && x >= tab->pane.left && x < tab->pane.right &&
-            y >= tab->pane.top && y < tab->pane.bottom) return (int)index + 1;
-        if (slot != NULL && x >= slot->pane.left && x < slot->pane.right &&
-            y >= slot->pane.top && y < slot->pane.bottom) return (int)index + 11;
+        if (tab != NULL && x >= tab->pane.left && x <= tab->pane.right &&
+            y >= tab->pane.top && y <= tab->pane.bottom) return (int)index + 1;
+        if (slot != NULL && x >= slot->pane.left && x <= slot->pane.right &&
+            y >= slot->pane.top && y <= slot->pane.bottom) return (int)index + 11;
     }
     return 0;
 }
@@ -720,8 +720,8 @@ static int upgspread_button_at(int x, int y)
             (uint16_t)g_selected_location)) return 0;
     control = window_catalog_find(&g_window_catalog, "BC_UpgSpread", 3);
     return control != NULL && x >= control->pane.left &&
-        x < control->pane.right && y >= control->pane.top &&
-        y < control->pane.bottom;
+        x <= control->pane.right && y >= control->pane.top &&
+        y <= control->pane.bottom;
 }
 
 static int ensure_trainb_art(void)
