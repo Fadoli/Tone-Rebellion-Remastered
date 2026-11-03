@@ -54,7 +54,8 @@ static int e2e_build_fixture(HWND window)
     if (!e2e_enabled() ||
         !platform_environment("TONE_REBELLION_E2E_FIXTURE", name, sizeof(name)) ||
         (strcmp(name, "badges") != 0 && strcmp(name, "enemy_hall") != 0 &&
-         strcmp(name, "spell") != 0 && strcmp(name, "dying") != 0))
+         strcmp(name, "spell") != 0 && strcmp(name, "dying") != 0 &&
+         strcmp(name, "obtain") != 0))
         return 0;
     g_menu.world_index = 0;
     g_menu.selected_tribe = 0;
@@ -137,6 +138,34 @@ static int e2e_build_fixture(HWND window)
         /* The fixture's tribe 0 has reached that island. A Leviathan placed
            here made the Hall's workers react and broke the click checks. */
         g_game_session.islands[island].access_mask |= 1U;
+    }
+    if (strcmp(name, "obtain") == 0) {
+        /* A PIT_Object (+0x10 == 1, artifact id 6 at +0x24, no owner) on the
+           nearest empty class-0 pad to the Hall, selected so BC_Obtain shows
+           (FUN_0045302a command 4). */
+        GameRuntimeIsland *home = &g_game_session.islands[island];
+        uint16_t location;
+        int best = -1;
+        int best_distance = 0;
+        for (location = 0; location < home->location_count; ++location) {
+            const GameRuntimeLocation *site = &home->locations[location];
+            int distance = (int)site->x - (int)x;
+            if (distance < 0) distance = -distance;
+            if (site->renderer_class != 0 || site->record_value_10 != 0 ||
+                site->owner_id != -1 || distance < 40) continue;
+            if (best < 0 || distance < best_distance) {
+                best = (int)location;
+                best_distance = distance;
+            }
+        }
+        if (best >= 0) {
+            home->locations[best].record_value_10 = 1;
+            home->locations[best].record_value_24 = 6;
+            if (!open_island_view(window, island)) return 0;
+            g_island_scroll_x = island_clamp_scroll((int)x - 0x140);
+            select_location_on_view(best);
+            return 1;
+        }
     }
     if (strcmp(name, "spell") == 0) {
         /* A finished 0x2f spell building near the Hall, stocked, with one
@@ -265,10 +294,10 @@ static void e2e_write_state(void)
             if (!game_session_floater_is_active(f) ||
                 f->island_index != g_menu.selected_map_island) continue;
             fprintf(file, "floater %u %d %d owner=%d type=%d subtype=%d "
-                    "flags=%u link=%d\n", i, (int)f->x, (int)f->y,
+                    "flags=%u link=%d cargo=%d\n", i, (int)f->x, (int)f->y,
                     (int)f->owner_slot, (int)f->type_index,
                     (int)f->source_subtype, (unsigned)f->source_runtime_flags,
-                    (int)f->source_link_0c);
+                    (int)f->source_link_0c, (int)f->carried_resource_code);
         }
         for (i = 0; i < island->location_count; ++i) {
             const GameRuntimeLocation *l = &island->locations[i];

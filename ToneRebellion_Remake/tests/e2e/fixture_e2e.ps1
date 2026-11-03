@@ -189,6 +189,24 @@ try {
         if ((State).cast_effects -eq 0) { $ended = $true }
     }
     Check $ended "the cast effect ends after its animation" ""
+    Quit
+
+    # Obtain: a PIT_Object (item 1, artifact 6) near the Hall is selected;
+    # BC_Obtain posts task 0xd (FUN_0042fa0f 0x39) and a worker picks it up.
+    Launch "obtain"
+    $st = State
+    $pit = $st.locations | Where-Object { $_.index -eq $st.selected_location } | Select-Object -First 1
+    Check ($null -ne $pit -and $pit.item -eq 1) "the obtain fixture selects a ground object" "selected $($st.selected_location) item $($pit.item)"
+    Click 543 425                                  # BC_Obtain
+    $picked = $false
+    for ($i = 0; $i -lt 150 -and -not $picked; $i++) {
+        Start-Sleep -Milliseconds 200
+        $now = State
+        $site = $now.locations | Where-Object { $_.index -eq $pit.index } | Select-Object -First 1
+        $carrier = $now.floaters | Where-Object { $_.cargo -eq 6 } | Select-Object -First 1
+        if ($carrier -or ($site -and $site.item -ne 1)) { $picked = $true; Capture "obtain_pickup" }
+    }
+    Check $picked "BC_Obtain sends a worker that picks the object up" ""
 }
 finally {
     Quit
