@@ -300,6 +300,15 @@ static IslandLocationActionControl selected_location_action(void)
         selection_island() < 0 ||
         selection_island() >= g_game_session.island_count ||
         g_selected_location < 0) return ISLAND_LOCATION_ACTION_NONE;
+    /* FUN_0042f303 never hides IWMove/IWHallMove (only IWLocInfo's 0x350b,
+       FUN_0044003d, shows or hides them), but IWInventory and IWGlyphs
+       follow them in windows.txt and share 192..447 x 368..471: painted on
+       top and hit first, they cover the button in modes 4 and 5 (REA haiku
+       2026-11-03, ev_75a4b8f4, ev_8c7540d8). Panels earlier in the list
+       (construction, tasks, trade, diplomacy) stay under it. */
+    if (g_island_panel_mode == WINDOW_ISLAND_PANEL_INVENTORY ||
+        g_island_panel_mode == WINDOW_ISLAND_PANEL_GLYPHS)
+        return ISLAND_LOCATION_ACTION_NONE;
     island = &g_game_session.islands[selection_island()];
     if (g_selected_location >= island->location_count) {
         return ISLAND_LOCATION_ACTION_NONE;
