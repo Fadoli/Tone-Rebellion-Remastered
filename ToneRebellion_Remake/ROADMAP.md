@@ -56,8 +56,8 @@ Fixtures statiques (`TONE_REBELLION_E2E_FIXTURE` : badges, enemy_hall, spell, ob
 
 À trancher par sous-agent avant le port concerné :
 
-- Boucle de distribution souris des panneaux Hall; index d'état actif en vue île; route mode 0/1/2 `FUN_0042970c` → `FUN_0042fa0f`.
-- Expéditeur du paquet de clic Repair, `FUN_00429f3a`, `FUN_00452b67`.
+- ~~Boucle de distribution souris~~: résolue le 2026-11-03 (`FUN_0046be81` survol, `FUN_0046c25d` clics, à rebours, premier gagnant, bords inclus). Restent: index d'état actif en vue île; route mode 0/1/2 `FUN_0042970c` → `FUN_0042fa0f`.
+- ~~Expéditeur du paquet de clic Repair~~: établi le 2026-11-02 (catégorie 1 code 3, liste de réparation de la tribu, `behavior/island-repair-control.md`).
 - Paquet natif de `IWMove`.
 
 ## Audit REA du 2026-10-27
@@ -75,9 +75,9 @@ Corrigés le 2026-10-31 (REA `ev_7393f2a9`, `ev_9994f35e`, `ev_3cb7946b`, `ev_1b
 - Traversée de pont : le port garde l'ordre dans `handoff_resume_action` et force `+0x3c = 9` pendant la traversée, puis l'état 9 pour l'action 9 (et l'action 0); le natif n'écrit jamais `+0x3c` (`FUN_004210a9`) et finit en état 0 (0x41f928) en laissant `FUN_004211bb` relancer l'action. Bloc sous-type 4 (0x41fa33..0x41fa44, `+0x3c = 9` après 0x4023bf) non tracé.
 - Latch `+0x90` : corrigé le 2026-11-02 — en multijoueur (`multiplayer_session`, `DAT_004befe0`) le port ne verrouille plus et saute seulement le recruteur; `0x401d9d` = `FUN_00460072`, portée (`game_session_hand_back_player_holdings`: glyphes et objets d'inventaire remis sur des sites; `ev_3de14804…`, `ev_5cabff24…`, asm `ev_160fda2c…`). Écart: le port s'arrête quand aucun site n'est libre, le natif boucle sans fin. Le départ d'un joueur en cours de partie (`FUN_004121b7` cas 2) l'appelle aussi, via la commande synchronisée `GAME_COMMAND_HAND_BACK_PLAYER` mise en file par l'hôte, sauf si un autre joueur partage la tribu. Évènement 0xb (texte/son via 0x4013c0) non résolu.
 - Presse-papiers : enregistrement automatique de tous les bâtiments d'entraînement (natif : seulement le bâtiment sélectionné).
-- `IWFltInfo` affiché seulement en modes général/lieu (natif : tout mode après 0x3f); masquage d'un floater mourant (0x8, timer >= 40) non testé au rendu.
+- `IWFltInfo` affiché seulement en modes général/lieu (natif : tout mode après 0x3f); mort d'un floater dessinée comme `FUN_0042704b` le 2026-11-03 (cellules `die.shp`, corps masqué dès le tick 20, fixture `dying`). Après `FUN_0042f8f7` le mode vaut toujours 0 ou 3: l'écart ne se voit qu'en changeant de mode avec un floater sélectionné.
 
-Doutes à trancher : sites « hidden pad » exclus du hit-test (commit `4452b0a`, sans preuve), gardes CONSTR supplémentaires (`payload_12`, taille, réservation), `renderer_class != 0` refusant une tâche CONSTR, cas 1..0xd et 0x10..0x14 de `FUN_0041e569` non relus.
+Doutes à trancher : sites « hidden pad » exclus du hit-test: prouvé le 2026-11-03 (garde de `FUN_00435581`: `+4 != 0`, bit joueur de `+0x22` ou `+0x10 != 0`, `ev_1e045b59…`); gardes CONSTR supplémentaires (`payload_12`, taille, réservation), `renderer_class != 0` refusant une tâche CONSTR, cas 1..0xd et 0x10..0x14 de `FUN_0041e569` non relus.
 
 ## Hors périmètre pour l'instant
 
