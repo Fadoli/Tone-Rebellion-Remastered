@@ -46,7 +46,7 @@ Porté : volume/pan par distance (`FUN_0045b24d`), bullets/impacts des producteu
 
 ## Phase 6 — Portage Web (dernière priorité)
 
-Plan : [TODO_WEB.md](TODO_WEB.md). Déjà fait : surface `RenderSurface`, services `platform_*`, shell `remake_sdl` (rendu, audio, curseurs `FLOAT.EXE`, sockets TCP), chemins UTF-8, build Web jouable (`tools/build_web.sh`, `web/shell.html` : wasm 1,37 Mo, dossier du jeu copié dans `IDBFS`, sauvegardes/options synchronisées après écriture, export/import, audio SDL3 repris au premier geste). Reste : écoute SDL contre Win32, partie réseau complète sous SDL, multijoueur Web.
+Plan : [TODO_WEB.md](TODO_WEB.md). Déjà fait : surface `RenderSurface`, services `platform_*`, shell `remake_sdl` (rendu, audio, curseurs `FLOAT.EXE`, sockets TCP), chemins UTF-8, build Web jouable (`tools/build_web.sh`, `web/shell.html` : wasm 1,37 Mo, dossier du jeu copié dans `IDBFS`, sauvegardes/options synchronisées après écriture, export/import, audio SDL3 repris au premier geste). Parité audio SDL/Win32 vérifiée dans le code (écoute facultative); multijoueur Web réglé par la build mono-joueur (relais possible sur demande). Reste: partie réseau complète sous SDL vérifiée en jeu (lobby SDL↔SDL déjà vérifié).
 
 ## Transverse — Vérification
 
