@@ -176,11 +176,9 @@ static void run_ui_frame(HWND window, WPARAM wparam)
         }
         while (sim_steps-- != 0U) {
         ++g_menu.animation_ticks;
-        if (g_menu.screen == SCREEN_WORLD_MAP && g_mouse_inside) {
-            /* Islands orbit under a stationary pointer. Re-hit-test each
-               animation tick so the hover frame follows the moving art. */
-            (void)update_world_map_hover(g_mouse_x, g_mouse_y);
-        }
+        /* No per-tick world-map hover re-test: FUN_004702d9 re-tests only on
+           message 10, the mouse-move code FUN_0046be81 sends, so an island
+           orbiting under a still pointer keeps its old hover state. */
         if (g_menu.screen == SCREEN_ISLAND && g_game_session_valid &&
             !g_net_in_game)
             simulate_session_tick(g_menu.animation_ticks);
