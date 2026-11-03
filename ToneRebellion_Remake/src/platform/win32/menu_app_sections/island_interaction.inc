@@ -226,6 +226,10 @@ static int island_location_hit_width(int location_index)
         }
     }
     if (runtime != NULL && runtime->renderer_class != 0) return widths[2];
+    /* FUN_00435581: an empty site indexes the table by its runtime +0x0c,
+       the pad-size subtype FUN_00461b3b stores (construction_site_size). */
+    if (runtime != NULL && runtime->construction_site_size <= 2U)
+        index = runtime->construction_site_size;
     if (runtime != NULL && runtime->record_value_10 > 0 &&
         (unsigned int)runtime->record_value_10 < g_pad_catalog.item_count) {
         int size = g_pad_catalog.items[runtime->record_value_10].size;
