@@ -2349,6 +2349,31 @@ static void draw_location_action_panel(RenderSurface *surface)
     g_e2e_text_info[0] = '\0';
     if (island_floater_info_shown()) {
         /* IWTextInfo is hidden; the floater panel owns this pane. */
+    } else if (island_panel_location_info_visible(g_island_panel_mode) &&
+               selected_location->renderer_class == 0 &&
+               selected_location->record_value_10 == 1 &&
+               selected_location->record_value_24 >= 5 &&
+               selected_location->record_value_24 <= 0x21 &&
+               g_inventory_item_info_text[
+                   selected_location->record_value_24 - 5][0] != '\0') {
+        /* FUN_0042f755 sends 0x3039 (site) to IWTextInfo; FUN_00439673 mode 0
+           shows a ground object (+0x10 0/1, id +0x24 > 3) as BRIDGE%02d
+           (id - 5) below 6, else PLOT%02d (id - 6), the plotobj.txt entry
+           the inventory panel also uses (REA haiku 2026-11-03,
+           ev_6a86d6f2, ev_20a8dd58). */
+        (void)island_panel_info_inventory_key(
+            (unsigned int)selected_location->record_value_24,
+            g_e2e_text_info, sizeof(g_e2e_text_info));
+        text_panel = window_catalog_find(&g_window_catalog, "IWTextInfo", 3);
+        if (text_panel != NULL && text_panel->shape_frame >= 0 &&
+            (uint32_t)text_panel->shape_frame < g_temp_hole_art.frame_count) {
+            draw_sprite(surface, &g_temp_hole_art,
+                        (uint32_t)text_panel->shape_frame,
+                        text_panel->pane.left, text_panel->pane.top);
+            draw_iw_text_info_text(surface, text_panel,
+                g_inventory_item_info_text[
+                    selected_location->record_value_24 - 5]);
+        }
     } else if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL &&
                selected_location->renderer_class == 0 &&
                location_base_item_id(selected_location) == 0x2a &&

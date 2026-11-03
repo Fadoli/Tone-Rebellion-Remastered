@@ -114,6 +114,7 @@ centrée dans le panneau par `FUN_004119ba` (`(W-largeur)/2 - origine`), sans
 `FUN_0044338b` est le détail d'unité (WORKER/AWAKE, HITS, STRENGTH, CHARGE;
 gamey.txt: Ouvrier, Le Sage, Coups, Puissance, Niveau, Charge) et ne sert pas
 aux objets au sol; la note précédente de cette section l'avait supposé à tort.
+Clic sur un objet au sol, autres panneaux (REA haiku 2026-11-03, `ev_ed75141a…` `FUN_0042fa0f`, `ev_6a86d6f2…` `FUN_0042f755`, `ev_20a8dd58…` `FUN_00439673`, `ev_8518ba3d…` `FUN_00429ebe`, `ev_acb06186…` `FUN_0045302a`, `ev_379f1f88…` `FUN_0042f303`): pour l'item 1 et l'objet 5..0x21, `FUN_0042fa0f` appelle `FUN_0042f755(site, 1)`: mode 3 (`IWLocInfo`, `IWLocControl`, `IWTextInfo`; `IWFltInfo` et les autres masqués), message 0x3039 (site) à `IWTextInfo`, et la commande 4 seule (Obtain) sans test de propriétaire ni de tribu. `IWTextInfo` (mode 0 de `FUN_00439673`) affiche l'entrée `BRIDGE%02d` (objet − 5) sous 6, sinon `PLOT%02d` (objet − 6), clés de `plotobj.txt` (texte enveloppé, (10, 6)); clé absente = rien. Aucun son (`FUN_00438120` exige le propriétaire). Port: texte ajouté (`g_inventory_item_info_text`, même enveloppe que les descriptions de bâtiment, y = 0x10); vérifié en jeu (fixture `obtain`: « Le Tétrajen… », `PLOT00`). Inconnu: gestionnaire 0x3039 qui écrit `+0x70/+0x74`.
 Le port dessine donc seulement la frame centrée (l'ancien libellé inventé
 « OBJET AU SOL » et la description sont retirés).
 `FUN_0042704b` lit l'ID d'objet en `+0x18` (frame `id-5`, feuille `DAT_0049acb4`)
