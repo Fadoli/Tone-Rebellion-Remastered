@@ -114,6 +114,17 @@ try {
     Start-Sleep -Milliseconds 600
     Capture "badges_world"
 
+    # Diplomacy: with the Hall selected by default, BC_Diplomacy opens the
+    # Diplomacy panel (mode 6).
+    Click 574 441                                  # BC_Diplomacy
+    Start-Sleep -Milliseconds 500
+    $dip = State
+    Check ($dip.panel_mode -eq 6) "BC_Diplomacy opens the Diplomacy panel" "panel_mode $($dip.panel_mode)"
+    Capture "diplomacy"
+    Click 130 450                                  # TASKLIST, then back
+    Click 130 450
+    Start-Sleep -Milliseconds 300
+
     # The Leviathan (FUN_00435581 picks the first unflagged floater within
     # 20 of the click): scroll it into view, then click it where it stands.
     if ($leviathan) {
