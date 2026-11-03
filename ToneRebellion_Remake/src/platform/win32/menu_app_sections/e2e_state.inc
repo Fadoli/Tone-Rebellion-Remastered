@@ -37,7 +37,8 @@ static int e2e_start_fixture(HWND window)
    the Hall island and adds known units beside the Hall: an own warrior
    (subtype 4, full charge), an enemy subtype-1 unit and two Leviathans
    (subtypes 12 and 9). TONE_REBELLION_E2E_FIXTURE=enemy_hall builds the
-   same game and opens tribe 1's Hall island instead. Returns 1 when
+   same game and opens tribe 1's Hall island instead; "spell" adds a stocked
+   spell building with a linked caster and selects it. Returns 1 when
    built. */
 static int e2e_build_fixture(HWND window)
 {
@@ -51,7 +52,8 @@ static int e2e_build_fixture(HWND window)
     uint16_t y;
     if (!e2e_enabled() ||
         !platform_environment("TONE_REBELLION_E2E_FIXTURE", name, sizeof(name)) ||
-        (strcmp(name, "badges") != 0 && strcmp(name, "enemy_hall") != 0))
+        (strcmp(name, "badges") != 0 && strcmp(name, "enemy_hall") != 0 &&
+         strcmp(name, "spell") != 0))
         return 0;
     g_menu.world_index = 0;
     g_menu.selected_tribe = 0;
@@ -119,6 +121,43 @@ static int e2e_build_fixture(HWND window)
            here made the Hall's workers react and broke the click checks. */
         g_game_session.islands[island].access_mask |= 1U;
     }
+    if (strcmp(name, "spell") == 0) {
+        /* A finished 0x2f spell building near the Hall, stocked, with one
+           linked level-1 caster: tribe 0's BC_Spell7 is kind 14
+           (Enchantement de tribu), cast at once without a target pick. */
+        uint16_t location;
+        int placed = -1;
+        for (location = 0; placed < 0 &&
+             location < g_game_session.islands[island].location_count;
+             ++location) {
+            IslandLocation site = {0};
+            site.kind = ISLAND_LOCATION_PAD;
+            site.renderer_subtype =
+                g_game_session.islands[island].locations[location]
+                    .construction_site_size;
+            if (game_session_place_building(&g_game_session, &g_pad_catalog, 0,
+                    island, location, &site, 0x2f, NULL, 0))
+                placed = (int)location;
+        }
+        if (placed >= 0) {
+            GameRuntimeLocation *tower =
+                &g_game_session.islands[island].locations[placed];
+            int caster;
+            tower->resource_stock[GAME_RESOURCE_MAGIC_TONE] = 200;
+            tower->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 200;
+            caster = native_save_add_fixture_floater(&g_game_session,
+                &g_floater_catalog, 0, 4, island, tower->x,
+                (uint16_t)(tower->y - 10), 1, 0);
+            if (caster >= 0)
+                (void)game_session_link_floater_charge(&g_game_session,
+                    (unsigned int)caster, (uint16_t)placed);
+            x = tower->x;
+            if (!open_island_view(window, island)) return 0;
+            g_island_scroll_x = island_clamp_scroll((int)x - 0x140);
+            select_location_on_view(placed);
+            return 1;
+        }
+    }
     if (!open_island_view(window, island)) return 0;
     g_island_scroll_x = island_clamp_scroll((int)x - 0x140);
     /* TONE_REBELLION_E2E_SELECT: a site of the opened island to select, for
@@ -151,6 +190,8 @@ static void e2e_write_state(void)
             g_selected_floater, g_selected_location, g_island_panel_mode,
             g_menu.selected_tribe);
     fprintf(file, "hall_player %d\n", selected_hall_player());
+    fprintf(file, "cast_effects %u\n",
+            (unsigned int)g_game_session.active_cast_effect_count);
     fprintf(file, "text_info %s\n",
             g_e2e_text_info[0] != '\0' ? g_e2e_text_info : "-");
     fprintf(file, "anim_ticks %u\nclock_ms %lu\n", g_menu.animation_ticks,

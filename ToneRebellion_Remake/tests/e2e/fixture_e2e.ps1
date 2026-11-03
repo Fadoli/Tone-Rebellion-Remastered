@@ -137,6 +137,28 @@ try {
         Check ($sel.selected_location -eq $hall.index -and $sel.text_info -eq "NEWGAME1") "another tribe's Hall shows its tribe name" "selected $($sel.selected_location) text $($sel.text_info)"
         Capture "enemy_hall"
     }
+    Quit
+
+    # A spell cast: tribe 0's BC_Spell7 on a 0x2f building is kind 14 (no
+    # target pick). FUN_0042383d starts the effect at cast tick 10 and
+    # FUN_004239e9 applies it when FUN_0041760b's animation ends.
+    Launch "spell"
+    $st = State
+    $tower = $st.locations | Where-Object { $_.index -eq $st.selected_location } | Select-Object -First 1
+    Check ($null -ne $tower -and $tower.item -eq 0x2f) "the spell fixture selects its spell building" "selected $($st.selected_location) item $($tower.item)"
+    Click 592 453                                  # BC_Spell7
+    $started = $false
+    for ($i = 0; $i -lt 40 -and -not $started; $i++) {
+        Start-Sleep -Milliseconds 150
+        if ((State).cast_effects -gt 0) { $started = $true; Capture "spell_cast" }
+    }
+    Check $started "BC_Spell7 starts a cast effect" "cast_effects stayed 0"
+    $ended = $false
+    for ($i = 0; $i -lt 60 -and $started -and -not $ended; $i++) {
+        Start-Sleep -Milliseconds 200
+        if ((State).cast_effects -eq 0) { $ended = $true }
+    }
+    Check $ended "the cast effect ends after its animation" ""
 }
 finally {
     Quit
