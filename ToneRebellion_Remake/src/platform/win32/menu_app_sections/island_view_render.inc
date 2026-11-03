@@ -262,7 +262,9 @@ static int16_t island_floater_health_stat(const GameFloaterStart *floater)
 {
     if (floater->max_hit_points <= 0 || floater->current_hit_points <= 0)
         return 0;
-    return (int16_t)(((int32_t)floater->current_hit_points * 10) /
+    /* FUN_0042704b: __ftol(11.0 * hp / max) (DAT_00494158 = 11.0, asm
+       0x427a00..0x427aa3); the badge layout caps it at ten. */
+    return (int16_t)(((int32_t)floater->current_hit_points * 11) /
                      floater->max_hit_points);
 }
 
@@ -353,18 +355,28 @@ static void draw_island_floater_overlays(RenderSurface *surface, const GameFloat
         frame < g_floater_info_art.frame_count) {
         draw_sprite(surface, &g_floater_info_art, frame, badge_x, badge_y);
     }
-    /* Charge gauge beside the health one, friendly units only. */
+    /* Charge gauge beside the health one, for any owner: FUN_0042704b gates
+       it on DAT_005c37fc, type != 4 and subtype >= 1 only (all tribes
+       start allied, FUN_0046466f). */
     if (island_worker_state_overlay_enabled(g_floater_overlay_flags, 1) &&
-        floater->owner_slot == g_menu.selected_tribe &&
         game_session_floater_charge_values(floater, &g_floater_catalog,
                                            &charge_now, &charge_max) &&
         charge_max > 0 &&
         island_worker_charge_badge_layout(
             floater->type_index, floater->source_subtype,
-            (int16_t)(((int32_t)(charge_now > 0 ? charge_now : 0) * 10) /
+            (int16_t)(((int32_t)(charge_now > 0 ? charge_now : 0) * 11) /
                       charge_max),
             floater->facing_left, body_left, body_top, body_right,
             &frame, &badge_x, &badge_y) &&
+        frame < g_floater_info_art.frame_count) {
+        draw_sprite(surface, &g_floater_info_art, frame, badge_x, badge_y);
+    }
+    /* The pink gauge in the same spot for a Leviathan: its attack rank. */
+    if (island_worker_state_overlay_enabled(g_floater_overlay_flags, 1) &&
+        floater->type_index == 4U &&
+        island_leviathan_rank_badge_layout(floater->source_subtype,
+            floater->attack_level_flags, floater->facing_left,
+            body_left, body_top, body_right, &frame, &badge_x, &badge_y) &&
         frame < g_floater_info_art.frame_count) {
         draw_sprite(surface, &g_floater_info_art, frame, badge_x, badge_y);
     }
@@ -1828,7 +1840,7 @@ static void render_island_view(RenderSurface *surface)
                             selected_floater->type_index,
                             selected_floater->source_subtype,
                             (int16_t)(((int32_t)(charge_now > 0 ? charge_now : 0) *
-                                       10) / charge_max),
+                                       11) / charge_max),
                             selected_floater->facing_left,
                             body_left, body_top, body_right,
                             &charge_frame, &badge_x, &badge_y) &&

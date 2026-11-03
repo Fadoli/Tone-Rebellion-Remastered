@@ -37,3 +37,12 @@ Port: le badge de royaume prenait la tribu (`type_index`) et refusait le type 4;
 
 Observation: `FUN_004204bc` pose le drapeau 0x8 (+0x1c), remet le compteur +0x24 à 0 et appelle `FUN_00416a9a(1, rec)` (`levdeath` ou `fltdeath`); `FUN_0041e569` incrémente le compteur et retire le floater après 40 ticks. `FUN_0042704b` ne dessine corps et jambes que si le compteur est < 20, puis, pour chacun, `FUN_0041137c`: des cellules de la forme `die` (`data\die.shp`) tous les 24 px depuis 12 px à l'intérieur de la boîte opaque de la frame (miroir: seul x de base inversé), k = 0 puis +5 par cellule, frame `(compteur - 8 + (k & 7)) / 2` (troncature C) dessinée si 0..10, blit RLE simple. Pas de fondu ni de remappage; badges FLTINFO masqués par `(+0x1c & 0x808) != 0`; le floater mourant reste cliquable (`FUN_00435581` ne teste que le bit 0x1).
 Port: `draw_floater_death_cells` (`island_view_render.inc`) pour les floaters de tribu et les Léviathans; badges masqués. Fixture `dying` (`TONE_REBELLION_E2E_FIXTURE=dying`) pour observer la séquence.
+
+### Barre rose des Léviathans et échelle des jauges (REA haiku 2026-11-03, `ev_c1b3c0b4…`, `ev_c98a873c…`, `ev_b35f6adb…`)
+
+Observation: `FUN_0042704b` dessine, sous la même garde que la jauge de charge (`DAT_005c37fc`) mais pour le type 4 de sous-type 10..17, une jauge rose: frame FLTINFO `0x2a - min(10, n)` avec n = quartet haut de `+0x0a` (rang d'attaque, `FUN_0041ff56`), si n > 0, à la place de la jauge bleue (x = x_r + (tourné ? 5 : 0)). Les trois jauges utilisent `DAT_00494158` = 11.0: santé `0x15 - min(10, __ftol(11·PV/max))` (PV négatifs ramenés à 0), charge `10 - min(10, __ftol(11·charge/max))`, rose `0x2a - min(10, n)`.
+Port: `island_leviathan_rank_badge_layout`; facteur 11 pour santé et charge (avant: 10); la jauge de charge n'a plus de garde de propriétaire (le natif n'en a pas, et toutes les tribus commencent alliées).
+
+### Alliances au départ (REA haiku 2026-11-03, `ev_ca19bd63…`)
+
+`FUN_0046466f` met à 1 chaque entrée de `DAT_00619290` (+0xd8, politique: 1 = ami) et de `DAT_006192a0` (+0xe8, destinataires) pour chaque joueur et chaque tribu 0..3, soi compris: toutes les tribus commencent alliées. `FUN_00465793` sous-code 10 les bascule. Port: `game_session.c` initialise `diplomacy_policy_mask` et `message_recipient_mask` à 0x0f (avant: seule l'entrée de soi).

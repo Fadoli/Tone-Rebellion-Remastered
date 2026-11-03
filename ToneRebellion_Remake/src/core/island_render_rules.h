@@ -82,11 +82,22 @@ int island_worker_stat_badge_layout(uint8_t worker_type,
 /* FUN_0042704b's third overlay-enable global (flag bit 2) gates a second
    FLTINFO gauge for non-spore floaters with a nonzero subtype: frame
    10 - stat (stat capped at ten), beside the combat-stat badge at the opposite
-   X offset (+5 when mirrored, +0 otherwise). Interpretation: the x87 operands
-   before __ftol are not in the decompiled output; the remake feeds it
-   charge/max * 10. */
+   X offset (+5 when mirrored, +0 otherwise). The stat is
+   __ftol(11.0 * charge / max) (DAT_00494158 = 11.0, asm 0x427b07..0x427bde),
+   so a full charge gives 11, capped at ten. */
 int island_worker_state_overlay_enabled(uint8_t flags,
                                         int renderer_allows_overlays);
+/* FUN_0042704b's pink Leviathan gauge (asm 0x427c2e..0x427d5c, same gate as
+   the charge gauge but type 4, subtype 10..17 and rank n > 0): FLTINFO frame
+   0x2a - min(10, n), n = the attack rank (high nibble of +0x0a), at the
+   charge gauge's spot. Returns 0 when not drawn. */
+int island_leviathan_rank_badge_layout(uint8_t subtype, uint16_t level_flags,
+                                       int facing_left,
+                                       int32_t body_hit_left,
+                                       int32_t body_hit_top,
+                                       int32_t body_hit_right_exclusive,
+                                       uint32_t *frame,
+                                       int32_t *x, int32_t *y);
 int island_worker_charge_badge_layout(uint8_t floater_type,
                                       uint8_t worker_type,
                                       int16_t charge_stat, int facing_left,

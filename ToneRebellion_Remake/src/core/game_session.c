@@ -57,15 +57,18 @@ int game_session_initialize(const WorldDefinition *world,
 
     memset(&next, 0, sizeof(next));
     next.config = *config;
-    /* DAT_00619290[player][player]: original saves hold 1 (friend) for every
-       entry, self included, and FUN_00420991 only rejects friends through
-       this table, so a zero self entry made soldiers target their own tribe.
-       Interpretation: the new-game writer was not read; only the self entry
-       is seeded here, other tribes keep the remake's "enemy" default. */
+    /* FUN_0046466f (ev_ca19bd63) sets every entry of DAT_00619290 (+0xd8,
+       policy, 1 = friend) and DAT_006192a0 (+0xe8, message recipients) to 1
+       for each player p and tribe k in 0..3, self included: every tribe
+       starts allied with every other. FUN_00465793 subcode 10 toggles them. */
     {
         unsigned int slot;
-        for (slot = 0; slot < GAME_START_PLAYER_COUNT; ++slot)
-            next.diplomacy_policy_mask[slot] = (uint8_t)(1U << slot);
+        for (slot = 0; slot < GAME_START_PLAYER_COUNT; ++slot) {
+            next.diplomacy_policy_mask[slot] =
+                (uint8_t)((1U << GAME_START_PLAYER_COUNT) - 1U);
+            next.message_recipient_mask[slot] =
+                (uint8_t)((1U << GAME_START_PLAYER_COUNT) - 1U);
+        }
     }
     {
         unsigned int row;

@@ -98,7 +98,7 @@ static int e2e_build_fixture(HWND window)
         if (max_x > (int)x && far_x > max_x - 20) far_x = max_x - 20;
         (void)native_save_add_fixture_floater(&g_game_session,
             &g_floater_catalog, GAME_START_PLAYER_COUNT, 12, island,
-            (uint16_t)far_x, (uint16_t)(y - 60), 1, 0);
+            (uint16_t)far_x, (uint16_t)(y - 60), 0x31, 0); /* rank 3, level 1 */
         (void)native_save_add_fixture_floater(&g_game_session,
             &g_floater_catalog, GAME_START_PLAYER_COUNT, 9, island,
             (uint16_t)(far_x - 40), (uint16_t)(y - 10), 0, 0);

@@ -176,6 +176,26 @@ int island_worker_charge_badge_layout(uint8_t floater_type,
     return 1;
 }
 
+int island_leviathan_rank_badge_layout(uint8_t subtype, uint16_t level_flags,
+                                       int facing_left,
+                                       int32_t body_hit_left,
+                                       int32_t body_hit_top,
+                                       int32_t body_hit_right_exclusive,
+                                       uint32_t *frame,
+                                       int32_t *x, int32_t *y)
+{
+    uint32_t rank = ((uint32_t)level_flags & 0xf0U) >> 4;
+    if (subtype < 10U || subtype > 17U || rank == 0 || frame == NULL ||
+        x == NULL || y == NULL ||
+        body_hit_right_exclusive <= body_hit_left) return 0;
+    if (rank > 10U) rank = 10U;
+    *frame = 0x2aU - rank;
+    *x = (facing_left ? body_hit_right_exclusive - 1 : body_hit_left - 8) +
+         (facing_left ? 5 : 0);
+    *y = body_hit_top;
+    return 1;
+}
+
 uint32_t island_worker_legs_frame(uint8_t worker_type, int has_cargo,
                                   uint32_t animation_ticks)
 {

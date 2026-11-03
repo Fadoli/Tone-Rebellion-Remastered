@@ -122,9 +122,12 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
     assert(session.economy[0].source_maintenance_budget == 30);
     assert(session.pending_event_count == 0);
     assert(session.pending_events[0].active == 0);
-    /* Each tribe starts as its own friend, so soldiers never target it. */
-    for (player = 0; player < GAME_START_PLAYER_COUNT; ++player)
-        assert(session.diplomacy_policy_mask[player] == (uint8_t)(1U << player));
+    /* FUN_0046466f: every tribe starts allied with every tribe, itself
+       included, and is a message recipient of all. */
+    for (player = 0; player < GAME_START_PLAYER_COUNT; ++player) {
+        assert(session.diplomacy_policy_mask[player] == 0x0f);
+        assert(session.message_recipient_mask[player] == 0x0f);
+    }
     assert(session.tone_placements.placement_count == 5);
     for (island_index = 0; island_index < session.tone_placements.placement_count;
          ++island_index) {
