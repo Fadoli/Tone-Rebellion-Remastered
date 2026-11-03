@@ -157,6 +157,7 @@ static void handle_click(HWND window, int x, int y)
                     island_panel_select_floater(&selection, slot_floater);
                     select_location_anywhere(selection_island(), selection.location_index);
                     g_selected_floater = slot_floater;
+                    ++g_floater_select_serial;
                     g_hovered_location = -1;
                     platform_invalidate(window);
                     return;
@@ -663,6 +664,7 @@ static void handle_click(HWND window, int x, int y)
                     island_panel_select_floater(&selection, clicked_floater);
                     select_location_anywhere(selection_island(), selection.location_index);
                     g_selected_floater = clicked_floater;
+                    ++g_floater_select_serial;
                     select_floater_source_building(clicked_floater);
                     g_hovered_location = -1;
                     platform_invalidate(window);

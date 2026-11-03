@@ -763,11 +763,30 @@ static void draw_island_lilmap_dots(RenderSurface *surface, const WindowTemplate
     if (saved != 0) render_surface_restore(surface, saved);
 }
 
+/* FUN_0042f303 hides IWFltInfo on every panel mode change; only a floater
+   selection (FUN_0042f8f7) shows it again (REA haiku 2026-11-03,
+   ev_379f1f88, ev_aa63a0e6). */
+static int floater_info_pane_open(void)
+{
+    static unsigned int shown_serial;
+    static int shown_mode = -1;
+    static int open;
+    if (shown_serial != g_floater_select_serial) {
+        shown_serial = g_floater_select_serial;
+        shown_mode = g_island_panel_mode;
+        open = 1;
+    } else if (shown_mode != g_island_panel_mode) {
+        shown_mode = g_island_panel_mode;
+        open = 0;
+    }
+    return open;
+}
+
 /* FUN_0042f8f7 hides IWTextInfo while IWFltInfo (same 456,328 pane) shows the
    selected floater. */
 static int island_floater_info_shown(void)
 {
-    if (!g_game_session_valid || g_selected_floater < 0 ||
+    if (!g_game_session_valid || !floater_info_pane_open() || g_selected_floater < 0 ||
         (unsigned int)g_selected_floater >= g_game_session.floater_count ||
         g_menu.selected_map_island < 0) return 0;
     return g_game_session.floaters[g_selected_floater].island_index ==
@@ -1557,6 +1576,7 @@ static void render_island_view(RenderSurface *surface)
        IWLocInfo/IWLocControl and shows the floater in IWFltInfo, the
        456,328 pane shared with the hidden IWTextInfo. */
     if (selected_floater != NULL && selected_floater->type_index < 4 &&
+        floater_info_pane_open() &&
         island_panel_location_info_visible(g_island_panel_mode)) {
         const WindowTemplate *info = window_catalog_find(
             &g_window_catalog, "IWFltInfo", 3);
@@ -1856,6 +1876,7 @@ static void render_island_view(RenderSurface *surface)
                game_session_floater_is_active(selected_floater) &&
                selected_floater->source_subtype >= 9U &&
                selected_floater->source_subtype <= 17U &&
+               floater_info_pane_open() &&
                island_panel_location_info_visible(g_island_panel_mode)) {
         const WindowTemplate *info = window_catalog_find(
             &g_window_catalog, "IWFltInfo", 3);

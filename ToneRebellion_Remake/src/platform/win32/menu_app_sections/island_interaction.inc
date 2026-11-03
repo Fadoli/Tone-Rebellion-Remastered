@@ -1005,6 +1005,7 @@ static void island_right_click(int clicked_floater, int x, int y)
     if (clicked_floater >= 0) {
         /* msg 0x3f -> FUN_0042f8f7. */
         g_selected_floater = clicked_floater;
+        ++g_floater_select_serial;
         select_floater_source_building(clicked_floater);
         g_hovered_location = -1;
     } else if (!ordering && clicked_location >= 0) {

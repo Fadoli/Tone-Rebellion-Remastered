@@ -351,6 +351,8 @@ static int g_selected_location = -1;
    native +0x16c is a location pointer on any island); -1 = viewed island. */
 static int g_selected_location_island = -1;
 static int g_selected_floater = -1;
+/* Bumped by each floater selection (FUN_0042f8f7 shows IWFltInfo). */
+static unsigned int g_floater_select_serial;
 static IwConstructState g_iw_construct;
 static IwConstructInfoState g_iw_construct_info;
 static int32_t g_iw_construct_items[IW_CONSTRUCT_BUILD_CANDIDATE_COUNT];
@@ -583,6 +585,7 @@ static void select_building_warrior(void)
             floater->owner_slot == (uint8_t)g_menu.selected_tribe &&
             floater_belongs_to_selected_building(floater)) {
             g_selected_floater = (int)n;
+            ++g_floater_select_serial;
             return;
         }
     }
