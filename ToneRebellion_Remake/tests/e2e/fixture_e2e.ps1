@@ -54,6 +54,8 @@ function State {
             $l = @{ index = [int]$t[1]; x = [int]$t[2]; y = [int]$t[3] }
             foreach ($kv in $t[4..($t.Length - 1)]) { $k, $v = $kv -split '='; $l[$k] = [int]$v }
             $st.locations += , $l
+        } elseif ($t[0] -eq 'island_message') {
+            $st.island_message = $line.Substring(15)
         } elseif ($t[0] -eq 'text_info') {
             $st.text_info = $t[1]
         } elseif ($t.Length -eq 2 -and $t[1] -match '^-?\d+$') {
@@ -280,6 +282,18 @@ try {
     Check $seq "removing the last seals starts the end sequence" ""
     Check $map "the end sequence returns to the world map" ""
     Check $end "the end sequence opens the end screen" ""
+    Quit
+
+    # Island messages: world event 6 for the local tribe shows FLTADV
+    # (FUN_004334ce, newtext.txt), the head of the island message queue.
+    Launch "messages"
+    $msg = $null
+    for ($i = 0; $i -lt 30 -and -not $msg; $i++) {
+        Start-Sleep -Milliseconds 200
+        $now = State
+        if ($now.island_message -like '*niveau*') { $msg = $now.island_message; Capture "island_message" }
+    }
+    Check ($null -ne $msg) "a floater advance shows the FLTADV island message" "head message: $((State).island_message)"
 }
 finally {
     Quit

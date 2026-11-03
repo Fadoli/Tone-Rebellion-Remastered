@@ -55,7 +55,8 @@ static int e2e_build_fixture(HWND window)
         !platform_environment("TONE_REBELLION_E2E_FIXTURE", name, sizeof(name)) ||
         (strcmp(name, "badges") != 0 && strcmp(name, "enemy_hall") != 0 &&
          strcmp(name, "spell") != 0 && strcmp(name, "dying") != 0 &&
-         strcmp(name, "obtain") != 0 && strcmp(name, "victory") != 0))
+         strcmp(name, "obtain") != 0 && strcmp(name, "victory") != 0 &&
+         strcmp(name, "messages") != 0))
         return 0;
     g_menu.world_index = 0;
     g_menu.selected_tribe = 0;
@@ -139,6 +140,11 @@ static int e2e_build_fixture(HWND window)
            here made the Hall's workers react and broke the click checks. */
         g_game_session.islands[island].access_mask |= 1U;
     }
+    if (strcmp(name, "messages") == 0)
+        /* World event 6 (FUN_00416a9a, a trained floater advanced) for the
+           local tribe: FUN_004334ce shows FLTADV. */
+        (void)game_session_queue_world_event(&g_game_session,
+            GAME_SESSION_WORLD_EVENT_FLOATER_ADVANCED, island, 0);
     if (strcmp(name, "victory") == 0 && g_game_session.island_count > 0) {
         /* Every PIT_LeviShield seal (0x17..0x24) of the last island gone:
            FUN_00460460 starts sequence state 2 on its next pass. Speed 3. */
@@ -254,6 +260,8 @@ static void e2e_write_state(void)
     fprintf(file, "construct_open %d\nconstruct_column %d\nconstruct_item %d\n",
             g_iw_construct_open, (int)g_iw_construct.hovered_column,
             (int)g_iw_construct_info.item_id);
+    fprintf(file, "island_message %s\n",
+            g_island_message_count > 0 ? g_island_messages[0].text : "-");
     fprintf(file, "cast_effects %u\n",
             (unsigned int)g_game_session.active_cast_effect_count);
     fprintf(file, "text_info %s\n",
