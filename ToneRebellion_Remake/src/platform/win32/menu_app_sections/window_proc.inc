@@ -200,6 +200,7 @@ static void run_ui_frame(HWND window, WPARAM wparam)
             if (request == 2 && g_menu.screen == SCREEN_ISLAND) {
                 g_menu.screen = SCREEN_WORLD_MAP;
                 g_hovered_location = -1;
+                update_window_title(window);
             } else if (request == 7) {
                 g_game_session_valid = 0;
                 if (!enter_end_game_screen())

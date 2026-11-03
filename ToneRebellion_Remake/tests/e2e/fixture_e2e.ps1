@@ -268,12 +268,13 @@ try {
     # sequence state 2; the map follows (state 2 -> SetState 2) and then the
     # end screen (SetState 7, screen 6). The fixture runs at speed 3.
     Launch "victory"
-    $seq = $false; $map = $false; $end = $false
+    $seq = $false; $map = $false; $end = $false; $paradise = $false
     for ($i = 0; $i -lt 450 -and -not $end; $i++) {
         Start-Sleep -Milliseconds 200
         $now = State
         if (-not $seq -and $now.sequence -ge 2) { $seq = $true; Capture "victory_sequence" }
         if ($seq -and -not $map -and $now.screen -eq 2) { $map = $true; Capture "victory_map" }
+        if (-not $paradise -and $now.sequence -eq 4 -and $now.sequence_tick -ge 80) { $paradise = $true; Capture "victory_paradise" }
         if ($now.screen -eq 6) { $end = $true; Start-Sleep -Seconds 1; Capture "victory_end" }
     }
     Check $seq "removing the last seals starts the end sequence" ""
