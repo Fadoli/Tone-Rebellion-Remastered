@@ -5,7 +5,7 @@
 ## Constat
 
 - Décompilation : `index.jsonl` couvre 2410 procédures (1493 internes, 780 thunks, 123 externes, 14 runtime); 1507 décompilées, 903 exclues avec motif. L'inventaire est clos; le travail REA restant est ciblé (questions ouvertes ci-dessous), pas un balayage.
-- Remake : ~44 k lignes C11 (`src/`), 27 programmes de test C + `tests/test_docs_integrity.mjs` + `tests/e2e/island_e2e.ps1`. Backlog : 38 items cochés, 34 ouverts (Interface 19, Tâches 8, Mouvement 4, Autres 3); la plupart des ouverts sont des écarts de fidélité ou des « porté, non vérifié en jeu », pas des fonctions absentes.
+- Remake : ~44 k lignes C11 (`src/`), 27 programmes de test C + `tests/test_docs_integrity.mjs` + `tests/e2e/island_e2e.ps1` et `tests/e2e/fixture_e2e.ps1` (parties statiques générées, jamais les sauvegardes du joueur). Backlog (2026-11-03) : 71 items cochés, 1 ouvert (délai d'effacement du site source au déplacement de bâtiment, écart volontaire).
 - Boucle de jeu : déplacement manuel, ordres de bâtiment, tâches (CONSTR, CHARGE, Obtain, SUPPLY, UpgSpread, Upgrade, Repair, Hall type 4), IA Léviathan et victoire par les sceaux sont portés. Restent des règles sans preuve native (voir Phase 1) et la vérification en jeu.
 
 ## Phase 0 — Hygiène (immédiat)
@@ -38,11 +38,11 @@
 
 ## Phase 4 — Parité d'interface
 
-Items à faible risque, parallélisables : polices (`bigfont` des étiquettes), ordre de dessin du cadre de construction et couleurs, commerce/diplomatie (ordre ombrage/emblèmes, couleur de légende), modes d'inventaire et messages `0x3039`/`0x42`, `IWFltInfo` (x 4, `BLDNAME`, `DAT_004bf11c`), reste de la carte du monde, options `float.cfg`.
+Faite (2026-11-03) : polices, construction, commerce, diplomatie, inventaire, `IWFltInfo`, carte du monde (survol au seul mouvement de souris), options `float.cfg`, bords inclusifs des contrôles, badges FLTINFO (royaume par ligne fltinf, Léviathans, charge), mort des floaters (`die.shp`), zone de clic des bâtiments.
 
 ## Phase 5 — Audio
 
-Porté : volume/pan par distance (`FUN_0045b24d`), bullets/impacts des producteurs (items Léviathan 0x0a..0x15, seuls appelants de `FUN_00416342`), sons d'île `FEATnn`, `CRUMBLE` (émetteur `FUN_00450847`, message 7 → `FUN_0042fa0f` 5 → évènement monde 7, île vue seulement). Animation d'application des sorts (`FUN_0041760b`) portée : l'effet du sort tombe à la fin de l'animation. Dessins `KILLBEAS`/`FAROBT` et miroir portés. Reste : vérification en jeu (`TODO_OTHER` l.6).
+Porté : volume/pan par distance (`FUN_0045b24d`), bullets/impacts des producteurs (items Léviathan 0x0a..0x15, seuls appelants de `FUN_00416342`), sons d'île `FEATnn`, `CRUMBLE` (émetteur `FUN_00450847`, message 7 → `FUN_0042fa0f` 5 → évènement monde 7, île vue seulement). Animation d'application des sorts (`FUN_0041760b`) portée : l'effet du sort tombe à la fin de l'animation. Dessins `KILLBEAS`/`FAROBT` et miroir portés, lancer vérifié en jeu (fixture `spell`).
 
 ## Phase 6 — Portage Web (dernière priorité)
 
@@ -50,7 +50,7 @@ Plan : [TODO_WEB.md](TODO_WEB.md). Déjà fait : surface `RenderSurface`, servic
 
 ## Transverse — Vérification
 
-Plusieurs items sont « portés, non vérifiés en jeu » (ordre des panneaux Hall, sélection floater, panneau inférieur droit, `IWMove`). Étendre `island_e2e.ps1` pour couvrir chacun, puis cocher.
+Fixtures statiques (`TONE_REBELLION_E2E_FIXTURE` : badges, enemy_hall, spell, obtain, dying, victory, messages) et `TONE_REBELLION_SAVE_DIR` : `fixture_e2e.ps1` (20 contrôles) et `island_e2e.ps1` (21 contrôles, 1 ignoré) tournent sans toucher aux sauvegardes du joueur; voir `docs/build-and-validation.md`.
 
 ## Questions REA ouvertes
 
