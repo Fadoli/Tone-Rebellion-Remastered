@@ -198,7 +198,11 @@ int game_session_initialize(const WorldDefinition *world,
     next.random_state = rng;
 
     /* FUN_004528ca starts newly instantiated pad objects with flags 0x410,
-       zeroed animation fields, and animation-rate field +0x32 set to 1. */
+       zeroed animation fields, and animation-rate field +0x32 set to 1.
+       Buildings present at game start show no placement ramp (0x10):
+       FUN_0046466f clears it on each starting Hall right after
+       FUN_00452859 (0x464abc..0x464ac5), and the island loader FUN_00461b3b
+       never sets it (REA haiku 2026-11-03, ev_3cb7946b, ev_4d4899a8). */
     for (island_index = 0; island_index < next.island_count; ++island_index) {
         GameRuntimeIsland *runtime = &next.islands[island_index];
         unsigned int location_index;
@@ -216,7 +220,7 @@ int game_session_initialize(const WorldDefinition *world,
                 ? pad_item->maintenance_tone_cost : 0;
             state->new_build_animation_ticks = 0;
             if (state->record_value_10 > 0 && state->renderer_class <= 1) {
-                state->source_flags = 0x410;
+                state->source_flags = 0x400;
                 state->chug_progress = 0;
                 state->glyph_progress = 0;
                 state->animation_rate = 1;

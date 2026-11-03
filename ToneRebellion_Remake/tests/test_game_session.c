@@ -166,8 +166,8 @@ static void test_session_initializes_player_starts_and_runtime_items(void)
         assert(pad->source_value_14 == (int32_t)player);
         assert(pad->source_value_32 == 1);
         assert(pad->source_value_3e == -1);
-        assert(pad->source_flags == 0x410);
-        assert((pad->source_flags & 0x001U) == 0);
+        /* FUN_0046466f clears the 0x10 placement ramp after FUN_00452859. */
+        assert((pad->source_flags & 0x010U) == 0);
         assert((pad->source_flags & 0x400U) != 0);
         assert(pad->chug_progress == 0 && pad->glyph_progress == 0);
         assert(pad->animation_rate == 1);
