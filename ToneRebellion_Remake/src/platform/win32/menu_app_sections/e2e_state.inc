@@ -47,13 +47,14 @@ static int e2e_build_fixture(HWND window)
     const GamePlayerEconomy *economy;
     const GameRuntimeLocation *hall;
     const FloaterStats *warrior;
+    int enemy;
     uint8_t island;
     uint16_t x;
     uint16_t y;
     if (!e2e_enabled() ||
         !platform_environment("TONE_REBELLION_E2E_FIXTURE", name, sizeof(name)) ||
         (strcmp(name, "badges") != 0 && strcmp(name, "enemy_hall") != 0 &&
-         strcmp(name, "spell") != 0))
+         strcmp(name, "spell") != 0 && strcmp(name, "dying") != 0))
         return 0;
     g_menu.world_index = 0;
     g_menu.selected_tribe = 0;
@@ -76,8 +77,16 @@ static int e2e_build_fixture(HWND window)
     (void)native_save_add_fixture_floater(&g_game_session, &g_floater_catalog,
         0, 4, island, (uint16_t)(x + 70), (uint16_t)(y - 20), 0,
         warrior != NULL ? warrior->max_attack_points : 0);
-    (void)native_save_add_fixture_floater(&g_game_session, &g_floater_catalog,
+    enemy = native_save_add_fixture_floater(&g_game_session, &g_floater_catalog,
         1, 1, island, (uint16_t)(x + 130), (uint16_t)(y - 30), 0, 0);
+    /* "dying": the enemy unit dies at once (FUN_004204bc), so its death
+       ticks (DIE cells) can be watched. */
+    if (strcmp(name, "dying") == 0 && enemy >= 0) {
+        GameFloaterStart *victim = &g_game_session.floaters[enemy];
+        victim->current_hit_points = 0;
+        victim->source_runtime_flags |= 0x008U;
+        victim->source_death_timer = 0;
+    }
     if (strcmp(name, "badges") == 0) {
         /* The Leviathans keep to the island's floater range (the Hall
            island of this world does not scroll). Only this fixture: on

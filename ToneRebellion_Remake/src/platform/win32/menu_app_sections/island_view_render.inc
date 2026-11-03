@@ -271,6 +271,44 @@ static int16_t island_floater_health_stat(const GameFloaterStart *floater)
    combat-stat badge (FUN_00420f28), which the source does not restrict to
    workers: leviathans with a body shape get it too (type 4 is only excluded
    from the third, strength, badge). Anchor is the body frame's hit box. */
+/* FUN_0041137c (ev_8beff744, ev_7f3d6aca): DIE cells tiled every 24 px from
+   12 px inside the opaque box of one body or legs frame, k starting at 0 and
+   growing by 5 per cell; cell frame (counter - 8 + (k & 7)) / 2, C truncation,
+   drawn when 0..10, plain RLE blit at the cell point. */
+static void draw_floater_death_cells(RenderSurface *surface,
+                                     const SpriteSheet *art,
+                                     uint32_t frame_index, int x, int y,
+                                     int counter)
+{
+    const SpriteFrame *frame;
+    int min_x;
+    int min_y;
+    int width;
+    int height;
+    int i;
+    int j;
+    unsigned int k = 0;
+    if (art == NULL || frame_index >= art->frame_count ||
+        g_floater_die_art.frame_count == 0) return;
+    frame = &art->frames[frame_index];
+    if (frame->hit_right <= frame->hit_left ||
+        frame->hit_bottom <= frame->hit_top) return;
+    min_x = frame->x_offset + frame->hit_left;
+    min_y = frame->y_offset + frame->hit_top;
+    width = frame->hit_right - 1 - frame->hit_left;
+    height = frame->hit_bottom - 1 - frame->hit_top;
+    for (j = 0; 12 + 24 * j <= height; ++j) {
+        for (i = 0; 12 + 24 * i <= width; ++i) {
+            int cell = (counter - 8 + (int)(k & 7U)) / 2;
+            if (cell >= 0 && cell <= 10 &&
+                (uint32_t)cell < g_floater_die_art.frame_count)
+                draw_sprite(surface, &g_floater_die_art, (uint32_t)cell,
+                            x + min_x + 12 + 24 * i, y + min_y + 12 + 24 * j);
+            k += 5U;
+        }
+    }
+}
+
 static void draw_island_floater_overlays(RenderSurface *surface, const GameFloaterStart *floater,
                                          const SpriteSheet *body_art,
                                          uint32_t body_frame_index,
@@ -287,6 +325,9 @@ static void draw_island_floater_overlays(RenderSurface *surface, const GameFloat
     int16_t charge_max;
     if (g_floater_info_art.frame_count < 26|| body_art == NULL ||
         body_frame_index >= body_art->frame_count) return;
+    /* FUN_0042704b draws the FLTINFO badges only when (+0x1c & 0x808) == 0:
+       none on a dying (0x008) floater. */
+    if ((floater->source_runtime_flags & 0x808U) != 0) return;
     body_frame = &body_art->frames[body_frame_index];
     body_left = x + body_frame->x_offset + body_frame->hit_left;
     body_top = y + body_frame->y_offset + body_frame->hit_top;
@@ -345,15 +386,27 @@ static void draw_island_leviathan_floater(RenderSurface *surface,
     leg_frame = island_leviathan_legs_frame(floater, sheet_index);
     /* FUN_0042704b draws the optional body shape (fltinf shape 0) before the
        mandatory legs shape (shape 1); subtype 9 has legs only. */
-    if (floater->source_subtype != 9U) {
-        body_art = floater->facing_left
-            ? &g_leviathan_body_art_flipped : &g_leviathan_body_art;
-        if (body_art->frame_count >= 16U) {
-            draw_sprite(surface, body_art, island_leviathan_body_frame(floater),
-                        x, y);
+    {
+        /* FUN_0042704b: a dying Leviathan shows body and legs only below
+           death tick 20, each followed by its DIE cells (FUN_0041137c). */
+        const int dying = (floater->source_runtime_flags & 0x008U) != 0;
+        const int counter = (int)floater->source_death_timer;
+        if (floater->source_subtype != 9U) {
+            body_art = floater->facing_left
+                ? &g_leviathan_body_art_flipped : &g_leviathan_body_art;
+            if (body_art->frame_count >= 16U) {
+                if (!dying || counter < 20)
+                    draw_sprite(surface, body_art,
+                                island_leviathan_body_frame(floater), x, y);
+                if (dying)
+                    draw_floater_death_cells(surface, body_art,
+                        island_leviathan_body_frame(floater), x, y, counter);
+            }
         }
+        if (!dying || counter < 20) draw_sprite(surface, leg_art, leg_frame, x, y);
+        if (dying)
+            draw_floater_death_cells(surface, leg_art, leg_frame, x, y, counter);
     }
-    draw_sprite(surface, leg_art, leg_frame, x, y);
 }
 
 static void draw_leviathan_sprite_revealed(RenderSurface *surface, const SpriteSheet *art,
@@ -1133,14 +1186,31 @@ static void render_island_view(RenderSurface *surface)
                                           stipple_level);
                 body_frame_index = island_floater_body_sprite_frame(&drawn,
                                                                     body_art);
-                if (body_art->frame_count != 0)
-                    draw_island_floater_layer(surface, body_art, body_frame_index,
-                                              floater_x, floater_y, 0x10000U,
-                                              stipple_level);
-                if (leg_art->frame_count != 0)
-                    draw_island_floater_layer(surface, leg_art, leg_frame,
-                                              floater_x, floater_y, 0x10000U,
-                                              stipple_level);
+                {
+                    /* FUN_0042704b: a dying floater (+0x1c & 8) shows its
+                       body and legs only below death tick 20, each followed
+                       by its DIE cells (FUN_0041137c). */
+                    const int dying = (floater->source_runtime_flags & 0x008U) != 0;
+                    const int counter = (int)floater->source_death_timer;
+                    if (body_art->frame_count != 0) {
+                        if (!dying || counter < 20)
+                            draw_island_floater_layer(surface, body_art,
+                                body_frame_index, floater_x, floater_y,
+                                0x10000U, stipple_level);
+                        if (dying)
+                            draw_floater_death_cells(surface, body_art,
+                                body_frame_index, floater_x, floater_y, counter);
+                    }
+                    if (leg_art->frame_count != 0) {
+                        if (!dying || counter < 20)
+                            draw_island_floater_layer(surface, leg_art,
+                                leg_frame, floater_x, floater_y, 0x10000U,
+                                stipple_level);
+                        if (dying)
+                            draw_floater_death_cells(surface, leg_art,
+                                leg_frame, floater_x, floater_y, counter);
+                    }
+                }
                 body_art = island_floater_body_art(floater);
                 draw_island_floater_overlays(surface, floater, body_art,
                                              body_frame_index,

@@ -174,6 +174,8 @@ static SpriteSheet g_leviathan_legs[9];
 static SpriteSheet g_leviathan_legs_flipped[9];
 static SpriteSheet g_floater_info_art;
 static SpriteSheet g_island_feature_art;
+/* data\\die.shp: FUN_0041137c's death cells over a dying floater. */
+static SpriteSheet g_floater_die_art;
 static SpriteSheet g_leviathan_reveal_art;
 static SpriteSheet g_island_names_art;
 static SpriteSheet g_load_save_art;
