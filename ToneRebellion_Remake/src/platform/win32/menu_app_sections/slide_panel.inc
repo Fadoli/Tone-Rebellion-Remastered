@@ -112,6 +112,16 @@ static void slide_panel_close_now(void)
     g_slide_pos = 0;
 }
 
+/* Remake behaviour (requested; FUN_004576c7 neither pauses nor opens the
+   SlideWindow): a loaded game starts paused with the panel open, so the
+   player resumes it from the pause zone. */
+static void slide_panel_open_paused(void)
+{
+    g_slide_phase = 2;
+    g_slide_pos = SLIDE_OPEN_HEIGHT;
+    g_paused = 1;
+}
+
 static int slide_panel_hit(int x, int y)
 {
     int index;
@@ -289,6 +299,37 @@ static int slide_panel_press(HWND window, int x, int y)
     }
     (void)window;
     return 1;
+}
+
+/* FUN_0046ae19 (0x46b5f7..0x46b707): while DAT_004bf124 is set, frame 0 of
+   the PAUSE shape (data\pause.shp, the closed eye) is drawn on the island
+   and world map views, centred on its opaque bounds (FUN_00405e11 at the
+   origin): x = clamp((640 - width) / 2, 0, 639), y = 112. */
+static SpriteSheet g_pause_art;
+
+static void render_pause_eye(RenderSurface *surface)
+{
+    const SpriteFrame *frame;
+    int width;
+    int x;
+    if (!g_paused) return;
+    if (g_pause_art.frame_count == 0) {
+        CobArchive archive = {0};
+        char error[128];
+        if (!cob_archive_open(game_file_path("TONE01.COB"), &archive,
+                              error, sizeof(error))) return;
+        (void)load_sprite_sheet(&archive, "data\\pause.shp",
+                                g_load_save_palette, &g_pause_art, error,
+                                sizeof(error));
+        cob_archive_close(&archive);
+        if (g_pause_art.frame_count == 0) return;
+    }
+    frame = &g_pause_art.frames[0];
+    width = frame->hit_right - frame->hit_left;
+    x = (640 - width) / 2;
+    if (x < 0) x = 0;
+    if (x > 0x27f) x = 0x27f;
+    draw_sprite(surface, &g_pause_art, 0, x, 0x70);
 }
 
 /* Paint 0x457f15: y offset d = pos - 99; frame 0 background, frame 7 when

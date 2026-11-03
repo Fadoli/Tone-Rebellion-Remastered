@@ -318,8 +318,10 @@ static void render_back_buffer(RenderSurface *back)
     } else {
         render_load_game(back);
     }
-    if (g_menu.screen == SCREEN_WORLD_MAP || g_menu.screen == SCREEN_ISLAND)
+    if (g_menu.screen == SCREEN_WORLD_MAP || g_menu.screen == SCREEN_ISLAND) {
+        render_pause_eye(back);
         render_slide_panel(back);
+    }
     /* End-sequence fade (FUN_00410765 through the screen palette): every
        channel is scaled by (256 - level) / 256. The native fade starts from
        the logo.pal buffer at 0x630730; the port darkens the frame as drawn. */

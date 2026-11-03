@@ -2,6 +2,9 @@ static void dispatch_newgame_master_message(HWND window, int message)
 {
     if (net_newgame_message(window, message)) return;
     if (message == 52) {
+        /* A new game never inherits a loaded game's pause. */
+        g_paused = 0;
+        slide_panel_close_now();
         (void)begin_new_game(window);
     } else if (message == 53) {
         g_menu.world_index = (g_menu.world_index + 1) % g_menu.world_map.world_count;
@@ -50,6 +53,8 @@ static void handle_click(HWND window, int x, int y)
             if (!resume_path(path, sizeof(path)) || !read_save_file(window, path))
                 platform_message_box(window, "La partie sauvegardee n'a pas pu etre reprise.",
                                      "Tone Rebellion remake", 1);
+            else
+                slide_panel_open_paused();
         }
     } else if (g_menu.screen == SCREEN_NEW_GAME && clicked_tribe >= 0) {
         /* NewGameWin's custom mouse handler resolves the animated tribe glyphs
@@ -825,6 +830,7 @@ static void handle_click(HWND window, int x, int y)
                                           error, sizeof(error))) {
                     g_load_save_mode = 0;
                     g_load_from_game = 0;
+                    slide_panel_open_paused();
                 } else {
                     char message[256];
                     (void)snprintf(message, sizeof(message),
@@ -838,6 +844,7 @@ static void handle_click(HWND window, int x, int y)
                     read_save_file(window, path)) {
                     g_load_save_mode = 0;
                     g_load_from_game = 0;
+                    slide_panel_open_paused();
                 } else {
                     platform_message_box(window, "Cette sauvegarde n'a pas pu etre chargee.",
                                          "Tone Rebellion remake", 1);

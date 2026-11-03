@@ -272,6 +272,7 @@ static void e2e_write_state(void)
             (int)g_iw_construct_info.item_id);
     fprintf(file, "island_message %s\n",
             g_island_message_count > 0 ? g_island_messages[0].text : "-");
+    fprintf(file, "paused %d\nslide_phase %d\n", g_paused, g_slide_phase);
     fprintf(file, "cast_effects %u\n",
             (unsigned int)g_game_session.active_cast_effect_count);
     fprintf(file, "text_info %s\n",

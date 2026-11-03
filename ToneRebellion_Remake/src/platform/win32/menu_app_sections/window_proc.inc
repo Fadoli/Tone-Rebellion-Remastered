@@ -128,8 +128,10 @@ static void run_ui_frame(HWND window, WPARAM wparam)
            change it from 1 to 3 (FUN_0046a5b7). */
         unsigned sim_steps = g_menu.screen == SCREEN_ISLAND ? g_sim_speed : 1U;
         slide_panel_tick();
-        /* The SlideWindow pause flag (DAT_004bf124) stops the game loop. */
-        if (g_paused && g_menu.screen == SCREEN_ISLAND) sim_steps = 0;
+        /* The SlideWindow pause flag (DAT_004bf124) stops the game loop on
+           the island and on the world map alike (planet view frozen). */
+        if (g_paused && (g_menu.screen == SCREEN_ISLAND ||
+                         g_menu.screen == SCREEN_WORLD_MAP)) sim_steps = 0;
         /* A network game advances by turns on every screen; the loop
            below then only drives the UI animation clock. */
         if (g_net_in_game) {
