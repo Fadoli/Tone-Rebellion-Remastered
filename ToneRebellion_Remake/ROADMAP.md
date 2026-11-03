@@ -58,7 +58,7 @@ Fixtures statiques (`TONE_REBELLION_E2E_FIXTURE` : badges, enemy_hall, spell, ob
 
 - ~~Boucle de distribution souris~~: résolue le 2026-11-03 (`FUN_0046be81` survol, `FUN_0046c25d` clics, à rebours, premier gagnant, bords inclus). Restent: index d'état actif en vue île; route mode 0/1/2 `FUN_0042970c` → `FUN_0042fa0f`.
 - ~~Expéditeur du paquet de clic Repair~~: établi le 2026-11-02 (catégorie 1 code 3, liste de réparation de la tribu, `behavior/island-repair-control.md`).
-- Paquet natif de `IWMove`.
+- ~~Paquet natif de `IWMove`~~: établi le 2026-11-02 (catégorie 3, sous-type 5 saisie `FUN_0045f4f5`, 6 pose `FUN_0045f5c5`, via `FUN_004354a2`; voir `behavior/island-ground-object-interaction.md`, « Paquets du déplacement »).
 
 ## Audit REA du 2026-10-27
 
