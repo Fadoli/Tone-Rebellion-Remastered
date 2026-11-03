@@ -1,6 +1,8 @@
 # End-to-end smoke test for the Win32 remake: drives the real window with
 # posted mouse/keyboard messages and asserts on screen captures.
-# Needs an existing remake save (the title screen must show REPRENDRE PARTIE).
+# Starts from the static enemy_hall fixture (world 0, tribe 0, fixed seed,
+# tribe 1's Hall island open; see e2e_build_fixture), with saves and settings
+# in a temporary folder: the player's saves are never read or written.
 # Usage: powershell -File tests/e2e/island_e2e.ps1 [-Exe path] [-OutDir dir]
 param(
     [string]$Exe = (Join-Path $PSScriptRoot "..\..\ToneRebellion_Remake.exe"),
@@ -25,6 +27,14 @@ $script:proc = $null
 
 $script:statePath = Join-Path $OutDir "state.txt"
 $env:TONE_REBELLION_E2E_STATE = $script:statePath
+$saves = Join-Path $OutDir "saves"
+if (Test-Path $saves) { Remove-Item -Recurse -Force $saves }
+New-Item -ItemType Directory -Force $saves | Out-Null
+Set-Content -Path (Join-Path $saves "audio.cfg") -Value "0 0 0 0" -Encoding ascii
+Set-Content -Path (Join-Path $saves "video.cfg") -Value "scale 1" -Encoding ascii
+$env:TONE_REBELLION_SAVE_DIR = $saves
+$env:TONE_REBELLION_E2E_FIXTURE = "enemy_hall"
+Remove-Item Env:TONE_REBELLION_E2E_LOAD -ErrorAction SilentlyContinue
 
 function State {
     # Parse the snapshot written by the remake (src/.../e2e_state.inc).
@@ -44,7 +54,7 @@ function State {
             $st.dots += , ([int]$t[2])
         } elseif ($t[0] -eq 'clip_slot') {
             $st.clips += , @{ slot = [int]$t[1]; island = [int]$t[2]; location = [int]$t[3] }
-        } elseif ($t.Length -eq 2) { $st[$t[0]] = [int]$t[1] }
+        } elseif ($t.Length -eq 2 -and $t[1] -match '^-?\d+$') { $st[$t[0]] = [int]$t[1] }
     }
     $st
 }
@@ -214,11 +224,8 @@ try {
     Start-Sleep -Seconds 6
     [E2E]::SetForegroundWindow((Handle)) | Out-Null   # captures use the screen
     Start-Sleep -Milliseconds 500
-    Check ((Title) -like "*Title*") "starts on the title screen" (Title)
-
-    Click 323 305   # REPRENDRE PARTIE
-    Start-Sleep -Seconds 4
-    Check ((Title) -like "*Island*") "REPRENDRE opens the island view" (Title)
+    Check ((Title) -like "*Island*") "the fixture opens the island view" (Title)
+    Start-Sleep -Seconds 4   # the Halls' placement ramp (100 ticks)
 
     # Island scroll memory (DAT_005dbee0): the minimap viewport marker lives in
     # IWLilMap (logical 192,328..447,359).

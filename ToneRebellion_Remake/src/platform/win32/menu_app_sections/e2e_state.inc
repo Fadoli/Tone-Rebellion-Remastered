@@ -37,7 +37,8 @@ static int e2e_start_fixture(HWND window)
    the Hall island and adds known units beside the Hall: an own warrior
    (subtype 4, full charge), an enemy subtype-1 unit and two Leviathans
    (subtypes 12 and 9). TONE_REBELLION_E2E_FIXTURE=enemy_hall builds the
-   same game and opens tribe 1's Hall island instead. Returns 1 when built. */
+   same game and opens tribe 1's Hall island instead. Returns 1 when
+   built. */
 static int e2e_build_fixture(HWND window)
 {
     char name[32];
@@ -87,7 +88,8 @@ static int e2e_build_fixture(HWND window)
         island = (uint8_t)economy->hall_island_index;
         x = g_game_session.islands[island]
                 .locations[economy->hall_location_index].x;
-        /* The fixture's tribe 0 has reached that island. */
+        /* The fixture's tribe 0 has reached that island. A Leviathan placed
+           here made the Hall's workers react and broke the click checks. */
         g_game_session.islands[island].access_mask |= 1U;
     }
     if (!open_island_view(window, island)) return 0;
