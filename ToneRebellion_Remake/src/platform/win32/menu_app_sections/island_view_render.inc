@@ -717,6 +717,59 @@ static void draw_building_slot_floaters(RenderSurface *surface, const WindowTemp
     }
 }
 
+/* BC_Obtain is WINTYPE 46, class IWGetArtifact (ctor FUN_00442e8e, vtable
+   0x494530); its paint FUN_00443078 ignores the BLDCMD frame: it fills the
+   pane, draws diploma frame 0x17 at (W/2 - 20, 0) while the control holds
+   the mouse focus, then, unless a type-13 (Obtain) entry already names the
+   object (FUN_004667eb), a subtype-0 worker of the local tribe carrying
+   the object (+0x18 = +0x24 id) through FUN_0042704b at (W/2, 0x14)
+   (REA haiku 2026-11-04, ev_611f078c, ev_7ed2efb4). The fill is palette
+   entry DAT_0049e140[0]; the port leaves the pane's black panel. */
+static void draw_get_artifact_control(RenderSurface *surface,
+                                      const WindowTemplate *control,
+                                      const GameRuntimeLocation *site)
+{
+    int width = control->pane.right - control->pane.left;
+    int x = control->pane.left + width / 2;
+    int y = control->pane.top + 0x14;
+    int16_t object_id = (int16_t)site->record_value_24;
+    unsigned int i;
+    GameFloaterStart worker;
+    const SpriteSheet *body_art;
+    const SpriteSheet *leg_art;
+    uint32_t body_frame;
+
+    fill_rect(surface, control->pane.left, control->pane.top,
+              control->pane.right + 1, control->pane.bottom + 1, RGB(0, 0, 0));
+    if (g_hovered_location_grab && g_diplomacy_art.frame_count > 0x17U)
+        draw_sprite(surface, &g_diplomacy_art, 0x17, x - 20, control->pane.top);
+    if (object_id < 5 || object_id > 0x21) return;
+    for (i = 0; i < g_game_session.pending_event_count; ++i) {
+        const GamePendingEvent *event = &g_game_session.pending_events[i];
+        if (event->active && event->action_type == 0x0d &&
+            event->payload_12 == object_id) return;
+    }
+    if (g_menu.selected_tribe < 0 ||
+        g_menu.selected_tribe >= GAME_START_PLAYER_COUNT) return;
+    memset(&worker, 0, sizeof(worker));
+    worker.is_active = 1;
+    worker.owner_slot = (uint8_t)g_menu.selected_tribe;
+    worker.type_index = g_game_session.player_starts
+        .players[g_menu.selected_tribe].floater_type_index;
+    worker.source_subtype = 0;
+    worker.carried_resource_code = object_id;
+    if (worker.type_index > 3U) return;
+    body_art = island_floater_body_art(&worker);
+    leg_art = island_floater_legs_art(&worker);
+    body_frame = island_floater_body_sprite_frame(&worker, body_art);
+    draw_island_floater_cargo(surface, &worker, x, y, 8);
+    if (body_art->frame_count != 0)
+        draw_sprite_scaled(surface, body_art, body_frame, x, y, 0x10000U);
+    if (leg_art->frame_count != 0)
+        draw_sprite_scaled(surface, leg_art, island_floater_legs_frame(&worker),
+                           x, y, 0x10000U);
+}
+
 /* Painter at 0x4384f2 (not a Ghidra procedure, decoded by hand from bytes).
    Pass 1 walks the island's 0x60-byte site records and stamps a 3x3 dot
    (FUN_0043842c) at (x,y)/10 + pane origin:
@@ -2495,10 +2548,10 @@ static void draw_location_action_panel(RenderSurface *surface)
     if (obtain_button_visible()) {
         const WindowTemplate *obtain_control = window_catalog_find(
             &g_window_catalog, "BC_Obtain", 3);
-        if (obtain_control != NULL) {
-            draw_control_with_hover_overlay(surface, obtain_control,
-                &g_building_command_art, g_hovered_location_grab);
-        }
+        if (obtain_control != NULL)
+            draw_get_artifact_control(surface, obtain_control,
+                &g_game_session.islands[g_menu.selected_map_island]
+                     .locations[view_selected_location()]);
     }
     if (g_hall_stock_art.frame_count >= 5 && g_selected_location >= 0 &&
         g_menu.selected_tribe >= 0 && selection_island() >= 0) {
