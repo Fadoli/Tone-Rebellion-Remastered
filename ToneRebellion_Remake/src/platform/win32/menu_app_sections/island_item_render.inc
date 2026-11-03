@@ -238,6 +238,13 @@ static int draw_runtime_item_scaled(RenderSurface *surface, const GameRuntimeLoc
     const SpriteSheet *sheet;
     uint32_t frame;
     int destruction_origin_y = y;
+    /* FUN_0040bf98 copies the five-dword descriptor into local_5c..local_4c
+       and, before either downward shift, stores the unshifted anchor y in
+       local_4c, the copy's bottom row: the sinking or rising building is
+       cut at its ground line, while the ground mark and CRUMBLE use the
+       caller's descriptor. INT_MIN = no cut. */
+    int clip_bottom = INT_MIN;
+    int saved_clip = 0;
     int drew = 0;
 
     if (runtime_location == NULL || (raw_id = runtime_location->record_value_10) <= 0 ||
@@ -254,6 +261,7 @@ static int draw_runtime_item_scaled(RenderSurface *surface, const GameRuntimeLoc
     if ((runtime_location->source_flags & 0x080U) != 0 &&
         scale_16_16 == 0x10000U && runtime_location->source_value_48 > 0x1e) {
         int32_t fall_ticks = runtime_location->source_value_48 - 0x1e;
+        clip_bottom = y;
         y += fall_ticks + (fall_ticks * fall_ticks) / 0x28;
     }
 
@@ -293,6 +301,7 @@ static int draw_runtime_item_scaled(RenderSurface *surface, const GameRuntimeLoc
                     recolor_under_sprite(surface, &g_solidpad_art, pad_frame, x, y,
                                          pose_selector, pose_level);
                 }
+                clip_bottom = y;
                 y += remaining < 8 ? (remaining * remaining) / 8
                                    : 2 * remaining - 8;
             }
@@ -301,6 +310,12 @@ static int draw_runtime_item_scaled(RenderSurface *surface, const GameRuntimeLoc
         }
     }
 
+    if (clip_bottom != INT_MIN) {
+        saved_clip = render_surface_save(surface);
+        if (saved_clip != 0)
+            render_surface_intersect_clip(surface, INT_MIN / 2, INT_MIN / 2,
+                                          INT_MAX / 2, clip_bottom + 1);
+    }
     /* Flag 0x100: FUN_004106dd(1, level) haze table, level 0..3 from the
        +0x44 counter (0..999), applied to every later layer. The native setter
        of the flag is not identified, so this only shows once a writer exists. */
@@ -538,6 +553,7 @@ static int draw_runtime_item_scaled(RenderSurface *surface, const GameRuntimeLoc
             draw_site_shimmer(surface, x - 20, y - 50, x + 20, y, seed);
         drew = 1;
     }
+    if (saved_clip != 0) render_surface_restore(surface, saved_clip);
     /* FUN_0040bf98 draws CRUMBLE after the item's data layers on the full-size
        in-world path. The overlay runs for flag 0x080 through the destruction
        timer and uses a nine-frame band for each pad size (class 1 uses band 4). */
