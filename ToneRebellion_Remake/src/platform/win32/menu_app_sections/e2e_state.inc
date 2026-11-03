@@ -56,7 +56,7 @@ static int e2e_build_fixture(HWND window)
         (strcmp(name, "badges") != 0 && strcmp(name, "enemy_hall") != 0 &&
          strcmp(name, "spell") != 0 && strcmp(name, "dying") != 0 &&
          strcmp(name, "obtain") != 0 && strcmp(name, "victory") != 0 &&
-         strcmp(name, "messages") != 0))
+         strcmp(name, "messages") != 0 && strcmp(name, "return") != 0))
         return 0;
     g_menu.world_index = 0;
     g_menu.selected_tribe = 0;
@@ -185,7 +185,7 @@ static int e2e_build_fixture(HWND window)
             return 1;
         }
     }
-    if (strcmp(name, "spell") == 0) {
+    if (strcmp(name, "spell") == 0 || strcmp(name, "return") == 0) {
         /* A finished 0x2f spell building near the Hall, stocked, with one
            linked level-1 caster: tribe 0's BC_Spell7 is kind 14
            (Enchantement de tribu), cast at once without a target pick. */
@@ -215,6 +215,16 @@ static int e2e_build_fixture(HWND window)
             if (caster >= 0)
                 (void)game_session_link_floater_charge(&g_game_session,
                     (unsigned int)caster, (uint16_t)placed);
+            if (caster >= 0 && strcmp(name, "return") == 0) {
+                /* "return": the linked caster stands 150 px away and has
+                   just finished a state, so the 0x41f9ba block sends it
+                   back to its building (action 9). */
+                GameFloaterStart *f = &g_game_session.floaters[caster];
+                f->x = (uint16_t)(tower->x + 150);
+                f->destination_x = f->x;
+                f->previous_movement_state = 1;
+                f->movement_state = 0;
+            }
             x = tower->x;
             if (!open_island_view(window, island)) return 0;
             g_island_scroll_x = island_clamp_scroll((int)x - 0x140);
