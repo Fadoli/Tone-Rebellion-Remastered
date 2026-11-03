@@ -27,25 +27,8 @@ static void render_world_map(RenderSurface *surface)
     world = &g_menu.world_map.worlds[g_menu.world_index];
     if (!draw_records) goto paradise;
     /* WorldWindow display type 1 (FUN_00471b74) renders explicit bridge pairs
-       as animated palette-color pixels. They are drawn after the islands
-       (see below), as in the original record order. */
-    for (island_index = 0; island_index < world->island_count; ++island_index) {
-        const WorldIsland *island = &world->islands[island_index];
-        int x;
-        int y;
-        uint32_t frame = world_island_frame_index(
-            island_index, island->shape_id, g_hovered_island == (int)island_index);
-        world_island_position(island, &x, &y);
-        /* FUN_00471e66 draws islands 0..3 at scale 1.0 and the others at the
-           window scale this+0x70 (0xc000 = 75 % by default: FUN_00470259). The
-           hit rectangles stay unscaled (FUN_00405e11 bounds). */
-        if (island_index < 4U)
-            draw_sprite(surface, &g_small_islands, frame, x, y);
-        else
-            draw_sprite_scaled(surface, &g_small_islands, frame, x, y, 0xc000U);
-    }
-    /* FUN_00471e66 draws records in order: every island record precedes the
-       bridge records (FUN_004718eb), so the bridge sparks end up on top. */
+       as animated palette-color pixels. FUN_00471b34's sort puts every bridge
+       record before the islands, so the sparks are drawn first. */
     {
         BYTE bridge_colors[8];
         int ramp;
@@ -117,6 +100,30 @@ static void render_world_map(RenderSurface *surface)
                         center_y + y_jitter, colorref_pixel(g_map_palette[color]));
                 }
             }
+        }
+    }
+    {
+        /* Islands back to front (FUN_00471b34 order). FUN_00471e66 draws
+           islands 0..3 at scale 1.0 and the others at the window scale
+           this+0x70 (0xc000 = 75 % by default: FUN_00470259). The hit
+           rectangles stay unscaled (FUN_00405e11 bounds). */
+        size_t order[WORLD_MAP_MAX_ISLANDS];
+        size_t count = world_island_draw_order(world, order);
+        size_t k;
+        for (k = 0; k < count; ++k) {
+            const WorldIsland *island;
+            int x;
+            int y;
+            uint32_t frame;
+            island_index = order[k];
+            island = &world->islands[island_index];
+            frame = world_island_frame_index(island_index, island->shape_id,
+                                             g_hovered_island == (int)island_index);
+            world_island_position(island, &x, &y);
+            if (island_index < 4U)
+                draw_sprite(surface, &g_small_islands, frame, x, y);
+            else
+                draw_sprite_scaled(surface, &g_small_islands, frame, x, y, 0xc000U);
         }
     }
     {

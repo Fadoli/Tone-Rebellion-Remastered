@@ -1,11 +1,14 @@
 static int world_island_at(int x, int y)
 {
     const WorldDefinition *world;
+    size_t order[WORLD_MAP_MAX_ISLANDS];
+    size_t position;
     size_t island_index;
     if (g_menu.world_index < 0 || g_menu.world_index >= g_menu.world_map.world_count) return -1;
     world = &g_menu.world_map.worlds[g_menu.world_index];
-    island_index = world->island_count;
-    while (island_index > 0) {
+    /* FUN_00472013 scans the sorted list from its end: front-most first. */
+    position = world_island_draw_order(world, order);
+    while (position > 0) {
         const WorldIsland *island;
         uint32_t frame_index;
         const SpriteFrame *frame;
@@ -15,7 +18,7 @@ static int world_island_at(int x, int y)
         int top;
         int right;
         int bottom;
-        --island_index;
+        island_index = order[--position];
         island = &world->islands[island_index];
         /* Use the non-hover image's bounds so changing to the highlighted
            frame cannot make the cursor fall out of its own hit target. */

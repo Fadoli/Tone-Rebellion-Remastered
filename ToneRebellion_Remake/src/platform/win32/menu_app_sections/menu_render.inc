@@ -220,17 +220,113 @@ static void render_new_game(RenderSurface *surface)
     draw_newgame_text(surface);
 }
 
+/* FUN_0046290d (per-island world tick) moves the orbit radius +0x29d8 during
+   the end sequence: with DAT_006191b4 == 3 past tick 99 (t = tick - 100) or
+   == 4 before tick 0x3c (t = tick + 200), a radius above 200 changes by
+   -(t / 70) when the local player's +0x90 latch is clear (islands close on
+   the centre) or by (t / 70) / 3 when it is set (they drift away), clamped
+   to [-20, 20] per tick (REA haiku 2026-11-04, ev_d98059a7). WORLDPOS stays
+   immutable; the shift is kept here per island and cleared outside the
+   sequence. Display only, so it is not saved. */
+static int32_t g_world_range_shift[WORLD_MAP_MAX_ISLANDS];
+
+static int32_t world_island_range(const WorldIsland *island)
+{
+    const WorldDefinition *world;
+    ptrdiff_t index;
+    if (g_menu.world_index < 0 || g_menu.world_index >= g_menu.world_map.world_count)
+        return island->range;
+    world = &g_menu.world_map.worlds[g_menu.world_index];
+    index = island - world->islands;
+    if (index < 0 || (size_t)index >= world->island_count ||
+        index >= WORLD_MAP_MAX_ISLANDS) return island->range;
+    return island->range + g_world_range_shift[index];
+}
+
+static void world_map_tick_orbit_ranges(void)
+{
+    const WorldDefinition *world;
+    int state;
+    int tick;
+    int t = -1;
+    size_t index;
+    if (!g_game_session_valid || g_menu.world_index < 0 ||
+        g_menu.world_index >= g_menu.world_map.world_count) return;
+    world = &g_menu.world_map.worlds[g_menu.world_index];
+    state = g_game_session.world_sequence_state;
+    tick = g_game_session.world_sequence_tick;
+    if (state == 0) {
+        memset(g_world_range_shift, 0, sizeof(g_world_range_shift));
+        return;
+    }
+    if (state == 3 && tick > 99) t = tick - 100;
+    else if (state == 4 && tick < 0x3c) t = tick + 200;
+    if (t == -1) return;
+    if (g_menu.selected_tribe >= 0 &&
+        g_menu.selected_tribe < GAME_START_PLAYER_COUNT &&
+        g_game_session.economy[g_menu.selected_tribe].defeat_latched)
+        t = (t / 0x46) / 3;
+    else
+        t = -(t / 0x46);
+    if (t < -0x14) t = -0x14;
+    if (t > 0x14) t = 0x14;
+    for (index = 0; index < world->island_count && index < WORLD_MAP_MAX_ISLANDS;
+         ++index) {
+        if (world->islands[index].range + g_world_range_shift[index] > 200)
+            g_world_range_shift[index] += t;
+    }
+}
+
+static float world_island_angle(const WorldIsland *island)
+{
+    /* FUN_00471536 uses angle - phase. Keep WORLDPOS immutable and advance
+       the phase by 0.25 degree per 33 ms remake animation tick. */
+    return ((float)island->angle_degrees -
+            (float)(g_menu.animation_ticks % 1440u) * 0.25f) * 0.017453277f;
+}
+
+/* FUN_00471536 depth key (record +0x10, minus its 3000 bias):
+   sin(angle) * range * 0.06. */
+static float world_island_depth(const WorldIsland *island)
+{
+    return (float)(sin((double)world_island_angle(island)) *
+                   world_island_range(island) * 0.06000000238418579);
+}
+
+/* FUN_00471b34 qsorts the display list with FUN_0046fee0 (0x46fee0): bridge
+   records before islands, then a larger key first. A larger key is higher on
+   screen (further back), so islands are drawn back to front and
+   FUN_00472013, which scans the list from the end, hits the front-most one
+   first. Ties keep record order here (qsort leaves them unspecified). */
+static size_t world_island_draw_order(const WorldDefinition *world,
+                                      size_t order[WORLD_MAP_MAX_ISLANDS])
+{
+    float keys[WORLD_MAP_MAX_ISLANDS];
+    size_t count = world->island_count < WORLD_MAP_MAX_ISLANDS
+        ? world->island_count : WORLD_MAP_MAX_ISLANDS;
+    size_t i;
+    for (i = 0; i < count; ++i) {
+        size_t j = i;
+        float key = world_island_depth(&world->islands[i]);
+        while (j > 0 && keys[j - 1] < key) {
+            keys[j] = keys[j - 1];
+            order[j] = order[j - 1];
+            --j;
+        }
+        keys[j] = key;
+        order[j] = i;
+    }
+    return count;
+}
+
 static void world_island_position(const WorldIsland *island, int *x, int *y)
 {
     const float scale_x = 0.12999999523162842f;
     const float scale_y = 0.06000000238418579f;
-    /* FUN_00471536 uses angle - phase. Keep WORLDPOS immutable and advance
-       the phase by 0.25 degree per 33 ms remake animation tick. */
-    float angle = ((float)island->angle_degrees -
-                   (float)(g_menu.animation_ticks % 1440u) * 0.25f) *
-                  0.017453277f;
-    float x_delta = (float)(cos((double)angle) * island->range * scale_x);
-    float y_delta = (float)(sin((double)angle) * island->range * scale_y);
+    float angle = world_island_angle(island);
+    int32_t range = world_island_range(island);
+    float x_delta = (float)(cos((double)angle) * range * scale_x);
+    float y_delta = (float)(sin((double)angle) * range * scale_y);
     float z_delta = (float)island->z * scale_y;
     /* FUN_00470259 sets the centre to half the WORLDVIEW pane (0 0 639 479,
        inclusive coordinates as the other Iw* panes): cx = 639 / 2 and

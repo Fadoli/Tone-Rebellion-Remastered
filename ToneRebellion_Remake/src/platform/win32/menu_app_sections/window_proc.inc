@@ -178,6 +178,7 @@ static void run_ui_frame(HWND window, WPARAM wparam)
         }
         while (sim_steps-- != 0U) {
         ++g_menu.animation_ticks;
+        world_map_tick_orbit_ranges();
         /* No per-tick world-map hover re-test: FUN_004702d9 re-tests only on
            message 10, the mouse-move code FUN_0046be81 sends, so an island
            orbiting under a still pointer keeps its old hover state. */
