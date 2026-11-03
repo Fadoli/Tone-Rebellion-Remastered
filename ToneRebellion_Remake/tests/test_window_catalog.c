@@ -68,7 +68,9 @@ static void verify_fixture(void)
     assert(strcmp(window->message_destination, "MASTER") == 0);
     assert(window->has_hilite_frame && window->hilite_frame == 16);
     assert(window_catalog_hit_test(&catalog, 1, 564, 419) == window);
-    assert(window_catalog_hit_test(&catalog, 1, 633, 419) == NULL);
+    /* FUN_0046be81: right and bottom edges are inside (JG/JL). */
+    assert(window_catalog_hit_test(&catalog, 1, 633, 419) == window);
+    assert(window_catalog_hit_test(&catalog, 1, 634, 419) == NULL);
     window = window_catalog_find(&catalog, "SHADE", 3);
     assert(window != NULL && window->state_count == 2);
     assert(window->has_open_pane && window->open_pane.bottom == 99);

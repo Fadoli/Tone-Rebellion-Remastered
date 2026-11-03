@@ -82,9 +82,9 @@ int window_catalog_load(const unsigned char *bytes, size_t length,
 
 const WindowTemplate *window_catalog_find(const WindowCatalog *catalog,
                                           const char *name, int32_t state);
-/* Tests pane rectangles in reverse descriptor order, so overlaps agree with
-   this renderer's forward source-order drawing. Right and bottom edges are
-   exclusive; that convention still needs verification for each UI class. */
+/* Tests pane rectangles in reverse descriptor order, first match winning, as
+   FUN_0046be81 scans control slots from the last down. All four edges are
+   inclusive (JG/JL compares; windows.txt PANE values stored unchanged). */
 const WindowTemplate *window_catalog_hit_test(const WindowCatalog *catalog,
                                                int32_t state, int32_t x,
                                                int32_t y);

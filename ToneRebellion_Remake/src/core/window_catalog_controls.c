@@ -35,8 +35,8 @@ const WindowTemplate *window_catalog_hit_test(const WindowCatalog *catalog,
                 break;
             }
         }
-        if (matches_state && window->pane.left <= x && x < window->pane.right &&
-            window->pane.top <= y && y < window->pane.bottom) return window;
+        if (matches_state && window->pane.left <= x && x <= window->pane.right &&
+            window->pane.top <= y && y <= window->pane.bottom) return window;
     }
     return NULL;
 }
@@ -67,8 +67,8 @@ const WindowTemplate *window_catalog_hit_test_names(
                 break;
             }
         }
-        if (matches_state && window->pane.left <= x && x < window->pane.right &&
-            window->pane.top <= y && y < window->pane.bottom) return window;
+        if (matches_state && window->pane.left <= x && x <= window->pane.right &&
+            window->pane.top <= y && y <= window->pane.bottom) return window;
     }
     return NULL;
 }
