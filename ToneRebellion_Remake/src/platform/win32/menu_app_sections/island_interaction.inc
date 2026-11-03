@@ -251,7 +251,29 @@ static int island_location_at(int x, int y)
         if (dx >= 101 || island_site_is_hidden_pad(index) ||
             !island_location_pickable(index)) continue;
         width = island_location_hit_width(index);
-        if (dx < width && dy > -(width / 2) && dy < width / 2) return index;
+        {
+            /* FUN_00435581 (ev_1e045b59): an occupied site (+0x10 != 0)
+               reaches up to max(c, W/2), c = the third BASE value of its
+               bldinf item (FUN_00455833 record {a-1, b-1, c}, read through
+               FUN_00456a87); the bottom bound stays W/2. */
+            int top = width / 2;
+            if (g_game_session_valid && g_menu.selected_map_island >= 0 &&
+                g_menu.selected_map_island < g_game_session.island_count &&
+                (unsigned int)index < g_game_session.islands[
+                    g_menu.selected_map_island].location_count) {
+                const GameRuntimeLocation *runtime = &g_game_session.islands[
+                    g_menu.selected_map_island].locations[index];
+                if (runtime->record_value_10 > 0) {
+                    const BuildingRenderItem *item = building_render_find(
+                        &g_building_render_catalog,
+                        (uint16_t)runtime->record_value_10);
+                    if (item != NULL && item->base.present &&
+                        (int)(item->base.ticks_per_frame & 0xffU) > top)
+                        top = (int)(item->base.ticks_per_frame & 0xffU);
+                }
+            }
+            if (dx < width && dy > -top && dy < width / 2) return index;
+        }
     }
     return -1;
 }
