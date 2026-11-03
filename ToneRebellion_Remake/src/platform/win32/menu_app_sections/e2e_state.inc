@@ -251,6 +251,9 @@ static void e2e_write_state(void)
     fprintf(file, "sequence %d\nsequence_tick %d\n",
             g_game_session_valid ? (int)g_game_session.world_sequence_state : -1,
             g_game_session_valid ? (int)g_game_session.world_sequence_tick : -1);
+    fprintf(file, "construct_open %d\nconstruct_column %d\nconstruct_item %d\n",
+            g_iw_construct_open, (int)g_iw_construct.hovered_column,
+            (int)g_iw_construct_info.item_id);
     fprintf(file, "cast_effects %u\n",
             (unsigned int)g_game_session.active_cast_effect_count);
     fprintf(file, "text_info %s\n",

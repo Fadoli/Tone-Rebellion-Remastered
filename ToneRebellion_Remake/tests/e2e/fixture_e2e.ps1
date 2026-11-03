@@ -13,6 +13,9 @@ using System; using System.Runtime.InteropServices;
 public class FixtureE2E {
   [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr h, ref POINT p);
+  [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
   [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
   [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
@@ -207,6 +210,47 @@ try {
         if ($carrier -or ($site -and $site.item -ne 1)) { $picked = $true; Capture "obtain_pickup" }
     }
     Check $picked "BC_Obtain sends a worker that picks the object up" ""
+
+    # IWConstruct: clicking an empty buildable pad opens it; hovering a column
+    # (FUN_0043ad79: x in the pane, y from top + 0x1a to bottom - 10) fills
+    # IWConstructInfo with that item.
+    $st = State
+    $pad = $null
+    $open = $false
+    foreach ($l in $st.locations) {
+        if ($l.class -ne 0 -or $l.item -ne 0 -or $l.owner -ne -1) { continue }
+        $sx = $l.x - $st.scroll
+        if ($sx -lt 30 -or $sx -gt 610 -or $l.y -lt 40 -or $l.y -gt 300) { continue }
+        $free = $true
+        foreach ($f in $st.floaters) {
+            if ([math]::Max([math]::Abs($f.x - $l.x), [math]::Abs($f.y - $l.y)) -lt 24) { $free = $false }
+        }
+        if (-not $free) { continue }
+        # A pad tribe 0 cannot build on behaves as bare ground: try the next.
+        Click $sx $l.y
+        Start-Sleep -Milliseconds 400
+        if ((State).construct_open -eq 1) { $pad = $l; $open = $true; break }
+    }
+    if ($true) {
+        Check $open "clicking an empty pad opens IWConstruct" "no buildable pad opened it"
+        if ($open) {
+            $l = [IntPtr]((420 -shl 16) -bor 220)
+            $r = New-Object FixtureE2E+RECT; [FixtureE2E]::GetClientRect($script:h, [ref]$r) | Out-Null
+            $k = [math]::Min($r.R / 640.0, $r.B / 480.0); $ox = ($r.R - 640 * $k) / 2; $oy = ($r.B - 480 * $k) / 2
+            $l = [IntPtr]((([int]($oy + 420 * $k)) -shl 16) -bor ([int]($ox + 220 * $k)))
+            # A posted move alone arms TrackMouseEvent, and the real cursor
+            # outside the window then sends WM_MOUSELEAVE: put it there.
+            $pt = New-Object FixtureE2E+POINT
+            $pt.X = [int]($ox + 220 * $k); $pt.Y = [int]($oy + 420 * $k)
+            [FixtureE2E]::ClientToScreen($script:h, [ref]$pt) | Out-Null
+            [FixtureE2E]::SetCursorPos($pt.X, $pt.Y) | Out-Null
+            [FixtureE2E]::PostMessage($script:h, 0x200, [IntPtr]0, $l) | Out-Null
+            Start-Sleep -Milliseconds 500
+            $hov = State
+            Check ($hov.construct_column -eq 0 -and $hov.construct_item -ge 0) "hovering IWConstruct fills IWConstructInfo" "column $($hov.construct_column) item $($hov.construct_item)"
+            Capture "construct_hover"
+        }
+    }
     Quit
 
     # Victory: with every seal of the last island gone, FUN_00460460 starts
