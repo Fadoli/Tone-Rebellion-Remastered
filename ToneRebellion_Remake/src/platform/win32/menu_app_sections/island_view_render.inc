@@ -1493,6 +1493,28 @@ static void render_island_view(RenderSurface *surface)
             draw_sprite(surface, cast_art, cast_frame, x, y);
         }
     }
+    /* FUN_00435f4d (ev_b7679b0e): the hovered site (+0x17a) shimmers over
+       x +/- 0x17, y +/- 0x17 when it is a feature trigger (+4 == 3,
+       +0x10 == 3), in any mode; then an armed inventory item
+       (DAT_0049e9c4 != -1) draws its TRIGGERS frame at the mouse + (10, 0). */
+    if (runtime_island != NULL && g_hovered_location >= 0 &&
+        g_hovered_location < (int)runtime_island->location_count &&
+        runtime_island->locations[g_hovered_location].renderer_class == 3 &&
+        runtime_island->locations[g_hovered_location].record_value_10 == 3) {
+        const GameRuntimeLocation *hovered =
+            &runtime_island->locations[g_hovered_location];
+        int hx = (int)hovered->x - g_island_scroll_x;
+        int hy = image_top + (int)hovered->y;
+        draw_site_shimmer(surface, hx - 0x17, hy - 0x17, hx + 0x17, hy + 0x17,
+                          g_game_session.simulation_tick >> 1);
+    }
+    if (g_selected_inventory_item >= GAME_INVENTORY_ITEM_FIRST_ID &&
+        (uint32_t)(g_selected_inventory_item - GAME_INVENTORY_ITEM_FIRST_ID) <
+            g_inventory_item_art.frame_count && g_mouse_inside)
+        draw_sprite(surface, &g_inventory_item_art,
+                    (uint32_t)(g_selected_inventory_item -
+                               GAME_INVENTORY_ITEM_FIRST_ID),
+                    g_mouse_x + 10, g_mouse_y);
     if (saved_dc != 0) render_surface_restore(surface, saved_dc);
 
     /* ISLETMP is the original 640x160 bottom template at y=320, matching the
