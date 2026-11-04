@@ -976,6 +976,16 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         } else if (g_menu.screen == SCREEN_MAIN_MENU && wparam == 'L') {
             g_menu.screen = SCREEN_LOAD_GAME;
             platform_invalidate(window);
+        } else if (g_menu.screen == SCREEN_NEW_GAME && wparam == 'L' &&
+                   g_net_mode == NET_MODE_HOST && !g_net_in_game) {
+            /* Remake: the lobby host picks a saved game to continue in
+               network; every guest receives it. */
+            g_net_load_pick = 1;
+            g_load_save_mode = 0;
+            g_load_from_game = 0;
+            scan_load_slots();
+            g_menu.screen = SCREEN_LOAD_GAME;
+            platform_invalidate(window);
         } else if (g_menu.screen == SCREEN_ISLAND &&
                    (wparam == VK_LEFT || wparam == VK_RIGHT)) {
             g_island_scroll_x += wparam == VK_RIGHT ? 160 : -160;

@@ -156,138 +156,159 @@ static void finish_tribe_choice(HWND window)
     update_window_title(window);
 }
 
-/* Restores a remake save; returns 0 (without touching the running game) when
-   the file is not a valid remake save. */
-static int read_save_file(HWND window, const char *path)
+/* The whole file in a malloc'ed buffer, or NULL. */
+static unsigned char *read_whole_file(const char *path, size_t *length)
 {
-    unsigned char header[0x80];
-    RemakeSaveBody body;
-    unsigned char length_bytes[4];
-    unsigned char *schema = NULL;
-    unsigned char *data = NULL;
-    uint32_t schema_length = 0;
     FILE *file = fopen(path, "rb");
-    int on_island;
-    int ok;
-    char error[160];
-    if (file == NULL) return 0;
-    ok = fread(header, 1, sizeof(header), file) == sizeof(header) &&
-        memcmp(header, "1.16", 4) == 0 &&
-        fread(&body, 1, sizeof(body), file) == sizeof(body) &&
-        body.magic == REMAKE_SAVE_MAGIC &&
-        (body.version == REMAKE_SAVE_VERSION ||
-         (body.version == 1 && body.session_size == sizeof(GameSession))) &&
-        body.session_size > 0 && body.session_size <= 64u * 1024u * 1024u &&
-        body.world_index >= 0 &&
-        body.world_index < g_menu.world_map.world_count &&
-        body.selected_tribe >= 0 && body.selected_tribe < GAME_START_PLAYER_COUNT;
-    if (ok && body.version == REMAKE_SAVE_VERSION) {
-        ok = fread(length_bytes, 1, 4, file) == 4;
-        schema_length = (uint32_t)length_bytes[0] | (uint32_t)length_bytes[1] << 8 |
-            (uint32_t)length_bytes[2] << 16 | (uint32_t)length_bytes[3] << 24;
-        ok = ok && schema_length > 0 && schema_length <= REMAKE_SAVE_MAX_SCHEMA &&
-            (schema = (unsigned char *)malloc(schema_length)) != NULL &&
-            fread(schema, 1, schema_length, file) == schema_length;
+    unsigned char *bytes = NULL;
+    long size;
+    *length = 0;
+    if (file == NULL) return NULL;
+    if (fseek(file, 0, SEEK_END) == 0 && (size = ftell(file)) > 0 &&
+        size <= 64L * 1024L * 1024L && fseek(file, 0, SEEK_SET) == 0 &&
+        (bytes = (unsigned char *)malloc((size_t)size)) != NULL &&
+        fread(bytes, 1, (size_t)size, file) == (size_t)size) {
+        *length = (size_t)size;
+    } else {
+        free(bytes);
+        bytes = NULL;
     }
-    ok = ok && (data = (unsigned char *)malloc(body.session_size)) != NULL &&
-        fread(data, 1, body.session_size, file) == body.session_size;
     (void)fclose(file);
-    if (ok && schema == NULL) {
+    return bytes;
+}
+
+static uint32_t get_le32(const unsigned char *bytes)
+{
+    return (uint32_t)bytes[0] | (uint32_t)bytes[1] << 8 |
+        (uint32_t)bytes[2] << 16 | (uint32_t)bytes[3] << 24;
+}
+
+/* A remake save's bytes into g_game_session; g_menu takes the save's world,
+   tribe and difficulty. Returns 0 and leaves the game and the menu as they
+   were when the bytes are not a valid remake save. A network game loads the
+   host's file through here on every machine. */
+static int apply_remake_save_bytes(const unsigned char *bytes, size_t length,
+                                   RemakeSaveBody *body)
+{
+    const unsigned char *schema = NULL;
+    const unsigned char *data;
+    uint32_t schema_length = 0;
+    size_t at = 0x80 + sizeof(RemakeSaveBody);
+    char error[160];
+    int ok;
+    if (bytes == NULL || length < at || memcmp(bytes, "1.16", 4) != 0) return 0;
+    memcpy(body, bytes + 0x80, sizeof(*body));
+    ok = body->magic == REMAKE_SAVE_MAGIC &&
+        (body->version == REMAKE_SAVE_VERSION ||
+         (body->version == 1 && body->session_size == sizeof(GameSession))) &&
+        body->session_size > 0 && body->session_size <= 64u * 1024u * 1024u &&
+        body->world_index >= 0 &&
+        body->world_index < g_menu.world_map.world_count &&
+        body->selected_tribe >= 0 && body->selected_tribe < GAME_START_PLAYER_COUNT;
+    if (ok && body->version == REMAKE_SAVE_VERSION) {
+        ok = length >= at + 4;
+        if (ok) schema_length = get_le32(bytes + at);
+        at += 4;
+        ok = ok && schema_length > 0 && schema_length <= REMAKE_SAVE_MAX_SCHEMA &&
+            length - at >= schema_length;
+        if (ok) schema = bytes + at;
+        at += schema_length;
+    }
+    ok = ok && length - at >= body->session_size;
+    if (!ok) return 0;
+    data = bytes + at;
+    if (schema == NULL) {
         memcpy(&g_game_session, data, sizeof(GameSession));
-    } else if (ok) {
+    } else {
         /* Fields the save does not know keep the values of a fresh session
            of the same world and tribe. */
         int previous_world = g_menu.world_index;
         int previous_tribe = g_menu.selected_tribe;
         int previous_difficulty = g_menu.difficulty;
         GameSession *previous = (GameSession *)malloc(sizeof(GameSession));
-        ok = previous != NULL;
-        if (ok) {
-            *previous = g_game_session;
-            g_menu.world_index = body.world_index;
-            g_menu.selected_tribe = body.selected_tribe;
-            g_menu.difficulty = body.difficulty;
-            ok = load_game_session_for_selected_world(error, sizeof(error)) &&
-                game_session_schema_migrate(&g_game_session, schema,
-                    schema_length, data, body.session_size);
-            if (!ok) {
-                g_game_session = *previous;
-                g_menu.world_index = previous_world;
-                g_menu.selected_tribe = previous_tribe;
-                g_menu.difficulty = previous_difficulty;
-            }
+        if (previous == NULL) return 0;
+        *previous = g_game_session;
+        g_menu.world_index = body->world_index;
+        g_menu.selected_tribe = body->selected_tribe;
+        g_menu.difficulty = body->difficulty;
+        ok = load_game_session_for_selected_world(error, sizeof(error)) &&
+            game_session_schema_migrate(&g_game_session, schema,
+                schema_length, data, body->session_size);
+        if (!ok) {
+            g_game_session = *previous;
+            g_menu.world_index = previous_world;
+            g_menu.selected_tribe = previous_tribe;
+            g_menu.difficulty = previous_difficulty;
         }
         free(previous);
+        if (!ok) return 0;
     }
-    free(schema);
-    free(data);
-    if (!ok) return 0;
-    /* A save made during a network game continues as a solo game here. */
-    g_game_session.config.multiplayer_session = 0;
-    g_game_session.network_paused = 0;
+    g_game_session_world_index = body->world_index;
+    g_menu.world_index = body->world_index;
+    g_menu.difficulty = body->difficulty;
+    g_menu.selected_tribe = body->selected_tribe;
+    return 1;
+}
+
+/* Menu and view state for a game that was just loaded. */
+static void reset_view_after_load(void)
+{
     game_music_state_init(&g_game_music);
-    g_game_session_world_index = body.world_index;
     g_game_session_valid = 1;
     clear_island_messages();
-    g_menu.world_index = body.world_index;
-    g_menu.difficulty = body.difficulty;
-    g_menu.selected_tribe = body.selected_tribe;
     g_menu.selected_map_island = -1;
     g_menu.setup_accepted = 1;
-    g_menu.animation_ticks = body.animation_ticks;
-    g_sim_speed = body.sim_speed >= 1U && body.sim_speed <= 3U ? body.sim_speed : 1U;
     g_selected_floater = -1;
     select_location_on_view(-1);
     g_hovered_island = -1;
     g_defeat_ticks = 0;
+}
+
+/* Restores a remake save; returns 0 (without touching the running game) when
+   the file is not a valid remake save. */
+static int read_save_file(HWND window, const char *path)
+{
+    RemakeSaveBody body;
+    size_t length;
+    unsigned char *bytes = read_whole_file(path, &length);
+    int on_island;
+    int ok = apply_remake_save_bytes(bytes, length, &body);
+    free(bytes);
+    if (!ok) return 0;
+    /* A save made during a network game continues as a solo game here. */
+    g_game_session.config.multiplayer_session = 0;
+    g_game_session.network_paused = 0;
+    reset_view_after_load();
+    g_menu.animation_ticks = body.animation_ticks;
+    g_sim_speed = body.sim_speed >= 1U && body.sim_speed <= 3U ? body.sim_speed : 1U;
     if (begin_tribe_choice(window)) return 1;
     on_island = body.on_island && body.selected_map_island >= 0;
     g_menu.screen = SCREEN_WORLD_MAP;
-    if (on_island && !open_island_view(window, body.selected_map_island)) {
-        (void)snprintf(error, sizeof(error), "island view could not be restored");
+    if (on_island && !open_island_view(window, body.selected_map_island))
         g_menu.screen = SCREEN_WORLD_MAP;
-    }
     return 1;
 }
 
-/* Loads an original-game save (C:\Program Files\Tone\NN.SAV; the process sees
-   the VirtualStore copy). The world and tribe come from the file, a fresh
+/* An original save's bytes: the world and tribe come from the file, a fresh
    session is built for them and the native records are applied on top
-   (core/native_save.c). Returns 0 and leaves the running game untouched when
-   the file cannot be restored. */
-static int read_native_save_file(HWND window, const char *path, char *error,
-                                 size_t error_capacity)
+   (core/native_save.c). Returns 0 and leaves the game and the menu as they
+   were when the bytes cannot be restored. */
+static int apply_native_save_bytes(const unsigned char *bytes, size_t length,
+                                   char *error, size_t error_capacity)
 {
     NativeSave save;
-    FILE *file = fopen(path, "rb");
-    unsigned char *bytes = NULL;
-    long length;
     int world;
-    int ok = 0;
     int previous_world = g_menu.world_index;
     int previous_tribe = g_menu.selected_tribe;
     int previous_difficulty = g_menu.difficulty;
-    if (file == NULL) {
-        (void)snprintf(error, error_capacity, "save file could not be opened");
+    if (bytes == NULL ||
+        !native_save_parse(bytes, length, &save, error, error_capacity))
         return 0;
-    }
-    if (fseek(file, 0, SEEK_END) != 0 || (length = ftell(file)) <= 0 ||
-        fseek(file, 0, SEEK_SET) != 0 ||
-        (bytes = (unsigned char *)malloc((size_t)length)) == NULL ||
-        fread(bytes, 1, (size_t)length, file) != (size_t)length) {
-        (void)fclose(file);
-        free(bytes);
-        (void)snprintf(error, error_capacity, "save file could not be read");
-        return 0;
-    }
-    (void)fclose(file);
-    if (!native_save_parse(bytes, (size_t)length, &save, error, error_capacity))
-        goto done;
     world = native_save_find_world(&save, &g_menu.world_map);
     if (world < 0 || save.tribe >= GAME_START_PLAYER_COUNT) {
         (void)snprintf(error, error_capacity,
                        "save world or tribe is not supported");
-        goto done;
+        return 0;
     }
     g_menu.world_index = world;
     g_menu.selected_tribe = (int)save.tribe;
@@ -297,22 +318,105 @@ static int read_native_save_file(HWND window, const char *path, char *error,
         g_menu.world_index = previous_world;
         g_menu.selected_tribe = previous_tribe;
         g_menu.difficulty = previous_difficulty;
-        goto done;
+        return 0;
     }
-    game_music_state_init(&g_game_music);
-    g_menu.selected_map_island = -1;
-    g_menu.setup_accepted = 1;
+    return 1;
+}
+
+/* Loads an original-game save (C:\Program Files\Tone\NN.SAV; the process sees
+   the VirtualStore copy). Returns 0 and leaves the running game untouched when
+   the file cannot be restored. */
+static int read_native_save_file(HWND window, const char *path, char *error,
+                                 size_t error_capacity)
+{
+    size_t length;
+    unsigned char *bytes = read_whole_file(path, &length);
+    int ok;
+    if (bytes == NULL) {
+        (void)snprintf(error, error_capacity, "save file could not be read");
+        return 0;
+    }
+    ok = apply_native_save_bytes(bytes, length, error, error_capacity);
+    free(bytes);
+    if (!ok) return 0;
+    reset_view_after_load();
     g_sim_speed = 1U;
-    g_selected_floater = -1;
-    select_location_on_view(-1);
-    g_hovered_island = -1;
-    g_defeat_ticks = 0;
     g_menu.screen = SCREEN_WORLD_MAP;
     (void)begin_tribe_choice(window);
-    ok = 1;
-done:
-    free(bytes);
-    return ok;
+    return 1;
+}
+
+/* The host's save, applied to g_game_session on every machine of the
+   lobby: the tribe choice offers the tribes played in it. The lobby keeps
+   its own tribe for this machine. */
+static int net_load_apply(void)
+{
+    RemakeSaveBody body;
+    char error[160];
+    int lobby_tribe = g_menu.selected_tribe;
+    int ok = g_net_save_native
+        ? apply_native_save_bytes(g_net_save, g_net_save_length, error, sizeof(error))
+        : apply_remake_save_bytes(g_net_save, g_net_save_length, &body);
+    if (!ok) return 0;
+    g_game_session_valid = 0;
+    g_tribe_choice_mask = (uint8_t)(game_session_active_player_mask(&g_game_session) |
+        (g_menu.selected_tribe >= 0 && g_menu.selected_tribe < GAME_START_PLAYER_COUNT
+             ? 1U << g_menu.selected_tribe : 0U));
+    if (lobby_tribe >= 0 && lobby_tribe < GAME_START_PLAYER_COUNT)
+        g_menu.selected_tribe = lobby_tribe;
+    return 1;
+}
+
+/* Game start of a loaded network game: every machine applies the same file
+   again, then plays its lobby tribe. */
+static int net_load_start(HWND window, uint8_t tribe)
+{
+    if (!net_load_apply()) return 0;
+    g_game_session.config.multiplayer_session = 1;
+    g_game_session.config.selected_tribe = tribe;
+    g_game_session.network_paused = 0;
+    g_menu.selected_tribe = tribe;
+    reset_view_after_load();
+    g_sim_speed = 1U;
+    net_save_clear();
+    g_menu.screen = SCREEN_WORLD_MAP;
+    update_window_title(window);
+    platform_invalidate(window);
+    return 1;
+}
+
+/* Lobby host: a save picked on the Load screen becomes the game to continue.
+   Returns 1 when it was read and applied. */
+static int net_host_pick_save(const char *path, int native)
+{
+    size_t length;
+    unsigned char *bytes = read_whole_file(path, &length);
+    unsigned tribe;
+    if (bytes == NULL) {
+        net_set_status("Sauvegarde illisible");
+        return 0;
+    }
+    net_save_clear();
+    g_net_save = bytes;
+    g_net_save_length = length;
+    g_net_save_native = native ? 1U : 0U;
+    if (!net_load_apply()) {
+        net_save_clear();
+        net_set_status("Sauvegarde illisible");
+        return 0;
+    }
+    g_net_save_ready = 1;
+    net_lobby_set_world(&g_net_lobby, (uint8_t)g_menu.world_index,
+                        (uint8_t)g_menu.difficulty);
+    if (g_net_lobby.players[0].tribe >= GAME_START_PLAYER_COUNT ||
+        (g_tribe_choice_mask & (1U << g_net_lobby.players[0].tribe)) == 0) {
+        for (tribe = 0; tribe < GAME_START_PLAYER_COUNT; ++tribe)
+            if ((g_tribe_choice_mask & (1U << tribe)) != 0) break;
+        (void)net_lobby_set_tribe(&g_net_lobby, 0, (uint8_t)tribe);
+    }
+    net_host_broadcast_state();
+    net_set_status("Partie chargee : envoi aux joueurs...");
+    return 1;
 }
 
 static int save_slot_path(int slot, char *path, size_t capacity)
@@ -336,6 +440,12 @@ static int resume_path(char *path, size_t capacity)
    Load returns to the title. */
 static void leave_load_screen(void)
 {
+    if (g_net_load_pick) {
+        /* Picking a save for the network lobby. */
+        g_net_load_pick = 0;
+        g_menu.screen = SCREEN_NEW_GAME;
+        return;
+    }
     if (g_load_save_mode || g_load_from_game) {
         g_load_save_mode = 0;
         g_load_from_game = 0;

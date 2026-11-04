@@ -1,5 +1,11 @@
 static void dispatch_newgame_master_message(HWND window, int message)
 {
+    if (g_tribe_choice_mask != 0 && g_net_mode != NET_MODE_NONE) {
+        /* Network lobby of a loaded game: the lobby rules apply (played
+           tribes only, world size and difficulty locked). */
+        (void)net_newgame_message(window, message);
+        return;
+    }
     if (g_tribe_choice_mask != 0) {
         /* Loaded game: the world size and difficulty are the save's; only a
            played tribe can be picked, and NEWGAME continues the game. */
@@ -832,6 +838,14 @@ static void handle_click(HWND window, int x, int y)
                     platform_message_box(window, "La sauvegarde n'a pas pu etre ecrite.",
                                          "Tone Rebellion remake", 1);
                 }
+            } else if (slot >= 0 && slot < 8 && g_load_slot_valid[slot] &&
+                       g_net_load_pick) {
+                /* Network lobby: the host's pick goes to every guest. */
+                if (g_load_slot_native[slot])
+                    (void)net_host_pick_save(g_load_slot_native_path[slot], 1);
+                else if (save_slot_path(slot, path, sizeof(path)))
+                    (void)net_host_pick_save(path, 0);
+                leave_load_screen();
             } else if (slot >= 0 && slot < 8 && g_load_slot_valid[slot] &&
                        g_load_slot_native[slot]) {
                 char error[160];

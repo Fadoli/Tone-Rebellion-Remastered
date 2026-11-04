@@ -43,6 +43,43 @@ static uint32_t g_net_issue_ms, g_net_issue_tick, g_net_apply_ms, g_net_apply_ti
 static void simulate_session_tick(uint32_t source_tick);
 static void enter_net_setup_screen(void);
 
+/* Network game from a save (remake extension): the host loads a save in the
+   lobby, sends the file to every guest in chunks, each machine applies the
+   same bytes, the lobby turns into the tribe choice of a loaded game, and
+   the start continues that session on every machine. */
+enum { NET_RECORD_SAVE_DATA = 0x44,  /* host -> guest: native, total, offset, bytes */
+       NET_RECORD_SAVE_ACK = 0x45,   /* guest -> host: save applied */
+       NET_SAVE_CHUNK = 2048, NET_SAVE_CHUNKS_PER_POLL = 4 };
+static unsigned char *g_net_save;
+static size_t g_net_save_length;
+static uint8_t g_net_save_native;
+static size_t g_net_save_received;
+static size_t g_net_save_sent[NET_LOBBY_MAX_PLAYERS];
+static uint8_t g_net_save_acked;
+static int g_net_save_ready;
+/* save_game.inc: apply g_net_save to g_game_session (lobby) / start it. */
+static int net_load_apply(void);
+static int net_load_start(HWND window, uint8_t tribe);
+
+static void net_save_clear(void)
+{
+    free(g_net_save);
+    g_net_save = NULL;
+    g_net_save_length = 0;
+    g_net_save_received = 0;
+    g_net_save_native = 0;
+    g_net_save_acked = 0;
+    g_net_save_ready = 0;
+    memset(g_net_save_sent, 0, sizeof(g_net_save_sent));
+    g_tribe_choice_mask = 0;
+}
+
+static uint32_t net_le32(const uint8_t *bytes)
+{
+    return (uint32_t)bytes[0] | (uint32_t)bytes[1] << 8 |
+        (uint32_t)bytes[2] << 16 | (uint32_t)bytes[3] << 24;
+}
+
 static void queue_island_message(const char *text, int16_t selector);
 
 static void net_set_status(const char *text)
@@ -76,6 +113,7 @@ static void net_shutdown(void)
     g_net_mode = NET_MODE_NONE;
     g_net_connecting = 0;
     g_net_in_game = 0;
+    net_save_clear();
     if (g_net_wsa_started) {
         net_socket_cleanup();
         g_net_wsa_started = 0;
@@ -197,6 +235,8 @@ static void net_drop_peer(unsigned slot)
                            g_net_lobby.players[slot].name);
         }
         net_lobby_remove_player(&g_net_lobby, (uint8_t)slot);
+        g_net_save_sent[slot] = 0;
+        g_net_save_acked &= (uint8_t)~(1U << slot);
         if (!g_net_in_game) net_host_broadcast_state();
     } else {
         /* Without the host no turn can be validated: continue alone. */
@@ -271,7 +311,7 @@ static void net_apply_game_start(HWND window, const NetGameStart *start)
     g_menu.difficulty = start->difficulty;
     g_menu.selected_tribe = tribe;
     g_random_state = start->seed;
-    if (begin_new_game(window)) {
+    if (g_net_save_ready ? net_load_start(window, tribe) : begin_new_game(window)) {
         uint8_t peers = 0;
         unsigned slot;
         /* Same on every machine: built from the shared start record. */
@@ -340,9 +380,92 @@ static void net_host_handle_frame(unsigned slot, const NetFrame *frame)
     } else if (frame->type == NET_RECORD_TRIBE && frame->length == 1U &&
                g_net_lobby.players[slot].connected) {
         /* Only the host decides; the sender slot is the socket's, not the
-           frame's claim. */
-        (void)net_lobby_set_tribe(&g_net_lobby, (uint8_t)slot, frame->payload[0]);
+           frame's claim. A loaded game offers its played tribes only. */
+        if (g_tribe_choice_mask == 0 ||
+            (frame->payload[0] < GAME_START_PLAYER_COUNT &&
+             (g_tribe_choice_mask & (1U << frame->payload[0])) != 0))
+            (void)net_lobby_set_tribe(&g_net_lobby, (uint8_t)slot, frame->payload[0]);
         net_host_broadcast_state();
+    } else if (frame->type == NET_RECORD_SAVE_ACK &&
+               g_net_lobby.players[slot].connected && g_net_save != NULL) {
+        g_net_save_acked |= (uint8_t)(1U << slot);
+        (void)snprintf(g_net_status, sizeof(g_net_status),
+                       "%s a recu la partie chargee", g_net_lobby.players[slot].name);
+    }
+}
+
+/* Guest: one chunk of the host's save; the whole file is applied as soon as
+   it is complete and the host is told. */
+static void net_client_receive_save(const NetFrame *frame)
+{
+    uint32_t total;
+    uint32_t offset;
+    size_t count;
+    if (frame->length < 9U) return;
+    total = net_le32(frame->payload + 1);
+    offset = net_le32(frame->payload + 5);
+    count = frame->length - 9U;
+    if (total == 0U || total > 64U * 1024U * 1024U || offset > total ||
+        count > total - offset) return;
+    if (offset == 0U) {
+        net_save_clear();
+        g_net_save = (unsigned char *)malloc(total);
+        if (g_net_save == NULL) return;
+        g_net_save_length = total;
+        g_net_save_native = frame->payload[0];
+        net_set_status("Reception de la partie chargee par l'hote...");
+    }
+    if (g_net_save == NULL || total != g_net_save_length ||
+        offset != g_net_save_received) return;
+    memcpy(g_net_save + offset, frame->payload + 9, count);
+    g_net_save_received += count;
+    if (g_net_save_received != g_net_save_length) return;
+    if (net_load_apply()) {
+        uint8_t bytes[NET_FRAME_MAX_SIZE];
+        size_t length = net_frame_encode(bytes, sizeof(bytes), NET_RECORD_SAVE_ACK,
+                                         g_net_lobby.local_slot, NULL, 0);
+        g_net_save_ready = 1;
+        net_set_status("Partie chargee par l'hote : choisissez une tribu jouee");
+        if (!net_send(0, bytes, length)) net_drop_peer(0);
+    } else {
+        net_set_status("La partie chargee par l'hote n'a pas pu etre lue");
+    }
+}
+
+/* Host: a few chunks of the loaded save to each guest that lacks it, per
+   poll, so the non-blocking sockets never fill up. */
+static void net_host_send_save_chunks(void)
+{
+    unsigned slot;
+    if (g_net_save == NULL || g_net_in_game) return;
+    for (slot = 1; slot < NET_LOBBY_MAX_PLAYERS; ++slot) {
+        unsigned chunk;
+        if (g_net_peers[slot] == NET_SOCKET_INVALID ||
+            !g_net_lobby.players[slot].connected) continue;
+        for (chunk = 0; chunk < NET_SAVE_CHUNKS_PER_POLL &&
+                        g_net_save_sent[slot] < g_net_save_length; ++chunk) {
+            uint8_t payload[9 + NET_SAVE_CHUNK];
+            uint8_t bytes[NET_FRAME_MAX_SIZE];
+            size_t offset = g_net_save_sent[slot];
+            size_t count = g_net_save_length - offset;
+            size_t length;
+            unsigned i;
+            if (count > NET_SAVE_CHUNK) count = NET_SAVE_CHUNK;
+            payload[0] = g_net_save_native;
+            for (i = 0; i < 4U; ++i) {
+                payload[1 + i] = (uint8_t)(g_net_save_length >> (8U * i));
+                payload[5 + i] = (uint8_t)(offset >> (8U * i));
+            }
+            memcpy(payload + 9, g_net_save + offset, count);
+            length = net_frame_encode(bytes, sizeof(bytes), NET_RECORD_SAVE_DATA, 0,
+                                      payload, 9 + count);
+            if (length == 0U) return;
+            if (!net_send(slot, bytes, length)) {
+                net_drop_peer(slot);
+                break;
+            }
+            g_net_save_sent[slot] = offset + count;
+        }
     }
 }
 
@@ -376,6 +499,8 @@ static void net_poll_peer(HWND window, unsigned slot)
                     net_drop_peer(0);
                     return;
                 }
+            } else if (frame.type == NET_RECORD_SAVE_DATA && !g_net_in_game) {
+                net_client_receive_save(&frame);
             } else if (frame.type == NET_RECORD_TURN) {
                 NetTurnBundle bundle;
                 if (g_net_in_game &&
@@ -450,6 +575,7 @@ static int net_poll(HWND window)
         for (slot = 0; slot < NET_LOBBY_MAX_PLAYERS && g_net_mode != NET_MODE_NONE; ++slot)
             if (g_net_peers[slot] != NET_SOCKET_INVALID) net_poll_peer(window, slot);
     }
+    if (g_net_mode == NET_MODE_HOST) net_host_send_save_chunks();
     return memcmp(before, g_net_status, sizeof(before)) != 0 ||
            memcmp(&lobby_before, &g_net_lobby, sizeof(lobby_before)) != 0;
 }
@@ -463,6 +589,8 @@ static int net_newgame_message(HWND window, int message)
     if (g_net_mode == NET_MODE_NONE) return 0;
     if (message >= 60 && message <= 63) {
         uint8_t tribe = (uint8_t)(message - 60);
+        if (g_tribe_choice_mask != 0 && (g_tribe_choice_mask & (1U << tribe)) == 0)
+            return 1;
         if (g_net_mode == NET_MODE_HOST) {
             if (net_lobby_set_tribe(&g_net_lobby, 0, tribe)) net_host_broadcast_state();
         } else if (g_net_lobby.local_slot < NET_LOBBY_MAX_PLAYERS) {
@@ -474,6 +602,7 @@ static int net_newgame_message(HWND window, int message)
         return 1;
     }
     if (g_net_mode != NET_MODE_HOST) return 1;
+    if ((message == 53 || message == 55) && g_net_save != NULL) return 1;
     if (message == 53 || message == 55) {
         if (message == 53)
             g_menu.world_index = (g_menu.world_index + 1) % g_menu.world_map.world_count;
@@ -491,6 +620,23 @@ static int net_newgame_message(HWND window, int message)
         if (!net_lobby_game_start(&g_net_lobby, &start)) {
             net_set_status("Il faut deux joueurs et des tribus differentes");
             return 1;
+        }
+        if (g_net_save != NULL) {
+            /* A loaded game starts once every guest applied the file, and
+               only with tribes that were played in it. */
+            unsigned slot;
+            for (slot = 0; slot < NET_LOBBY_MAX_PLAYERS; ++slot) {
+                if (!g_net_lobby.players[slot].connected) continue;
+                if (slot != 0 && (g_net_save_acked & (1U << slot)) == 0) {
+                    net_set_status("Envoi de la partie chargee en cours");
+                    return 1;
+                }
+                if (start.tribes[slot] >= GAME_START_PLAYER_COUNT ||
+                    (g_tribe_choice_mask & (1U << start.tribes[slot])) == 0) {
+                    net_set_status("Chaque joueur doit choisir une tribu jouee");
+                    return 1;
+                }
+            }
         }
         length = net_lobby_encode_game_start(&start, bytes, sizeof(bytes));
         net_host_broadcast(bytes, length);

@@ -56,3 +56,15 @@ L'original refuse Sauvegarder, Charger et la pause en réseau (`FUN_004578df`, `
 - L'invité reprend : les deux repartent ensemble.
 - `F5` côté invité : les tours et l'empreinte restent identiques chez les deux pendant l'écran de sauvegarde.
 - Aucune désynchronisation. `resume.gam` est écrit des deux côtés en quittant.
+
+## Reprendre une partie sauvegardée en réseau (extension du remake, 2026-11-04)
+
+- **Chargement par l'hôte :** dans le lobby, la touche `L` ouvre l'écran Charger, qui accepte une sauvegarde du remake ou d'origine.
+- **Envoi aux invités :** le fichier part à chaque invité (`NET_RECORD_SAVE_DATA` 0x44 : type, taille, décalage, puis jusqu'à 2 Ko). L'hôte envoie 4 tranches par invité et par sondage, pour ne pas remplir les sockets non bloquantes ; un invité qui arrive plus tard reçoit le fichier depuis le début.
+- **Application :** chaque machine applique les mêmes octets (`net_load_apply`) et confirme (`NET_RECORD_SAVE_ACK` 0x45).
+- **Lobby :** il devient le choix de tribu d'une partie chargée, comme en solo (tribus non jouées en noir). Taille du monde et difficulté sont celles de la sauvegarde ; l'hôte refuse toute tribu non jouée.
+- **Lancement :** il attend la confirmation de chaque invité et une tribu jouée pour chacun. Chaque machine réapplique alors le fichier et joue sa tribu de lobby (`net_load_start`), avec `multiplayer_session` à 1.
+
+**Vérifié :** deux instances, port 28778, dossiers temporaires. La sauvegarde vient de la fixture `badges` avec F8 (tribus 0 et 1 jouées) et est placée dans l'emplacement 0 de l'hôte.
+- Après `L` et le clic sur l'emplacement 0, le choix des deux machines vaut `0b11`.
+- L'invité joue la tribu 1, l'hôte la tribu 0. Après le lancement, les deux voient le bâtiment ajouté par F8 (`active_mask` 2), au même tour, sans désynchronisation.

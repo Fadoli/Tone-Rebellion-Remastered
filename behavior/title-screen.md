@@ -221,4 +221,4 @@ Demande utilisateur, sans équivalent natif.
 
 **Vérifié :** fixture `badges`, F8 (bâtiment pour la tribu 1), sortie puis RESUME dans un dossier temporaire. L'écran de choix s'ouvre ; un clic sur une tribu noire est ignoré ; la tribu 1 se sélectionne ; la difficulté et la taille du monde restent ; NEWGAME ouvre la carte avec la tribu 1.
 
-Le même écran servira au chargement d'une partie en réseau, qui n'est pas encore fait.
+Le même écran sert au chargement d'une partie en réseau ([multijoueur](multiplayer.md)).

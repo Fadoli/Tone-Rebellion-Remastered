@@ -320,6 +320,10 @@ static void e2e_write_state(void)
             g_game_session_valid ? (int)g_game_session.location_move_active : 0,
             selected_location_can_be_grabbed(), g_hovered_location,
             g_mouse_x, g_mouse_y);
+    fprintf(file, "active_mask %u\nchoice_mask %u\n",
+            g_game_session_valid
+                ? (unsigned)game_session_active_player_mask(&g_game_session) : 0U,
+            (unsigned)g_tribe_choice_mask);
     fprintf(file, "repair_button %d\nrepair_hovered %d\n",
             selected_repair_button_visible(), g_hovered_repair_control);
     fprintf(file, "selection_island %d\n", selection_island());

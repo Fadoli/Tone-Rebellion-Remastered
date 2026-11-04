@@ -121,6 +121,8 @@ static int g_paused;
 /* Tribe choice after loading a game with several played tribes (remake): one
    bit per tribe that can be picked on the New Game screen; 0 otherwise. */
 static uint8_t g_tribe_choice_mask;
+/* Lobby host on the Load screen, picking the game to continue in network. */
+static int g_net_load_pick;
 static void draw_clipboard_strip(RenderSurface *surface);
 static int load_game_session_for_selected_world(char *error, size_t error_capacity);
 static int draw_building_preview(RenderSurface *surface, uint16_t item_id, uint8_t player_slot,

@@ -152,6 +152,13 @@ static void net_setup_activate(HWND window, int button)
 static void leave_new_game_screen(void)
 {
     const int networked = g_net_mode != NET_MODE_NONE;
+    if (networked) {
+        /* net_leave_lobby drops a loaded game with the lobby. */
+        net_leave_lobby();
+        g_menu.setup_accepted = 0;
+        enter_net_setup_screen();
+        return;
+    }
     if (g_tribe_choice_mask != 0) {
         /* Leaving the tribe choice drops the loaded game. */
         g_tribe_choice_mask = 0;
