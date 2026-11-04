@@ -1391,12 +1391,14 @@ unsigned int game_session_resolve_cast_effect_step(
                   .locations[(uint16_t)target_location_index];
     if (step == 0x16) {
         /* FUN_004239e9 compares item-0x17 with DAT_0061a634[owner], the
-           word P+0x147c = 0x146c + 2 * 8: FUN_004204bc's kill counter for
-           subtype 8, so seal k breaks only after k such kills. */
+           word P+0x147c that FUN_00465793 subtype 3 fills with the cast
+           glyph (0x465c05, this + 0x2e41c): glyph k breaks seal k. The
+           word also sits at FUN_004204bc's type-4 subtype-8 kill slot, but
+           no Leviathan spawns as subtype 8. */
         caster->source_runtime_flags |= 0x200U;
         if (caster->type_index >= GAME_START_PLAYER_COUNT ||
             target->record_value_10 - 0x17 != (int32_t)session->economy[
-                caster->type_index].leviathan_kills_by_subtype[8]) return 0;
+                caster->type_index].selected_glyph_index) return 0;
         return game_session_apply_cast_site_effect(
             session, caster->island_index, (uint16_t)target_location_index,
             30000) != 0 ? 1U : 0U;
