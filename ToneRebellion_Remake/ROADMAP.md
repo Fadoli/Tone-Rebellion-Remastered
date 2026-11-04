@@ -16,7 +16,7 @@ State on 2026-11-04. Remaining work: [TODO](TODO.md); ported features: [implemen
 - **Interface**: panel parity, fonts, world map, FLTINFO badges (state badge and spell shimmer included), pause (island and map frozen, eye closed), starting buildings already built, title screen stars and credits, move button frames while a building is held, repair button pulse.
 - **Audio**: volume and pan by distance, producer, island and collapse sounds.
 - **Web and SDL**: web port done in 8 steps (1 portable `RenderSurface`, 2 `platform_*` services, 3 SDL3 adapter, 4 Emscripten target, 5 user data, 6 `IDBFS` saves, 7 browser audio, 8 single-player web build); CD image (`.iso`) import.
-- **Network**: lockstep TCP play checked SDL to SDL; pause, game speed, save and loading a saved game in network play (remake extensions).
+- **Network**: lockstep TCP play checked SDL to SDL; pause, game speed, save, loading a saved game and reconnection after a lost connection in network play (remake extensions).
 - **Checks**: static fixtures (`TONE_REBELLION_E2E_FIXTURE`: badges, enemy_hall, spell, obtain, dying, victory, messages, return, repair) with `TONE_REBELLION_SAVE_DIR`; `tests/e2e/fixture_e2e.ps1` and `tests/e2e/island_e2e.ps1` ([validation](docs/build-and-validation.md)).
 
 ## Kept gaps

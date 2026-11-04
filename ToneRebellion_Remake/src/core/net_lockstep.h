@@ -97,6 +97,13 @@ size_t net_lockstep_finish_tick(NetLockstep *lockstep, uint32_t session_hash,
 int net_lockstep_receive_bundle(NetLockstep *lockstep, const NetTurnBundle *bundle);
 void net_lockstep_receive_ack(NetLockstep *lockstep, uint8_t slot, uint32_t turns_done);
 void net_lockstep_drop_peer(NetLockstep *lockstep, uint8_t slot);
+/* Reconnection (remake). Host: a guest that rejoins at `turn` (it receives
+   the state at the start of that turn, then the bundles from it on). */
+void net_lockstep_add_peer(NetLockstep *lockstep, uint8_t slot, uint32_t turn);
+/* Host: the bundle of `turn` still in the window, or NULL. */
+const NetTurnBundle *net_lockstep_bundle(const NetLockstep *lockstep, uint32_t turn);
+/* Guest: restarts the lockstep at `turn` with no bundle held. */
+void net_lockstep_resume_at(NetLockstep *lockstep, uint32_t turn);
 
 size_t net_lockstep_encode_bundle(const NetTurnBundle *bundle, uint8_t *payload, size_t capacity);
 int net_lockstep_decode_bundle(const uint8_t *payload, size_t length, NetTurnBundle *bundle);

@@ -180,6 +180,29 @@ void net_lockstep_drop_peer(NetLockstep *lockstep, uint8_t slot)
     lockstep->peer_mask &= (uint8_t)~(1U << slot);
 }
 
+void net_lockstep_add_peer(NetLockstep *lockstep, uint8_t slot, uint32_t turn)
+{
+    if (lockstep == NULL || !lockstep->is_host || slot >= NET_LOCKSTEP_MAX_PLAYERS) return;
+    lockstep->peer_mask |= (uint8_t)(1U << slot);
+    lockstep->acked[slot] = turn;
+}
+
+const NetTurnBundle *net_lockstep_bundle(const NetLockstep *lockstep, uint32_t turn)
+{
+    const NetTurnBundle *bundle;
+    if (lockstep == NULL) return NULL;
+    bundle = &lockstep->bundles[turn % NET_TURN_WINDOW];
+    return bundle->valid && bundle->turn == turn ? bundle : NULL;
+}
+
+void net_lockstep_resume_at(NetLockstep *lockstep, uint32_t turn)
+{
+    if (lockstep == NULL) return;
+    net_lockstep_init(lockstep, 0, 0);
+    lockstep->tick = turn * NET_TURN_TICKS;
+    lockstep->latest_bundle_turn = turn;
+}
+
 /* Payload: turn, hash turn, hash (LE dwords), has_hash, count, delay, commands. */
 size_t net_lockstep_encode_bundle(const NetTurnBundle *bundle, uint8_t *payload, size_t capacity)
 {
