@@ -200,3 +200,14 @@ Observation:
 - Palette: `FUN_0046cce7` copie la palette et lève `+0x62b0` (ev_bf6741b3…). `FUN_0046ae19` applique alors une rampe depuis le noir, pas de 4/256 par tick, jusqu'à 252 (ev_deae8f42…). La remise à 0 de la rampe (`FUN_00469cce`) n'a pas d'appelant résolu: fondu d'entrée du titre non établi. Aucune rotation de palette trouvée.
 - `intro.avi` (état 6, `INTROMOVIE`, WINTYPE 12): seule entrée littérale = touche `I` de `FUN_0046a5b7` (0x46a830), gardée par `DAT_004c2b74` (mot-clé `nevada`, absent du `FLOAT.CFG` livré). La fin de lecture met en file `SetState(0)` (SENDMESSAGE `1 0 0`). Pas jouée au démarrage normal (ev_fd4063b9…, ev_22a5846e…).
 Conclusion statique: aucune animation de l'écran titre dans le code lu. Inconnus: écrivains de `+0x70` des boutons, appelant de `FUN_00469cce`.
+
+## Crédits et étoiles de l'écran titre (REA haiku 2026-11-04)
+Correction de la section précédente: l'animation existe, dans la peinture `FUN_0042af35` de la classe SceneWindow (WINTYPE 3, vtable 0x4941f0), pour `BACKGRND` hors état 8 (ev_de222a9d, ev_550c7247).
+Observation:
+- `credits.txt` (TONE00.COB) est lu une fois par `FUN_0042ac69` (ev_09d2977b): lignes non vides de commentaire, arrêt à `ENDCREDITS`, 0x4f caractères max. La ligne blanche prend une entrée; la boucle de dessin s'arrête à 24 entrées, donc la dernière ligne n'est jamais affichée.
+- Compteur `DAT_0049d64c` = −600 à l'entrée de la fenêtre (`FUN_0042ad76`), +1 par peinture, remis à −600 au-delà de 2230 (ev_8b656df8). Aucune entrée ne le remet à zéro: le texte arrive après 600 images.
+- `FUN_0042b239` (ev_ad3a187c): clip 100..540 × 20..270; ligne i à y = Σ pas[0..i] − P (pas à 0x49d6a0 + i·0x54: 450, 40, 30, 30, 120, …, 120), tracée si P > 0 et −10 < y < 300, centrée sur 440 px. Titre (frame + 1) en x = −100, y = −60 si P ≤ 0, −60 − P si P < 300, (2230 − P) − 60 si P > 1950.
+- Objet texte 0x4c2f30: police 0 (police par défaut), sans écrivain de police trouvé.
+- Étoiles `FUN_0042a6c9`: rect fenêtre réduit de 20, au plus min(50, aire/6000) étoiles, une naissance par peinture (rand CRT), vie 32 peintures, couleur = index le plus proche de (7k, 7k, 20 + 6k), k = min(7, (âge > 16 ? 32 − âge : âge)/2). Rects d'exclusion seulement en état 1.
+- État 8: barre d'astérisques à (150, 300) au lieu des crédits.
+Port: `title_credits.inc` (étoiles, défilement, titre mobile), une peinture par image à 20 Hz. Interprétations: police SMFONT et stylo 6 (comme l'écran de fin), graine propre pour les étoiles. Vérifié en jeu: le titre part vers le haut vers 30 s, puis défilent les crédits et l'histoire.

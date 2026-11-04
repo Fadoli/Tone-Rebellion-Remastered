@@ -92,7 +92,13 @@ static void run_ui_frame(HWND window, WPARAM wparam)
 {
     if (wparam == 1) {
         e2e_write_state();
+        /* One SceneWindow paint per frame; resets off the title. */
+        title_credits_tick();
         if (net_poll(window)) platform_invalidate(window);
+    }
+    if (wparam == 1 && g_menu.screen == SCREEN_MAIN_MENU) {
+        platform_invalidate(window);
+        return;
     }
     if (wparam == 1 && g_menu.screen == SCREEN_NET_SETUP) {
         /* Caret blink. */

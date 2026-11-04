@@ -108,6 +108,8 @@ static void update_interaction_cursor(void)
 
 
 static void update_window_title(HWND window);
+static void render_title_credits(RenderSurface *surface, const SpriteSheet *sheet,
+                                 uint32_t logo_frame);
 static void set_background_tune(const char *tune_id);
 static void set_background_tune_once(const char *tune_id);
 static void stop_background_tune(void);

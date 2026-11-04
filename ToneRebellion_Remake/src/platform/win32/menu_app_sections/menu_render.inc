@@ -137,15 +137,18 @@ static void draw_configured_buttons(RenderSurface *surface, int state, const cha
             frame = window_catalog_control_frame(window, hovered);
         }
         draw_sprite(surface, sheet, (uint32_t)frame, window->pane.left, window->pane.top);
-        /* FUN_0042aafa (WINTYPE 3 paint): for the window named BACKGRND it
-           also draws SHAPEFRAME + 1 forty pixels higher: TITSCRN frame 1 is
-           the game title (331x145, offset 158,144), so it shows at
-           (158, 104) on the title (states 0 and 8; REA haiku 2026-11-04,
-           ev_ae3113dd). */
-        if (strcmp(window->name, "BACKGRND") == 0 &&
-            (uint32_t)window->shape_frame + 1U < sheet->frame_count)
-            draw_sprite(surface, sheet, (uint32_t)window->shape_frame + 1U,
-                        window->pane.left, window->pane.top - 0x28);
+        /* BACKGRND also shows SHAPEFRAME + 1, the game title (TITSCRN frame
+           1, 331x145, offset 158,144), forty pixels higher: (158, 104).
+           Outside state 8 the SceneWindow paint FUN_0042af35 draws it with
+           the stars and the credits scroll (title_credits.inc); FUN_0042aafa
+           draws it statically (REA haiku 2026-11-04, ev_ae3113dd). */
+        if (strcmp(window->name, "BACKGRND") == 0) {
+            if (state == 0)
+                render_title_credits(surface, sheet, (uint32_t)window->shape_frame + 1U);
+            else if ((uint32_t)window->shape_frame + 1U < sheet->frame_count)
+                draw_sprite(surface, sheet, (uint32_t)window->shape_frame + 1U,
+                            window->pane.left, window->pane.top - 0x28);
+        }
     }
 }
 

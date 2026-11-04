@@ -323,18 +323,17 @@ done:
 static int load_menu_art(char *error, size_t error_capacity)
 {
     CobArchive archive = {0};
-    COLORREF title_palette[256];
     COLORREF newgame_palette[256];
     COLORREF mainmap_palette[256];
     COLORREF load_save_palette[256];
     const char *path = game_file_path("TONE01.COB");
     int success = 0;
     if (!cob_archive_open(path, &archive, error, error_capacity)) return 0;
-    if (!load_palette(&archive, "data\\titscrn.pal", title_palette, NULL,
+    if (!load_palette(&archive, "data\\titscrn.pal", g_title_palette, NULL,
                       error, error_capacity) ||
         !load_palette(&archive, "data\\newgame.pal", newgame_palette, NULL,
                       error, error_capacity) ||
-        !load_sprite_sheet(&archive, "data\\titscrn.shp", title_palette,
+        !load_sprite_sheet(&archive, "data\\titscrn.shp", g_title_palette,
                            &g_title_art, error, error_capacity) ||
         !load_palette(&archive, "data\\game.pal", load_save_palette, NULL,
                       error, error_capacity) ||

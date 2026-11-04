@@ -607,6 +607,8 @@ static void select_building_warrior(void)
 
 #include "menu_app_sections/world_map_render.inc"
 
+#include "menu_app_sections/title_credits.inc"
+
 #include "menu_app_sections/net_session.inc"
 
 #include "menu_app_sections/net_setup_screen.inc"
