@@ -1,5 +1,16 @@
 static void dispatch_newgame_master_message(HWND window, int message)
 {
+    if (g_tribe_choice_mask != 0) {
+        /* Loaded game: the world size and difficulty are the save's; only a
+           played tribe can be picked, and NEWGAME continues the game. */
+        if (message == 52) {
+            finish_tribe_choice(window);
+        } else if (message >= 60 && message <= 63 &&
+                   (g_tribe_choice_mask & (1U << (message - 60))) != 0) {
+            g_menu.selected_tribe = message - 60;
+        }
+        return;
+    }
     if (net_newgame_message(window, message)) return;
     if (message == 52) {
         /* A new game never inherits a loaded game's pause. */

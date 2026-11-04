@@ -122,6 +122,40 @@ static int write_save_file(const char *path)
     return ok;
 }
 
+/* Remake: a loaded game with two or more played tribes
+   (game_session_active_player_mask, plus the saved tribe) opens the New Game
+   screen as a tribe choice instead of the map. Returns 1 when it did. */
+static int begin_tribe_choice(HWND window)
+{
+    uint8_t mask = game_session_active_player_mask(&g_game_session);
+    unsigned int count = 0;
+    unsigned int tribe;
+    if (g_menu.selected_tribe >= 0 && g_menu.selected_tribe < GAME_START_PLAYER_COUNT)
+        mask |= (uint8_t)(1U << g_menu.selected_tribe);
+    for (tribe = 0; tribe < GAME_START_PLAYER_COUNT; ++tribe)
+        if ((mask & (1U << tribe)) != 0) ++count;
+    if (count < 2U) return 0;
+    g_tribe_choice_mask = mask;
+    g_menu.screen = SCREEN_NEW_GAME;
+    update_window_title(window);
+    return 1;
+}
+
+/* NEWGAME on the tribe choice: play the loaded game as the picked tribe. */
+static void finish_tribe_choice(HWND window)
+{
+    g_tribe_choice_mask = 0;
+    if (!g_game_session_valid || g_menu.selected_tribe < 0 ||
+        g_menu.selected_tribe >= GAME_START_PLAYER_COUNT) {
+        g_menu.screen = SCREEN_MAIN_MENU;
+        return;
+    }
+    g_game_session.config.selected_tribe = (uint8_t)g_menu.selected_tribe;
+    g_menu.selected_map_island = -1;
+    g_menu.screen = SCREEN_WORLD_MAP;
+    update_window_title(window);
+}
+
 /* Restores a remake save; returns 0 (without touching the running game) when
    the file is not a valid remake save. */
 static int read_save_file(HWND window, const char *path)
@@ -206,6 +240,7 @@ static int read_save_file(HWND window, const char *path)
     select_location_on_view(-1);
     g_hovered_island = -1;
     g_defeat_ticks = 0;
+    if (begin_tribe_choice(window)) return 1;
     on_island = body.on_island && body.selected_map_island >= 0;
     g_menu.screen = SCREEN_WORLD_MAP;
     if (on_island && !open_island_view(window, body.selected_map_island)) {
@@ -273,7 +308,7 @@ static int read_native_save_file(HWND window, const char *path, char *error,
     g_hovered_island = -1;
     g_defeat_ticks = 0;
     g_menu.screen = SCREEN_WORLD_MAP;
-    (void)window;
+    (void)begin_tribe_choice(window);
     ok = 1;
 done:
     free(bytes);

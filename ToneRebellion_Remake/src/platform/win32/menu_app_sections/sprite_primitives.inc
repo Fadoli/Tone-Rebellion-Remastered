@@ -118,6 +118,9 @@ static int run_world_sequence_step(HWND window);
 /* SlideWindow pause (slide_panel.inc); a network game mirrors
    GameSession.network_paused into it. */
 static int g_paused;
+/* Tribe choice after loading a game with several played tribes (remake): one
+   bit per tribe that can be picked on the New Game screen; 0 otherwise. */
+static uint8_t g_tribe_choice_mask;
 static void draw_clipboard_strip(RenderSurface *surface);
 static int load_game_session_for_selected_world(char *error, size_t error_capacity);
 static int draw_building_preview(RenderSurface *surface, uint16_t item_id, uint8_t player_slot,
@@ -148,7 +151,9 @@ static const int g_difficulty_count = 5;
 static void update_window_title(HWND window)
 {
     const char *title = "Tone Rebellion - Title";
-    if (g_menu.screen == SCREEN_NEW_GAME) title = "Tone Rebellion - New Game";
+    if (g_menu.screen == SCREEN_NEW_GAME && g_tribe_choice_mask != 0)
+        title = "Tone Rebellion - Choose Tribe";
+    else if (g_menu.screen == SCREEN_NEW_GAME) title = "Tone Rebellion - New Game";
     else if (g_menu.screen == SCREEN_NET_SETUP) title = "Tone Rebellion - Multiplayer";
     else if (g_menu.screen == SCREEN_WORLD_MAP) title = "Tone Rebellion - World Map";
     else if (g_menu.screen == SCREEN_ISLAND)
@@ -706,6 +711,26 @@ static void draw_sprite(RenderSurface *surface, const SpriteSheet *sheet,
                         frame->width, 0, 0, frame->width, frame->height,
                         x + frame->x_offset, y + frame->y_offset, 0x10000U,
                         NULL, NULL);
+}
+
+static uint32_t black_pixel(uint32_t pixel, void *context)
+{
+    (void)context;
+    return pixel & 0xff000000U;
+}
+
+/* The frame's shape in black (an unplayable tribe on the choice screen). */
+static void draw_sprite_black(RenderSurface *surface, const SpriteSheet *sheet,
+                              uint32_t frame_index, int x, int y)
+{
+    const SpriteFrame *frame;
+    if (sheet == NULL || frame_index >= sheet->frame_count) return;
+    frame = &sheet->frames[frame_index];
+    if (frame->pixels == NULL) return;
+    render_surface_blit(surface, frame->pixels, frame->width, frame->height,
+                        frame->width, 0, 0, frame->width, frame->height,
+                        x + frame->x_offset, y + frame->y_offset, 0x10000U,
+                        black_pixel, NULL);
 }
 
 /* FUN_00405265 scales by sampling the source pixel under each destination

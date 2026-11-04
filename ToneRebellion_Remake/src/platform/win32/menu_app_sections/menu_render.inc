@@ -223,9 +223,15 @@ static void render_new_game(RenderSurface *surface)
         draw_sprite(surface, &g_big_floaters, animation_frame, 530, floater_y);
     }
     for (tribe = 0; tribe < 4; ++tribe) {
-        draw_sprite(surface, &g_glyphs,
-                    (uint32_t)(tribe * 20 + (g_menu.animation_ticks / 3u) % 20u),
-                    tribe_centers[tribe].x, tribe_centers[tribe].y);
+        uint32_t glyph = (uint32_t)(tribe * 20 + (g_menu.animation_ticks / 3u) % 20u);
+        /* Tribe choice of a loaded game: a tribe nobody played stays black. */
+        if (g_tribe_choice_mask != 0 &&
+            (g_tribe_choice_mask & (1U << tribe)) == 0)
+            draw_sprite_black(surface, &g_glyphs, (uint32_t)(tribe * 20),
+                              tribe_centers[tribe].x, tribe_centers[tribe].y);
+        else
+            draw_sprite(surface, &g_glyphs, glyph,
+                        tribe_centers[tribe].x, tribe_centers[tribe].y);
     }
     draw_tribe_descriptions(surface);
     draw_hover_help(surface);

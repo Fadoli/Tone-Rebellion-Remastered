@@ -211,3 +211,14 @@ Observation:
 - Étoiles `FUN_0042a6c9`: rect fenêtre réduit de 20, au plus min(50, aire/6000) étoiles, une naissance par peinture (rand CRT), vie 32 peintures, couleur = index le plus proche de (7k, 7k, 20 + 6k), k = min(7, (âge > 16 ? 32 − âge : âge)/2). Rects d'exclusion seulement en état 1.
 - État 8: barre d'astérisques à (150, 300) au lieu des crédits.
 Port: `title_credits.inc` (étoiles, défilement, titre mobile), une peinture par image à 20 Hz. Interprétations: police SMFONT et stylo 6 (comme l'écran de fin), graine propre pour les étoiles. Vérifié en jeu: le titre part vers le haut vers 30 s, puis défilent les crédits et l'histoire.
+
+## Choix de la tribu au chargement (extension du remake, 2026-11-04)
+
+Demande utilisateur, sans équivalent natif.
+- **Déclenchement :** au chargement d'une sauvegarde (du remake ou d'origine), le remake cherche les tribus jouées (`game_session_active_player_mask`). Une tribu est jouée si elle a plus que son Hall de départ parmi ses bâtiments, un ordre de bâtiment, ou une tâche mise en file. Les demandes de ressources que le recruteur crée seul (`resource_task_slot`) ne comptent pas. La tribu de la sauvegarde compte toujours.
+- **Écran :** avec au moins deux tribus jouées, l'écran Nouvelle partie s'ouvre en mode choix (titre « Choose Tribe »). Les tribus non jouées sont dessinées en noir et ne se sélectionnent pas. La taille du monde et la difficulté sont celles de la sauvegarde et ne changent pas.
+- **Validation :** NEWGAME reprend la partie avec la tribu choisie, sur la carte du monde. Quitter l'écran abandonne la partie chargée.
+
+**Vérifié :** fixture `badges`, F8 (bâtiment pour la tribu 1), sortie puis RESUME dans un dossier temporaire. L'écran de choix s'ouvre ; un clic sur une tribu noire est ignoré ; la tribu 1 se sélectionne ; la difficulté et la taille du monde restent ; NEWGAME ouvre la carte avec la tribu 1.
+
+Le même écran servira au chargement d'une partie en réseau, qui n'est pas encore fait.

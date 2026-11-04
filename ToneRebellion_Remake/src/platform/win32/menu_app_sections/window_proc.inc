@@ -986,7 +986,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                    (wparam == VK_LEFT || wparam == VK_RIGHT)) {
             dispatch_newgame_master_message(window, 53);
             platform_invalidate(window);
-        } else if (g_menu.screen == SCREEN_NEW_GAME &&
+        } else if (g_menu.screen == SCREEN_NEW_GAME && g_tribe_choice_mask == 0 &&
                    (wparam == VK_LEFT || wparam == VK_RIGHT)) {
             const int count = g_menu.world_map.world_count;
             g_menu.world_index = (g_menu.world_index + count +

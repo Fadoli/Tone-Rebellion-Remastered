@@ -1,4 +1,5 @@
 #include "game_session.h"
+#include "game_session_internal.h"
 
 #include <string.h>
 
@@ -105,6 +106,44 @@ int game_session_workstr_summary(const GameSession *session,
     return 1;
 }
 
+
+uint8_t game_session_active_player_mask(const GameSession *session)
+{
+    unsigned int building_count[GAME_START_PLAYER_COUNT] = {0};
+    uint8_t mask = 0;
+    unsigned int i;
+    unsigned int j;
+    if (session == NULL) return 0;
+    for (i = 0; i < session->island_count; ++i) {
+        const GameRuntimeIsland *island = &session->islands[i];
+        for (j = 0; j < island->location_count; ++j) {
+            const GameRuntimeLocation *location = &island->locations[j];
+            int32_t owner = location->owner_id;
+            int32_t item;
+            if (owner < 0 || owner >= GAME_START_PLAYER_COUNT ||
+                location->renderer_class != 0) continue;
+            item = game_session_base_item_id(location);
+            if (item < 0x25 || item > 0x34) continue;
+            ++building_count[owner];
+            if (location->building_order_genre != 0)
+                mask |= (uint8_t)(1U << owner);
+        }
+    }
+    for (i = 0; i < GAME_START_PLAYER_COUNT; ++i)
+        if (building_count[i] > 1U) mask |= (uint8_t)(1U << i);
+    for (i = 0; i < session->pending_event_count &&
+                i < GAME_SESSION_MAX_PENDING_EVENTS; ++i) {
+        const GamePendingEvent *event = &session->pending_events[i];
+        int recruiter = 0;
+        if (!event->active || event->player_id < 0 ||
+            event->player_id >= GAME_START_PLAYER_COUNT) continue;
+        for (j = 0; j < GAME_RESOURCE_TYPE_COUNT; ++j)
+            if (session->economy[event->player_id].resource_task_slot[j] ==
+                (int16_t)i) recruiter = 1;
+        if (!recruiter) mask |= (uint8_t)(1U << event->player_id);
+    }
+    return mask;
+}
 
 int game_session_end_game_score(const GameSession *session, uint8_t player_slot,
                                 GameEndGameScore *score)
