@@ -1,29 +1,30 @@
-# Feuille de route
+# Roadmap
 
-État au 2026-11-03. Reste à faire : [TODO](TODO.md); portage acquis : [implemented.md](docs/implemented.md); preuves : `../behavior/` et [FUNCTION_GUIDE.md](../FUNCTION_GUIDE.md).
+State on 2026-11-04. Remaining work: [TODO](TODO.md); ported features: [implemented.md](docs/implemented.md); remake choices that differ from the original: [differences from the original game](docs/differences-from-original.md); evidence: `../behavior/` and [FUNCTION_GUIDE.md](../FUNCTION_GUIDE.md).
 
-## Constat
+## Status
 
-- Décompilation : `index.jsonl` couvre 2410 procédures (1493 internes, 780 thunks, 123 externes, 14 runtime); 1507 décompilées, 903 exclues avec motif. L'inventaire est clos; le travail REA restant est ciblé (questions ouvertes ci-dessous), pas un balayage.
-- Remake : ~44 k lignes C11 (`src/`), 27 programmes de test C + `tests/test_docs_integrity.mjs` + `tests/e2e/island_e2e.ps1` et `tests/e2e/fixture_e2e.ps1` (parties statiques générées, jamais les sauvegardes du joueur). Backlog (2026-11-03) : 71 items cochés, 1 ouvert (délai d'effacement du site source au déplacement de bâtiment, écart volontaire).
+- Decompilation: `index.jsonl` covers 2410 procedures (1493 internal, 780 thunks, 123 external, 14 runtime); 1507 decompiled, 903 excluded with a reason. The inventory is closed; remaining REA work is targeted, not a sweep, and no REA question is open.
+- Remake: ~47 k lines of C11 (`src/`), 27 CTest entries (C unit tests and `tests/test_docs_integrity.mjs`), plus `tests/e2e/island_e2e.ps1` and `tests/e2e/fixture_e2e.ps1` (generated static games, never the player's saves).
 
-## Fait
+## Done
 
-- **Boucle de jeu** : déplacement manuel, ordres de bâtiment (`BC_*`, adoption `FUN_0042219e`), tâches (CONSTR, CHARGE, Obtain, SUPPLY, UpgSpread, Upgrade, Repair par liste de réparation, Hall type 4), retour des sous-types 4 et 8 en fin d'action.
-- **Adversaires** : IA Léviathan (contamination, défense, production, attaques, riposte `FUN_00421d82`); pas de planificateur de tribu adverse dans le natif.
-- **Fin de partie** : victoire par les sceaux (états 2..7), défaite « plus de floaters », écran de fin ([fin de partie](../behavior/end-game.md)).
-- **Sauvegarde** : sauvegardes du remake et du jeu d'origine; une partie chargée ou reprise s'ouvre en pause, panneau d'options ouvert (choix du remake).
-- **Interface** : parité des panneaux, polices, carte du monde, badges FLTINFO (dont badge d'état et scintillement des sorts), pause (île et carte figées, œil fermé), bâtiments de départ déjà construits.
-- **Audio** : volume/pan par distance, sons de producteurs, d'île et d'écroulement.
-- **Web et SDL** : portage Web fait en 8 étapes (1 surface portable `RenderSurface`, 2 services `platform_*`, 3 adaptateur SDL3, 4 cible Emscripten, 5 données utilisateur, 6 sauvegardes `IDBFS`, 7 audio navigateur, 8 build Web mono-joueur); partie réseau SDL↔SDL vérifiée en jeu.
-- **Vérification** : fixtures statiques (`TONE_REBELLION_E2E_FIXTURE` : badges, enemy_hall, spell, obtain, dying, victory, messages, return) avec `TONE_REBELLION_SAVE_DIR`; `tests/e2e/fixture_e2e.ps1` et `tests/e2e/island_e2e.ps1` ([validation](docs/build-and-validation.md)).
+- **Game loop**: manual movement, building orders (`BC_*`, adoption `FUN_0042219e`), tasks (CONSTR, CHARGE, Obtain, SUPPLY, UpgSpread, Upgrade, Repair through the repair list, Hall type 4), return of subtypes 4 and 8 after an action, recruiter with its fallback birth island.
+- **Opponents**: Leviathan AI (contamination, defence, production, attacks, retaliation `FUN_00421d82`); the original has no planner for opposing tribes.
+- **End of game**: seal victory (sequence states 2..7, also in network games), defeat when no floater is left, end screen with score cards ([end of game](../behavior/end-game.md)).
+- **Saving**: remake saves that survive `GameSession` changes (field table), original saves with their score counters, tribe choice when several tribes were played.
+- **Interface**: panel parity, fonts, world map, FLTINFO badges (state badge and spell shimmer included), pause (island and map frozen, eye closed), starting buildings already built, title screen stars and credits, move button frames while a building is held, repair button pulse.
+- **Audio**: volume and pan by distance, producer, island and collapse sounds.
+- **Web and SDL**: web port done in 8 steps (1 portable `RenderSurface`, 2 `platform_*` services, 3 SDL3 adapter, 4 Emscripten target, 5 user data, 6 `IDBFS` saves, 7 browser audio, 8 single-player web build); CD image (`.iso`) import.
+- **Network**: lockstep TCP play checked SDL to SDL; pause, save and loading a saved game in network play (remake extensions).
+- **Checks**: static fixtures (`TONE_REBELLION_E2E_FIXTURE`: badges, enemy_hall, spell, obtain, dying, victory, messages, return, repair) with `TONE_REBELLION_SAVE_DIR`; `tests/e2e/fixture_e2e.ps1` and `tests/e2e/island_e2e.ps1` ([validation](docs/build-and-validation.md)).
 
-## Écarts gardés
+## Kept gaps
 
-- Traversée de pont : l'ordre `+0x3c` est rangé dans `handoff_resume_action`; reprise au même tick que le natif, sans écart observable.
-- Déplacement de bâtiment : la source est effacée à la pose (natif : 8 à 16 ticks plus tard, `FUN_00450a71`); le délai dupliquerait le Hall dans la recherche du port.
-- CONSTR : le port garde l'action 4 là où le natif porte l'action 5 (`FA_Build`), sans effet observé.
-- Presse-papiers : rempli avec tous les bâtiments d'entraînement possédés (`game_session_clip_auto_register`); natif : seulement le bâtiment sélectionné. Retirer l'appel dans `island_view_render.inc` rend le comportement natif.
-- Chargement en pause : choix du remake, `FUN_004576c7` ne pause pas.
+- Bridge crossing: the `+0x3c` order is kept in `handoff_resume_action`; it resumes on the same tick as the original, with no observable difference.
+- Building move: the source is cleared at the placement (original: 8 to 16 ticks later, `FUN_00450a71`); the delay would duplicate the Hall in the port's Hall search.
+- CONSTR: the port keeps action 4 where the original carries action 5 (`FA_Build`), with no observed effect.
+- Clipboard: filled with every owned training building (`game_session_clip_auto_register`); original: only the selected one. Removing the call in `island_view_render.inc` gives the original behaviour.
+- Every remake choice visible to the player (network pause, save and load, Escape shortcut, end screen click, repair button, paused load, tribe choice) is listed in [differences from the original game](docs/differences-from-original.md).
 
-Hors périmètre et questions ouvertes : [TODO](TODO.md).
+Out of scope and open points: [TODO](TODO.md).

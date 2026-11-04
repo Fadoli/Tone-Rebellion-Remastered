@@ -10,165 +10,165 @@ subtype. That subtype mapping is an implementation gate following the user's
 constraint; the original allowlist and `FA_Cast` interaction remain unresolved.
 
 
-Sections détaillées ci-dessous. Les titres sont repris ici pour conserver les anciens liens d’ancrage.
+Detailed sections below. The headings are kept here to preserve the old anchor links.
 
 ## Input and destination path
-[Section complète](MOVEMENT_INPUT.md#input-and-destination-path)
+[Full section](MOVEMENT_INPUT.md#input-and-destination-path)
 
 ### `0x4c` coordinate order and its receiver
-[Section complète](MOVEMENT_COORDINATE_ORDERS.md#0x4c-coordinate-order-and-its-receiver)
+[Full section](MOVEMENT_COORDINATE_ORDERS.md#0x4c-coordinate-order-and-its-receiver)
 
 ## Interaction cursor lifecycle
-[Section complète](MOVEMENT_SPEED.md#interaction-cursor-lifecycle)
+[Full section](MOVEMENT_SPEED.md#interaction-cursor-lifecycle)
 
 ## Unit tick and speed source
-[Section complète](MOVEMENT_SPEED.md#unit-tick-and-speed-source)
+[Full section](MOVEMENT_SPEED.md#unit-tick-and-speed-source)
 
 ## Tick, state machine, target and arrival detail
-[Section complète](MOVEMENT_TICK.md#tick-state-machine-target-and-arrival-detail)
+[Full section](MOVEMENT_TICK.md#tick-state-machine-target-and-arrival-detail)
 
 ### Update sequence
-[Section complète](MOVEMENT_TICK.md#update-sequence)
+[Full section](MOVEMENT_TICK.md#update-sequence)
 
 ### Destination resolution and step size
-[Section complète](MOVEMENT_STEP_KERNEL.md#destination-resolution-and-step-size)
+[Full section](MOVEMENT_STEP_KERNEL.md#destination-resolution-and-step-size)
 
 ### Target source and facing adjustment
-[Section complète](MOVEMENT_STEP_KERNEL.md#target-source-and-facing-adjustment)
+[Full section](MOVEMENT_STEP_KERNEL.md#target-source-and-facing-adjustment)
 
 ### `FA_Move`: local target approach and arrival
-[Section complète](MOVEMENT_LOCAL_ORDERS.md#fa_move-local-target-approach-and-arrival)
+[Full section](MOVEMENT_LOCAL_ORDERS.md#fa_move-local-target-approach-and-arrival)
 
 ### `FA_DefendFlt`: reach target, select a nearby unit, then approach it
-[Section complète](MOVEMENT_LOCAL_ORDERS.md#fa_defendflt-reach-target-select-a-nearby-unit-then-approach-it)
+[Full section](MOVEMENT_LOCAL_ORDERS.md#fa_defendflt-reach-target-select-a-nearby-unit-then-approach-it)
 
 ### Autonomous order selection and execution
-[Section complète](MOVEMENT_AUTONOMOUS_ORDERS.md#autonomous-order-selection-and-execution)
+[Full section](MOVEMENT_AUTONOMOUS_ORDERS.md#autonomous-order-selection-and-execution)
 
 ### `FA_Wander` destination generation and repeated movement
-[Section complète](MOVEMENT_AUTONOMOUS_ORDERS.md#fa_wander-destination-generation-and-repeated-movement)
+[Full section](MOVEMENT_AUTONOMOUS_ORDERS.md#fa_wander-destination-generation-and-repeated-movement)
 
 ### Attack orders: approach then stationary combat state
-[Section complète](MOVEMENT_LOCAL_ORDERS.md#attack-orders-approach-then-stationary-combat-state)
+[Full section](MOVEMENT_LOCAL_ORDERS.md#attack-orders-approach-then-stationary-combat-state)
 
 ### Training and recharge orders: travel to a location record
-[Section complète](MOVEMENT_TRAVEL_ORDERS.md#training-and-recharge-orders-travel-to-a-location-record)
+[Full section](MOVEMENT_TRAVEL_ORDERS.md#training-and-recharge-orders-travel-to-a-location-record)
 
 ### `FA_ObtainObject`: assigned location or owner candidate
-[Section complète](MOVEMENT_TRAVEL_ORDERS.md#fa_obtainobject-assigned-location-or-owner-candidate)
+[Full section](MOVEMENT_TRAVEL_ORDERS.md#fa_obtainobject-assigned-location-or-owner-candidate)
 
 ### Cross-island handoff through state `0x11`
-[Section complète](MOVEMENT_TRAVEL_ORDERS.md#cross-island-handoff-through-state-0x11)
+[Full section](MOVEMENT_TRAVEL_ORDERS.md#cross-island-handoff-through-state-0x11)
 
 ### `FA_Deliver`: site search, island handoff and local approach
-[Section complète](MOVEMENT_SITE_ORDERS.md#fa_deliver-site-search-island-handoff-and-local-approach)
+[Full section](MOVEMENT_SITE_ORDERS.md#fa_deliver-site-search-island-handoff-and-local-approach)
 
 ### `FA_Repair`: candidate site then local approach
-[Section complète](MOVEMENT_SITE_ORDERS.md#fa_repair-candidate-site-then-local-approach)
+[Full section](MOVEMENT_SITE_ORDERS.md#fa_repair-candidate-site-then-local-approach)
 
 ### `FA_Build`: three local route states
-[Section complète](MOVEMENT_SITE_ORDERS.md#fa_build-three-local-route-states)
+[Full section](MOVEMENT_SITE_ORDERS.md#fa_build-three-local-route-states)
 
 ### `FA_Cast` (`0x13`): target resolution without locomotion
-[Section complète](MOVEMENT_SPECIAL_ORDERS.md#fa_cast-0x13-target-resolution-without-locomotion)
+[Full section](MOVEMENT_SPECIAL_ORDERS.md#fa_cast-0x13-target-resolution-without-locomotion)
 
 ### `FA_MergeWith` (`0x14`): approach, then idle/roam state
-[Section complète](MOVEMENT_SPECIAL_ORDERS.md#fa_mergewith-0x14-approach-then-idleroam-state)
+[Full section](MOVEMENT_SPECIAL_ORDERS.md#fa_mergewith-0x14-approach-then-idleroam-state)
 
 ### Orders without a local consumer branch
-[Section complète](MOVEMENT_ORDER_EDGE_CASES.md#orders-without-a-local-consumer-branch)
+[Full section](MOVEMENT_ORDER_EDGE_CASES.md#orders-without-a-local-consumer-branch)
 
 ### Facing and rendered anchor
-[Section complète](MOVEMENT_ORDER_EDGE_CASES.md#facing-and-rendered-anchor)
+[Full section](MOVEMENT_ORDER_EDGE_CASES.md#facing-and-rendered-anchor)
 
 ## Current port and limits
-[Section complète](MOVEMENT_PORT.md#current-port-and-limits)
+[Full section](MOVEMENT_PORT.md#current-port-and-limits)
 
 ## Order 9 from the Hall move context
-[Section complète](MOVEMENT_HALL_CONTEXT.md#order-9-from-the-hall-move-context)
+[Full section](MOVEMENT_HALL_CONTEXT.md#order-9-from-the-hall-move-context)
 
-## Audit direct mouvement/combat (pseudocode relu par l'agent principal)
+## Direct movement/combat audit (pseudocode re-read by the main agent)
 
-Evidence: `FUN_00422d27` `ev_dce3014d` et assembleur `ev_12c6e0e8`, `FUN_004672a6` `ev_11cfa067` (distance de Tchebychev), `FUN_00420217` `ev_6ccca76e`, `FUN_004204bc` `ev_2016a3eb`, `FUN_0041e569` `ev_8578fcc7`, `FUN_0042520e` `ev_124b4bd8`, `FUN_00425296` `ev_436a1ff2`.
+Evidence: `FUN_00422d27` `ev_dce3014d` and assembly `ev_12c6e0e8`, `FUN_004672a6` `ev_11cfa067` (Chebyshev distance), `FUN_00420217` `ev_6ccca76e`, `FUN_004204bc` `ev_2016a3eb`, `FUN_0041e569` `ev_8578fcc7`, `FUN_0042520e` `ev_124b4bd8`, `FUN_00425296` `ev_436a1ff2`.
 
-- Corrigé: la vitesse réduite près de la cible est `distance / 4` tronqué (`CDQ/AND 3/ADD/SAR 2` à `0x422f8c`), pas arrondie vers le haut; un pas nul retombe sur `tick & 1`. `floater_motion.c` et son test suivent désormais le natif.
-- Corrigé: l'expiration du drapeau floater `0x100` (bouclier du cast niveau 0/1 et `0x1100` au niveau 2) manquait. `FUN_0041e569` (queue) incrémente le compteur `+0x24`; au-delà de 2000 (`FUN_00425296(0x100)`) le drapeau tombe; avec `0x1000`, au-delà de 0xdac (3500) les deux tombent. Porté dans `game_session_tick_floater_cast_pulse`.
-- Confirmé conforme: étapes de déplacement par axe borné, doublement de vitesse du sous-type 0 par propriétaire, +1 des sites 0x2c/0x2d/0x2e, états 8/9/0xe à vitesse 1 près de la cible (rayon 100), table `FUN_00425296` (8 -> 40, 0x2000 -> 45), minuterie de mort, tirage de dégâts de `FUN_00420217` (trois tirages bornés à 10, garde propriétaire/0x8/0x100) et application de `FUN_004204bc` (mort quand PV < 1).
-- Non rediffé ligne à ligne: le calcul x87 du pourcentage de touche de `FUN_00420217` (le décompilateur le perd; le port le reconstruit), les cases d'actions 6/7/8/9 de `FUN_0041e569` et les fonctions `FUN_00420721`, `FUN_00423068`, `FUN_004200d2`, `FUN_00420188`, `FUN_00415fc6`. Non vérifié en jeu.
+- Fixed: the reduced speed near the target is `distance / 4` truncated (`CDQ/AND 3/ADD/SAR 2` at `0x422f8c`), not rounded up; a zero step falls back to `tick & 1`. `floater_motion.c` and its test now follow the native.
+- Fixed: the expiry of floater flag `0x100` (cast shield at level 0/1, and `0x1100` at level 2) was missing. `FUN_0041e569` (tail) increments the counter `+0x24`; beyond 2000 (`FUN_00425296(0x100)`) the flag drops; with `0x1000`, beyond 0xdac (3500) both drop. Ported in `game_session_tick_floater_cast_pulse`.
+- Confirmed matching: per-axis bounded movement steps, subtype 0 speed doubling per owner, +1 for sites 0x2c/0x2d/0x2e, states 8/9/0xe at speed 1 near the target (radius 100), `FUN_00425296` table (8 -> 40, 0x2000 -> 45), death timer, `FUN_00420217` damage roll (three draws bounded to 10, owner/0x8/0x100 guard) and `FUN_004204bc` application (death when HP < 1).
+- Not diffed line by line: the x87 hit-percentage computation of `FUN_00420217` (the decompiler loses it; the port reconstructs it), the action cases 6/7/8/9 of `FUN_0041e569`, and the functions `FUN_00420721`, `FUN_00423068`, `FUN_004200d2`, `FUN_00420188`, `FUN_00415fc6`. Not verified in game.
 
-### Hit chance de `FUN_00420217` (assembleur relu, `ev_d4bb6e22`; constantes `ev_15f172be`, table de saut `ev_d7687baa`, `__ftol` `ev_7430d34a`)
+### Hit chance of `FUN_00420217` (assembly re-read, `ev_d4bb6e22`; constants `ev_15f172be`, jump table `ev_d7687baa`, `__ftol` `ev_7430d34a`)
 
-`FUN_004533a8` (tours) appelle `FUN_00420217(ligne pad +0x0a, -1, propriétaire)`; `FUN_004200d2` (frappe de floater) l'appelle avec la puissance de l'attaquant, son royaume (`FUN_0042003c`) et son propriétaire. Corrigé dans `game_session_combat.c`:
-- Le terme de difficulté est un double: difficulté 0 -> `p/4` (plancher 1), 1 et 2 -> `p/2` (plancher 2), 3 et 4 -> `2p/3` (plancher 3); le port utilisait des divisions entières et traitait 2 comme 3+.
-- La correction « royaume différent » multiplie le terme de difficulté (pas la puissance brute): `(0/limite - 0.5) * terme`, signe inversé quand le royaume attaquant > 1 (les globales `DAT_00618e4c/50` valent 0 au chargement).
-- Le pourcentage `(int)(60*score/14) + 10` utilise `__ftol` qui TRONQUE (`OR AH,0xc` à `0x472c7b`); le port arrondissait au plus proche.
-- Voie des tours (`royaume = -1`): le royaume attaquant devient celui de la cible, donc aucun terme de royaume; le port appliquait un terme dérivé du sous-type.
-- Défense: sous-types 0 et 9 ont une défense nulle (le port ajoutait les niveaux pour le sous-type 0); un sous-type 9 prend le royaume de l'attaquant.
-Les globales `DAT_00618e4c/50` ont 3 références chacune hors de ce calcul (`0x438b9b/0x438e45`, `0x438bbb/0x438f9e`), non analysées. Non vérifié en jeu.
+`FUN_004533a8` (towers) calls `FUN_00420217(pad row +0x0a, -1, owner)`; `FUN_004200d2` (floater strike) calls it with the attacker's power, its realm (`FUN_0042003c`) and its owner. Fixed in `game_session_combat.c`:
+- The difficulty term is a double: difficulty 0 -> `p/4` (floor 1), 1 and 2 -> `p/2` (floor 2), 3 and 4 -> `2p/3` (floor 3); the port used integer divisions and treated 2 as 3+.
+- The "different realm" correction multiplies the difficulty term (not the raw power): `(0/limit - 0.5) * term`, sign inverted when the attacker realm > 1 (the globals `DAT_00618e4c/50` are 0 at load).
+- The percentage `(int)(60*score/14) + 10` uses `__ftol`, which TRUNCATES (`OR AH,0xc` at `0x472c7b`); the port rounded to nearest.
+- Tower path (`realm = -1`): the attacker realm becomes the target's, so there is no realm term; the port applied a term derived from the subtype.
+- Defense: subtypes 0 and 9 have zero defense (the port added the levels for subtype 0); a subtype 9 takes the attacker's realm.
+The globals `DAT_00618e4c/50` each have 3 references outside this computation (`0x438b9b/0x438e45`, `0x438bbb/0x438f9e`), not analysed. Not verified in game.
 
-### Puissance d'attaque: une seule fonction (`FUN_0041fde6`, `ev_6840e960`; chargeur `FUN_004633a7`, `ev_8709314a`)
+### Attack power: a single function (`FUN_0041fde6`, `ev_6840e960`; loader `FUN_004633a7`, `ev_8709314a`)
 
-`FUN_004200d2` (attaque de floater) et `FUN_00420188` (attaque de site, `ev_18b2df90`) appellent la même `FUN_0041fde6`. Le chargeur écrit les six entiers de chaque ligne aux décalages `+0` (portée), `+2` (royaume), `+6` (PV), `+8` (points d'attaque max, comparés au compteur de charge dans `FUN_0041e569` cas 1), `+0xa` (force d'attaque), `+0xc` (vitesse). La base de `FUN_0041fde6` est donc la force d'attaque (`+0xa`), pas les points d'attaque max (`+8`). Le port utilisait `max_attack_points` pour les sites; corrigé: une seule fonction `floater_attack_power` avec la base `attack_strength` (catégorie 4 ou sous-type non nul chargé), +3 si la source liée a le drapeau `0x8000`, +1 pour les bits de glyphe `0x01/0x40/0x400` du joueur sur une source `0x2c/0x2d/0x2e`, puis niveau × 3 plus part de 1/22 (catégorie 4) ou niveau × 2. Le terme de glyphe était absent de la voie floater. Non vérifié en jeu.
+`FUN_004200d2` (floater attack) and `FUN_00420188` (site attack, `ev_18b2df90`) call the same `FUN_0041fde6`. The loader writes the six integers of each row at offsets `+0` (range), `+2` (realm), `+6` (HP), `+8` (max attack points, compared with the charge counter in `FUN_0041e569` case 1), `+0xa` (attack strength), `+0xc` (speed). The base of `FUN_0041fde6` is therefore the attack strength (`+0xa`), not the max attack points (`+8`). The port used `max_attack_points` for sites; fixed: a single `floater_attack_power` function with base `attack_strength` (category 4 or loaded nonzero subtype), +3 if the linked source has flag `0x8000`, +1 for the player's glyph bits `0x01/0x40/0x400` on a `0x2c/0x2d/0x2e` source, then level × 3 plus a 1/22 share (category 4) or level × 2. The glyph term was missing from the floater path. Not verified in game.
 
-### RNG et rayon d'approche (assembleur relu: `FUN_00467260` `ev_ea4dec92`, `FUN_00474b80` `ev_85045540`, `FUN_00474b90` `ev_c71d7459`; `FUN_00420721` `ev_fd5a4201`, `FUN_00423068` `ev_f59cd438`)
+### RNG and approach radius (assembly re-read: `FUN_00467260` `ev_ea4dec92`, `FUN_00474b80` `ev_85045540`, `FUN_00474b90` `ev_c71d7459`; `FUN_00420721` `ev_fd5a4201`, `FUN_00423068` `ev_f59cd438`)
 
-- Corrigé: `FUN_00467260` charge la graine `[0x4a4b78]`, la copie dans la graine CRT, fait un pas du LCG MSVC et RÉÉCRIT le résultat sur 15 bits dans `[0x4a4b78]`. Le tirage suivant repart donc de la sortie 15 bits précédente, pas de l'état 32 bits. `tone_rng.c` gardait l'état complet (suite 41, 18467, 6334 pour la graine 1); elle suit désormais le natif (41, 172, 600). Tous les tirages après le premier changent, donc aussi mondes générés, cibles de tours et musiques; les tests `test_tone_rng` et `test_game_music` ont été mis à jour. La graine initiale écrite par le natif dans `[0x4a4b78]` n'est pas identifiée.
-- Corrigé: le rayon d'approche de `FUN_0041e569` cas 0xe/0xf vient de `FUN_00420721` (portée de la ligne, `×5/4` tronqué en 16 bits avec le bit de glyphe `0x04` et une source liée); 10 par défaut.
-- Non porté (relevé par lecture directe de `FUN_00423068`): le rejet d'un ordre quand le point d'arrivée tombe hors de `[min, max]` du propriétaire (`return 0` -> `FUN_00421ec1(-1)`), l'état 8 qui stocke un décalage aléatoire relatif `(rand(200)-100, rand(200)-100)` sans borne de `y`, et les décalages d'approche `±0x4a/0x4c` issus de `FUN_0045575c` pour les états 3/4.
+- Fixed: `FUN_00467260` loads the seed `[0x4a4b78]`, copies it into the CRT seed, performs one step of the MSVC LCG and WRITES the 15-bit result back to `[0x4a4b78]`. The next draw therefore restarts from the previous 15-bit output, not from the 32-bit state. `tone_rng.c` kept the full state (sequence 41, 18467, 6334 for seed 1); it now follows the native (41, 172, 600). All draws after the first change, hence also generated worlds, tower targets and music; the tests `test_tone_rng` and `test_game_music` were updated. The initial seed written by the native into `[0x4a4b78]` is not identified.
+- Fixed: the approach radius of `FUN_0041e569` case 0xe/0xf comes from `FUN_00420721` (row range, `×5/4` truncated to 16 bits with glyph bit `0x04` and a linked source); 10 by default.
+- Not ported (found by direct reading of `FUN_00423068`): the rejection of an order when the arrival point falls outside the owner's `[min, max]` (`return 0` -> `FUN_00421ec1(-1)`), state 8 storing a relative random offset `(rand(200)-100, rand(200)-100)` with no `y` bound, and the approach offsets `±0x4a/0x4c` from `FUN_0045575c` for states 3/4.
 
-### Sélections pondérées et recherche de cible (`FUN_0041e28e` `ev_17c3c46d`, `FUN_00420a55` `ev_54951b3e`, `FUN_00420635` `ev_ccde6e44`, `FUN_00420991` `ev_1f975170`; agent haiku/général pour le premier tri, tous les faits ci-dessous relus)
+### Weighted selections and target search (`FUN_0041e28e` `ev_17c3c46d`, `FUN_00420a55` `ev_54951b3e`, `FUN_00420635` `ev_ccde6e44`, `FUN_00420991` `ev_1f975170`; haiku/general agent for the first pass, all facts below re-read)
 
-- Corrigé: `FUN_0041e28e` calcule `poids_i = somme / d_i`, normalisés à 1000, puis des seuils CUMULÉS entiers `seuil_i = ftol(seuil_{i-1} + poids_i)` (`__ftol` tronque), et force le dernier seuil à 1000 pour qu'un tirage choisisse toujours un candidat. Le port arrondissait au plus proche (action9) ou n'accumulait pas du tout (livraison, copie distincte) et pouvait renvoyer -1. Une seule fonction `game_session_pick_inverse_distance` sert maintenant aux quatre usages.
-- Corrigé: `FUN_00420a55` cas 4 filtre par la distance du point cible (< 90, zéro permis) mais collecte et pondère la distance du floater chercheur au site (`FUN_00420635`); le port utilisait le point cible pour les deux.
-- Corrigé: `FUN_004208eb` n'a pas de cas particulier pour un floater protégé de catégorie 4; le port renvoyait toujours ce floater.
-- Non porté, constaté: `FUN_00420991` teste une table d'île `DAT_0061fa2e[île] >= 0x65` (inverse la règle catégorie-4 pour les sources de catégorie 4); table nulle au chargement, écrivain inconnu.
-- Non porté, rapporté par agent (non relu): effets d'ordres (`FUN_004211bb`) pour les actions 2/0x11 (recharge), 0xb/0xc (dépôt d'objet avant charge), 0xd (branche « objet porté » -> état 4), sous-étapes de livraison (action 4), action 5 stockée comme 4, annulation `FUN_00466533` après attaque; et dans `FUN_0041e569` le bloc de fin (sous-type 8 -> ordre vers le Hall, sous-type 4 -> enregistrement du bâtiment), les drapeaux de mêlée `0x10`/`0x40` (jamais écrits par le port; `FUN_00422d27` bloque le pas si `+0x1c & 0x411`), l'état 8 (sortie via `FUN_004208eb`), la cadence 1/8 de l'état 9, les appels `FUN_00416a9a(5)` à l'état 0x15.
+- Fixed: `FUN_0041e28e` computes `weight_i = sum / d_i`, normalised to 1000, then integer CUMULATIVE thresholds `threshold_i = ftol(threshold_{i-1} + weight_i)` (`__ftol` truncates), and forces the last threshold to 1000 so that a draw always picks a candidate. The port rounded to nearest (action9) or did not accumulate at all (delivery, separate copy) and could return -1. A single function `game_session_pick_inverse_distance` now serves the four uses.
+- Fixed: `FUN_00420a55` case 4 filters on the distance of the target point (< 90, zero allowed) but collects and weights the distance from the searching floater to the site (`FUN_00420635`); the port used the target point for both.
+- Fixed: `FUN_004208eb` has no special case for a protected category-4 floater; the port always returned that floater.
+- Not ported, observed: `FUN_00420991` tests an island table `DAT_0061fa2e[island] >= 0x65` (inverts the category-4 rule for category-4 sources); table zero at load, writer unknown.
+- Not ported, reported by agent (not re-read): order effects (`FUN_004211bb`) for actions 2/0x11 (recharge), 0xb/0xc (object drop before charge), 0xd ("carried object" branch -> state 4), delivery sub-steps (action 4), action 5 stored as 4, `FUN_00466533` cancellation after attack; and in `FUN_0041e569` the end block (subtype 8 -> order to the Hall, subtype 4 -> building record), the melee flags `0x10`/`0x40` (never written by the port; `FUN_00422d27` blocks the step if `+0x1c & 0x411`), state 8 (exit via `FUN_004208eb`), the 1/8 cadence of state 9, the `FUN_00416a9a(5)` calls at state 0x15.
 
-### Défense (état 8), mêlée (drapeaux 0x10/0x40) et frappes immobiles (relus: `FUN_00423068` `ev_78129691`/asm `ev_f59cd438`, `FUN_00422d27` `ev_dce3014d`, `FUN_0041e569` `ev_8578fcc7`, `FUN_004211bb` `ev_3477c421`)
+### Defense (state 8), melee (flags 0x10/0x40) and stationary strikes (re-read: `FUN_00423068` `ev_78129691`/asm `ev_f59cd438`, `FUN_00422d27` `ev_dce3014d`, `FUN_0041e569` `ev_8578fcc7`, `FUN_004211bb` `ev_3477c421`)
 
-- Corrigé: en état 8 le natif stocke dans `+0x28/+0x2a` un décalage `(rand(200)-100, rand(200)-100)` tiré une fois au plan (x puis y, plan rejeté si x hors de `[min, max]` avec min = 0 par défaut) et `FUN_00422d27` ajoute chaque pas la position du floater protégé (`DAT_006137c8/ca`). Le port tirait une position autour du défenseur lui-même à chaque tick (jamais de suivi). Désormais: décalage fixé au plan (`follow_offset_x/y`), destination = protégé + décalage borné à x 0..0x9ff, y 0x28..0x122; replan seulement à l'arrivée sans candidat.
-- Corrigé: les états 6 et 7 (frappes) sont immobiles dans le natif (`FUN_00422d27` non appelée); le port poursuivait la cible.
-- Corrigé: mêlée. À l'arrivée en état 0xf (hors action 0x14) d'un floater sans attaque à distance (`FUN_00420721` renvoie 0), la cible reçoit `0x10`, l'attaquant `0x40`. Un floater avec `0x10` ne fait pas de pas (`+0x1c & 0x411`, ici 0x10 seul retenu) tant qu'un floater de l'île le cible avec `0x40`. Le port n'écrivait jamais ces drapeaux.
-- Non vérifié en jeu. Les bits `0x01` et `0x400` du même masque de blocage (`FUN_00422d27` non appelée) ne sont pas portés.
+- Fixed: in state 8 the native stores in `+0x28/+0x2a` an offset `(rand(200)-100, rand(200)-100)` drawn once at planning (x then y, plan rejected if x is outside `[min, max]` with min = 0 by default) and `FUN_00422d27` adds the protected floater's position (`DAT_006137c8/ca`) at each step. The port drew a position around the defender itself at every tick (never following). Now: offset fixed at planning (`follow_offset_x/y`), destination = protected + offset clamped to x 0..0x9ff, y 0x28..0x122; replan only on arrival without a candidate.
+- Fixed: states 6 and 7 (strikes) are stationary in the native (`FUN_00422d27` not called); the port chased the target.
+- Fixed: melee. On arrival in state 0xf (outside action 0x14) of a floater without a ranged attack (`FUN_00420721` returns 0), the target receives `0x10`, the attacker `0x40`. A floater with `0x10` does not step (`+0x1c & 0x411`, only 0x10 retained here) as long as a floater on the island targets it with `0x40`. The port never wrote these flags.
+- Not verified in game. Bits `0x01` and `0x400` of the same blocking mask (`FUN_00422d27` not called) are not ported.
 
-### Ordres de charge et fin d'ordre (relus: `FUN_004211bb` `ev_3477c421`)
+### Charge orders and order end (re-read: `FUN_004211bb` `ev_3477c421`)
 
-- Corrigé: les ordres 0xb/0xc appellent `FUN_00425084` avant de planifier l'état de charge: l'objet porté est déposé ou crédité d'abord (`game_session_order_floater_to_charge_site`).
-- Corrigé: la fin d'un ordre automatique (`FUN_00421ec1(-1)` + `FUN_00466533`) efface le groupe de drapeaux `0x65`, pas seulement `0x04` (`game_session_advance_category4_autonomous_order`).
-- Restent non portés: actions 2/0x11 (aucun émetteur dans le port), branche « objet déjà porté » de l'action 0xd, sous-étapes de livraison, retour au Hall des sous-types 4/8 comme bloc commun, rejet d'un ordre hors de la plage du propriétaire, blocage de pas par `0x01`/`0x400`.
+- Fixed: orders 0xb/0xc call `FUN_00425084` before planning the charge state: the carried object is dropped or credited first (`game_session_order_floater_to_charge_site`).
+- Fixed: the end of an automatic order (`FUN_00421ec1(-1)` + `FUN_00466533`) clears the flag group `0x65`, not only `0x04` (`game_session_advance_category4_autonomous_order`).
+- Still not ported: actions 2/0x11 (no emitter in the port), the "object already carried" branch of action 0xd, delivery sub-steps, return to the Hall of subtypes 4/8 as a common block, rejection of an order outside the owner's range, step blocking by `0x01`/`0x400`.
 
-### Producteur de la recharge (état 2): `FUN_0042219e`, branche des floaters liés (relu: `ev_7b65b088`, `FUN_0045ddb8` `ev_95bce0a0`, `FUN_0045de20` `ev_72655553`, `FUN_0045dd3c` `ev_e33131f1`, `FUN_00420f28` `ev_309dc553`)
+### Recharge producer (state 2): `FUN_0042219e`, linked-floater branch (re-read: `ev_7b65b088`, `FUN_0045ddb8` `ev_95bce0a0`, `FUN_0045de20` `ev_72655553`, `FUN_0045dd3c` `ev_e33131f1`, `FUN_00420f28` `ev_309dc553`)
 
-Aucun émetteur de l'action 2 dans le port (le récepteur `delivery.c`, `recharge_order`, existe). Natif, pour un floater non catégorie 4 avec un bâtiment lié (`+0xc != -1`), hors drapeau `0x10` (sinon `FUN_00421d82`):
-1. si ce floater est le floater « courant » du bâtiment (`record+0x4c == index`) et n'a pas le drapeau `0x20`, ordre `0xc` vers le bâtiment (île/site du record), puis fin;
-2. sinon, s'il est déjà en état 2 avec drapeau `0x01` (à l'arrivée), il reste;
-3. sinon calcul des besoins: PV max `FUN_00420f28` (ligne pad `+6`, formule de niveau, +1 sous-type 0 avec bit de glyphe `0x10`, ×5/4 avec bit de glyphe et source `0x2c/0x2d/0x2e`) et charge max (ligne pad `+8`). Seuils: `maxPV` et `max charge`, ou leur tiers si `FUN_0045de20() == 0` (soit ordre 9 vers la cellule de la source sur l'île de la source, à moins de 0x14), ou 1 et `PV/3` pour les ordres 6, 7, 8/9 non initiaux. Soin (`+0x44 = 0`) si `PV < seuil` et `maxPV <= PV + stock+0x2a du bâtiment` (`FUN_0045dd3c`, le test de glyphe 0x1000 y est inatteignable: trois égalités simultanées sur un même identifiant); sinon recharge (`+0x44 = 1`) si `charge < seuil` et `max charge <= charge + stock+0x2a`. Ordre 2 vers le bâtiment (`+0x30/+0x42` = île/site, `+0x44` = 0/1);
-4. sinon copie de l'ordre du record du bâtiment (6 à 9), sauf action `0x13`.
-Arrivée (cas 1 de `FUN_0041e569`): drapeau 1 puis 10 ticks d'attente, puis chaque cycle consomme 1 point de `stock+0x2a` (`FUN_0045ddb8(1)`, ×4/3 jamais actif) pour +1 PV (`+0x44 == 0`) ou +1 charge; s'arrête quand rien n'est dû ou plus de stock. Non porté: dépend du modèle d'enregistrement de bâtiment (`record+0x4c`, île/site du record) qui n'existe pas dans le port.
+No emitter of action 2 in the port (the receiver `delivery.c`, `recharge_order`, exists). Native, for a non-category-4 floater with a linked building (`+0xc != -1`), without flag `0x10` (otherwise `FUN_00421d82`):
+1. if this floater is the building's "current" floater (`record+0x4c == index`) and does not have flag `0x20`, order `0xc` to the building (island/site of the record), then end;
+2. otherwise, if it is already in state 2 with flag `0x01` (on arrival), it stays;
+3. otherwise compute the needs: max HP `FUN_00420f28` (pad row `+6`, level formula, +1 subtype 0 with glyph bit `0x10`, ×5/4 with glyph bit and source `0x2c/0x2d/0x2e`) and max charge (pad row `+8`). Thresholds: `maxHP` and `max charge`, or their third if `FUN_0045de20() == 0` (i.e. order 9 to the source cell on the source island, within 0x14), or 1 and `HP/3` for non-initial orders 6, 7, 8/9. Heal (`+0x44 = 0`) if `HP < threshold` and `maxHP <= HP + building stock+0x2a` (`FUN_0045dd3c`, the 0x1000 glyph test there is unreachable: three simultaneous equalities on the same identifier); otherwise recharge (`+0x44 = 1`) if `charge < threshold` and `max charge <= charge + stock+0x2a`. Order 2 to the building (`+0x30/+0x42` = island/site, `+0x44` = 0/1);
+4. otherwise copy the order of the building's record (6 to 9), except action `0x13`.
+Arrival (case 1 of `FUN_0041e569`): flag 1 then 10 wait ticks, then each cycle consumes 1 point of `stock+0x2a` (`FUN_0045ddb8(1)`, ×4/3 never active) for +1 HP (`+0x44 == 0`) or +1 charge; stops when nothing is due or stock runs out. Not ported: depends on the building-record model (`record+0x4c`, island/site of the record) which does not exist in the port.
 
-### Rejet hors plage (`FUN_00423068`, `ev_f59cd438` lignes `0x4235e2..0x423611`)
-Corrigé pour les états d'approche 0xf/0x10: si le x du point d'arrivée est hors de `[min, max]` du propriétaire (0 et 0x9ff par défaut, catégorie 4 libre), l'ordre est annulé comme `FUN_00421ec1(-1)` (drapeaux `0x65` effacés, retour à l'errance) au lieu d'être suivi. Les autres états (3/4 livraison, 9 coordonnée) ne vérifient pas encore cette borne.
+### Out-of-range rejection (`FUN_00423068`, `ev_f59cd438` lines `0x4235e2..0x423611`)
+Fixed for the approach states 0xf/0x10: if the x of the arrival point is outside the owner's `[min, max]` (0 and 0x9ff by default, category 4 free), the order is cancelled as `FUN_00421ec1(-1)` (flags `0x65` cleared, return to wandering) instead of being followed. The other states (3/4 delivery, 9 coordinate) do not check this bound yet.
 
-### Table de tâches (relu: `FUN_004662b7` `ev_1a99fa08`, `FUN_00422031` `ev_bd805382`; revue par agent pour le reste)
+### Task table (re-read: `FUN_004662b7` `ev_1a99fa08`, `FUN_00422031` `ev_bd805382`; agent review for the rest)
 
-- Corrigé: la détection de doublon de `FUN_004662b7` (types 5 et 0xd) compare joueur, île `+0xa`, site `+0xe` et type seulement; le port comparait aussi `+0xc` et l'objet (`+0x12`), donc acceptait deux lignes pour le même site.
-- Corrigé: `FUN_00422031` cas 0x12 teste le mot porté (`in_ECX[6]` = `+0x18`), pas le sous-type: un ouvrier portant du Build Tone est éligible, sinon il faut une source de Build Tone accessible. Le port excluait le sous-type 1.
-- Refonte 2026-11-01 (voir [répartition des ouvriers](../behavior/island-tasks.md#répartition-des-ouvriers-refonte-2026-11-01)): types 6/0x11 ajoutés au test « urgent », gardes inventées (plafonds 20/10/SUPPLY, réservation de coût, finisseur unique) et restriction d'île des livraisons de ressource supprimées. Restent: détachement d'une ligne d'objet lors d'un échange (`FUN_00466533(ancien)`) non porté, `reclaim_orphaned_task_claim` conservé comme garde.
+- Fixed: the duplicate detection of `FUN_004662b7` (types 5 and 0xd) compares only player, island `+0xa`, site `+0xe` and type; the port also compared `+0xc` and the object (`+0x12`), so it accepted two rows for the same site.
+- Fixed: `FUN_00422031` case 0x12 tests the carried word (`in_ECX[6]` = `+0x18`), not the subtype: a worker carrying Build Tone is eligible, otherwise an accessible Build Tone source is required. The port excluded subtype 1.
+- Rework 2026-11-01 (see [worker allocation](../behavior/island-tasks.md#répartition-des-ouvriers-refonte-2026-11-01)): types 6/0x11 added to the "urgent" test, invented guards (caps 20/10/SUPPLY, cost reservation, single finisher) and the island restriction on resource deliveries removed. Remaining: detaching an object row during an exchange (`FUN_00466533(old)`) not ported, `reclaim_orphaned_task_claim` kept as a guard.
 
-### Économie (relu: `FUN_004526de` `ev_16ab810c`; revue par agent pour le reste)
-- Corrigé: l'accessibilité d'un bâtiment compare le coût d'entretien du pad à `+0x40` du joueur (`DAT_006191f8`, capacité moins entretien = `source_maintenance_budget`), pas à la capacité brute `+0x3c`. Placement (`game_session_buildings.c`) et affectation d'ouvriers (`game_session_delivery.c`) corrigés; tests mis à jour (`construction.inc`).
-- Corrigé: la fin d'un pas `0x100` sur un site de propriétaire 4 passe par le recalcul des Léviathans comme `FUN_00453a5f`.
-- Écarts restants rapportés (agent, non relus): cadence des marqueurs 6-9 gardée par `DAT_0061f8d8` (jamais écrit), branche stratégique de sous-type Léviathan (`DAT_0061f998` etc.), deux globales de difficulté distinctes (`DAT_004bf11c` bornée, `DAT_00618e48`), repli de naissance sur l'île d'origine `+0x13c4`, verrou de défaite `+0x90` de `FUN_0045eaa7`, retour anticipé de `FUN_004528ca` si `FUN_0045ee26` échoue pour 0x2c-0x32, événement de destruction de type 7.
+### Economy (re-read: `FUN_004526de` `ev_16ab810c`; agent review for the rest)
+- Fixed: a building's accessibility compares the pad's maintenance cost with the player's `+0x40` (`DAT_006191f8`, capacity minus maintenance = `source_maintenance_budget`), not the raw capacity `+0x3c`. Placement (`game_session_buildings.c`) and worker assignment (`game_session_delivery.c`) fixed; tests updated (`construction.inc`).
+- Fixed: the end of a `0x100` step on an owner-4 site goes through the Leviathan recomputation like `FUN_00453a5f`.
+- Remaining gaps reported (agent, not re-read): cadence of markers 6-9 guarded by `DAT_0061f8d8` (never written), strategic Leviathan-subtype branch (`DAT_0061f998` etc.), two distinct difficulty globals (`DAT_004bf11c` bounded, `DAT_00618e48`), birth fallback to the home island `+0x13c4`, defeat lock `+0x90` of `FUN_0045eaa7`, early return of `FUN_004528ca` if `FUN_0045ee26` fails for 0x2c-0x32, type-7 destruction event.
 
-### Globales d'économie sans écrivain direct (xrefs relus: `ev_a2281049` `0x61f8d8`, `ev_bff2cd49` `0x61f998`, `ev_87d7d29c` `0x618e48`, `ev_34709f82` `0x4bf11c`)
-- `DAT_0061f8d8` (garde de cadence des marqueurs 6-9) et `DAT_0061f998` (branche stratégique de sous-type Léviathan) n'ont chacun qu'une seule référence directe, une lecture (`0x451407`, `0x45198e`). Leurs écrivains sont donc indirects (écritures indexées par un bloc) et non résolus; le port garde la cadence `+0x32` et la sélection de sous-type partielle.
-- `DAT_004bf11c` (difficulté bornée 0..4 utilisée par la puissance d'attaque, le seuil de spawn Léviathan et `FUN_0041e569`) et `DAT_00618e48` (difficulté non bornée utilisée par `FUN_00450a71` cas 5 et le bonus Léviathan) ont 11 et 14 références directes en lecture seule; leur identité reste non prouvée, le port utilise une seule valeur.
+### Economy globals without a direct writer (xrefs re-read: `ev_a2281049` `0x61f8d8`, `ev_bff2cd49` `0x61f998`, `ev_87d7d29c` `0x618e48`, `ev_34709f82` `0x4bf11c`)
+- `DAT_0061f8d8` (cadence guard of markers 6-9) and `DAT_0061f998` (strategic Leviathan-subtype branch) each have only one direct reference, a read (`0x451407`, `0x45198e`). Their writers are therefore indirect (block-indexed writes) and unresolved; the port keeps the `+0x32` cadence and the partial subtype selection.
+- `DAT_004bf11c` (difficulty bounded 0..4 used by attack power, the Leviathan spawn threshold and `FUN_0041e569`) and `DAT_00618e48` (unbounded difficulty used by `FUN_00450a71` case 5 and the Leviathan bonus) have 11 and 14 direct read-only references; their identity remains unproven, the port uses a single value.
 
-### Recrutement (`FUN_0045eaa7`, relu: `ev_427930b7`)
-Conforme à `game_session_tick_floater_recruitment`: nombre de floaters du joueur, capacité `+0x3c`, budget `+0x40 > 4`, ouvriers (sous-type 0) `< capacité / 2`, minuteur `+0x8c` incrémenté puis naissance (`FUN_004532e2`) quand `> 300`, avec le marqueur de naissance `+0x13ce != -1`. Seul le verrou de défaite `+0x90` (événement 0xb ou `FUN_00460072`) n'a pas d'équivalent dans le port; la détection de fin de partie relève de l'écran de fin de partie en cours de développement.
+### Recruitment (`FUN_0045eaa7`, re-read: `ev_427930b7`)
+Matches `game_session_tick_floater_recruitment`: the player's floater count, capacity `+0x3c`, budget `+0x40 > 4`, workers (subtype 0) `< capacity / 2`, timer `+0x8c` incremented then birth (`FUN_004532e2`) when `> 300`, with the birth marker `+0x13ce != -1`. Only the defeat lock `+0x90` (event 0xb or `FUN_00460072`) has no equivalent in the port; end-of-game detection belongs to the end-of-game screen under development.
 
-### Ordre de choix des lignes de tâche
-Résolu 2026-11-01: le port prend la première ligne éligible dans l'ordre des emplacements et réévalue un ouvrier occupé une fois toutes les dix ticks, comme `FUN_0042219e`; voir [répartition des ouvriers](../behavior/island-tasks.md#répartition-des-ouvriers-refonte-2026-11-01).
+### Task row choice order
+Resolved 2026-11-01: the port takes the first eligible row in slot order and re-evaluates a busy worker once every ten ticks, like `FUN_0042219e`; see [worker allocation](../behavior/island-tasks.md#répartition-des-ouvriers-refonte-2026-11-01).
 
-### Retour au Hall des sous-types 8 (bloc de fin de `FUN_0041e569`, `ev_8578fcc7`)
-Porté de façon approchée: dès qu'un floater de sous-type 8 passe d'un état non nul à l'état 0 (état terminé) hors action `0x13` et hors action 9 (déjà vers le Hall), il reçoit l'ordre de coordonnée vers son Hall (`game_session_order_floater_home`), comme le `in_ECX[0xf] = 9` du natif. Le détecteur utilise le champ de suivi `previous_movement_state`. Non porté: sous-type 4 (ordre issu de l'enregistrement du bâtiment `DAT_006192b0`, inexistant dans le port) et la garde globale `DAT_006191b4`. Non vérifié en jeu.
+### Subtype 8 return to the Hall (end block of `FUN_0041e569`, `ev_8578fcc7`)
+Ported approximately: as soon as a subtype-8 floater goes from a nonzero state to state 0 (finished state) outside action `0x13` and outside action 9 (already toward the Hall), it receives the coordinate order to its Hall (`game_session_order_floater_home`), like the native `in_ECX[0xf] = 9`. The detector uses the tracking field `previous_movement_state`. Not ported: subtype 4 (order from the building record `DAT_006192b0`, nonexistent in the port) and the global guard `DAT_006191b4`. Not verified in game.

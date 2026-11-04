@@ -1,29 +1,29 @@
-# Reste à faire
+# Remaining work
 
-Porter uniquement les comportements établis par le binaire et les données locales. Preuves : `../behavior/` et [FUNCTION_GUIDE.md](../FUNCTION_GUIDE.md); état d'ensemble et écarts gardés : [feuille de route](ROADMAP.md). Ce qui est fait n'est pas listé ici (voir les revues et l'historique git).
+Port only behaviour established by the binary and the local data. Evidence: `../behavior/` and [FUNCTION_GUIDE.md](../FUNCTION_GUIDE.md); overall state and kept gaps: [roadmap](ROADMAP.md); remake choices: [differences from the original game](docs/differences-from-original.md). Finished work is not listed here (see the reviews and the git history).
 
-## À faire
+## To do
 
-- Déplacement de bâtiment : la source est effacée à la pose; le natif la passe en `+0x58 = 3` et l'efface 8 à 16 ticks plus tard (`FUN_0045343b`, `FUN_00450a71`). Le port ne peut pas garder ce délai tant que la recherche du Hall verrait deux Halls ([analyse](../behavior/island-ground-object-interaction.md)).
-- Vérifier en jeu : Repair par liste de réparation jusqu'aux PV pleins (fixture `repair` : bouton et liste vérifiés), contamination d'un marqueur classe 1 par une Spore, séquence de victoire complète (en solo et en réseau, F11 réseau = commande 0x15), survol des déclencheurs de trait (aucun n'est atteignable dans les fixtures).
-- Ménage local (ignoré par git) : copies `ToneRebellion_Remake_sdl - Copie*.exe`, `ToneRebellion_Remake*.zip`, `../hs_err_pid*.log`, `mci_debug.log`.
+- Building move: the source is cleared at the placement; the original sets `+0x58 = 3` and clears it 8 to 16 ticks later (`FUN_0045343b`, `FUN_00450a71`). The port cannot keep that delay while the Hall search would see two Halls ([analysis](../behavior/island-ground-object-interaction.md)).
+- Check in game: Repair through the repair list up to full health (fixture `repair`: button and list checked), contamination of a class-1 marker by a Spore, the full victory sequence (solo and network; in a network game `F11` sends command 0x15), hover over the trait triggers (none is reachable in the fixtures).
+- Local clean-up (ignored by git): copies `ToneRebellion_Remake_sdl - Copie*.exe`, `ToneRebellion_Remake*.zip`, `../hs_err_pid*.log`, `mci_debug.log`.
 
-## Non porté
+## Not ported
 
-- Tâches : branche IA des ouvriers en danger (`DAT_005eebd4`, états 6/7), second appelant de `FUN_004239e9` (état 0x13, sous-cas 0x14), types de tâche 6, 0x11 et 0xd de la liste « urgente ».
-- Textes : genre 3 `FEAT%02d` (clés absentes des données, table `DAT_005eebf8` non modélisée), textes de gisement `POOLINFECT`/`SUPPLY_%d`; fond `DAT_004c2b08`.
-- Réseau : pose directe `FUN_00465793` (catégorie 3, sous-type 4), seulement par le relais `FUN_00412eac`.
+- Tasks: AI branch for workers in danger (`DAT_005eebd4`, states 6/7), second caller of `FUN_004239e9` (state 0x13, sub-case 0x14), task types 6, 0x11 and 0xd of the "urgent" list.
+- Texts: genre 3 `FEAT%02d` (keys missing from the data, table `DAT_005eebf8` not modelled), pool texts `POOLINFECT`/`SUPPLY_%d`; background `DAT_004c2b08`.
+- Network: direct placement `FUN_00465793` (category 3, subtype 4), only through the relay `FUN_00412eac`.
 
-## Écarts mineurs
+## Minor gaps
 
-- Texte enveloppé d'`IWTextInfo` posé à y = 0x10 (natif (10, 6)).
-- Badge 0x1e (Léviathan) et voile `spl11` du propriétaire 4 jamais affichés : `DAT_0061fa2e` sans écrivain connu.
-- Nettoyage de site approximatif; fusion Maj+clic droit = raccourci du remake.
+- Wrapped `IWTextInfo` text placed at y = 0x10 (original (10, 6)).
+- Badge 0x1e (Leviathan) and the owner-4 `spl11` veil never drawn: `DAT_0061fa2e` has no known writer.
+- Approximate site clean-up.
 
-## Questions REA ouvertes
+## Open REA questions
 
-Aucune. La passe du 2026-11-04 a clos les précédentes ([états des floaters](../behavior/floater-states.md)) : gardes CONSTR déjà portées, aucun producteur de l'état 10, pas de préfixe `x`, appelants, corps, classe d'`IWLocInfo` et message 0x47 établis.
+None. The 2026-11-04 pass closed the previous ones ([floater states](../behavior/floater-states.md)): CONSTR guards already ported, no producer of state 10, no `x` prefix, callers, bodies, `IWLocInfo` class and message 0x47 established.
 
-## Hors périmètre
+## Out of scope
 
-Mode HallStk et noms des genres 0x2c; multijoueur natif exact (DirectPlay, chat, cartes `ENDGNONP`); `intro.avi`; commandes `nevada` (rotation/zoom clavier).
+HallStk mode and the names of genres 0x2c; exact native multiplayer (DirectPlay, chat); `intro.avi`; `nevada` commands (keyboard rotation and zoom).
