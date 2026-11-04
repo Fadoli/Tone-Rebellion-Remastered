@@ -396,6 +396,15 @@ static int net_host_pick_save(const char *path, int native)
         net_set_status("Sauvegarde illisible");
         return 0;
     }
+    if (g_net_in_game) {
+        /* Loading during the game: every machine goes back to the lobby
+           first, then receives the file there. */
+        uint8_t frame[NET_FRAME_MAX_SIZE];
+        size_t frame_length = net_frame_encode(frame, sizeof(frame),
+            NET_RECORD_LOBBY_RETURN, 0, NULL, 0);
+        if (frame_length != 0U) net_host_broadcast(frame, frame_length);
+        net_back_to_lobby();
+    }
     net_save_clear();
     g_net_save = bytes;
     g_net_save_length = length;
@@ -441,9 +450,10 @@ static int resume_path(char *path, size_t capacity)
 static void leave_load_screen(void)
 {
     if (g_net_load_pick) {
-        /* Picking a save for the network lobby. */
+        /* Picking a save for the network lobby, or from a running network
+           game (back to it when nothing was picked). */
         g_net_load_pick = 0;
-        g_menu.screen = SCREEN_NEW_GAME;
+        g_menu.screen = g_net_in_game ? g_save_return_screen : SCREEN_NEW_GAME;
         return;
     }
     if (g_load_save_mode || g_load_from_game) {

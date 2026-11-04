@@ -265,8 +265,19 @@ static int slide_panel_press(HWND window, int x, int y)
     /* FUN_004578df only sends Save/Load (SetState 5/4) and pauses when
        DAT_004befe0 == 0. Remake: a network game keeps Save (a local copy of
        the shared session) and pauses every machine through a lockstep
-       command; Load stays off. */
-    if (g_net_in_game && hit == 1) hit = -1;
+       command; only the host can Load, which takes every machine back to
+       the lobby with the picked game (net_host_pick_save). */
+    if (g_net_in_game && hit == 1 && g_net_mode != NET_MODE_HOST) hit = -1;
+    if (g_net_in_game && hit == 1) {
+        slide_panel_close_now();
+        g_save_return_screen = g_menu.screen;
+        g_net_load_pick = 1;
+        g_load_save_mode = 0;
+        g_load_from_game = 0;
+        scan_load_slots();
+        g_menu.screen = SCREEN_LOAD_GAME;
+        hit = -1;
+    }
     if (g_net_in_game && hit == 2) {
         int32_t paused = g_game_session.network_paused ? 0 : 1;
         (void)issue_command(GAME_COMMAND_SET_NETWORK_PAUSE, 1, &paused);

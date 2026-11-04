@@ -49,6 +49,7 @@ static void enter_net_setup_screen(void);
    the start continues that session on every machine. */
 enum { NET_RECORD_SAVE_DATA = 0x44,  /* host -> guest: native, total, offset, bytes */
        NET_RECORD_SAVE_ACK = 0x45,   /* guest -> host: save applied */
+       NET_RECORD_LOBBY_RETURN = 0x46, /* host -> guests: game over, back to the lobby */
        NET_SAVE_CHUNK = 2048, NET_SAVE_CHUNKS_PER_POLL = 4 };
 static unsigned char *g_net_save;
 static size_t g_net_save_length;
@@ -72,6 +73,17 @@ static void net_save_clear(void)
     g_net_save_ready = 0;
     memset(g_net_save_sent, 0, sizeof(g_net_save_sent));
     g_tribe_choice_mask = 0;
+}
+
+/* Every machine leaves the running network game for the lobby (the host
+   loads another game): the lobby settings and players stay. */
+static void net_back_to_lobby(void)
+{
+    g_net_in_game = 0;
+    g_game_session_valid = 0;
+    g_paused = 0;
+    g_net_lobby.started = 0;
+    g_menu.screen = SCREEN_NEW_GAME;
 }
 
 static uint32_t net_le32(const uint8_t *bytes)
@@ -499,6 +511,9 @@ static void net_poll_peer(HWND window, unsigned slot)
                     net_drop_peer(0);
                     return;
                 }
+            } else if (frame.type == NET_RECORD_LOBBY_RETURN && g_net_in_game) {
+                net_back_to_lobby();
+                net_set_status("L'hote charge une autre partie");
             } else if (frame.type == NET_RECORD_SAVE_DATA && !g_net_in_game) {
                 net_client_receive_save(&frame);
             } else if (frame.type == NET_RECORD_TURN) {
