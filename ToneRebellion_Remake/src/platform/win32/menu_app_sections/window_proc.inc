@@ -191,37 +191,45 @@ static void run_ui_frame(HWND window, WPARAM wparam)
         if (g_menu.screen == SCREEN_ISLAND && g_game_session_valid &&
             !g_net_in_game)
             simulate_session_tick(g_menu.animation_ticks);
-        /* FUN_00464e4d runs once per world tick on every game screen. The
-           seal victory reaches SetState(2) 1,102 ticks after state 2 and
-           SetState(7) 2,054 ticks after it; DAT_004bf120 = 0 then stops the
-           game, so the session ends with the end screen. */
-        if (g_game_session_valid && !g_net_in_game &&
-            g_game_session.world_sequence_state >= 2) {
-            int request;
-            /* State 2 queues world event 0xb (0) at tick 0; FUN_004334ce
-               answers with the `winend` tune. */
-            if (g_game_session.world_sequence_state == 2 &&
-                g_game_session.world_sequence_tick == 0)
-                set_background_tune_once("winend");
-            game_session_world_sequence_state2_events(&g_game_session,
-                                                      &g_floater_catalog);
-            request = game_session_tick_world_sequence(&g_game_session);
-            if (request == 2 && g_menu.screen == SCREEN_ISLAND) {
-                g_menu.screen = SCREEN_WORLD_MAP;
-                g_hovered_location = -1;
-                update_window_title(window);
-            } else if (request == 7) {
-                if (!enter_end_game_screen())
-                    g_menu.screen = SCREEN_MAIN_MENU;
-                g_game_session_valid = 0;
-                break;
-            }
-        }
+        if (!g_net_in_game && run_world_sequence_step(window)) break;
         }
         /* Redraw the full animated screen at every 20 Hz frame,
            including while the Tasks panel is open. */
         platform_invalidate(window);
     }
+}
+
+/* FUN_00464e4d runs once per world tick on every game screen, on every
+   machine of a network game alike (lockstep: net_run_frame calls this after
+   each turn). The seal victory reaches SetState(2) 1,102 ticks after state 2
+   and SetState(7) 2,054 ticks after it; DAT_004bf120 = 0 then stops the
+   game, so the session ends with the end screen. Returns 1 when it did. */
+static int run_world_sequence_step(HWND window)
+{
+    int request;
+    if (!g_game_session_valid || g_game_session.world_sequence_state < 2)
+        return 0;
+    /* State 2 queues world event 0xb (0) at tick 0; FUN_004334ce answers
+       with the `winend` tune. */
+    if (g_game_session.world_sequence_state == 2 &&
+        g_game_session.world_sequence_tick == 0)
+        set_background_tune_once("winend");
+    game_session_world_sequence_state2_events(&g_game_session,
+                                              &g_floater_catalog);
+    request = game_session_tick_world_sequence(&g_game_session);
+    if (request == 2 && g_menu.screen == SCREEN_ISLAND) {
+        g_menu.screen = SCREEN_WORLD_MAP;
+        g_hovered_location = -1;
+        update_window_title(window);
+    } else if (request == 7) {
+        if (!enter_end_game_screen())
+            g_menu.screen = SCREEN_MAIN_MENU;
+        g_game_session_valid = 0;
+        /* The game is over on every machine: leave the network session. */
+        if (g_net_in_game) net_shutdown();
+        return 1;
+    }
+    return 0;
 }
 
 /* WM_TIMER fires on the system tick (15.6 ms by default), so a 50 ms
@@ -861,8 +869,15 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         }
         if (wparam == VK_F11 && (g_menu.screen == SCREEN_WORLD_MAP ||
                                  g_menu.screen == SCREEN_ISLAND)) {
-            /* Port-only preview: the native state-7 trigger is not established. */
-            if (enter_end_game_screen()) platform_invalidate(window);
+            /* Port-only aid. In a network game it sends world command 0x15
+               like the native debug key 'W' (FUN_0046a5b7 0x46a92a, gated by
+               DAT_004c2b74): every machine jumps to sequence state 3. Solo
+               keeps the direct end-screen preview. */
+            if (g_net_in_game) {
+                if (g_game_session_valid &&
+                    g_game_session.world_sequence_state < 2)
+                    (void)issue_command(GAME_COMMAND_START_END_SEQUENCE, 0, NULL);
+            } else if (enter_end_game_screen()) platform_invalidate(window);
             return 0;
         }
         if (wparam == VK_ESCAPE && (g_defend_area_armed || g_armed_spell_action)) {

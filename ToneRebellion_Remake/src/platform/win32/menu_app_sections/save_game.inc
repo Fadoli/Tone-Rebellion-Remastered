@@ -3,10 +3,15 @@
    does not reproduce, so the remake writes its own files: the same 0x80-byte
    header layout (so the Load/Save screen lists them like the native slots)
    followed by a "TRRM" body with the menu state and the raw GameSession.
-   They live in a `saves` directory next to the executable; the original game
-   directory is never written. */
+   Version 2 adds the GameSession field table (game_session_schema.h) before
+   the session bytes, so a later build whose GameSession changed copies the
+   fields by name over a fresh session of the same world. Version 1 files
+   (no table) still load when their session size matches. They live in a
+   `saves` directory next to the executable; the original game directory is
+   never written. */
 
-enum { REMAKE_SAVE_MAGIC = 0x4d525254 /* "TRRM" */, REMAKE_SAVE_VERSION = 1 };
+enum { REMAKE_SAVE_MAGIC = 0x4d525254 /* "TRRM" */, REMAKE_SAVE_VERSION = 2,
+       REMAKE_SAVE_MAX_SCHEMA = 1u << 20 };
 
 typedef struct RemakeSaveBody {
     uint32_t magic;
@@ -20,6 +25,9 @@ typedef struct RemakeSaveBody {
     uint32_t sim_speed;
     uint32_t animation_ticks;
 } RemakeSaveBody;
+
+/* Version 2: the schema length follows the body, then the schema, then
+   session_size bytes of session. */
 
 static void put_le32(unsigned char *bytes, uint32_t value)
 {
@@ -71,8 +79,18 @@ static int write_save_file(const char *path)
     unsigned char header[0x80];
     RemakeSaveBody body;
     FILE *file;
+    unsigned char *schema;
+    size_t schema_length = game_session_schema_write(NULL, 0);
+    unsigned char length_bytes[4];
     int ok;
     if (!g_game_session_valid) return 0;
+    schema = (unsigned char *)malloc(schema_length);
+    if (schema == NULL ||
+        game_session_schema_write(schema, schema_length) != schema_length) {
+        free(schema);
+        return 0;
+    }
+    put_le32(length_bytes, (uint32_t)schema_length);
     fill_save_header(header);
     memset(&body, 0, sizeof(body));
     body.magic = REMAKE_SAVE_MAGIC;
@@ -88,11 +106,17 @@ static int write_save_file(const char *path)
     body.sim_speed = g_sim_speed;
     body.animation_ticks = g_menu.animation_ticks;
     file = fopen(path, "wb");
-    if (file == NULL) return 0;
+    if (file == NULL) {
+        free(schema);
+        return 0;
+    }
     ok = fwrite(header, 1, sizeof(header), file) == sizeof(header) &&
          fwrite(&body, 1, sizeof(body), file) == sizeof(body) &&
+         fwrite(length_bytes, 1, 4, file) == 4 &&
+         fwrite(schema, 1, schema_length, file) == schema_length &&
          fwrite(&g_game_session, 1, sizeof(g_game_session), file) ==
              sizeof(g_game_session);
+    free(schema);
     ok = (fclose(file) == 0) && ok;
     platform_storage_changed();
     return ok;
@@ -104,29 +128,66 @@ static int read_save_file(HWND window, const char *path)
 {
     unsigned char header[0x80];
     RemakeSaveBody body;
-    GameSession *session;
+    unsigned char length_bytes[4];
+    unsigned char *schema = NULL;
+    unsigned char *data = NULL;
+    uint32_t schema_length = 0;
     FILE *file = fopen(path, "rb");
     int on_island;
+    int ok;
     char error[160];
     if (file == NULL) return 0;
-    session = (GameSession *)malloc(sizeof(*session));
-    if (session == NULL ||
-        fread(header, 1, sizeof(header), file) != sizeof(header) ||
-        memcmp(header, "1.16", 4) != 0 ||
-        fread(&body, 1, sizeof(body), file) != sizeof(body) ||
-        body.magic != REMAKE_SAVE_MAGIC || body.version != REMAKE_SAVE_VERSION ||
-        body.session_size != sizeof(GameSession) ||
-        body.world_index < 0 ||
-        body.world_index >= g_menu.world_map.world_count ||
-        body.selected_tribe < 0 || body.selected_tribe >= GAME_START_PLAYER_COUNT ||
-        fread(session, 1, sizeof(*session), file) != sizeof(*session)) {
-        (void)fclose(file);
-        free(session);
-        return 0;
+    ok = fread(header, 1, sizeof(header), file) == sizeof(header) &&
+        memcmp(header, "1.16", 4) == 0 &&
+        fread(&body, 1, sizeof(body), file) == sizeof(body) &&
+        body.magic == REMAKE_SAVE_MAGIC &&
+        (body.version == REMAKE_SAVE_VERSION ||
+         (body.version == 1 && body.session_size == sizeof(GameSession))) &&
+        body.session_size > 0 && body.session_size <= 64u * 1024u * 1024u &&
+        body.world_index >= 0 &&
+        body.world_index < g_menu.world_map.world_count &&
+        body.selected_tribe >= 0 && body.selected_tribe < GAME_START_PLAYER_COUNT;
+    if (ok && body.version == REMAKE_SAVE_VERSION) {
+        ok = fread(length_bytes, 1, 4, file) == 4;
+        schema_length = (uint32_t)length_bytes[0] | (uint32_t)length_bytes[1] << 8 |
+            (uint32_t)length_bytes[2] << 16 | (uint32_t)length_bytes[3] << 24;
+        ok = ok && schema_length > 0 && schema_length <= REMAKE_SAVE_MAX_SCHEMA &&
+            (schema = (unsigned char *)malloc(schema_length)) != NULL &&
+            fread(schema, 1, schema_length, file) == schema_length;
     }
+    ok = ok && (data = (unsigned char *)malloc(body.session_size)) != NULL &&
+        fread(data, 1, body.session_size, file) == body.session_size;
     (void)fclose(file);
-    g_game_session = *session;
-    free(session);
+    if (ok && schema == NULL) {
+        memcpy(&g_game_session, data, sizeof(GameSession));
+    } else if (ok) {
+        /* Fields the save does not know keep the values of a fresh session
+           of the same world and tribe. */
+        int previous_world = g_menu.world_index;
+        int previous_tribe = g_menu.selected_tribe;
+        int previous_difficulty = g_menu.difficulty;
+        GameSession *previous = (GameSession *)malloc(sizeof(GameSession));
+        ok = previous != NULL;
+        if (ok) {
+            *previous = g_game_session;
+            g_menu.world_index = body.world_index;
+            g_menu.selected_tribe = body.selected_tribe;
+            g_menu.difficulty = body.difficulty;
+            ok = load_game_session_for_selected_world(error, sizeof(error)) &&
+                game_session_schema_migrate(&g_game_session, schema,
+                    schema_length, data, body.session_size);
+            if (!ok) {
+                g_game_session = *previous;
+                g_menu.world_index = previous_world;
+                g_menu.selected_tribe = previous_tribe;
+                g_menu.difficulty = previous_difficulty;
+            }
+        }
+        free(previous);
+    }
+    free(schema);
+    free(data);
+    if (!ok) return 0;
     game_music_state_init(&g_game_music);
     g_game_session_world_index = body.world_index;
     g_game_session_valid = 1;

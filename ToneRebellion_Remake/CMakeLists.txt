@@ -37,6 +37,8 @@ add_library(tone_core STATIC
     src/core/game_start.c
     src/core/game_start_tones.c
     src/core/game_session.c
+    src/core/game_session_schema.c
+    src/core/game_session_schema_io.c
     src/core/game_session_start.c
     src/core/native_save.c
     src/core/game_session_buildings.c
@@ -217,6 +219,13 @@ if(BUILD_TESTING)
     target_compile_features(test_native_save PRIVATE c_std_11)
     enable_test_assertions(test_native_save)
     add_test(NAME native_save_unit COMMAND test_native_save)
+
+    add_executable(test_game_session_schema tests/test_game_session_schema.c)
+    target_link_libraries(test_game_session_schema PRIVATE tone_core)
+    target_compile_features(test_game_session_schema PRIVATE c_std_11)
+    enable_test_assertions(test_game_session_schema)
+    add_test(NAME game_session_schema_unit COMMAND test_game_session_schema)
+
 
     add_executable(test_game_inventory tests/test_game_inventory.c)
     target_link_libraries(test_game_inventory PRIVATE tone_core)

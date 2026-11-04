@@ -543,7 +543,6 @@ static void net_run_frame(HWND window)
 {
     unsigned budget = 1;
     GameCommandContext context;
-    (void)window;
     if (!g_net_in_game || !g_game_session_valid) return;
     context.pads = &g_pad_catalog;
     if (g_net_mode == NET_MODE_HOST && ++g_net_ping_frames >= 20U) {
@@ -568,6 +567,7 @@ static void net_run_frame(HWND window)
                 g_net_apply_tick = g_net_lockstep.tick;
             }
         simulate_session_tick(g_game_session.simulation_tick);
+        if (run_world_sequence_step(window)) return;
         created_count = net_lockstep_finish_tick(&g_net_lockstep,
             game_session_sync_hash(&g_game_session), created,
             sizeof(created) / sizeof(created[0]));

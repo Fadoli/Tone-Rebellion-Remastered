@@ -91,3 +91,27 @@ Limites: le tick monde du port n'avance que dans la vue d'île (le natif tourne 
 
 ## Score à la victoire réelle (port, vérifié en jeu)
 Défaut corrigé: le chemin de victoire (`SetState(7)`) invalidait la session avant d'ouvrir l'écran, et les cartes, calculées à chaque peinture, ne s'affichaient pas (fond et texte défilant seuls). Le natif garde les enregistrements joueurs en mémoire pendant l'état 7; le port fige donc score et masque de glyphes des quatre joueurs à l'entrée de l'écran. Échap ramène au titre quand la session est terminée (carte du monde pour l'aperçu `F11`). Vérifié avec la fixture `victory`: carte joueur complète après le tick 500.
+
+## Recruteur, verrou `+0x90` et évènement 0xb (REA haiku 2026-11-04)
+
+Observations (`FUN_0045eaa7` `ev_427930b7…`/`ev_3de14804…`, `FUN_0045e6d3` `ev_c2e25b0d…`/`ev_66cb5384…`, `FUN_004532e2`, `FUN_0046bdee` `ev_9faa1834…`):
+- **Recruteur :**
+  - Le minuteur `P+0x8c` avance si `P+0x40 > 4`, si les ouvriers de sous-type 0 sont moins de `P+0x3c/2` et si `P+0x13ce != -1`.
+  - Au-delà de 300, `FUN_004532e2` fait naître l'ouvrier sur le site `P+0x13cc/P+0x13ce`, et le minuteur repart à 0 même si la naissance échoue.
+  - Quand `P+0x13ce == -1`, le minuteur reste figé. Il n'y a ni boucle ni nouvel essai dans le même tick.
+- **Choix du site (`FUN_0045e6d3`) :** il n'a lieu qu'à certains évènements : naissance, bascule d'un drapeau d'unité, niveau 10, commande 10, mise en place, `FUN_00466c8b`. Le site choisi est le marqueur classe 1 (`+4 == 1`, bit du joueur dans l'octet `+0x22`) le plus proche du Hall (`P+0x13c8/+0x13ca`, écrits par `FUN_0045f5c5`). À défaut, c'est le premier marqueur de l'île `P+0x13c4`. Rien n'écrit `P+0x13c4`, qui vaut donc 0. Aucun test d'occupation.
+- **Évènement 0xb :** `FUN_004655b2` range `{0xb, p<<16 | 3}` dans la file `monde+0x2cc40`. `FUN_0046bdee` vide cette file à chaque image, en jeu non pausé, vers le gestionnaire de l'état courant (`callback(5, op, arg)`), qui joue `loosend` (`FUN_004334ce`). Ce n'est pas le cas 0xb de `FUN_004672ef`, qui choisit un message de site.
+- **`P+0x90` :** aucune remise à 0 en cours de partie n'a été trouvée.
+
+**Port :** le remake recherche le site à chaque tick au lieu de le garder entre deux évènements. Le résultat est le même tant que les marqueurs ne changent pas. Il a reçu l'île de repli 0. L'écart « le natif boucle » était faux : le remake fige déjà le minuteur quand aucun site n'existe.
+
+## Fin de partie en réseau (REA haiku 2026-11-04)
+
+Observations (`ev_1e306ae9…` 0x46a918, `ev_172a608b…` `FUN_004672ef`, `ev_302239fa…` `FUN_00464e4d`, `ev_92309414…` `FUN_0044954d`) :
+- **Touche de débogage 'W' :** elle n'agit que si `DAT_004c2b74` est non nul. En réseau, elle envoie la commande monde 0x15 par `FUN_004133f2`. Seul le premier mot est écrit, le reste du tampon n'est pas initialisé.
+- **Cas 0x15 :** il pose `DAT_006191b4 = 3` et `DAT_006191b6 = 0` sur chaque machine.
+- **Séquence `FUN_00464e4d` :** chaque machine la déroule avec son propre `L` (verrou local `+0x90`).
+- **Victoire par les sceaux (`FUN_00460460`, état 2) :** elle est locale sur chaque machine, sans paquet ni test de `DAT_004befe0`.
+- **Écran de fin (`FUN_0044954d`) :** il n'a pas de branche réseau.
+
+**Port :** le remake déroule désormais la séquence dans le tick réseau (`net_run_frame`, `run_world_sequence_step`) et quitte la session réseau à l'écran de fin. F11 en réseau envoie `GAME_COMMAND_START_END_SEQUENCE` (0x15). Non vérifié en jeu à deux machines.

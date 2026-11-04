@@ -1349,6 +1349,23 @@ static void game_session_tick_floater_recruitment(
         if (island_index >= session->island_count) continue;
         birth_location = game_session_find_birth_location(
             session, (uint8_t)player_slot, island_index);
+        /* FUN_0045e6d3 falls back to island P+0x13c4 and its first class-1
+           marker with the player's bit in +0x22. Nothing writes P+0x13c4
+           (REA 2026-11-04), so it stays 0: the first island of the world.
+           With no site at all P+0x13ce = -1 and the timer stays put. */
+        if (birth_location < 0 && session->island_count > 0) {
+            const GameRuntimeIsland *fallback = &session->islands[0];
+            unsigned int index;
+            for (index = 0; index < fallback->location_count; ++index) {
+                if (fallback->locations[index].renderer_class == 1 &&
+                    (fallback->locations[index].source_value_22 &
+                     (uint16_t)(1U << player_slot)) != 0) {
+                    island_index = 0;
+                    birth_location = (int)index;
+                    break;
+                }
+            }
+        }
         if (birth_location < 0) continue;
         if (economy->source_maintenance_budget > 4 &&
             worker_count < (unsigned int)economy->source_maintenance_capacity / 2U &&
