@@ -106,6 +106,13 @@ static void slide_panel_tick(void)
     }
 }
 
+/* Remake: Escape opens the panel (phase 1) or retracts it (phase 3) from
+   wherever it is. */
+static void slide_panel_toggle(void)
+{
+    g_slide_phase = g_slide_phase == 1 || g_slide_phase == 2 ? 3 : 1;
+}
+
 static void slide_panel_close_now(void)
 {
     g_slide_phase = 0;

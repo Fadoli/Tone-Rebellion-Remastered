@@ -235,8 +235,8 @@ try {
     $c0 = MarkerColumn $m0 195 332 445 357
     $c1 = MarkerColumn $m1 195 332 445 357
     Check ($c1 -gt $c0) "arrow keys scroll the island" "marker $c0 -> $c1"
-    Key 0x1B        # Esc -> world map
-    Check ((Title) -like "*World Map*") "Esc returns to the world map" (Title)
+    Click 30 350    # GOTOMAP -> world map
+    Check ((Title) -like "*World Map*") "GOTOMAP returns to the world map" (Title)
     Key 0x52        # R (E2E test aid) -> reopen the same island
     Start-Sleep -Seconds 2
     Check ((Title) -like "*Island*") "the island reopens" (Title)

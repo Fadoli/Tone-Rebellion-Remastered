@@ -149,7 +149,7 @@ static void update_window_title(HWND window)
     else if (g_menu.screen == SCREEN_NET_SETUP) title = "Tone Rebellion - Multiplayer";
     else if (g_menu.screen == SCREEN_WORLD_MAP) title = "Tone Rebellion - World Map";
     else if (g_menu.screen == SCREEN_ISLAND)
-        title = "Tone Rebellion - Island (arrows: scroll, Esc: map)";
+        title = "Tone Rebellion - Island (arrows: scroll, Esc: options)";
     else if (g_menu.screen == SCREEN_LOAD_GAME) title = g_load_save_mode ? "Tone Rebellion - Save Game (Esc: back)" : "Tone Rebellion - Load Game (Esc: back)";
     platform_set_title(window, title);
     if (g_menu.screen != SCREEN_ISLAND) {

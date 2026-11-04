@@ -923,15 +923,18 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             if (g_menu.screen == SCREEN_LOAD_GAME) {
                 leave_load_screen();
                 platform_invalidate(window);
-            } else if (g_menu.screen == SCREEN_ISLAND) {
-                if (g_game_session.location_move_active) {
-                    (void)issue_command(GAME_COMMAND_CANCEL_LOCATION_MOVE, 0, NULL);
-                }
-                g_menu.screen = SCREEN_WORLD_MAP;
-                g_hovered_location = -1;
+            } else if (g_menu.screen == SCREEN_ISLAND &&
+                       g_game_session.location_move_active) {
+                /* A held building is put back first. */
+                (void)issue_command(GAME_COMMAND_CANCEL_LOCATION_MOVE, 0, NULL);
                 platform_invalidate(window);
-            } else if (g_menu.screen == SCREEN_WORLD_MAP) {
-                /* No native Esc on the world map. */
+            } else if (g_menu.screen == SCREEN_ISLAND ||
+                       g_menu.screen == SCREEN_WORLD_MAP) {
+                /* Remake shortcut (no native Esc in game): open or close the
+                   SlideWindow options panel (save, load, pause, quit, music,
+                   sound), as a press on the top edge does. */
+                slide_panel_toggle();
+                platform_invalidate(window);
             } else if (g_menu.screen == SCREEN_NEW_GAME) {
                 leave_new_game_screen();
                 platform_invalidate(window);
