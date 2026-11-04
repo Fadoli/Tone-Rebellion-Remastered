@@ -2,9 +2,10 @@
    frame 0 under the endgame.pal palette; ENDGTEXT (type 38, FUN_0041b0d7)
    scrolls the endgame.txt lines inside pane 211,15..427,134; ENDGPLAYER and
    ENDGNONP draw the score cards. Entered by the seal victory sequence
-   (SetState(7)) or the F11 preview key. A left click on the player card,
-   the text or a card leaves to the title (SetState(0), REA 2026-11-04);
-   no input skips or speeds up the scroll (see behavior/end-game.md). */
+   (SetState(7)) or the F11 preview key. Native: a left click on the
+   player card, the text or a card leaves to the title (SetState(0), REA
+   2026-11-04). Remake choice: the click skips the scroll and the card
+   reveal, Escape leaves (see behavior/end-game.md). */
 
 enum {
     END_GAME_PANE_LEFT = 211,
@@ -156,6 +157,14 @@ static int end_game_screen_hit(int x, int y)
         if (x >= panes[i][0] && x <= panes[i][2] &&
             y >= panes[i][1] && y <= panes[i][3]) return 1;
     return 0;
+}
+
+/* Remake: jump to the restart tick 0x1f5, where the text has scrolled
+   away and every card step is drawn. */
+static void end_game_screen_skip(void)
+{
+    if (g_end_game_tick < END_GAME_TICK_RESTART)
+        g_end_game_tick = END_GAME_TICK_RESTART;
 }
 
 /* DAT_004c2994: one step per paint; wraps to 0x1f5 once above 6000. */

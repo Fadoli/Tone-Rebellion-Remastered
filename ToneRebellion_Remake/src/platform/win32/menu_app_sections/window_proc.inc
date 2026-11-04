@@ -486,7 +486,8 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         if (g_menu.screen == SCREEN_END_GAME) {
             /* Message 6 (left press) on ENDGPLAYER, ENDGTEXT or an ENDGNONP
                card: FUN_0041a7d6 / FUN_0041b575 / FUN_0041afbb queue
-               SetState(0), the title. STATBKG alone ignores it. */
+               SetState(0), the title. Remake choice: the click skips the
+               text scroll and the card reveal instead; Escape leaves. */
             RECT end_client;
             RECT end_viewport;
             platform_client_rect(window, &end_client);
@@ -500,9 +501,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                         (end_viewport.right - end_viewport.left),
                     ((GET_Y_LPARAM(lparam) - end_viewport.top) * LOGICAL_HEIGHT) /
                         (end_viewport.bottom - end_viewport.top))) {
-                g_game_session_valid = 0;
-                g_menu.screen = SCREEN_MAIN_MENU;
-                update_window_title(window);
+                end_game_screen_skip();
                 platform_invalidate(window);
             }
             return 0;
@@ -912,9 +911,11 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             return 0;
         }
         if (wparam == VK_ESCAPE && g_menu.screen == SCREEN_END_GAME) {
-            /* After the victory sequence the session is over: back to the
-               title (no native exit was found, see behavior/end-game.md). */
+            /* Remake exit (the native one is a click, SetState(0)): after
+               the victory sequence the session is over, back to the title;
+               the F11 preview returns to the map. */
             g_menu.screen = g_game_session_valid ? SCREEN_WORLD_MAP : SCREEN_MAIN_MENU;
+            update_window_title(window);
             platform_invalidate(window);
             return 0;
         }
