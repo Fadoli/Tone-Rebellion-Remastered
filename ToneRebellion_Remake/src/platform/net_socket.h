@@ -33,6 +33,9 @@ NetSocket net_socket_connect(const char *host, uint16_t port, int *lookup_failed
 int net_socket_connect_status(NetSocket socket_handle);
 /* Sends the whole buffer; 0 if it does not fit (a full buffer is a failure). */
 int net_socket_send(NetSocket socket_handle, const void *bytes, size_t length);
+/* Sends what the system takes now: bytes sent (0 when its buffer is full),
+   or NET_SOCKET_FAILED. */
+int net_socket_send_some(NetSocket socket_handle, const void *bytes, size_t length);
 /* Bytes read, 0 once the peer closed, or NET_SOCKET_WOULD_BLOCK / FAILED. */
 int net_socket_receive(NetSocket socket_handle, void *buffer, size_t capacity);
 void net_socket_close(NetSocket socket_handle);

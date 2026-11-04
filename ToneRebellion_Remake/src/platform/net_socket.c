@@ -19,6 +19,7 @@ typedef int socklen_t;
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -59,6 +60,16 @@ static int net_socket_set_nonblocking(SOCKET socket_handle)
 #endif
     return flags >= 0 && fcntl(socket_handle, F_SETFL, flags | O_NONBLOCK) == 0;
 #endif
+}
+
+/* Turn records are small and sent one by one: without TCP_NODELAY, Nagle's
+   algorithm holds them until the previous one is acknowledged, adding up to
+   a delayed-ACK period (about 200 ms) to every round trip. */
+static void net_socket_set_low_latency(SOCKET socket_handle)
+{
+    int enabled = 1;
+    (void)setsockopt(socket_handle, IPPROTO_TCP, TCP_NODELAY,
+                     (const char *)&enabled, (socklen_t)sizeof(enabled));
 }
 
 int net_socket_startup(void)
@@ -112,6 +123,7 @@ NetSocket net_socket_accept(NetSocket listener)
     SOCKET incoming = accept((SOCKET)listener, NULL, NULL);
     if (incoming == INVALID_SOCKET) return NET_SOCKET_INVALID;
     (void)net_socket_set_nonblocking(incoming);
+    net_socket_set_low_latency(incoming);
     return (NetSocket)incoming;
 }
 
@@ -137,6 +149,7 @@ NetSocket net_socket_connect(const char *host, uint16_t port, int *lookup_failed
     address.sin_port = htons(port);
     peer = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (peer == INVALID_SOCKET) return NET_SOCKET_INVALID;
+    net_socket_set_low_latency(peer);
     if (!net_socket_set_nonblocking(peer) ||
         (connect(peer, (struct sockaddr *)&address, sizeof(address)) != 0 &&
          net_socket_error() != NET_ERROR_IN_PROGRESS)) {
@@ -178,6 +191,22 @@ int net_socket_send(NetSocket socket_handle, const void *bytes, size_t length)
         sent += (size_t)result;
     }
     return 1;
+}
+
+int net_socket_send_some(NetSocket socket_handle, const void *bytes, size_t length)
+{
+    size_t sent = 0;
+    while (sent < length) {
+        int result = (int)send((SOCKET)socket_handle, (const char *)bytes + sent,
+                               (int)(length - sent), NET_SEND_FLAGS);
+        if (result > 0) {
+            sent += (size_t)result;
+            continue;
+        }
+        if (result < 0 && net_socket_would_block()) break;
+        return NET_SOCKET_FAILED;
+    }
+    return (int)sent;
 }
 
 int net_socket_receive(NetSocket socket_handle, void *buffer, size_t capacity)

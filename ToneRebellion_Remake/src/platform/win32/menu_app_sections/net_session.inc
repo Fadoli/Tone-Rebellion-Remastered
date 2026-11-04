@@ -114,12 +114,15 @@ static void net_close_socket(NetSocket *socket_handle)
     }
 }
 
+static void net_out_clear(unsigned slot);
+
 static void net_shutdown(void)
 {
     unsigned slot;
     net_close_socket(&g_net_listen);
     for (slot = 0; slot < NET_LOBBY_MAX_PLAYERS; ++slot) {
         net_close_socket(&g_net_peers[slot]);
+        net_out_clear(slot);
         memset(&g_net_readers[slot], 0, sizeof(g_net_readers[slot]));
     }
     g_net_mode = NET_MODE_NONE;
@@ -178,11 +181,69 @@ static void net_watch(NetSocket socket_handle)
 #endif
 }
 
-/* Frames are a few hundred bytes; a full send buffer drops the peer. */
+/* Outgoing bytes the system did not take yet, per peer. A full system
+   buffer (slow link, a peer whose window is held by a drag, a save being
+   sent) used to drop the peer, and a partly sent frame broke the stream;
+   the queue keeps the frames in order and net_poll flushes it. Only a
+   socket error or this much backlog drops a peer. */
+enum { NET_OUT_CAPACITY = 1024 * 1024 };
+typedef struct NetOutQueue {
+    uint8_t *bytes;
+    size_t start;
+    size_t used;
+} NetOutQueue;
+static NetOutQueue g_net_out[NET_LOBBY_MAX_PLAYERS];
+
+static void net_out_clear(unsigned slot)
+{
+    free(g_net_out[slot].bytes);
+    memset(&g_net_out[slot], 0, sizeof(g_net_out[slot]));
+}
+
+/* 0 on a socket error. */
+static int net_out_flush(unsigned slot)
+{
+    NetOutQueue *queue = &g_net_out[slot];
+    int sent;
+    if (queue->used == 0U) return 1;
+    sent = net_socket_send_some(g_net_peers[slot], queue->bytes + queue->start, queue->used);
+    if (sent < 0) return 0;
+    queue->start += (size_t)sent;
+    queue->used -= (size_t)sent;
+    if (queue->used == 0U) queue->start = 0;
+    return 1;
+}
+
+static size_t net_out_backlog(unsigned slot)
+{
+    return slot < NET_LOBBY_MAX_PLAYERS ? g_net_out[slot].used : 0U;
+}
+
 static int net_send(unsigned slot, const uint8_t *bytes, size_t length)
 {
+    NetOutQueue *queue;
     if (slot >= NET_LOBBY_MAX_PLAYERS || g_net_peers[slot] == NET_SOCKET_INVALID) return 0;
-    return net_socket_send(g_net_peers[slot], bytes, length);
+    queue = &g_net_out[slot];
+    if (!net_out_flush(slot)) return 0;
+    if (queue->used == 0U) {
+        int sent = net_socket_send_some(g_net_peers[slot], bytes, length);
+        if (sent < 0) return 0;
+        bytes += sent;
+        length -= (size_t)sent;
+        if (length == 0U) return 1;
+    }
+    if (queue->bytes == NULL) {
+        queue->bytes = (uint8_t *)malloc(NET_OUT_CAPACITY);
+        if (queue->bytes == NULL) return 0;
+    }
+    if (length > NET_OUT_CAPACITY - queue->used) return 0;
+    if (length > NET_OUT_CAPACITY - queue->start - queue->used) {
+        memmove(queue->bytes, queue->bytes + queue->start, queue->used);
+        queue->start = 0;
+    }
+    memcpy(queue->bytes + queue->start + queue->used, bytes, length);
+    queue->used += length;
+    return 1;
 }
 
 static void net_drop_peer(unsigned slot);
@@ -218,6 +279,7 @@ static void net_host_broadcast_state(void)
 static void net_drop_peer(unsigned slot)
 {
     net_close_socket(&g_net_peers[slot]);
+    net_out_clear(slot);
     memset(&g_net_readers[slot], 0, sizeof(g_net_readers[slot]));
     if (g_net_mode == NET_MODE_HOST) {
         if (g_net_in_game) {
@@ -381,6 +443,7 @@ static void net_host_handle_frame(unsigned slot, const NetFrame *frame)
             length = net_lobby_encode_reject(bytes, sizeof(bytes), (uint8_t)-assigned);
             (void)net_send(slot, bytes, length);
             net_close_socket(&g_net_peers[slot]);
+            net_out_clear(slot);
             memset(&g_net_readers[slot], 0, sizeof(g_net_readers[slot]));
             return;
         }
@@ -455,7 +518,8 @@ static void net_host_send_save_chunks(void)
         if (g_net_peers[slot] == NET_SOCKET_INVALID ||
             !g_net_lobby.players[slot].connected) continue;
         for (chunk = 0; chunk < NET_SAVE_CHUNKS_PER_POLL &&
-                        g_net_save_sent[slot] < g_net_save_length; ++chunk) {
+                        g_net_save_sent[slot] < g_net_save_length &&
+                        net_out_backlog(slot) < 4U * NET_SAVE_CHUNK; ++chunk) {
             uint8_t payload[9 + NET_SAVE_CHUNK];
             uint8_t bytes[NET_FRAME_MAX_SIZE];
             size_t offset = g_net_save_sent[slot];
@@ -588,6 +652,9 @@ static int net_poll(HWND window)
         }
     } else {
         for (slot = 0; slot < NET_LOBBY_MAX_PLAYERS && g_net_mode != NET_MODE_NONE; ++slot)
+            if (g_net_peers[slot] != NET_SOCKET_INVALID && !net_out_flush(slot))
+                net_drop_peer(slot);
+        for (slot = 0; slot < NET_LOBBY_MAX_PLAYERS && g_net_mode != NET_MODE_NONE; ++slot)
             if (g_net_peers[slot] != NET_SOCKET_INVALID) net_poll_peer(window, slot);
     }
     if (g_net_mode == NET_MODE_HOST) net_host_send_save_chunks();
@@ -701,6 +768,30 @@ static int issue_command(GameCommandKind kind, size_t count, const int32_t *args
    up to three while a guest lags the host (net_lockstep_frame_ticks). Commands of a turn run before its first tick. The host pings
    every guest once a second; the slowest round trip sets the input delay
    (native: the period the host sends on channel 4, type 1). */
+/* Frames the lockstep has waited in a row; past one second every player
+   is told who the game waits for (no timeout: TCP keeps the link, and a
+   slow player catches up instead of being dropped). */
+static unsigned g_net_stall_frames;
+
+static void net_report_stall(void)
+{
+    unsigned slot;
+    const char *name = NULL;
+    if (++g_net_stall_frames != 20U) return;
+    if (g_net_mode == NET_MODE_HOST) {
+        uint32_t turn = net_lockstep_turn(&g_net_lockstep);
+        for (slot = 1; slot < NET_LOBBY_MAX_PLAYERS; ++slot)
+            if ((g_net_lockstep.peer_mask & (1U << slot)) &&
+                g_net_lockstep.acked[slot] + NET_TURN_HOST_LEAD <= turn)
+                name = g_net_lobby.players[slot].name;
+    } else {
+        name = g_net_lobby.players[0].name;
+    }
+    if (name == NULL) return;
+    (void)snprintf(g_net_status, sizeof(g_net_status), "En attente de %s", name);
+    net_notify_in_game();
+}
+
 static void net_run_frame(HWND window)
 {
     unsigned budget = 1;
@@ -717,6 +808,10 @@ static void net_run_frame(HWND window)
         net_host_broadcast(bytes, length);
     }
     budget = net_lockstep_frame_ticks(&g_net_lockstep);
+    if (!g_net_lockstep.desync) {
+        if (net_lockstep_can_tick(&g_net_lockstep)) g_net_stall_frames = 0;
+        else net_report_stall();
+    }
     while (budget-- != 0U && net_lockstep_can_tick(&g_net_lockstep)) {
         const NetTurnBundle *bundle = net_lockstep_turn_commands(&g_net_lockstep);
         NetTurnBundle created[NET_TURN_MAX_DELAY + 1];

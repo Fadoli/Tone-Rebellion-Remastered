@@ -6,7 +6,7 @@ This page lists every behaviour of the remake that knowingly differs from `FLOAT
 
 | Topic | Original | Remake |
 |---|---|---|
-| Transport | DirectPlay sessions, native channels and turn rate. | Own TCP records (port 28610 by default) and lockstep turns of one tick (50 ms); see [multiplayer](../../behavior/multiplayer.md). No chat, no reconnection. |
+| Transport | DirectPlay sessions, native channels and turn rate. | Own TCP records (port 28610 by default) and lockstep turns of one tick (50 ms); see [multiplayer](../../behavior/multiplayer.md). No chat, no reconnection. No time-out: a slow or frozen player makes the others wait (with an "En attente de" message) instead of being dropped; only a closed connection drops a player. |
 | Lobby entry | DirectPlay property sheet (`FUN_0044c2b9`). | "Multijoueur" title button (`M`), the remake setup screen, `H`/`J` on the title, or `--host` / `--join address`. |
 | Tribes | One player per tribe. | Several players may share a tribe (co-operation). |
 | Pause | Refused in a network game (`FUN_004578df`, `DAT_004befe0 != 0`). | The pause zone of the options panel pauses every machine on the same turn (`GAME_COMMAND_SET_NETWORK_PAUSE`); turns keep flowing so the resume can arrive. Any player can pause or resume. |
