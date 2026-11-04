@@ -332,10 +332,22 @@ static int selected_repair_button_visible(void)
         g_selected_location < 0) return 0;
     island = &g_game_session.islands[selection_island()];
     if (g_selected_location >= island->location_count) return 0;
+    /* Remake choice (requested): the native FUN_0045302a shows the button on
+       every eligible site and checks the damage only at the click
+       (FUN_00452b67); here it shows only when that click would act, i.e. an
+       own damaged building, or one already in the repair list. */
     return island_panel_repair_button_visible(
-        island->locations[g_selected_location].record_value_10,
-        island->locations[g_selected_location].owner_id,
-        island->locations[g_selected_location].renderer_class);
+               island->locations[g_selected_location].record_value_10,
+               island->locations[g_selected_location].owner_id,
+               island->locations[g_selected_location].renderer_class) &&
+        g_menu.selected_tribe >= 0 &&
+        g_menu.selected_tribe < GAME_START_PLAYER_COUNT &&
+        (game_session_repair_available(&g_game_session, &g_pad_catalog,
+             (uint8_t)g_menu.selected_tribe, (uint8_t)selection_island(),
+             (uint16_t)g_selected_location) ||
+         game_session_repair_listed(&g_game_session,
+             (uint8_t)g_menu.selected_tribe, (uint8_t)selection_island(),
+             (uint16_t)g_selected_location));
 }
 
 static int selected_onoff_button_visible(void)

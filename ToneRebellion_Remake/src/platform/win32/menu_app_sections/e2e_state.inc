@@ -38,8 +38,8 @@ static int e2e_start_fixture(HWND window)
    (subtype 4, full charge), an enemy subtype-1 unit and two Leviathans
    (subtypes 12 and 9). TONE_REBELLION_E2E_FIXTURE=enemy_hall builds the
    same game and opens tribe 1's Hall island instead; "spell" adds a stocked
-   spell building with a linked caster and selects it. Returns 1 when
-   built. */
+   spell building with a linked caster and selects it; "repair" a damaged
+   0x25 producer (1 hit point), selected. Returns 1 when built. */
 static int e2e_build_fixture(HWND window)
 {
     char name[32];
@@ -56,7 +56,8 @@ static int e2e_build_fixture(HWND window)
         (strcmp(name, "badges") != 0 && strcmp(name, "enemy_hall") != 0 &&
          strcmp(name, "spell") != 0 && strcmp(name, "dying") != 0 &&
          strcmp(name, "obtain") != 0 && strcmp(name, "victory") != 0 &&
-         strcmp(name, "messages") != 0 && strcmp(name, "return") != 0))
+         strcmp(name, "messages") != 0 && strcmp(name, "return") != 0 &&
+         strcmp(name, "repair") != 0))
         return 0;
     g_menu.world_index = 0;
     g_menu.selected_tribe = 0;
@@ -185,6 +186,26 @@ static int e2e_build_fixture(HWND window)
             return 1;
         }
     }
+    if (strcmp(name, "repair") == 0) {
+        uint16_t location;
+        for (location = 0;
+             location < g_game_session.islands[island].location_count;
+             ++location) {
+            IslandLocation site = {0};
+            site.kind = ISLAND_LOCATION_PAD;
+            site.renderer_subtype =
+                g_game_session.islands[island].locations[location]
+                    .construction_site_size;
+            if (!game_session_place_building(&g_game_session, &g_pad_catalog,
+                    0, island, location, &site, 0x25, NULL, 0)) continue;
+            g_game_session.islands[island].locations[location].source_value_34 = 1;
+            x = g_game_session.islands[island].locations[location].x;
+            if (!open_island_view(window, island)) return 0;
+            g_island_scroll_x = island_clamp_scroll((int)x - 0x140);
+            select_location_on_view((int)location);
+            return 1;
+        }
+    }
     if (strcmp(name, "spell") == 0 || strcmp(name, "return") == 0) {
         /* A finished 0x2f spell building near the Hall, stocked, with one
            linked level-1 caster: tribe 0's BC_Spell7 is kind 14
@@ -299,6 +320,8 @@ static void e2e_write_state(void)
             g_game_session_valid ? (int)g_game_session.location_move_active : 0,
             selected_location_can_be_grabbed(), g_hovered_location,
             g_mouse_x, g_mouse_y);
+    fprintf(file, "repair_button %d\nrepair_hovered %d\n",
+            selected_repair_button_visible(), g_hovered_repair_control);
     fprintf(file, "selection_island %d\n", selection_island());
     if (g_game_session_valid && g_menu.selected_tribe >= 0 &&
         g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {

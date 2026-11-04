@@ -2534,7 +2534,17 @@ static void draw_location_action_panel(RenderSurface *surface)
                 &g_upgrade_button_art, g_hovered_upgrade_control);
         }
         if (selected_repair_button_visible()) {
-            draw_control_with_hover_overlay(surface, repair_button,
+            /* FUN_00442d60 (IWRepair tick): while the building is in the
+               tribe's repair list (FUN_0045ff3f) the NStateButton state +0x72
+               steps on odd ticks and wraps from NSTATES 11 back to 1, so
+               frames 1..10 cycle (the fade); otherwise state 0. */
+            WindowTemplate repair_state = *repair_button;
+            if (game_session_repair_listed(&g_game_session,
+                    (uint8_t)g_menu.selected_tribe, (uint8_t)selection_island(),
+                    (uint16_t)g_selected_location))
+                repair_state.shape_frame = repair_button->shape_frame + 1 +
+                    (int)((g_menu.animation_ticks / 2U) % 10U);
+            draw_control_with_hover_overlay(surface, &repair_state,
                 &g_repair_button_art, g_hovered_repair_control);
         }
     }

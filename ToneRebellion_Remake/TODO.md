@@ -5,7 +5,7 @@ Porter uniquement les comportements établis par le binaire et les données loca
 ## À faire
 
 - Déplacement de bâtiment : la source est effacée à la pose; le natif la passe en `+0x58 = 3` et l'efface 8 à 16 ticks plus tard (`FUN_0045343b`, `FUN_00450a71`). Le port ne peut pas garder ce délai tant que la recherche du Hall verrait deux Halls ([analyse](../behavior/island-ground-object-interaction.md)).
-- Vérifier en jeu : Repair par liste de réparation, contamination d'un marqueur classe 1 par une Spore, séquence de victoire complète (en solo et en réseau, F11 réseau = commande 0x15), survol des déclencheurs de trait (aucun n'est atteignable dans les fixtures).
+- Vérifier en jeu : Repair par liste de réparation jusqu'aux PV pleins (fixture `repair` : bouton et liste vérifiés), contamination d'un marqueur classe 1 par une Spore, séquence de victoire complète (en solo et en réseau, F11 réseau = commande 0x15), survol des déclencheurs de trait (aucun n'est atteignable dans les fixtures).
 - Ménage local (ignoré par git) : copies `ToneRebellion_Remake_sdl - Copie*.exe`, `ToneRebellion_Remake*.zip`, `../hs_err_pid*.log`, `mci_debug.log`.
 
 ## Non porté

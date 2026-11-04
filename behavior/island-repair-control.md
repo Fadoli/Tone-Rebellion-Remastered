@@ -191,3 +191,15 @@ Conclusion: Repair est atteignable et fonctionne, mais pas par `FA_Repair` (acti
 - Affichage: `FUN_004459e6` montre `REPAIR` pour une ligne type 4 sous-type 1 listée (0x445e56) et pour le type 0x12 (0x445d6e).
 Affichage (REA sonnet 2026-11-02, `ev_db2f678b…`, `ev_67877148…`): `FUN_0045302a` ajoute la commande 3 pour tout site avec `site+4 == 0`, `site+0x10 > 0x24` et `!= 0x2a` (hors branche Obtain), sans contrôle de propriétaire ni de dégâts; `FUN_0042f755` affiche alors `BC_Repair` (message 1). Propriétaire et dégâts ne sont vérifiés qu'au clic (`FUN_00429f3a`, `FUN_00452b67`). Le message 0xb de `FUN_00440567` (0x441a4a) touche tous les boutons du panneau sans condition. Aucun état enfoncé lié à la liste (`FUN_0045ff3f`) trouvé (méthode de dessin d'`IWRepair` non lue). Inconnue: autres appelants de `FUN_00414081` (réseau). Le maximum `FUN_00450978` est déjà modélisé par le port (`game_session_source_value_34_max`).
 Port (à aligner): tâche `0x12`, livraisons de Build Tone vers le site puis soin de 1 PV toutes les 40 ticks; le natif crédite 1 PV par unité livrée, sans attente, et le bouton bascule l'entrée.
+
+## Animation et visibilité de `BC_Repair` (REA haiku 2026-11-04)
+
+Observations (`FUN_0046cd22` cas 0x2b, constructeur `FUN_00442b9c` `ev_4d6e21907a…`, vtable `0x494518` `ev_f55f7d89…`, tick `FUN_00442d60` `ev_ae810f78…`) :
+- **Classe :** `IWRepair` est un `NStateButton` (vtable de base `0x4941b8`). Le message est traité par `FUN_00442c21`, le tick par `FUN_00442d60`.
+- **Animation (tick) :** si `FUN_0045ff3f` trouve le bâtiment dans la liste de réparation, l'état `+0x72` avance d'un cran aux ticks impairs (`DAT_004c2b64 % 2`). Il repart à 1 quand il atteint `+0x70` (NSTATES 11) : les images 1 à 10 défilent en boucle, c'est le fondu. Hors liste, `+0x72 = 0` (image 0). L'image 11 est le survol.
+- **Visibilité :** l'original ne cache pas le bouton. `FUN_0045302a` et `FUN_0042f755` ne lisent pas les points de vie ; les dégâts ne sont testés qu'au clic (`FUN_00452b67`).
+
+**Port :**
+- **Animation :** images 1 à 10 au rythme d'une image tous les deux ticks d'animation tant que le bâtiment est dans la liste ; image 0 sinon.
+- **Visibilité, choix du remake (demande utilisateur) :** le bouton n'apparaît que sur un bâtiment du joueur endommagé (`game_session_repair_available`), ou déjà dans la liste (`game_session_repair_listed`).
+- **Vérifié en jeu :** fixture `repair` (producteur 0x25 à 1 PV, sélectionné). Un clic met le bâtiment dans la liste et la croix pulse. Un bâtiment à pleine vie (posé avec F6) n'a pas de bouton.
