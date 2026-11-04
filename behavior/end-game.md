@@ -115,3 +115,17 @@ Observations (`ev_1e306ae9…` 0x46a918, `ev_172a608b…` `FUN_004672ef`, `ev_30
 - **Écran de fin (`FUN_0044954d`) :** il n'a pas de branche réseau.
 
 **Port :** le remake déroule désormais la séquence dans le tick réseau (`net_run_frame`, `run_world_sequence_step`) et quitte la session réseau à l'écran de fin. F11 en réseau envoie `GAME_COMMAND_START_END_SEQUENCE` (0x15). Non vérifié en jeu à deux machines.
+
+## Sortie de l'écran de fin, niveau du score, compteurs des sauvegardes (REA haiku 2026-11-04)
+
+Observations (`FUN_0041b575` `ev_8d649876…`, `FUN_0041a7d6` `ev_1c8d95a3…`, `FUN_0041afbb` `ev_5ae1246c…`, `FUN_0045f849` `ev_9efa8bcc…`, `FUN_00448e5a` `ev_3f92eb36…`) :
+- **Sortie :** `ENDGTEXT` (type 38, vtable `0x4940b0`), `ENDGPLAYER` (36) et `ENDGNONP` (37) répondent tous aux messages 6 et 7 par `FUN_0046c1b4(1, 0, 0)`, c'est-à-dire `SetState(0)`, le titre.
+- **Défilement :** aucun message ne change la minuterie `DAT_004c2994`. Elle n'est remise à 0 qu'au message 1. Rien n'accélère ni ne saute le défilement : « passer le texte » revient donc à quitter l'écran.
+- **Niveau du score :** `L = clamp(DAT_004bf11c, 0, 4)`, lu en `0x45f8b7`. C'est le niveau de la Nouvelle partie (bloc de session `+0x13c`, que le message 55 fait tourner de 0 à 4). Le score en tire `p4 = 50·L`.
+- **Ligne de score dans les .SAV d'origine :** le bloc joueur contient les morts de Léviathans (`+0x146c + 2·sous-type`), les morts par tribu (`+0x1490`) et les pertes (`+0x1498`). Dans les huit sauvegardes locales, les mots des sous-types 1 et 6 valent `0xffff` (autres données) ; le mot 8 est le glyphe lancé.
+
+**Port :**
+- Un clic gauche sur ces fenêtres renvoie au titre ; seul `STATBKG` l'ignore. Vérifié en jeu sur la fixture `badges` (F11 puis clic).
+- Le score de niveau suit `config.difficulty`.
+- Les cartes `ENDGNONP` s'affichent en partie réseau.
+- Le chargement d'une sauvegarde d'origine reprend les morts des sous-types 9 à 17, les morts par tribu, les pertes et le glyphe lancé. Les sauvegardes du remake gardent déjà ces champs (schéma de `GameSession`).

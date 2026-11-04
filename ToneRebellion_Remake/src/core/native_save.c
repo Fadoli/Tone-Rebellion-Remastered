@@ -32,6 +32,11 @@ enum {
     PLAYER_POLICY_ROW = 0xd8,    /* DAT_00619290 */
     PLAYER_RECIPIENT_ROW = 0xe8, /* DAT_006192a0 */
     PLAYER_STOCK_MODES = 0x13d0, /* DAT_0061a588: u16 per resource */
+    /* FUN_004204bc's score row (behavior/end-game.md): kills per Leviathan
+       subtype, kills per player faction, then the tribe's own losses. */
+    PLAYER_LEVIATHAN_KILLS = 0x146c,
+    PLAYER_FACTION_KILLS = 0x1490,
+    PLAYER_LOSSES = 0x1498,
     /* Tribe list (FUN_0045fd91 / FUN_0045fe62): 16 entries of 10 bytes,
        island, site, mode (0 repair, 1 UpgSpread), task row (-1 free),
        UpgSpread delivery count. */
@@ -324,6 +329,18 @@ static void apply_player_record(GamePlayerEconomy *economy, PlayerMasks *economy
             economy_masks->recipient |= (uint8_t)(1U << item);
     }
     economy->floater_birth_timer = u32_at(player + PLAYER_BIRTH_TIMER);
+    /* Leviathan subtypes 9..17 only: in the original saves the words of
+       subtypes 1 and 6 hold 0xffff (other data shares the row). */
+    for (item = 9; item < 18U; ++item)
+        economy->leviathan_kills_by_subtype[item] =
+            u16_at(player + PLAYER_LEVIATHAN_KILLS + item * 2U);
+    for (item = 0; item < GAME_START_PLAYER_COUNT; ++item)
+        economy->floater_kills_by_faction[item] =
+            u16_at(player + PLAYER_FACTION_KILLS + item * 2U);
+    economy->floater_losses = u16_at(player + PLAYER_LOSSES);
+    /* The same native word (P+0x147c, subtype 8) holds the cast glyph.
+       FUN_00465793 subtype 3 writes and FUN_004239e9 case 0x16 reads. */
+    economy->selected_glyph_index = (uint8_t)u16_at(player + PLAYER_LEVIATHAN_KILLS + 8U * 2U);
     economy->defeat_latched = u32_at(player + PLAYER_DEFEAT_LATCH) != 0;
     for (item = 0; item < GAME_RESOURCE_TYPE_COUNT; ++item) {
         uint16_t mode = u16_at(player + PLAYER_STOCK_MODES + item * 2U);

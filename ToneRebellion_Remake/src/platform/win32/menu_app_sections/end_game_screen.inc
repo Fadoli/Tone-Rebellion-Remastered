@@ -2,8 +2,9 @@
    frame 0 under the endgame.pal palette; ENDGTEXT (type 38, FUN_0041b0d7)
    scrolls the endgame.txt lines inside pane 211,15..427,134; ENDGPLAYER and
    ENDGNONP draw the score cards. Entered by the seal victory sequence
-   (SetState(7)) or the F11 preview key; no native leave input was found
-   (see behavior/end-game.md). */
+   (SetState(7)) or the F11 preview key. A left click on the player card,
+   the text or a card leaves to the title (SetState(0), REA 2026-11-04);
+   no input skips or speeds up the scroll (see behavior/end-game.md). */
 
 enum {
     END_GAME_PANE_LEFT = 211,
@@ -16,8 +17,7 @@ enum {
     END_GAME_SCROLL_START = 5,
     END_GAME_SCROLL_END = 500,
     END_GAME_TICK_WRAP = 6000,
-    END_GAME_TICK_RESTART = 0x1f5,
-    END_GAME_MULTIPLAYER_SESSION = 0
+    END_GAME_TICK_RESTART = 0x1f5
 };
 
 static SpriteSheet g_end_game_template_art;
@@ -38,6 +38,8 @@ static int g_end_game_loaded;
 static GameEndGameScore g_end_game_scores[4];
 static uint16_t g_end_game_glyph_masks[4];
 static uint8_t g_end_game_score_ready[4];
+/* DAT_004befe0 when the screen opened (a network game). */
+static int g_end_game_multiplayer;
 
 /* FUN_0041b0d7: records of 40 characters, read until a line starting with
    ENDSTORY; lines starting with '*' become empty spacers. */
@@ -133,9 +135,27 @@ static int enter_end_game_screen(void)
         g_end_game_glyph_masks[player] = g_game_session_valid
             ? g_game_session.economy[player].glyph_mask : 0;
     }
+    g_end_game_multiplayer = g_game_session_valid &&
+        g_game_session.config.multiplayer_session != 0;
     g_end_game_tick = 0;
     g_menu.screen = SCREEN_END_GAME;
     return 1;
+}
+
+/* windows.txt state 7: the panes whose handlers leave on message 6. */
+static int end_game_screen_hit(int x, int y)
+{
+    static const int panes[5][4] = {
+        {0, 0, 639, 319},       /* ENDGPLAYER */
+        {211, 15, 427, 134},    /* ENDGTEXT */
+        {15, 326, 204, 461},    /* ENDGNONP0..2 */
+        {223, 326, 412, 461},
+        {432, 326, 621, 461}};
+    unsigned i;
+    for (i = 0; i < 5U; ++i)
+        if (x >= panes[i][0] && x <= panes[i][2] &&
+            y >= panes[i][1] && y <= panes[i][3]) return 1;
+    return 0;
 }
 
 /* DAT_004c2994: one step per paint; wraps to 0x1f5 once above 6000. */
@@ -340,9 +360,9 @@ static void render_end_game(RenderSurface *surface)
     fill_rect(surface, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, RGB(0, 0, 0));
     draw_sprite(surface, &g_end_game_template_art, 0, 0, 0);
     render_end_game_player_card(surface, tick);
-    /* FUN_0041a8df draws only when DAT_004befe0 (multiplayer session) is set;
-       the port is solo-only, so the three ENDGNONP cards stay hidden. */
-    if (END_GAME_MULTIPLAYER_SESSION) render_end_game_other_cards(surface);
+    /* FUN_0041a8df draws only when DAT_004befe0 (multiplayer session) is set:
+       the three ENDGNONP cards show in a network game. */
+    if (g_end_game_multiplayer) render_end_game_other_cards(surface);
     if (tick <= END_GAME_SCROLL_START || tick >= END_GAME_SCROLL_END ||
         g_big_font.bytes == NULL) return;
     /* ENDGTEXT line i sits at local y = 150 - (tick - 5) + 16 i, centred in

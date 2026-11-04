@@ -116,10 +116,13 @@ int game_session_end_game_score(const GameSession *session, uint8_t player_slot,
     unsigned int percentage;
     unsigned int i;
     int32_t sum;
-    int32_t level = 0;
+    int32_t level;
 
     if (session == NULL || score == NULL ||
         player_slot >= GAME_START_PLAYER_COUNT) return 0;
+    /* 0x45f8b7: L = DAT_004bf11c, the New Game level (session block +0x13c,
+       cycled 0..4 by message 55), clamped to 0..4: p4 = 50 L. */
+    level = session->config.difficulty > 4U ? 4 : (int32_t)session->config.difficulty;
     memset(score, 0, sizeof(*score));
     economy = &session->economy[player_slot];
     for (i = 0; i < session->island_count; ++i) {

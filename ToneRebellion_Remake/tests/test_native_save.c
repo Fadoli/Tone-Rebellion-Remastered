@@ -221,6 +221,46 @@ static void test_crossing_worker_resumes_its_task(uint16_t step)
     free(data);
 }
 
+/* FUN_004204bc's score row (P+0x146c..0x1499) comes back for the end
+   screen: Leviathan kills of subtypes 9..17, faction kills, losses. */
+static void test_score_counters_are_restored(void)
+{
+    size_t size;
+    uint8_t *data = build_save(2, 2, &size);
+    NativeSave save;
+    uint8_t *player;
+    unsigned int slot;
+    char error[96] = "";
+
+    assert(native_save_parse(data, size, &save, error, sizeof(error)));
+    for (slot = 0; slot < FLOATER_SLOTS; ++slot)
+        put32(data + save.floater_offset + (size_t)slot * FLOATER_RECORD,
+              0xffffffffU);
+    player = data + save.player_offset + 2U * PLAYER_RECORD;
+    put16(player + 0x146c + 2 * 1, 0xffff); /* not a counter in real saves */
+    put16(player + 0x146c + 2 * 8, 3);      /* cast glyph */
+    put16(player + 0x146c + 2 * 9, 382);
+    put16(player + 0x146c + 2 * 17, 23);
+    put16(player + 0x1490 + 2 * 1, 4);
+    put16(player + 0x1498, 184);
+
+    memset(&crossing_session, 0, sizeof(crossing_session));
+    memset(&crossing_catalog, 0, sizeof(crossing_catalog));
+    crossing_session.island_count = 2;
+    crossing_session.islands[0].location_count = 2;
+    crossing_session.islands[1].location_count = 2;
+    assert(native_save_apply(&save, &crossing_catalog, &crossing_session,
+                             error, sizeof(error)));
+    assert(crossing_session.economy[2].leviathan_kills_by_subtype[1] == 0);
+    assert(crossing_session.economy[2].leviathan_kills_by_subtype[9] == 382);
+    assert(crossing_session.economy[2].leviathan_kills_by_subtype[17] == 23);
+    assert(crossing_session.economy[2].selected_glyph_index == 3);
+    assert(crossing_session.economy[2].floater_kills_by_faction[1] == 4);
+    assert(crossing_session.economy[2].floater_losses == 184);
+    assert(crossing_session.economy[0].floater_losses == 0);
+    free(data);
+}
+
 int main(void)
 {
     test_valid_save_reports_header_and_offsets();
@@ -230,6 +270,7 @@ int main(void)
     test_find_world_matches_island_count();
     test_crossing_worker_resumes_its_task(0);
     test_crossing_worker_resumes_its_task(1);
+    test_score_counters_are_restored();
     (void)puts("native save unit tests passed");
     return 0;
 }

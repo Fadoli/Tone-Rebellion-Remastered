@@ -483,7 +483,31 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
     case WM_LBUTTONDOWN: {
         /* A release lost outside the window must not swallow a later click. */
         g_swallow_left_button_up = 0;
-        if (g_menu.screen == SCREEN_LOGO || g_menu.screen == SCREEN_END_GAME) return 0;
+        if (g_menu.screen == SCREEN_END_GAME) {
+            /* Message 6 (left press) on ENDGPLAYER, ENDGTEXT or an ENDGNONP
+               card: FUN_0041a7d6 / FUN_0041b575 / FUN_0041afbb queue
+               SetState(0), the title. STATBKG alone ignores it. */
+            RECT end_client;
+            RECT end_viewport;
+            platform_client_rect(window, &end_client);
+            if (logical_viewport(end_client.right - end_client.left,
+                                 end_client.bottom - end_client.top,
+                                 &end_viewport) &&
+                end_viewport.right > end_viewport.left &&
+                end_viewport.bottom > end_viewport.top &&
+                end_game_screen_hit(
+                    ((GET_X_LPARAM(lparam) - end_viewport.left) * LOGICAL_WIDTH) /
+                        (end_viewport.right - end_viewport.left),
+                    ((GET_Y_LPARAM(lparam) - end_viewport.top) * LOGICAL_HEIGHT) /
+                        (end_viewport.bottom - end_viewport.top))) {
+                g_game_session_valid = 0;
+                g_menu.screen = SCREEN_MAIN_MENU;
+                update_window_title(window);
+                platform_invalidate(window);
+            }
+            return 0;
+        }
+        if (g_menu.screen == SCREEN_LOGO) return 0;
         {
             RECT panel_client;
             RECT panel_viewport;
