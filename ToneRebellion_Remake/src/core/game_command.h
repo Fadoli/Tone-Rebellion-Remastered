@@ -41,6 +41,7 @@ typedef enum GameCommandKind {
     GAME_COMMAND_HAND_BACK_PLAYER,        /* player (FUN_004121b7 case 2) */
     GAME_COMMAND_TOGGLE_REPAIR,           /* player, island, location */
     GAME_COMMAND_START_END_SEQUENCE,      /* (none): FUN_004672ef case 0x15 */
+    GAME_COMMAND_SET_NETWORK_PAUSE,       /* paused (remake) */
     GAME_COMMAND_KIND_COUNT
 } GameCommandKind;
 

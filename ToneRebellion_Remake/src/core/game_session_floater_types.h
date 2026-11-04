@@ -195,6 +195,9 @@ typedef struct GameSession {
        no-floater defeat branch stays in the window loop. */
     int16_t world_sequence_state;
     int16_t world_sequence_tick;
+    /* Remake: pause of a network game, set on every machine at the same turn
+       by GAME_COMMAND_SET_NETWORK_PAUSE (the native pause is solo only). */
+    uint8_t network_paused;
     uint8_t island_count;
     GameStartSetup player_starts;
     GameStartToneDistribution tone_placements;

@@ -136,6 +136,9 @@ int game_command_apply(GameSession *session, const GameCommandContext *context,
         if (a[0] < 0 || a[0] >= GAME_START_PLAYER_COUNT) return 0;
         game_session_hand_back_player_holdings(session, (unsigned int)a[0]);
         return 1;
+    case GAME_COMMAND_SET_NETWORK_PAUSE:
+        session->network_paused = a[0] != 0;
+        return 1;
     case GAME_COMMAND_START_END_SEQUENCE:
         /* World command 0x15, sent by the network debug key 'W'
            (FUN_0046a5b7 0x46a92a): DAT_006191b4 = 3, DAT_006191b6 = 0 on

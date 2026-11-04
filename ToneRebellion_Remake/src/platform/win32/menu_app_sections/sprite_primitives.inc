@@ -115,6 +115,9 @@ static void set_background_tune_once(const char *tune_id);
 static void stop_background_tune(void);
 static void draw_location_action_panel(RenderSurface *surface);
 static int run_world_sequence_step(HWND window);
+/* SlideWindow pause (slide_panel.inc); a network game mirrors
+   GameSession.network_paused into it. */
+static int g_paused;
 static void draw_clipboard_strip(RenderSurface *surface);
 static int load_game_session_for_selected_world(char *error, size_t error_capacity);
 static int draw_building_preview(RenderSurface *surface, uint16_t item_id, uint8_t player_slot,

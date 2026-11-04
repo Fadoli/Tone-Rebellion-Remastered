@@ -566,8 +566,13 @@ static void net_run_frame(HWND window)
                 g_net_apply_ms = platform_ticks_ms();
                 g_net_apply_tick = g_net_lockstep.tick;
             }
-        simulate_session_tick(g_game_session.simulation_tick);
-        if (run_world_sequence_step(window)) return;
+        /* A paused network game keeps exchanging turns (so the command
+           that resumes it can arrive) but its world stands still. */
+        g_paused = g_game_session.network_paused;
+        if (!g_game_session.network_paused) {
+            simulate_session_tick(g_game_session.simulation_tick);
+            if (run_world_sequence_step(window)) return;
+        }
         created_count = net_lockstep_finish_tick(&g_net_lockstep,
             game_session_sync_hash(&g_game_session), created,
             sizeof(created) / sizeof(created[0]));

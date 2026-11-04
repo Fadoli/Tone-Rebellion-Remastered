@@ -127,6 +127,12 @@ static void run_ui_frame(HWND window, WPARAM wparam)
         platform_invalidate(window);
         return;
     }
+    if (wparam == 1 && g_net_in_game && g_menu.screen == SCREEN_LOAD_GAME) {
+        /* Saving during a network game: the turns go on meanwhile. */
+        net_run_frame(window);
+        platform_invalidate(window);
+        return;
+    }
     if (wparam == 1 && (g_menu.screen == SCREEN_NEW_GAME ||
                         g_menu.screen == SCREEN_WORLD_MAP ||
                         g_menu.screen == SCREEN_ISLAND)) {
@@ -141,8 +147,8 @@ static void run_ui_frame(HWND window, WPARAM wparam)
         /* A network game advances by turns on every screen; the loop
            below then only drives the UI animation clock. */
         if (g_net_in_game) {
-            sim_steps = 1U;
             net_run_frame(window);
+            sim_steps = g_paused ? 0U : 1U;
         }
         /* FUN_0045eaa7 sets the end-sequence flag when the solo tribe has
            no floaters left; FUN_00464e4d then queues SetState(2) 100 ticks
@@ -704,7 +710,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             if (g_sim_speed < 3U) ++g_sim_speed;   /* FUN_0046a5b7: max 3 */
             return 0;
         }
-        if (wparam == VK_F5 && !g_net_in_game && (g_menu.screen == SCREEN_WORLD_MAP ||
+        if (wparam == VK_F5 && (g_menu.screen == SCREEN_WORLD_MAP ||
                                 g_menu.screen == SCREEN_ISLAND)) {
             /* Port shortcut for the Save screen (state 5); the native entry
                point is not established. */

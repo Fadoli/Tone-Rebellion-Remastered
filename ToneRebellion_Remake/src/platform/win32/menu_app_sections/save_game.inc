@@ -188,6 +188,9 @@ static int read_save_file(HWND window, const char *path)
     free(schema);
     free(data);
     if (!ok) return 0;
+    /* A save made during a network game continues as a solo game here. */
+    g_game_session.config.multiplayer_session = 0;
+    g_game_session.network_paused = 0;
     game_music_state_init(&g_game_music);
     g_game_session_world_index = body.world_index;
     g_game_session_valid = 1;
