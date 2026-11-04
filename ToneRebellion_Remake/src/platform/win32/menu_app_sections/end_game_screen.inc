@@ -1,9 +1,9 @@
 /* Menu state 7 (windows.txt "StatusScreen (winning)"): STATBKG paints ENDTEMP
    frame 0 under the endgame.pal palette; ENDGTEXT (type 38, FUN_0041b0d7)
-   scrolls the endgame.txt lines inside pane 211,15..427,134. Native entry
-   trigger, leave input and the ENDGPLAYER/ENDGNONP stat cards are not
-   established (see behavior/end-game.md); the port enters the screen only
-   through the F11 preview key. */
+   scrolls the endgame.txt lines inside pane 211,15..427,134; ENDGPLAYER and
+   ENDGNONP draw the score cards. Entered by the seal victory sequence
+   (SetState(7)) or the F11 preview key; no native leave input was found
+   (see behavior/end-game.md). */
 
 enum {
     END_GAME_PANE_LEFT = 211,
@@ -32,6 +32,12 @@ enum { EGT_POINTS, EGT_IVISIT, EGT_GLYPHS, EGT_SHADSTR, EGT_FLOTTRIB,
        EGT_COUNT = EGT_LSTREN1 + 5 };
 static char g_end_game_text[EGT_COUNT][48];
 static int g_end_game_loaded;
+/* Score inputs are read once when the screen opens: the victory path
+   (SetState(7)) ends the session right after, while the native records stay
+   in memory for FUN_00419a6b / FUN_0041a8df. */
+static GameEndGameScore g_end_game_scores[4];
+static uint16_t g_end_game_glyph_masks[4];
+static uint8_t g_end_game_score_ready[4];
 
 /* FUN_0041b0d7: records of 40 characters, read until a line starting with
    ENDSTORY; lines starting with '*' become empty spacers. */
@@ -118,7 +124,15 @@ static int load_end_game_screen(void)
 
 static int enter_end_game_screen(void)
 {
+    unsigned player;
     if (!load_end_game_screen()) return 0;
+    for (player = 0; player < 4U; ++player) {
+        g_end_game_score_ready[player] = (uint8_t)(g_game_session_valid &&
+            game_session_end_game_score(&g_game_session, (uint8_t)player,
+                                        &g_end_game_scores[player]));
+        g_end_game_glyph_masks[player] = g_game_session_valid
+            ? g_game_session.economy[player].glyph_mask : 0;
+    }
     g_end_game_tick = 0;
     g_menu.screen = SCREEN_END_GAME;
     return 1;
@@ -170,13 +184,12 @@ static void render_end_game_player_card(RenderSurface *surface, int tick)
     unsigned player = g_menu.selected_tribe < 4U ? g_menu.selected_tribe : 3U;
     unsigned glyph;
     unsigned color = end_game_tribe_color(player);
-    uint16_t mask = g_game_session_valid ? g_game_session.economy[player].glyph_mask : 0;
+    uint16_t mask = g_end_game_glyph_masks[player];
     GameEndGameScore score;
     char text[96];
     char noun[24];
-    if (!g_game_session_valid ||
-        !game_session_end_game_score(&g_game_session, (uint8_t)player, &score))
-        return;
+    if (!g_end_game_score_ready[player]) return;
+    score = g_end_game_scores[player];
     if (tick > 250 && g_end_game_art.frame_count > 5U)
         draw_sprite(surface, &g_end_game_art, 5, 31, 20);
     if (tick > 300 && g_end_game_art.frame_count > 0U)
@@ -278,7 +291,6 @@ static void render_end_game_other_cards(RenderSurface *surface)
     unsigned viewer = g_menu.selected_tribe < 4U ? g_menu.selected_tribe : 3U;
     unsigned card;
     unsigned other = 0;
-    if (!g_game_session_valid) return;
     for (card = 0; card < 3U; ++card, ++other) {
         GameEndGameScore score;
         unsigned player;
@@ -288,9 +300,8 @@ static void render_end_game_other_cards(RenderSurface *surface)
         int saved;
         if (other == viewer) ++other;
         player = other;
-        if (player >= 4U ||
-            !game_session_end_game_score(&g_game_session, (uint8_t)player, &score))
-            continue;
+        if (player >= 4U || !g_end_game_score_ready[player]) continue;
+        score = g_end_game_scores[player];
         color = end_game_tribe_color(player);
         saved = render_surface_save(surface);
         render_surface_intersect_clip(surface, card_x[card], 326, card_x[card] + 190, 462);

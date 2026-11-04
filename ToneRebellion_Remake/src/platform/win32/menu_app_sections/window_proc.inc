@@ -205,9 +205,9 @@ static void run_ui_frame(HWND window, WPARAM wparam)
                 g_hovered_location = -1;
                 update_window_title(window);
             } else if (request == 7) {
-                g_game_session_valid = 0;
                 if (!enter_end_game_screen())
                     g_menu.screen = SCREEN_MAIN_MENU;
+                g_game_session_valid = 0;
                 break;
             }
         }
@@ -867,7 +867,9 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             return 0;
         }
         if (wparam == VK_ESCAPE && g_menu.screen == SCREEN_END_GAME) {
-            g_menu.screen = SCREEN_WORLD_MAP;
+            /* After the victory sequence the session is over: back to the
+               title (no native exit was found, see behavior/end-game.md). */
+            g_menu.screen = g_game_session_valid ? SCREEN_WORLD_MAP : SCREEN_MAIN_MENU;
             platform_invalidate(window);
             return 0;
         }
