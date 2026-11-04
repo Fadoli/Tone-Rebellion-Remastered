@@ -911,10 +911,10 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             return 0;
         }
         if (wparam == VK_ESCAPE && g_menu.screen == SCREEN_END_GAME) {
-            /* Remake exit (the native one is a click, SetState(0)): after
-               the victory sequence the session is over, back to the title;
-               the F11 preview returns to the map. */
-            g_menu.screen = g_game_session_valid ? SCREEN_WORLD_MAP : SCREEN_MAIN_MENU;
+            /* Remake exit (the native one is a click): SetState(0), the
+               title, as the native exit; the F11 preview ends the game too. */
+            g_game_session_valid = 0;
+            g_menu.screen = SCREEN_MAIN_MENU;
             update_window_title(window);
             platform_invalidate(window);
             return 0;

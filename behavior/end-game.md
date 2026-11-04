@@ -125,7 +125,7 @@ Observations (`FUN_0041b575` `ev_8d649876…`, `FUN_0041a7d6` `ev_1c8d95a3…`, 
 - **Ligne de score dans les .SAV d'origine :** le bloc joueur contient les morts de Léviathans (`+0x146c + 2·sous-type`), les morts par tribu (`+0x1490`) et les pertes (`+0x1498`). Dans les huit sauvegardes locales, les mots des sous-types 1 et 6 valent `0xffff` (autres données) ; le mot 8 est le glyphe lancé.
 
 **Port :**
-- **Choix du remake (demande utilisateur), différent de l'original :** un clic gauche sur ces fenêtres saute le défilement et l'apparition des cartes (minuteur placé à `0x1f5`, où tout est affiché) ; Échap quitte, vers le titre après une victoire, vers la carte depuis l'aperçu F11. Vérifié en jeu sur la fixture `badges` : F11, clic (carte complète), Échap (carte du monde).
+- **Choix du remake (demande utilisateur), différent de l'original :** un clic gauche sur ces fenêtres saute le défilement et l'apparition des cartes (minuteur placé à `0x1f5`, où tout est affiché) ; Échap quitte vers le titre et termine la partie, aussi depuis l'aperçu F11. Vérifié en jeu sur la fixture `badges` : F11, clic (carte complète), Échap (titre).
 - Le score de niveau suit `config.difficulty`.
 - Les cartes `ENDGNONP` s'affichent en partie réseau.
 - Le chargement d'une sauvegarde d'origine reprend les morts des sous-types 9 à 17, les morts par tribu, les pertes et le glyphe lancé. Les sauvegardes du remake gardent déjà ces champs (schéma de `GameSession`).
