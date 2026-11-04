@@ -390,6 +390,7 @@ static const GameSessionSchemaField k_fields_GameSession[] = {
     SCHEMA_FIELD(GameSession, world_sequence_state, ((GameSession *)0)->world_sequence_state, -1),
     SCHEMA_FIELD(GameSession, world_sequence_tick, ((GameSession *)0)->world_sequence_tick, -1),
     SCHEMA_FIELD(GameSession, network_paused, ((GameSession *)0)->network_paused, -1),
+    SCHEMA_FIELD(GameSession, network_speed, ((GameSession *)0)->network_speed, -1),
     SCHEMA_FIELD(GameSession, island_count, ((GameSession *)0)->island_count, -1),
     SCHEMA_FIELD(GameSession, player_starts, ((GameSession *)0)->player_starts, 2),
     SCHEMA_FIELD(GameSession, tone_placements, ((GameSession *)0)->tone_placements, 4),

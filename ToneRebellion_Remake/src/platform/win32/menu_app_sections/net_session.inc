@@ -696,7 +696,8 @@ static int issue_command(GameCommandKind kind, size_t count, const int32_t *args
     issue_command((kind), sizeof((int32_t[]){__VA_ARGS__}) / sizeof(int32_t), \
                   (int32_t[]){__VA_ARGS__})
 
-/* Runs the turns this frame may take: one tick per 50 ms frame like solo,
+/* Runs the turns this frame may take: one turn per 50 ms frame like solo
+   (each turn simulates network_speed ticks),
    up to three while a guest lags the host (net_lockstep_frame_ticks). Commands of a turn run before its first tick. The host pings
    every guest once a second; the slowest round trip sets the input delay
    (native: the period the host sends on channel 4, type 1). */
@@ -731,8 +732,15 @@ static void net_run_frame(HWND window)
            that resumes it can arrive) but its world stands still. */
         g_paused = g_game_session.network_paused;
         if (!g_game_session.network_paused) {
-            simulate_session_tick(g_game_session.simulation_tick);
-            if (run_world_sequence_step(window)) return;
+            /* FUN_0041c46f runs DAT_004bf110 ticks per frame; a turn here
+               carries the same count on every machine. */
+            unsigned speed = g_game_session.network_speed;
+            unsigned step;
+            if (speed < 1U || speed > 3U) speed = 1U;
+            for (step = 0; step < speed; ++step) {
+                simulate_session_tick(g_game_session.simulation_tick);
+                if (run_world_sequence_step(window)) return;
+            }
         }
         created_count = net_lockstep_finish_tick(&g_net_lockstep,
             game_session_sync_hash(&g_game_session), created,

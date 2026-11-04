@@ -138,7 +138,7 @@ static void run_ui_frame(HWND window, WPARAM wparam)
                         g_menu.screen == SCREEN_ISLAND)) {
         /* FUN_0041c46f runs the tick DAT_004bf110 times per frame; keys 8/9
            change it from 1 to 3 (FUN_0046a5b7). */
-        unsigned sim_steps = g_menu.screen == SCREEN_ISLAND ? g_sim_speed : 1U;
+        unsigned sim_steps = g_menu.screen == SCREEN_NEW_GAME ? 1U : g_sim_speed;
         slide_panel_tick();
         /* The SlideWindow pause flag (DAT_004bf124) stops the game loop on
            the island and on the world map alike (planet view frozen). */
@@ -700,14 +700,24 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             platform_invalidate(window);
             return 0;
         }
-        if (g_menu.screen == SCREEN_ISLAND && !g_net_in_game &&
-            (wparam == '8' || wparam == VK_SUBTRACT)) {
-            if (g_sim_speed > 1U) --g_sim_speed;   /* FUN_0046a5b7: min 1 */
-            return 0;
-        }
-        if (g_menu.screen == SCREEN_ISLAND && !g_net_in_game &&
-            (wparam == '9' || wparam == VK_ADD)) {
-            if (g_sim_speed < 3U) ++g_sim_speed;   /* FUN_0046a5b7: max 3 */
+        if ((g_menu.screen == SCREEN_ISLAND || g_menu.screen == SCREEN_WORLD_MAP) &&
+            (wparam == '8' || wparam == VK_SUBTRACT || wparam == '9' || wparam == VK_ADD)) {
+            /* FUN_0046a5b7: +-1 bounded 1..3. A network game sends the new
+               value as a command so every machine changes at the same turn
+               (native: session message 0xb, gated by multispeed). */
+            int faster = wparam == '9' || wparam == VK_ADD;
+            if (g_net_in_game) {
+                int32_t speed = g_game_session.network_speed >= 1U &&
+                                g_game_session.network_speed <= 3U
+                                    ? (int32_t)g_game_session.network_speed : 1;
+                speed += faster ? 1 : -1;
+                if (speed >= 1 && speed <= 3)
+                    (void)issue_command(GAME_COMMAND_SET_NETWORK_SPEED, 1, &speed);
+            } else if (faster) {
+                if (g_sim_speed < 3U) ++g_sim_speed;
+            } else if (g_sim_speed > 1U) {
+                --g_sim_speed;
+            }
             return 0;
         }
         if (wparam == VK_F5 && (g_menu.screen == SCREEN_WORLD_MAP ||

@@ -198,6 +198,9 @@ typedef struct GameSession {
     /* Remake: pause of a network game, set on every machine at the same turn
        by GAME_COMMAND_SET_NETWORK_PAUSE (the native pause is solo only). */
     uint8_t network_paused;
+    /* Simulation ticks per network turn, 1..3 (0 reads as 1): the network
+       copy of DAT_004bf110, set by GAME_COMMAND_SET_NETWORK_SPEED. */
+    uint8_t network_speed;
     uint8_t island_count;
     GameStartSetup player_starts;
     GameStartToneDistribution tone_placements;

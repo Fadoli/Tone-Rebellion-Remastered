@@ -294,6 +294,9 @@ static void e2e_write_state(void)
     fprintf(file, "island_message %s\n",
             g_island_message_count > 0 ? g_island_messages[0].text : "-");
     fprintf(file, "paused %d\nslide_phase %d\n", g_paused, g_slide_phase);
+    fprintf(file, "sim_speed %u\nnet_speed %u\nsim_tick %lu\n", g_sim_speed,
+            (unsigned)g_game_session.network_speed,
+            (unsigned long)g_game_session.simulation_tick);
     fprintf(file, "cast_effects %u\n",
             (unsigned int)g_game_session.active_cast_effect_count);
     fprintf(file, "text_info %s\n",

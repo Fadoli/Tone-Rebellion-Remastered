@@ -57,6 +57,14 @@ L'original refuse Sauvegarder, Charger et la pause en réseau (`FUN_004578df`, `
 - `F5` côté invité : les tours et l'empreinte restent identiques chez les deux pendant l'écran de sauvegarde.
 - Aucune désynchronisation. `resume.gam` est écrit des deux côtés en quittant.
 
+## Vitesse de jeu en réseau (extension du remake, 2026-11-04)
+
+Observation (REA, ev_f30649de, ev_61f0589e, ev_0123adae, ev_02d74de1): la boucle `FUN_0041c46f` appelle `FUN_00413e8a` `DAT_004bf110 + DAT_004bf114` fois par image, sans test d'écran. Les touches `8`/`9` (pavé `-`/`+`) sont traitées par `FUN_0046a5b7`, appelée par la pompe `FUN_00469f56` pour tous les états (carte et île), bornées 1..3. `DAT_004bf110` = `GAMEENV(0x4befe0)+0x130`, posé à 2 en réseau aux cas 9 et 0xc de `FUN_004121b7`. `DAT_004bf114` n'est écrit que par `FUN_00413b68` en réseau: ticks de rattrapage (retard >> 2 au-delà de 4 périodes, 0 sous 2 périodes). Interprétation: pas de rattrapage en solo.
+
+Remake: `8`/`9` envoient `GAME_COMMAND_SET_NETWORK_SPEED`, qui pose `GameSession.network_speed` au même tour partout; chaque tour simule ce nombre de ticks. Écarts: pas de garde `multispeed`, départ à 1 (pas 2), pas de `DAT_004bf114` (le rattrapage du remake rejoue des tours, `net_lockstep_frame_ticks`). En solo la vitesse s'applique aussi sur la carte du monde.
+
+**Vérifié:** deux instances; vitesse 3 côté invité puis 2 côté hôte: 3 puis 2 ticks par tour sur les deux machines, aucune désynchronisation.
+
 ## Reprendre une partie sauvegardée en réseau (extension du remake, 2026-11-04)
 
 - **Chargement par l'hôte :** dans le lobby, la touche `L` ouvre l'écran Charger, qui accepte une sauvegarde du remake ou d'origine. En cours de partie, la zone Charger du panneau d'options fait de même pour l'hôte seul (fermée aux invités). Le choix renvoie toutes les machines au lobby (`NET_RECORD_LOBBY_RETURN` 0x46, `net_back_to_lobby`) avant l'envoi du fichier ; un retour sans choix ramène l'hôte à la partie.
