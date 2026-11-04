@@ -21,15 +21,12 @@ Porter uniquement les comportements établis par le binaire et les données loca
 ## Écarts mineurs
 
 - Texte enveloppé d'`IWTextInfo` posé à y = 0x10 (natif (10, 6)).
-- Badge 0x1e (Léviathan) jamais affiché : `DAT_0061fa2e` sans écrivain connu.
+- Badge 0x1e (Léviathan) et voile `spl11` du propriétaire 4 jamais affichés : `DAT_0061fa2e` sans écrivain connu.
 - Nettoyage de site approximatif; fusion Maj+clic droit = raccourci du remake.
 
 ## Questions REA ouvertes
 
-- Gardes CONSTR supplémentaires (`payload_12`, taille, réservation), `renderer_class != 0` refusant une tâche CONSTR, cas 1..0xd et 0x10..0x14 de `FUN_0041e569`.
-- État runtime 10 (compteur `+0x34`) : producteur inconnu, le port n'y entre jamais; préférence de classe 1 nulle (aucun écrivain trouvé).
-- Préfixe `x` et badges des monstres dans `FUN_0042704b`.
-- Appelants de `FUN_0045d867`/`FUN_0045d8b2`/`FUN_0045ccce`/`FUN_0045dcf4`; corps de `FUN_004207f2`/`FUN_004509da`/`FUN_0042383d`; classe d'`IWLocInfo`; récepteur du message 0x47 de survol.
+Aucune. La passe du 2026-11-04 a clos les précédentes ([états des floaters](../behavior/floater-states.md)) : gardes CONSTR déjà portées, aucun producteur de l'état 10, pas de préfixe `x`, appelants, corps, classe d'`IWLocInfo` et message 0x47 établis.
 
 ## Hors périmètre
 

@@ -295,6 +295,10 @@ static void e2e_write_state(void)
                     ? (int)g_game_session.economy[g_menu.selected_tribe]
                           .stock_mode[GAME_RESOURCE_BUILD_TONE] : -1,
                 (unsigned long)game_session_sync_hash(&g_game_session));
+    fprintf(file, "move_active %d\ncan_grab %d\nhovered_location %d\nmouse %d %d\n",
+            g_game_session_valid ? (int)g_game_session.location_move_active : 0,
+            selected_location_can_be_grabbed(), g_hovered_location,
+            g_mouse_x, g_mouse_y);
     fprintf(file, "selection_island %d\n", selection_island());
     if (g_game_session_valid && g_menu.selected_tribe >= 0 &&
         g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {

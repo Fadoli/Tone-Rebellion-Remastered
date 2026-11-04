@@ -47,6 +47,12 @@ int game_session_finish_location_move(GameSession *session,
                                       uint8_t player_slot,
                                       uint8_t island_index,
                                       uint16_t location_index);
+/* FUN_0045f337(held, hovered) as IWMove's paint asks it: 1 when the held
+   building could be placed on this site now. */
+int game_session_location_move_target_ok(const GameSession *session,
+                                         uint8_t player_slot,
+                                         uint8_t island_index,
+                                         uint16_t location_index);
 int game_session_cancel_location_move(GameSession *session,
                                       const PadCatalog *catalog);
 /* FUN_00460072 (multiplayer): hand a leaving or floater-less player's glyphs

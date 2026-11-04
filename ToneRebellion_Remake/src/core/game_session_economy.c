@@ -314,6 +314,30 @@ int game_session_begin_location_move(GameSession *session,
     return 1;
 }
 
+int game_session_location_move_target_ok(const GameSession *session,
+                                         uint8_t player_slot,
+                                         uint8_t island_index,
+                                         uint16_t location_index)
+{
+    if (session == NULL || !session->location_move_active ||
+        player_slot >= GAME_START_PLAYER_COUNT ||
+        player_slot != session->location_move_player ||
+        island_index >= session->island_count ||
+        session->location_move_source_island >= session->island_count ||
+        island_index != session->location_move_source_island ||
+        location_index >= session->islands[island_index].location_count ||
+        session->location_move_source_index >=
+            session->islands[session->location_move_source_island].location_count)
+        return 0;
+    return location_move_source_valid(
+               &session->islands[session->location_move_source_island]
+                    .locations[session->location_move_source_index],
+               player_slot) &&
+        location_move_target_valid(
+            &session->islands[island_index].locations[location_index],
+            player_slot);
+}
+
 int game_session_finish_location_move(GameSession *session,
                                       uint8_t player_slot,
                                       uint8_t island_index,
@@ -331,21 +355,12 @@ int game_session_finish_location_move(GameSession *session,
     int preserve_native_site_state;
     int32_t moved_base_item_id;
     GamePlayerEconomy *player_economy;
-    if (session == NULL || !session->location_move_active ||
-        player_slot >= GAME_START_PLAYER_COUNT ||
-        player_slot != session->location_move_player ||
-        island_index >= session->island_count ||
-        session->location_move_source_island >= session->island_count ||
-        island_index != session->location_move_source_island ||
-        location_index >= session->islands[island_index].location_count ||
-        session->location_move_source_index >=
-            session->islands[session->location_move_source_island].location_count)
+    if (!game_session_location_move_target_ok(session, player_slot,
+                                              island_index, location_index))
         return 0;
     source = &session->islands[session->location_move_source_island]
         .locations[session->location_move_source_index];
     target = &session->islands[island_index].locations[location_index];
-    if (!location_move_source_valid(source, player_slot) ||
-        !location_move_target_valid(target, player_slot)) return 0;
     player_economy = &session->economy[player_slot];
     /* FUN_00452a15 clears the source site through FUN_00460029, which also
        cancels pending tasks and detaches workers targeting the old location. */

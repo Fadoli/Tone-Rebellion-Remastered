@@ -2538,13 +2538,6 @@ static void draw_location_action_panel(RenderSurface *surface)
                 &g_repair_button_art, g_hovered_repair_control);
         }
     }
-    /* The grab/place flow starts from the native IWMove / IWHallMove control
-       (THBUTT frame 5, drawn with the other location controls); only the
-       placement hint remains here while a building is held. */
-    if (panel != NULL && g_game_session.location_move_active) {
-        draw_bitmap_label(surface, "Click a free site to place",
-            panel->pane.left + 8, panel->pane.top + 5, RGB(230, 238, 255));
-    }
     if (obtain_button_visible()) {
         const WindowTemplate *obtain_control = window_catalog_find(
             &g_window_catalog, "BC_Obtain", 3);
@@ -2658,9 +2651,32 @@ static void draw_location_action_panel(RenderSurface *surface)
     button = window_catalog_find(&g_window_catalog, button_name, 3);
     if (button != NULL && button->shape_frame >= 0 &&
         (uint32_t)button->shape_frame < g_hall_stock_art.frame_count) {
-        /* windows.txt binds both move controls to THBUTT frame 5. */
-        draw_sprite(surface, &g_hall_stock_art, (uint32_t)button->shape_frame,
+        /* FUN_00441e8b: THBUTT frame 5 (windows.txt), + 3 while the control
+           has the mouse focus. While a building is held (0x61a578 set) and
+           the mouse is over the island view (DAT_00630a3e < 0x140) or the
+           control, + 1, or + 2 when FUN_0045f337 accepts the hovered site
+           sent by FUN_0042fa0f message 0x47 (IWMove message 14000). The
+           native draws + 2 through FUN_00404c5a (current remap table); it is
+           drawn plain here. */
+        uint32_t frame = (uint32_t)button->shape_frame;
+        int hovered = g_hovered_location_action == action;
+        draw_sprite(surface, &g_hall_stock_art, frame,
                     button->pane.left, button->pane.top);
+        if (hovered && frame + 3U < g_hall_stock_art.frame_count)
+            draw_sprite(surface, &g_hall_stock_art, frame + 3U,
+                        button->pane.left, button->pane.top);
+        if (g_game_session.location_move_active &&
+            (g_mouse_y < 320 || hovered)) {
+            int placeable = g_hovered_location >= 0 &&
+                game_session_location_move_target_ok(&g_game_session,
+                    (uint8_t)g_menu.selected_tribe,
+                    (uint8_t)g_menu.selected_map_island,
+                    (uint16_t)g_hovered_location);
+            uint32_t held = frame + (placeable ? 2U : 1U);
+            if (held < g_hall_stock_art.frame_count)
+                draw_sprite(surface, &g_hall_stock_art, held,
+                            button->pane.left, button->pane.top);
+        }
     }
     /* The hovered move control's BC1 caption is drawn by
        draw_control_hover_caption. */
