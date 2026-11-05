@@ -351,7 +351,9 @@ static void e2e_write_state(void)
                 for (fl = 0; fl < g_game_session.islands[fi].location_count; ++fl)
                     if (g_game_session.islands[fi].locations[fl]
                             .move_fade_item_10 != 0) ++fading;
-        fprintf(file, "fade_sites %d\n", fading);
+        fprintf(file, "fade_sites %d\nscroll_x %d\n", fading, g_island_scroll_x);
+        fprintf(file, "panic_shown %d\npanic_frame %d\n",
+                island_panic_flag_shown(), g_panic_pulse_frame);
     }
     if (g_game_session_valid && g_menu.selected_tribe >= 0 &&
         g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {

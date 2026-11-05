@@ -188,6 +188,7 @@ static void run_ui_frame(HWND window, WPARAM wparam)
                 g_defeat_ticks = 0;
             }
         }
+        island_panic_pulse_step();
         while (sim_steps-- != 0U) {
         ++g_menu.animation_ticks;
         world_map_tick_orbit_ranges();

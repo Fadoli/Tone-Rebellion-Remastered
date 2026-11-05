@@ -1100,6 +1100,35 @@ static void draw_control_hover_caption(RenderSurface *surface)
                           native_text_color(g_island_palette, 6));
 }
 
+/* IWPanic +0x70/+0x72 (FUN_00439f30 / FUN_00439fdf, REA 2026-11-05): frame
+   and direction of the active PANIC pulse. */
+static int g_panic_pulse_frame = 8;
+static int g_panic_pulse_direction = 1;
+
+static int island_panic_flag_shown(void)
+{
+    return g_game_session_valid && g_menu.screen == SCREEN_ISLAND &&
+        g_menu.selected_map_island >= 0 && g_menu.selected_tribe >= 0 &&
+        game_session_panic_active(&g_game_session,
+                                  (uint8_t)g_menu.selected_tribe,
+                                  (uint8_t)g_menu.selected_map_island);
+}
+
+/* One window-manager pass (FUN_0046ae19 -> FUN_00439fdf) per UI frame: after
+   the blit the frame steps by the direction, which turns at 13 and 8
+   (8, 9 .. 13, 12 .. 9, ...); a cleared flag resets it to 8, rising. */
+static void island_panic_pulse_step(void)
+{
+    if (!island_panic_flag_shown()) {
+        g_panic_pulse_frame = 8;
+        g_panic_pulse_direction = 1;
+        return;
+    }
+    g_panic_pulse_frame += g_panic_pulse_direction;
+    if (g_panic_pulse_frame == 13) g_panic_pulse_direction = -1;
+    else if (g_panic_pulse_frame == 8) g_panic_pulse_direction = 1;
+}
+
 static void render_island_view(RenderSurface *surface)
 {
     const int image_top = 0;
@@ -1685,14 +1714,15 @@ static void render_island_view(RenderSurface *surface)
                 &g_window_catalog, button_names[button_index], 3);
             int frame;
             if (button == NULL || button->shape_frame < 0) continue;
-            /* Remake: PANIC keeps its highlighted frame while the mode is on. */
-            frame = window_catalog_control_frame(
-                button, (int)button_index == g_hovered_island_button ||
-                ((int)button_index == WINDOW_ISLAND_BUTTON_PANIC &&
-                 g_game_session_valid && g_menu.selected_map_island >= 0 &&
-                 game_session_panic_active(
-                     &g_game_session, (uint8_t)g_menu.selected_tribe,
-                     (uint8_t)g_menu.selected_map_island)));
+            /* IWPanic (FUN_00439fdf): while the island flag is set it blits
+               mainbutt frame +0x70 (8..13, bouncing) at the pane origin,
+               without the base or hover frame. */
+            if ((int)button_index == WINDOW_ISLAND_BUTTON_PANIC &&
+                island_panic_flag_shown())
+                frame = g_panic_pulse_frame;
+            else
+                frame = window_catalog_control_frame(
+                    button, (int)button_index == g_hovered_island_button);
             if (frame >= 0 && (uint32_t)frame < g_island_main_buttons.frame_count) {
                 draw_sprite(surface, &g_island_main_buttons, (uint32_t)frame,
                             button->pane.left, button->pane.top);

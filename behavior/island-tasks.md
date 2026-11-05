@@ -309,7 +309,13 @@ Changement de tâche à la replanification (passe 2026-11-02; REA haiku 5.5, `FU
   - types 0..3 : bascule par `FUN_00465793` catégorie 3 sous-type 0 (`0x465ae2`, bouton PANIC), remise à zéro par `FUN_00461859`, lecture/écriture de sauvegarde par `FUN_00462c55` ;
   - type 4 (`+0x29cc`) : c'est le drapeau « glyphe obtenu » (`FUN_004503bd`, `FUN_004672ef` cas 0x11, effacé par `FUN_00460072`).
 - **Qui lit le drapeau :** `FUN_0042219e` ne le lit que pour un floater de type ≠ 4, sans lien (`+0x0c == -1`), de sous-type ≠ 8 et hors actions 6/7. Les branches Léviathan reviennent avant la lecture (assembleur `0x4221b3..0x422556`). Le Léviathan ne réagit donc jamais à `+0x29cc`.
-- **Candidats :** `FUN_00420991` accepte toujours un floater de type 4 ; pour les autres types, il faut que la politique `0x619290` soit nulle. Les candidats sont des floaters de l'île (`0x618fb4`), pas des sites. `FUN_00439fdf` fait clignoter le bouton (`mainbutt`, frames 8..0xd) tant que le drapeau du joueur est posé.
+- **Candidats :** `FUN_00420991` accepte toujours un floater de type 4 ; pour les autres types, il faut que la politique `0x619290` soit nulle. Les candidats sont des floaters de l'île (`0x618fb4`), pas des sites. `FUN_00439fdf` fait clignoter le bouton tant que le drapeau du joueur est posé.
+- **Rendu du bouton PANIC** (REA haiku 2026-11-05, `ev_322de486…`, `ev_611f078c…`, `ev_e067c411…`) :
+  - `FUN_00439fdf` est le slot 2 de la classe `IWPanic` (WINTYPE 45, constructeur `FUN_00439f30`, `+0x70 = 8`, `+0x72 = 1`). La boucle `FUN_0046ae19` l'appelle à chaque passe d'affichage.
+  - Drapeau posé : il copie la frame `mainbutt` `+0x70` à l'origine du panneau, sans frame de base ni de survol, puis avance la frame d'un pas. Le sens s'inverse à 13 et à 8, d'où la suite 8, 9 … 13, 12 … 9.
+  - Drapeau nul : `+0x70 = 8`, `+0x72 = 1`, puis le dessin normal `FUN_0042a00b`.
+  - Port : `island_panic_pulse_step`, un pas par trame de 50 ms. Avant, le port gardait la frame de survol fixe.
+  - Vérifié en jeu (fixture `badges`) : frames 8 à 13 en aller-retour, retour à 8 quand le mode est coupé.
 - **Port :** déjà couvert par PANIC (`game_session_apply_panic_orders`, `source_event_state`). Le port choisit le candidat le plus proche ; le natif prend le plus petit `FUN_00420600`.
 - **Lignes de tâche :** `FUN_004662b7` (64 lignes de 0x14 octets à `0x6183bc`) n'est appelé que par `FUN_0045cd75` (type 0xb), `FUN_0045eaa7` et `FUN_004666c9` (type 4), et `FUN_00465793`, qui relaie les paquets de catégorie 0 (`ev_8318be3d…`).
 - **Paquets de catégorie 0 :** types 5, 0xd et 4 (`FUN_0042fa0f`), 0x12 (touche `F`) et 0x11 (touche `U` sur un pont : traversée vers l'île `+0x36`). Les cas `F`/`U` de `FUN_004337d9` exigent `DAT_004c2b74`, que seul le mot `nevada` de `float.cfg` pose (`FUN_0041d19d`, `0x41d285`). Ce sont des touches de débogage, hors périmètre.
