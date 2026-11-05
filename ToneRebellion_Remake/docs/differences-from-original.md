@@ -57,4 +57,5 @@ This page lists every behaviour of the remake that knowingly differs from `FLOAT
 | Topic | Original | Remake |
 |---|---|---|
 | Systems | Windows 9x, DirectX. | Win32 and SDL3 builds, and a browser build (Emscripten). |
+| Display rate | The island and the world map are drawn once per 20 frames/s game frame, with 1 to 3 simulation ticks each (game speed), so motion steps by up to 3 ticks per picture. | The game frame still runs at 20 frames/s, but the picture is painted at 20, 40, 60 (default) or 120 Hz: units, shots, spell effects and the world-map orbits are blended between the last two game frames, one frame (50 ms) behind. 20 Hz paints as the original. Shift+F12 or the window menu changes it; `video.cfg` keeps it (`fps`). Sprite frames stay the original ones. |
 | Browser data | — | The page asks for the game folder or the CD image (`.iso`, ISO 9660, read by slices); files stay in the browser storage. |

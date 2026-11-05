@@ -938,9 +938,26 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     (void)SetTimer(window, 2, 1000, NULL);
     ShowWindow(window, show_command);
     UpdateWindow(window);
-    while (GetMessageA(&message, NULL, 0, 0) > 0) {
-        TranslateMessage(&message);
-        DispatchMessageA(&message);
+    /* Messages, plus the display-rate paints between game frames
+       (render_interp.inc): SetTimer cannot go below 10 ms, so the loop
+       waits for the next paint itself. */
+    for (;;) {
+        int quit = 0;
+        (void)MsgWaitForMultipleObjects(0, NULL, FALSE, render_interp_wait_ms(),
+                                        QS_ALLINPUT);
+        while (PeekMessageA(&message, NULL, 0, 0, PM_REMOVE)) {
+            if (message.message == WM_QUIT) {
+                quit = 1;
+                break;
+            }
+            TranslateMessage(&message);
+            DispatchMessageA(&message);
+        }
+        if (quit) break;
+        if (render_interp_paint_due()) {
+            platform_invalidate(window);
+            UpdateWindow(window);
+        }
     }
     (void)timeEndPeriod(1);
     app_release_content();

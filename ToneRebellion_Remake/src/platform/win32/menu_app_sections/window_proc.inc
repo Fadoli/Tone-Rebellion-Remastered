@@ -139,6 +139,7 @@ static void run_ui_frame(HWND window, WPARAM wparam)
         /* FUN_0041c46f runs the tick DAT_004bf110 times per frame; keys 8/9
            change it from 1 to 3 (FUN_0046a5b7). */
         unsigned sim_steps = g_menu.screen == SCREEN_NEW_GAME ? 1U : g_sim_speed;
+        render_interp_begin_frame();
         slide_panel_tick();
         /* The SlideWindow pause flag (DAT_004bf124) stops the game loop on
            the island and on the world map alike (planet view frozen). */
@@ -200,6 +201,7 @@ static void run_ui_frame(HWND window, WPARAM wparam)
             simulate_session_tick(g_menu.animation_ticks);
         if (!g_net_in_game && run_world_sequence_step(window)) break;
         }
+        render_interp_end_frame();
         /* Redraw the full animated screen at every 20 Hz frame,
            including while the Tasks panel is open. */
         platform_invalidate(window);
@@ -261,7 +263,7 @@ static unsigned frame_clock_due(void)
 
 /* Window (system) menu entries for the scaling modes; system command IDs
    keep their low four bits clear and stay below 0xF000. */
-enum { SYSCOMMAND_SCALE_FIRST = 0x0100 };
+enum { SYSCOMMAND_SCALE_FIRST = 0x0100, SYSCOMMAND_RATE_FIRST = 0x0200 };
 static const char *const g_scale_mode_labels[SCALE_MODE_COUNT] = {
     "Scale: whole multiples (sharp, even pixels)",
     "Scale: fill window (sharp)",
@@ -280,6 +282,10 @@ static void update_scale_menu(HWND window)
                              SYSCOMMAND_SCALE_FIRST + 0x10 * (SCALE_MODE_COUNT - 1),
                              SYSCOMMAND_SCALE_FIRST + 0x10 * (UINT)g_scale_mode,
                              MF_BYCOMMAND);
+    (void)CheckMenuRadioItem(menu, SYSCOMMAND_RATE_FIRST,
+                             SYSCOMMAND_RATE_FIRST + 0x10 * (PAINT_RATE_COUNT - 1),
+                             SYSCOMMAND_RATE_FIRST + 0x10 * (UINT)g_paint_rate_index,
+                             MF_BYCOMMAND);
 #endif
 }
 
@@ -297,6 +303,15 @@ static void add_scale_menu(HWND window)
         (void)AppendMenuA(menu, MF_STRING,
                           SYSCOMMAND_SCALE_FIRST + 0x10 * (UINT)mode,
                           g_scale_mode_labels[mode]);
+    (void)AppendMenuA(menu, MF_SEPARATOR, 0, NULL);
+    for (mode = 0; mode < PAINT_RATE_COUNT; ++mode) {
+        char label[64];
+        (void)snprintf(label, sizeof(label), "Display rate: %u Hz%s",
+                       g_paint_rates[mode],
+                       mode == 0 ? " (original, no blending)" : "");
+        (void)AppendMenuA(menu, MF_STRING,
+                          SYSCOMMAND_RATE_FIRST + 0x10 * (UINT)mode, label);
+    }
     update_scale_menu(window);
 #endif
 }
@@ -311,6 +326,15 @@ static void set_scale_mode(HWND window, int mode)
     platform_invalidate(window);
 }
 
+/* Remake: paint rate of the island and world map (render_interp.inc). */
+static void set_paint_rate(HWND window, int index)
+{
+    if (index < 0 || index >= PAINT_RATE_COUNT) return;
+    g_paint_rate_index = index;
+    save_video_settings();
+    update_scale_menu(window);
+}
+
 static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                                           WPARAM wparam, LPARAM lparam)
 {
@@ -320,6 +344,12 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             (wparam & 0xFFF0U) < SYSCOMMAND_SCALE_FIRST + 0x10 * SCALE_MODE_COUNT) {
             set_scale_mode(window,
                 (int)(((wparam & 0xFFF0U) - SYSCOMMAND_SCALE_FIRST) / 0x10));
+            return 0;
+        }
+        if ((wparam & 0xFFF0U) >= SYSCOMMAND_RATE_FIRST &&
+            (wparam & 0xFFF0U) < SYSCOMMAND_RATE_FIRST + 0x10 * PAINT_RATE_COUNT) {
+            set_paint_rate(window,
+                (int)(((wparam & 0xFFF0U) - SYSCOMMAND_RATE_FIRST) / 0x10));
             return 0;
         }
         break;
@@ -687,7 +717,12 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         }
         return 0;
     case WM_KEYDOWN:
-        /* Port-only: F12 cycles the scaling mode on every screen. */
+        /* Port-only: Shift+F12 cycles the display rate, F12 the scaling
+           mode, on every screen. */
+        if (wparam == VK_F12 && platform_shift_down()) {
+            set_paint_rate(window, (g_paint_rate_index + 1) % PAINT_RATE_COUNT);
+            return 0;
+        }
         if (wparam == VK_F12) {
             set_scale_mode(window, (g_scale_mode + 1) % SCALE_MODE_COUNT);
             return 0;

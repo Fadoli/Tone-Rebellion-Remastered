@@ -301,8 +301,18 @@ static void render_load_game(RenderSurface *surface)
         draw_sprite(surface, &g_load_title_art, (g_load_save_mode ? 0U : 4U) + tribe, 317, 0);
     }
 }
-/* Composes the current screen into the 640x480 back buffer. */
+static void render_back_buffer_now(RenderSurface *back);
+
+/* Composes the current screen into the 640x480 back buffer, with the moving
+   things blended between the last two game frames (render_interp.inc). */
 static void render_back_buffer(RenderSurface *back)
+{
+    render_interp_apply();
+    render_back_buffer_now(back);
+    render_interp_restore();
+}
+
+static void render_back_buffer_now(RenderSurface *back)
 {
     render_surface_reset_clip(back);
     if (g_menu.screen == SCREEN_MAIN_MENU) {

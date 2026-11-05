@@ -27,7 +27,8 @@ static void save_video_settings(void)
     if (!video_settings_path(path, sizeof(path))) return;
     file = fopen(path, "w");
     if (file == NULL) return;
-    (void)fprintf(file, "scale %d\n", g_scale_mode);
+    (void)fprintf(file, "scale %d\nfps %u\n", g_scale_mode,
+                  g_paint_rates[g_paint_rate_index]);
     (void)fclose(file);
     platform_storage_changed();
 }
@@ -43,6 +44,13 @@ static void load_video_settings(void)
     if (fscanf(file, "scale %d", &mode) == 1 && mode >= 0 &&
         mode < SCALE_MODE_COUNT)
         g_scale_mode = mode;
+    {
+        unsigned rate;
+        int index;
+        if (fscanf(file, " fps %u", &rate) == 1)
+            for (index = 0; index < PAINT_RATE_COUNT; ++index)
+                if (g_paint_rates[index] == rate) g_paint_rate_index = index;
+    }
     (void)fclose(file);
 }
 
@@ -300,7 +308,8 @@ static float world_island_angle(const WorldIsland *island)
     /* FUN_00471536 uses angle - phase. Keep WORLDPOS immutable and advance
        the phase by 0.25 degree per 33 ms remake animation tick. */
     return ((float)island->angle_degrees -
-            (float)(g_menu.animation_ticks % 1440u) * 0.25f) * 0.017453277f;
+            ((float)(g_menu.animation_ticks % 1440u) + g_interp_orbit_ticks) *
+                0.25f) * 0.017453277f;
 }
 
 /* FUN_00471536 depth key (record +0x10, minus its 3000 bias):

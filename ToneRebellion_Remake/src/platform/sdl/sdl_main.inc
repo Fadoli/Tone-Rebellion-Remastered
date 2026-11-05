@@ -44,7 +44,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         SDL_ShowWindow(g_sdl_window);
     if (app_run_bench(g_sdl_window_token, g_sdl_command_line, &exit_code))
         return exit_code == 0 ? SDL_APP_SUCCESS : SDL_APP_FAILURE;
-    /* WM_TIMER 1 ran every 10 ms; the frame clock releases 20 frames/s. */
+    /* WM_TIMER 1 ran every 10 ms; the frame clock releases 20 frames/s.
+       SDL_AppIterate raises the rate for a 120 Hz display rate. */
     (void)SDL_SetHint(SDL_HINT_MAIN_CALLBACK_RATE, "100");
     SDL_ShowWindow(g_sdl_window);
     (void)SDL_StartTextInput(g_sdl_window);
@@ -65,10 +66,22 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
    cursor and a repaint when something changed. */
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
+    static unsigned iterate_rate;
     unsigned due = frame_clock_due();
+    unsigned wanted = g_paint_rates[g_paint_rate_index] * 2U > 100U
+        ? g_paint_rates[g_paint_rate_index] * 2U : 100U;
     (void)appstate;
+    /* 100 polls/s, or twice the display rate when that is higher, so each
+       paint lands close to its due time. */
+    if (wanted != iterate_rate) {
+        char text[16];
+        iterate_rate = wanted;
+        (void)snprintf(text, sizeof(text), "%u", wanted);
+        (void)SDL_SetHint(SDL_HINT_MAIN_CALLBACK_RATE, text);
+    }
     if (net_poll(g_sdl_window_token)) platform_invalidate(g_sdl_window_token);
     while (due-- != 0U) run_ui_frame(g_sdl_window_token, 1);
+    if (render_interp_paint_due()) g_sdl_dirty = 1;
     if (SDL_GetTicks() - g_sdl_tune_check >= 1000U) {
         g_sdl_tune_check = SDL_GetTicks();
         run_ui_frame(g_sdl_window_token, 2);

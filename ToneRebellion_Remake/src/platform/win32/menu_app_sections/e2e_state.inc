@@ -352,6 +352,9 @@ static void e2e_write_state(void)
                     if (g_game_session.islands[fi].locations[fl]
                             .move_fade_item_10 != 0) ++fading;
         fprintf(file, "fade_sites %d\nscroll_x %d\n", fading, g_island_scroll_x);
+        fprintf(file, "paint_count %lu\npaint_blended %lu\npaint_rate %u\n",
+                g_paint_count, g_paint_blended_count,
+                g_paint_rates[g_paint_rate_index]);
         fprintf(file, "panic_shown %d\npanic_frame %d\n",
                 island_panic_flag_shown(), g_panic_pulse_frame);
     }
