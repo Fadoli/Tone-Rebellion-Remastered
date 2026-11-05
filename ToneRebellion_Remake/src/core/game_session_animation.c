@@ -1724,6 +1724,26 @@ void game_session_tick_item_animations_with_floaters(
                  building_render_find(catalog, 5) == NULL) &&
                 tick_item5_spawn(session, pad_catalog, state, island_index))
                 goto tick_location_done;
+            /* Moved-from site (FUN_0045343b, +0x58 = 3): FUN_00450a71 counts
+               +0x46 up to 16 and then clears it. The port cleared its game
+               state at the placement; only the drawn copy ends here. */
+            if (state->move_fade_item_10 != 0 && state->record_value_10 != 0) {
+                /* The site was built on again: drop the drawn copy. */
+                state->move_fade_item_10 = 0;
+            } else if (state->move_fade_item_10 != 0) {
+                state->source_value_46 = (int16_t)(
+                    (uint16_t)state->source_value_46 + 1U);
+                if (state->source_value_58 != 3 ||
+                    state->source_value_46 >= 16) {
+                    state->source_value_46 = 0;
+                    state->source_value_58 = 0;
+                    state->move_fade_item_10 = 0;
+                    state->move_fade_record_24 = 0;
+                    state->move_fade_owner = 0;
+                    state->move_fade_level_flags = 0;
+                }
+                goto tick_location_done;
+            }
             /* FUN_00450a71's entry gate skips class-0 items 0/1 only while
                +0x14 is -1 (and 0x200 is clear); a Spore-claimed pad
                (+0x14 = 4) still reaches cases 0/1 below. */

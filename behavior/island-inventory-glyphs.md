@@ -59,6 +59,7 @@ avances de glyphes, coupure gloutonne au dernier espace qui tient, aucune limite
 de la rangée de glyphes. Avec `bgoutfnt.fnt` (hauteur 13 à l'octet 8; inférence périmée: `DAT_005c30b8` est `smfont`, `bgoutfnt.fnt` va dans l'objet `0x4c2f30`, voir `ui-fonts.md`): lignes
 aux ordonnées 20, 34, 48… Modes simples: NEWGAME, LEVNAME et le mode 5 sont centrés sans rappel
 (`x = (droite-gauche-w)/2`, `y = (bas-haut)/2 - 10`); le mode niveau dessine en (10, 2) et (10, 11).
+Textes de site (REA haiku 2026-11-05, `ev_015cff03…`, asm `ev_ff3b4347…`) : un site de classe 1 au Léviathan affiche `POOLINFECT` (`+0x10 == 5`) ou `SUPPLY%d` (`+0x10 - 6`) ; un site de classe 3 affiche `FEAT%02d` de l'île (mot `IB+0x29e0`, si < 0x0e). Les clés sont dans `bldtxt.txt`. Port : `island_site_info_text` (FEAT ajouté).
 Port: `hall_support_render.inc` utilise maintenant x = 6, largeur 167, première ligne à `haut + 6 + h + 1` et pas
 `h + 1` via `draw_wrapped_bitmap_label_pitch`; le renvoi partagé des autres écrans garde `h + 2`. Non porté: les
 modes centrés et niveau; `DAT_005c30b8` = `smfont` (tracé, `ui-fonts.md`).

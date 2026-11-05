@@ -35,6 +35,14 @@ typedef struct GameRuntimeLocation {
        recomputing active bit 0. Their field meanings are not established. */
     int16_t source_value_44;
     int16_t source_value_58;
+    /* Remake: the moved building's look while its old site fades out
+       (FUN_0045343b sets +0x58 = 3; FUN_00450a71 clears the site 8..16 ticks
+       later). The port clears the site's game state at once and keeps only
+       these for drawing; move_fade_item_10 = 0 when no fade runs. */
+    int32_t move_fade_item_10;
+    int32_t move_fade_record_24;
+    int16_t move_fade_owner;
+    uint16_t move_fade_level_flags;
     /* FUN_0045cbaa clears the three subtype 1..3 links when a site is turned
        off. -1 means the source has no linked task for that subtype. */
     int16_t source_task_slot[GAME_RESOURCE_TYPE_COUNT];

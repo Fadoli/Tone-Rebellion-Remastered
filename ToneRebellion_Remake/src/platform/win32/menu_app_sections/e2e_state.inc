@@ -333,6 +333,26 @@ static void e2e_write_state(void)
     fprintf(file, "repair_button %d\nrepair_hovered %d\n",
             selected_repair_button_visible(), g_hovered_repair_control);
     fprintf(file, "selection_island %d\n", selection_island());
+    {
+        int16_t hp = -1, hp_max = -1;
+        if (g_game_session_valid && g_selected_location >= 0 &&
+            selection_island() >= 0)
+            (void)game_session_repair_location_values(
+                &g_game_session, &g_pad_catalog, (uint8_t)selection_island(),
+                (uint16_t)g_selected_location, &hp, &hp_max);
+        fprintf(file, "selected_hp %d\nselected_hp_max %d\n", (int)hp,
+                (int)hp_max);
+    }
+    {
+        int fading = 0;
+        uint16_t fi, fl;
+        if (g_game_session_valid)
+            for (fi = 0; fi < g_game_session.island_count; ++fi)
+                for (fl = 0; fl < g_game_session.islands[fi].location_count; ++fl)
+                    if (g_game_session.islands[fi].locations[fl]
+                            .move_fade_item_10 != 0) ++fading;
+        fprintf(file, "fade_sites %d\n", fading);
+    }
     if (g_game_session_valid && g_menu.selected_tribe >= 0 &&
         g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
         for (i = 0; i < 3U; ++i) {

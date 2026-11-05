@@ -1,6 +1,16 @@
 #include "net_lobby.h"
 
+#include "game_session_schema.h"
+
+#include <stdlib.h>
+
 #include <string.h>
+
+static uint32_t net_le32_read(const uint8_t *bytes)
+{
+    return (uint32_t)bytes[0] | (uint32_t)bytes[1] << 8 |
+        (uint32_t)bytes[2] << 16 | (uint32_t)bytes[3] << 24;
+}
 
 static void copy_name(char *out, const char *name)
 {
@@ -97,20 +107,32 @@ void net_lobby_client_init(NetLobby *lobby)
     lobby->local_slot = NET_LOBBY_NO_SLOT;
 }
 
+int net_lobby_read_hello(const NetFrame *hello,
+                         char name[NET_LOBBY_NAME_CAPACITY + 1])
+{
+    size_t name_length;
+    if (hello == NULL || hello->type != NET_RECORD_HELLO ||
+        hello->length < NET_LOBBY_HELLO_HEADER ||
+        hello->payload[0] != NET_LOBBY_VERSION ||
+        net_le32_read(hello->payload + 1) != net_lobby_build_tag())
+        return -NET_REJECT_VERSION;
+    name_length = (size_t)hello->length - NET_LOBBY_HELLO_HEADER;
+    if (name_length > NET_LOBBY_NAME_CAPACITY) name_length = NET_LOBBY_NAME_CAPACITY;
+    memcpy(name, hello->payload + NET_LOBBY_HELLO_HEADER, name_length);
+    name[name_length] = '\0';
+    return 0;
+}
+
 int net_lobby_host_add_player(NetLobby *lobby, uint8_t slot, const NetFrame *hello)
 {
     char name[NET_LOBBY_NAME_CAPACITY + 1];
-    size_t name_length;
-    if (lobby == NULL || hello == NULL || hello->type != NET_RECORD_HELLO ||
-        hello->length < 1U || hello->payload[0] != NET_LOBBY_VERSION)
-        return -NET_REJECT_VERSION;
+    int status;
+    if (lobby == NULL) return -NET_REJECT_VERSION;
+    status = net_lobby_read_hello(hello, name);
+    if (status < 0) return status;
     if (lobby->started) return -NET_REJECT_STARTED;
     if (slot == 0U || slot >= NET_LOBBY_MAX_PLAYERS || lobby->players[slot].connected)
         return -NET_REJECT_FULL;
-    name_length = (size_t)hello->length - 1U;
-    if (name_length > NET_LOBBY_NAME_CAPACITY) name_length = NET_LOBBY_NAME_CAPACITY;
-    memcpy(name, hello->payload + 1, name_length);
-    name[name_length] = '\0';
     lobby->players[slot].tribe = first_free_tribe(lobby);
     lobby->players[slot].connected = 1;
     copy_name(lobby->players[slot].name, name);
@@ -175,17 +197,47 @@ int net_lobby_game_start(const NetLobby *lobby, NetGameStart *start)
     return 1;
 }
 
+uint32_t net_lobby_build_tag(void)
+{
+    /* FNV-1a over the serialised field table, then the session size. */
+    static uint32_t tag;
+    static int ready;
+    if (!ready) {
+        size_t size = game_session_schema_write(NULL, 0);
+        unsigned char *table = size != 0 ? (unsigned char *)malloc(size) : NULL;
+        uint32_t hash = 2166136261U;
+        size_t i;
+        if (table != NULL && game_session_schema_write(table, size) == size) {
+            for (i = 0; i < size; ++i) {
+                hash ^= table[i];
+                hash *= 16777619U;
+            }
+        }
+        free(table);
+        hash ^= (uint32_t)sizeof(GameSession);
+        hash *= 16777619U;
+        tag = hash;
+        ready = 1;
+    }
+    return tag;
+}
+
 size_t net_lobby_encode_hello(uint8_t *out, size_t capacity, const char *name)
 {
-    uint8_t payload[1 + NET_LOBBY_NAME_CAPACITY];
+    uint8_t payload[NET_LOBBY_HELLO_HEADER + NET_LOBBY_NAME_CAPACITY];
     char clean[NET_LOBBY_NAME_CAPACITY];
     size_t length;
+    uint32_t tag = net_lobby_build_tag();
     copy_name(clean, name);
     length = strlen(clean);
     payload[0] = NET_LOBBY_VERSION;
-    memcpy(payload + 1, clean, length);
+    payload[1] = (uint8_t)tag;
+    payload[2] = (uint8_t)(tag >> 8);
+    payload[3] = (uint8_t)(tag >> 16);
+    payload[4] = (uint8_t)(tag >> 24);
+    memcpy(payload + NET_LOBBY_HELLO_HEADER, clean, length);
     return net_frame_encode(out, capacity, NET_RECORD_HELLO, NET_LOBBY_NO_SLOT,
-                            payload, 1U + length);
+                            payload, NET_LOBBY_HELLO_HEADER + length);
 }
 
 size_t net_lobby_encode_welcome(uint8_t *out, size_t capacity, uint8_t slot)

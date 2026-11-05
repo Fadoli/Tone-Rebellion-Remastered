@@ -465,24 +465,21 @@ static void net_reject_socket(unsigned slot, uint8_t reason)
     memset(&g_net_readers[slot], 0, sizeof(g_net_readers[slot]));
 }
 
-/* Host: the socket at `from` asks for its reserved slot back. */
-static void net_host_rejoin(unsigned from, const NetFrame *frame)
+/* Host: the socket at `from` takes reserved slot `target` back. A player
+   whose game is still running sends REJOIN; one who restarted the game joins
+   again with HELLO and first gets its slot (WELCOME) and the player list. */
+static void net_host_rejoin_slot(unsigned from, unsigned target, const char *name,
+                                 int welcome)
 {
     uint8_t bytes[NET_FRAME_MAX_SIZE];
     uint8_t payload[12 + NET_RESYNC_CHUNK];
-    char name[NET_LOBBY_NAME_CAPACITY];
-    unsigned target = frame->length >= 1U ? frame->payload[0] : NET_LOBBY_MAX_PLAYERS;
-    size_t name_length = frame->length > 1U ? frame->length - 1U : 0U;
     uint32_t turn = net_lockstep_turn(&g_net_lockstep);
     uint32_t total = (uint32_t)sizeof(GameSession);
     uint32_t offset;
     size_t length;
     unsigned i;
-    memset(name, 0, sizeof(name));
-    if (name_length >= sizeof(name)) name_length = sizeof(name) - 1U;
-    if (name_length != 0U) memcpy(name, frame->payload + 1, name_length);
     if (target == 0U || target >= NET_LOBBY_MAX_PLAYERS || !g_net_reserved[target].active ||
-        strncmp(name, g_net_reserved[target].name, sizeof(name)) != 0 ||
+        strncmp(name, g_net_reserved[target].name, NET_LOBBY_NAME_CAPACITY) != 0 ||
         (target != from && g_net_peers[target] != NET_SOCKET_INVALID)) {
         net_reject_socket(from, NET_REJECT_STARTED);
         return;
@@ -501,6 +498,18 @@ static void net_host_rejoin(unsigned from, const NetFrame *frame)
     memcpy(g_net_lobby.players[target].name, g_net_reserved[target].name,
            sizeof(g_net_lobby.players[target].name));
     g_net_reserved[target].active = 0;
+    if (welcome) {
+        length = net_lobby_encode_welcome(bytes, sizeof(bytes), (uint8_t)target);
+        if (length == 0U || !net_send(target, bytes, length)) {
+            net_drop_peer(target);
+            return;
+        }
+        length = net_lobby_encode_player_list(&g_net_lobby, bytes, sizeof(bytes));
+        if (length == 0U || !net_send(target, bytes, length)) {
+            net_drop_peer(target);
+            return;
+        }
+    }
     /* The session at the start of `turn` (no command of that turn applied
        yet), then every bundle from `turn` on that is already made. */
     for (offset = 0; offset < total; offset += NET_RESYNC_CHUNK) {
@@ -536,6 +545,37 @@ static void net_host_rejoin(unsigned from, const NetFrame *frame)
     (void)snprintf(g_net_status, sizeof(g_net_status), "%s est de retour",
                    g_net_lobby.players[target].name);
     net_notify_in_game();
+}
+
+static void net_host_rejoin(unsigned from, const NetFrame *frame)
+{
+    char name[NET_LOBBY_NAME_CAPACITY + 1];
+    size_t name_length = frame->length > 1U ? frame->length - 1U : 0U;
+    memset(name, 0, sizeof(name));
+    if (name_length > NET_LOBBY_NAME_CAPACITY) name_length = NET_LOBBY_NAME_CAPACITY;
+    if (name_length != 0U) memcpy(name, frame->payload + 1, name_length);
+    net_host_rejoin_slot(from, frame->length >= 1U ? frame->payload[0]
+                                                   : NET_LOBBY_MAX_PLAYERS,
+                         name, 0);
+}
+
+/* Host: a HELLO during the game is a player back from a restart when its
+   name holds a reserved slot (same build: net_lobby_read_hello). */
+static void net_host_hello_in_game(unsigned from, const NetFrame *frame)
+{
+    char name[NET_LOBBY_NAME_CAPACITY + 1];
+    unsigned target;
+    if (net_lobby_read_hello(frame, name) < 0) {
+        net_reject_socket(from, NET_REJECT_VERSION);
+        return;
+    }
+    for (target = 1; target < NET_LOBBY_MAX_PLAYERS; ++target)
+        if (g_net_reserved[target].active &&
+            strncmp(name, g_net_reserved[target].name, NET_LOBBY_NAME_CAPACITY) == 0) {
+            net_host_rejoin_slot(from, target, name, 1);
+            return;
+        }
+    net_reject_socket(from, NET_REJECT_STARTED);
 }
 
 /* Host: a reserved slot left empty past the grace hands its tribe back. As
@@ -586,7 +626,7 @@ static void net_host_handle_frame(unsigned slot, const NetFrame *frame)
         }
         if (!g_net_lobby.players[slot].connected) {
             /* A new player during the game: refused. */
-            if (frame->type == NET_RECORD_HELLO) net_reject_socket(slot, NET_REJECT_STARTED);
+            if (frame->type == NET_RECORD_HELLO) net_host_hello_in_game(slot, frame);
             return;
         }
         if (frame->type == NET_RECORD_COMMAND &&
@@ -753,13 +793,42 @@ static void net_client_receive_resync(const NetFrame *frame)
         g_net_resync = (unsigned char *)malloc(total);
         g_net_resync_received = 0;
         if (g_net_resync == NULL) return;
-        net_lockstep_resume_at(&g_net_lockstep, turn);
+        if (g_net_in_game) net_lockstep_resume_at(&g_net_lockstep, turn);
     }
     if (g_net_resync == NULL || offset != g_net_resync_received || count > total - offset)
         return;
     memcpy(g_net_resync + offset, frame->payload + 12, count);
     g_net_resync_received += count;
     if (g_net_resync_received < total) return;
+    if (!g_net_in_game) {
+        /* Back after a restart: build this machine's own session for the
+           host's world and tribes (its local part: selected tribe, home
+           island), then take the shared part below. */
+        unsigned char *bytes = g_net_resync;
+        const GameSession *incoming = (const GameSession *)bytes;
+        NetGameStart start;
+        unsigned slot;
+        memset(&start, 0, sizeof(start));
+        start.seed = incoming->config.random_seed;
+        start.world_index = incoming->config.world_index;
+        start.difficulty = incoming->config.difficulty;
+        for (slot = 0; slot < NET_LOBBY_MAX_PLAYERS; ++slot) {
+            start.tribes[slot] = g_net_lobby.players[slot].connected
+                ? g_net_lobby.players[slot].tribe : (uint8_t)NET_LOBBY_NO_TRIBE;
+            if (start.tribes[slot] != NET_LOBBY_NO_TRIBE) ++start.player_count;
+        }
+        g_net_resync = NULL;  /* net_apply_game_start clears the rejoin state */
+        g_net_save_ready = 0;
+        net_apply_game_start(g_net_window, &start);
+        g_net_resync = bytes;
+        if (!g_net_in_game) {
+            free(g_net_resync);
+            g_net_resync = NULL;
+            net_lobby_failed("Retour dans la partie impossible");
+            return;
+        }
+        net_lockstep_resume_at(&g_net_lockstep, turn);
+    }
     {
         GameSession *incoming = (GameSession *)g_net_resync;
         size_t local = offsetof(GameSession, random_state);
@@ -855,7 +924,9 @@ static void net_poll_peer(HWND window, unsigned slot)
                 net_set_status("L'hote charge une autre partie");
             } else if (frame.type == NET_RECORD_SAVE_DATA && !g_net_in_game) {
                 net_client_receive_save(&frame);
-            } else if (frame.type == NET_RECORD_RESYNC && g_net_in_game && g_net_reconnecting) {
+            } else if (frame.type == NET_RECORD_RESYNC &&
+                       (g_net_in_game ? g_net_reconnecting
+                                      : g_net_lobby.local_slot < NET_LOBBY_MAX_PLAYERS)) {
                 net_client_receive_resync(&frame);
                 if (g_net_mode == NET_MODE_NONE) return;
             } else if (frame.type == NET_RECORD_REJECT && g_net_reconnecting) {

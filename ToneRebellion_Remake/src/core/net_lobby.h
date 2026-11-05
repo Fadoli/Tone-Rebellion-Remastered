@@ -18,7 +18,9 @@ enum {
     NET_LOBBY_NAME_CAPACITY = 16,
     NET_LOBBY_NO_TRIBE = 0xff,
     NET_LOBBY_NO_SLOT = 0xff,
-    NET_LOBBY_VERSION = 1,
+    /* 2: HELLO carries the session build tag after the version byte. */
+    NET_LOBBY_VERSION = 2,
+    NET_LOBBY_HELLO_HEADER = 5,
     NET_FRAME_HEADER_SIZE = 4,
     NET_FRAME_MAX_PAYLOAD = 2304,
     NET_FRAME_MAX_SIZE = NET_FRAME_HEADER_SIZE + NET_FRAME_MAX_PAYLOAD,
@@ -31,7 +33,7 @@ typedef enum NetRecordType {
     NET_RECORD_WORLD = 7,        /* host -> all (folded into the player list) */
     NET_RECORD_DIFFICULTY = 8,   /* host -> all (folded into the player list) */
     NET_RECORD_GAME_START = 9,   /* host -> all: seed, world, difficulty, tribes */
-    NET_RECORD_HELLO = 0x40,     /* client -> host: version, name (remake) */
+    NET_RECORD_HELLO = 0x40,     /* client -> host: version, build tag, name (remake) */
     NET_RECORD_WELCOME = 0x41,   /* host -> client: assigned slot (remake) */
     NET_RECORD_REJECT = 0x42     /* host -> client: reason (remake) */
 } NetRecordType;
@@ -102,6 +104,14 @@ void net_lobby_client_init(NetLobby *lobby);
 
 /* Host: the connection held at `slot` said HELLO. Returns the slot or
    -reason; the slot must be a free guest slot (1..3). */
+/* Fingerprint of the GameSession layout (field table and size). Lockstep
+   and the reconnection snapshot copy raw session bytes, so two builds play
+   together only when their tags match. */
+uint32_t net_lobby_build_tag(void);
+/* Checks a HELLO (version and build tag) and copies its player name.
+   Returns 0, or -NET_REJECT_VERSION. */
+int net_lobby_read_hello(const NetFrame *hello,
+                         char name[NET_LOBBY_NAME_CAPACITY + 1]);
 int net_lobby_host_add_player(NetLobby *lobby, uint8_t slot, const NetFrame *hello);
 void net_lobby_remove_player(NetLobby *lobby, uint8_t slot);
 /* Host: any tribe. Several players may share one tribe and play it in

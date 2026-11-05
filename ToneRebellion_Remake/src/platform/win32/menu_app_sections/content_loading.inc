@@ -280,10 +280,14 @@ static int load_building_render_catalog(char *error, size_t error_capacity)
     memset(g_building_descriptions, 0, sizeof(g_building_descriptions));
     {
         /* FUN_00439673 mode 0 reads these keys for pool, bridge and infected
-           site selections (bldtxt.txt). A missing key stays empty. */
+           site selections and FEAT%02d for feature triggers (bldtxt.txt). A
+           missing key stays empty. */
         static const char *const site_keys[SITE_TEXT_COUNT] = {
             "POOL", "POOLINFECT", "PRIMEPOOL", "BRIDGE",
-            "SUPPLY0", "SUPPLY1", "SUPPLY2", "SUPPLY3"
+            "SUPPLY0", "SUPPLY1", "SUPPLY2", "SUPPLY3",
+            "FEAT00", "FEAT01", "FEAT02", "FEAT03", "FEAT04", "FEAT05",
+            "FEAT06", "FEAT07", "FEAT08", "FEAT09", "FEAT10", "FEAT11",
+            "FEAT12", "FEAT13"
         };
         unsigned int site_text;
         memset(g_site_texts, 0, sizeof(g_site_texts));

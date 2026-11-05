@@ -116,6 +116,16 @@ static const char *island_site_info_text(const GameRuntimeLocation *location,
                    ((location->source_value_22 & 0xffU) & (1U << tribe)) != 0U) {
             index = SITE_TEXT_PRIME_POOL;
         }
+    } else if (location->renderer_class == 3) {
+        /* FUN_00439673 type 3 (0x439b77): FEAT%02d of the island's shape
+           word (island + 0x29e0, DAT_005eebf8) when below 0x0e
+           (REA haiku 2026-11-05). */
+        int island = selection_island();
+        int shape;
+        if (island < 0 || island >= g_game_session.island_count) return NULL;
+        shape = g_game_session.islands[island].leviathan_marker_shape_id;
+        if (shape < 0 || shape >= 0x0e) return NULL;
+        index = SITE_TEXT_FEAT00 + (unsigned int)shape;
     } else {
         return NULL;
     }
@@ -1169,6 +1179,21 @@ static void render_island_view(RenderSurface *surface)
         int y = image_top + (int)location->y;
         int pad_group = island_pad_group(location);
         int runtime_class = location->renderer_class;
+        GameRuntimeLocation fade_copy;
+        /* A moved building's old site fades out (+0x58 = 3, FUN_0040bf98
+           stipple) with the building's look kept aside by the port. */
+        if (runtime_location != NULL &&
+            runtime_location->move_fade_item_10 != 0 &&
+            runtime_location->source_value_58 == 3) {
+            fade_copy = *runtime_location;
+            fade_copy.record_value_10 = runtime_location->move_fade_item_10;
+            fade_copy.record_value_24 = runtime_location->move_fade_record_24;
+            fade_copy.owner_id = runtime_location->move_fade_owner;
+            fade_copy.source_value_14 = runtime_location->move_fade_owner;
+            fade_copy.source_level_flags =
+                runtime_location->move_fade_level_flags;
+            runtime_location = &fade_copy;
+        }
         if (location->renderer_class == 3 &&
             (location->renderer_variant == 4 || location->renderer_variant == 0x16)) {
             draw_island_feature(surface, g_island_surface_id, location,

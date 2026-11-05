@@ -1,6 +1,6 @@
 # Roadmap
 
-State on 2026-11-04. Remaining work: [TODO](TODO.md); ported features: [implemented.md](docs/implemented.md); remake choices that differ from the original: [differences from the original game](docs/differences-from-original.md); evidence: `../behavior/` and [FUNCTION_GUIDE.md](../FUNCTION_GUIDE.md).
+State on 2026-11-05. Remaining work: [TODO](TODO.md); ported features: [implemented.md](docs/implemented.md); remake choices that differ from the original: [differences from the original game](docs/differences-from-original.md); evidence: `../behavior/` and [FUNCTION_GUIDE.md](../FUNCTION_GUIDE.md).
 
 ## Status
 
@@ -16,13 +16,13 @@ State on 2026-11-04. Remaining work: [TODO](TODO.md); ported features: [implemen
 - **Interface**: panel parity, fonts, world map, FLTINFO badges (state badge and spell shimmer included), pause (island and map frozen, eye closed), starting buildings already built, title screen stars and credits, move button frames while a building is held, repair button pulse.
 - **Audio**: volume and pan by distance, producer, island and collapse sounds.
 - **Web and SDL**: web port done in 8 steps (1 portable `RenderSurface`, 2 `platform_*` services, 3 SDL3 adapter, 4 Emscripten target, 5 user data, 6 `IDBFS` saves, 7 browser audio, 8 single-player web build); CD image (`.iso`) import.
-- **Network**: lockstep TCP play checked SDL to SDL; pause, game speed, save, loading a saved game and reconnection after a lost connection in network play (remake extensions).
+- **Network**: lockstep TCP play checked SDL to SDL; pause, game speed, save, loading a saved game and reconnection after a lost connection or a restart of the game in network play, build check in `HELLO` (remake extensions).
 - **Checks**: static fixtures (`TONE_REBELLION_E2E_FIXTURE`: badges, enemy_hall, spell, obtain, dying, victory, messages, return, repair) with `TONE_REBELLION_SAVE_DIR`; `tests/e2e/fixture_e2e.ps1` and `tests/e2e/island_e2e.ps1` ([validation](docs/build-and-validation.md)).
 
 ## Kept gaps
 
 - Bridge crossing: the `+0x3c` order is kept in `handoff_resume_action`; it resumes on the same tick as the original, with no observable difference.
-- Building move: the source is cleared at the placement (original: 8 to 16 ticks later, `FUN_00450a71`); the delay would duplicate the Hall in the port's Hall search.
+- Building move: the old site fades out over 8 to 16 ticks as in the original (`FUN_00450a71`), but its game state is cleared at the placement so the Hall is never found twice.
 - CONSTR: the port keeps action 4 where the original carries action 5 (`FA_Build`), with no observed effect.
 - Clipboard: filled with every owned training building (`game_session_clip_auto_register`); original: only the selected one. Removing the call in `island_view_render.inc` gives the original behaviour.
 - Every remake choice visible to the player (network pause, save and load, Escape shortcut, end screen click, repair button, paused load, tribe choice) is listed in [differences from the original game](docs/differences-from-original.md).

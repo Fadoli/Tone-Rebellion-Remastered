@@ -354,6 +354,11 @@ int game_session_finish_location_move(GameSession *session,
     int moves_hall;
     int preserve_native_site_state;
     int32_t moved_base_item_id;
+    int32_t fade_item_10;
+    int32_t fade_record_24;
+    int32_t fade_owner;
+    uint16_t fade_level_flags;
+    int16_t fade_value_46;
     GamePlayerEconomy *player_economy;
     if (!game_session_location_move_target_ok(session, player_slot,
                                               island_index, location_index))
@@ -484,6 +489,11 @@ int game_session_finish_location_move(GameSession *session,
        transition window; all other moved-from sites clear both fields. */
     preserve_native_site_state = source->source_value_14 == 4 &&
         source->record_value_24 > 4 && source->record_value_24 < 0x22;
+    fade_item_10 = source->record_value_10;
+    fade_record_24 = source->record_value_24;
+    fade_owner = source->owner_id;
+    fade_level_flags = source->source_level_flags;
+    fade_value_46 = source->source_value_46;
     source->record_value_10 = 0;
     source->owner_id = -1;
     source->source_value_14 = -1;
@@ -511,9 +521,23 @@ int game_session_finish_location_move(GameSession *session,
     source->source_value_44 = 0;
     source->source_value_40 = 0;
     source->source_value_42 = 0;
-    /* FUN_004533fb clears +0x46, sets +0x58, then recomputes the active bit. */
-    source->source_value_46 = 0;
-    source->source_value_58 = 1;
+    /* FUN_0045f5c5 -> FUN_004535af marks the old site +0x58 = 3 with +0x46
+       folded to 0x10 - v when v > 7; FUN_00450a71 counts +0x46 up to 16 and
+       then clears it (FUN_00452a15). The port keeps the building's look for
+       that fade but its game state is already cleared above. */
+    if (source->renderer_class == 0 && fade_item_10 > 1) {
+        int16_t v = fade_value_46 > 7 ? (int16_t)(0x10 - fade_value_46)
+                                      : fade_value_46;
+        source->move_fade_item_10 = fade_item_10;
+        source->move_fade_record_24 = fade_record_24;
+        source->move_fade_owner = (int16_t)fade_owner;
+        source->move_fade_level_flags = fade_level_flags;
+        source->source_value_46 = v < 0 ? 0 : v;
+        source->source_value_58 = 3;
+    } else {
+        source->source_value_46 = 0;
+        source->source_value_58 = 1;
+    }
     /* FUN_00452a15 and the subsequent placement initializer both leave
        source +0x0c untouched, so retain this raw cadence across a move. */
     source->chug_progress = 0;

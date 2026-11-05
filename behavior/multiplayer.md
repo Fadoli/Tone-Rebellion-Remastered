@@ -65,11 +65,14 @@ L'original n'a pas de reconnexion (DirectPlay). Dans le remake :
 - **Invité :** il retente une connexion toutes les 2 s pendant 120 s, puis envoie `NET_RECORD_REJOIN` (0x47 : slot, nom). Pendant ce temps son monde est figé. S'il échoue, il continue en solo.
 - **Resynchronisation :** l'hôte envoie la `GameSession` telle qu'au début de son tour courant (`NET_RECORD_RESYNC` 0x48, morceaux de 2 Ko), puis les paquets de tour déjà faits, et remet l'invité dans le lockstep à ce tour. L'invité garde ses octets locaux (avant `random_state` et le presse-papiers, hors empreinte). Même version requise : la taille de `GameSession` doit être identique.
 - **Silence :** 15 s sans rien recevoir compte comme une coupure (l'hôte envoie un ping par seconde, l'invité répond et acquitte chaque tour).
+- **Après une relance du jeu :** le joueur rejoint l'hôte normalement (HELLO). Si son nom tient un slot réservé, l'hôte répond `WELCOME` (ce slot) et la liste des joueurs, puis la resynchronisation. L'invité démarre alors la partie localement avec le monde, la difficulté et la graine de l'hôte (`config` de la session reçue), ce qui reconstruit ses octets locaux (tribu, île de départ), puis prend la partie partagée.
+- **Version :** le HELLO (version 2) porte une empreinte de build : FNV-1a de la table des champs de `GameSession` (`game_session_schema_write`) et de sa taille (`net_lobby_build_tag`). Une empreinte différente est refusée (« Version incompatible »), au lobby comme au retour.
 
 **Vérifié** (deux instances, 127.0.0.1) :
 - Invité suspendu 20 s : l'hôte le coupe à 15 s et continue ; à la reprise, l'invité revient en moins d'1 s, avec la même empreinte, sans désynchronisation, et ses commandes passent.
 - Hôte suspendu 20 s : l'invité revient seul à la reprise.
 - Invité tué : son slot est libéré après 120 s (« G a quitte la partie »).
+- Invité tué puis relancé avec le même nom (2026-11-05) : il revient pendant la grâce (« G est de retour »), sa commande de vitesse passe, et aucune désynchronisation n'apparaît sur 170 tours (comparaison des empreintes à chaque tour).
 
 ## Vitesse de jeu en réseau (extension du remake, 2026-11-04)
 

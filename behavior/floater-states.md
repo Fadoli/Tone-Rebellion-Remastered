@@ -55,6 +55,8 @@ Il n'y a ni test de taille, ni réservation, ni test de classe de site. `FUN_004
   - charge : `10 * max(+0x22, 0) / FUN_00464242(...)+8` ;
   - rang : `10 * max(FUN_0041ff56, 0) / 11.0`.
 - **Voile `spl11` du propriétaire 4 :** il est lu dans `DAT_0061fa2e[rec+0x0e]` (île, si l'indice est dans 0..14), la même valeur que le badge 0x1e au-delà de 100. Le voile se dessine quand cette valeur est dans 1..0x15, avec la frame `(0x16 - v) / 2`. Le tableau n'ayant aucun écrivain connu, le voile ne se dessine jamais, comme le badge 0x1e. Il n'est pas porté.
+  - **Passe du 2026-11-05 (REA haiku) :** le tableau est un mot signé par île (15 entrées), lu en absolu par `FUN_00420991` (`0x4209e7`) et `FUN_0042704b` (`0x42776b`). La recherche d'octets `2e fa 61 00` ne trouve que ces deux lectures (`ev_d0a047ec…`), et les octets du fichier valent zéro (`ev_ad9230d6…`). Aucune adresse `0x61xxxx` n'est poussée comme destination de copie, et aucun `rep stos/movs` n'a de destination constante dans la zone.
+  - **Conclusion :** le tableau reste à zéro. Le remake, qui ne dessine ni le badge ni le voile, a donc le même rendu que l'original ; ce n'est pas un écart. Seule limite : une copie de bloc à destination calculée n'est pas exclue.
 - **Argument `param_5` :** il vaut 1 pour tous les appelants sauf `FUN_00428191`, qui passe 0 et supprime donc badges, barres et voile. `FUN_00405265` est le blitter avec mise à l'échelle et rotation (utilisé pour le miroir); `FUN_00410bd2` est le blitter RLE tramé, mode 8 opaque pour tous les appelants.
 
 ## Message 0x47 et `IWLocInfo`
