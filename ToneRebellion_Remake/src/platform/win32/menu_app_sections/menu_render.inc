@@ -9,7 +9,12 @@ static unsigned game_random(void)
    pixel (uneven pixel sizes) or HALFTONE filtering (blurred, about 5 ms of
    CPU per frame, bench/gameplay_hotspots.md). F12 and the window menu cycle
    it; saves\video.cfg keeps it. */
-enum { SCALE_INTEGER, SCALE_FIT_SHARP, SCALE_FIT_SMOOTH, SCALE_MODE_COUNT };
+/* FIT_SHARP_SMOOTH ("sharp bilinear") first scales by the largest whole
+   factor that fits, nearest pixel, then stretches that linearly to the
+   window: pixels stay square and crisp, only their edges are softened. New
+   modes go last so the numbers saved in video.cfg keep their meaning. */
+enum { SCALE_INTEGER, SCALE_FIT_SHARP, SCALE_FIT_SMOOTH, SCALE_FIT_SHARP_SMOOTH,
+       SCALE_MODE_COUNT };
 static int g_scale_mode = SCALE_FIT_SHARP;
 
 /* remake_options.inc: defined there with their defaults (1). */
@@ -62,6 +67,15 @@ static void load_video_settings(void)
             g_clip_all_training = flag != 0;
     }
     (void)fclose(file);
+}
+
+/* Sharp bilinear: the whole prescale factor for a viewport (at least 1). */
+static int sharp_prescale_factor(const RECT *viewport)
+{
+    int factor_x = (viewport->right - viewport->left) / LOGICAL_WIDTH;
+    int factor_y = (viewport->bottom - viewport->top) / LOGICAL_HEIGHT;
+    int factor = factor_x < factor_y ? factor_x : factor_y;
+    return factor < 1 ? 1 : factor;
 }
 
 static int logical_viewport(int client_width, int client_height, RECT *viewport)

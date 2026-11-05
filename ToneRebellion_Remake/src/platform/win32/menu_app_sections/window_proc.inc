@@ -267,7 +267,8 @@ enum { SYSCOMMAND_SCALE_FIRST = 0x0100, SYSCOMMAND_RATE_FIRST = 0x0200 };
 static const char *const g_scale_mode_labels[SCALE_MODE_COUNT] = {
     "Scale: whole multiples (sharp, even pixels)",
     "Scale: fill window (sharp)",
-    "Scale: fill window (smooth)"
+    "Scale: fill window (smooth)",
+    "Scale: fill window (sharp bilinear: whole multiple, then smooth)"
 };
 
 /* remake_sdl has no system menu: F12 cycles the modes. */

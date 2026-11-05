@@ -63,7 +63,8 @@ static int options_game_speed(void)
 static void options_value_text(int row, char *text, size_t capacity)
 {
     static const char *const scales[SCALE_MODE_COUNT] = {
-        "Multiples entiers", "Remplir (net)", "Remplir (lisse)"
+        "Multiples entiers", "Remplir (net)", "Remplir (lisse)",
+        "Remplir (net lisse)"
     };
     switch (row) {
     case OPTION_PAINT_RATE:

@@ -411,8 +411,128 @@ static int ensure_paint_buffer(HDC reference_dc)
     return 1;
 }
 
+/* Sharp bilinear (SCALE_FIT_SHARP_SMOOTH) on the CPU: the same result as
+   a nearest-pixel prescale by the whole factor k followed by a linear
+   stretch, computed in one pass. Along each axis an output pixel maps to a
+   source position u; the blend between source pixels t and t + 1 only
+   happens in the last 1/k of a pixel: w = clamp((frac(u) - 0.5 + 0.5/k) * k,
+   0, 1). Most weights are 0 or 1, so most pixels are plain copies. GDI
+   HALFTONE of a k-times buffer cost about 18 ms per paint at 1500x1125. */
+static HDC g_sharp_dc;
+static HBITMAP g_sharp_bitmap;
+static HGDIOBJ g_sharp_original_bitmap;
+static uint32_t *g_sharp_pixels;
+static int g_sharp_width, g_sharp_height;
+static int *g_sharp_x0, *g_sharp_wx, *g_sharp_y0, *g_sharp_wy;
+
+static void destroy_sharp_buffer(void)
+{
+    if (g_sharp_dc != NULL && g_sharp_original_bitmap != NULL)
+        (void)SelectObject(g_sharp_dc, g_sharp_original_bitmap);
+    if (g_sharp_bitmap != NULL) DeleteObject(g_sharp_bitmap);
+    if (g_sharp_dc != NULL) DeleteDC(g_sharp_dc);
+    free(g_sharp_x0);
+    free(g_sharp_y0);
+    g_sharp_dc = NULL;
+    g_sharp_bitmap = NULL;
+    g_sharp_original_bitmap = NULL;
+    g_sharp_pixels = NULL;
+    g_sharp_x0 = g_sharp_wx = g_sharp_y0 = g_sharp_wy = NULL;
+    g_sharp_width = g_sharp_height = 0;
+}
+
+static void sharp_axis_table(int out_size, int src_size, int factor,
+                             int *index, int *weight)
+{
+    int i;
+    for (i = 0; i < out_size; ++i) {
+        double u = ((double)i + 0.5) * (double)src_size / (double)out_size - 0.5;
+        int t = (int)floor(u);
+        double w = (u - (double)t - 0.5 + 0.5 / (double)factor) * (double)factor;
+        if (w < 0.0) w = 0.0;
+        if (w > 1.0) w = 1.0;
+        if (t < 0) { t = 0; w = 0.0; }
+        if (t >= src_size - 1) { t = src_size - 2; w = 1.0; }
+        index[i] = t;
+        weight[i] = (int)(w * 256.0 + 0.5);
+    }
+}
+
+static int ensure_sharp_buffer(HDC reference_dc, int width, int height, int factor)
+{
+    BITMAPINFO info;
+    void *bits = NULL;
+    if (g_sharp_dc != NULL && g_sharp_width == width && g_sharp_height == height)
+        return 1;
+    destroy_sharp_buffer();
+    g_sharp_x0 = (int *)malloc(sizeof(int) * (size_t)width * 2U);
+    g_sharp_y0 = (int *)malloc(sizeof(int) * (size_t)height * 2U);
+    if (g_sharp_x0 == NULL || g_sharp_y0 == NULL) {
+        destroy_sharp_buffer();
+        return 0;
+    }
+    g_sharp_wx = g_sharp_x0 + width;
+    g_sharp_wy = g_sharp_y0 + height;
+    sharp_axis_table(width, LOGICAL_WIDTH, factor, g_sharp_x0, g_sharp_wx);
+    sharp_axis_table(height, LOGICAL_HEIGHT, factor, g_sharp_y0, g_sharp_wy);
+    ZeroMemory(&info, sizeof(info));
+    info.bmiHeader.biSize = sizeof(info.bmiHeader);
+    info.bmiHeader.biWidth = width;
+    info.bmiHeader.biHeight = -height;
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+    g_sharp_dc = CreateCompatibleDC(reference_dc);
+    g_sharp_bitmap = g_sharp_dc != NULL
+        ? CreateDIBSection(reference_dc, &info, DIB_RGB_COLORS, &bits, NULL, 0) : NULL;
+    if (g_sharp_bitmap == NULL || bits == NULL) {
+        destroy_sharp_buffer();
+        return 0;
+    }
+    g_sharp_original_bitmap = SelectObject(g_sharp_dc, g_sharp_bitmap);
+    g_sharp_pixels = (uint32_t *)bits;
+    g_sharp_width = width;
+    g_sharp_height = height;
+    return 1;
+}
+
+static uint32_t sharp_mix(uint32_t a, uint32_t b, int w)
+{
+    uint32_t rb, g;
+    if (w <= 0) return a;
+    if (w >= 256) return b;
+    rb = ((a & 0xff00ffU) * (uint32_t)(256 - w) + (b & 0xff00ffU) * (uint32_t)w) >> 8;
+    g = ((a & 0x00ff00U) * (uint32_t)(256 - w) + (b & 0x00ff00U) * (uint32_t)w) >> 8;
+    return (rb & 0xff00ffU) | (g & 0x00ff00U);
+}
+
+static void sharp_bilinear_fill(const uint32_t *source)
+{
+    int x, y;
+    for (y = 0; y < g_sharp_height; ++y) {
+        const uint32_t *row0 = source + (size_t)g_sharp_y0[y] * LOGICAL_WIDTH;
+        const uint32_t *row1 = row0 + LOGICAL_WIDTH;
+        int wy = g_sharp_wy[y];
+        uint32_t *out = g_sharp_pixels + (size_t)y * (size_t)g_sharp_width;
+        if (wy == 0 || wy == 256) {
+            const uint32_t *row = wy == 0 ? row0 : row1;
+            for (x = 0; x < g_sharp_width; ++x)
+                out[x] = sharp_mix(row[g_sharp_x0[x]], row[g_sharp_x0[x] + 1],
+                                   g_sharp_wx[x]);
+        } else {
+            for (x = 0; x < g_sharp_width; ++x) {
+                int t = g_sharp_x0[x];
+                int wx = g_sharp_wx[x];
+                out[x] = sharp_mix(sharp_mix(row0[t], row0[t + 1], wx),
+                                   sharp_mix(row1[t], row1[t + 1], wx), wy);
+            }
+        }
+    }
+}
+
 static void destroy_paint_buffer(void)
 {
+    destroy_sharp_buffer();
     if (g_paint_buffer_dc != NULL && g_paint_buffer_original_bitmap != NULL)
         (void)SelectObject(g_paint_buffer_dc, g_paint_buffer_original_bitmap);
     if (g_paint_buffer_bitmap != NULL) DeleteObject(g_paint_buffer_bitmap);
@@ -448,9 +568,19 @@ static void present_back_buffer(HDC screen, const RECT *client)
         RECT bar = {viewport.right, viewport.top, client->right, viewport.bottom};
         FillRect(screen, &bar, (HBRUSH)GetStockObject(BLACK_BRUSH));
     }
+    if (g_scale_mode == SCALE_FIT_SHARP_SMOOTH &&
+        ensure_sharp_buffer(screen, viewport.right - viewport.left,
+                            viewport.bottom - viewport.top,
+                            sharp_prescale_factor(&viewport))) {
+        sharp_bilinear_fill(g_back_surface.pixels);
+        BitBlt(screen, viewport.left, viewport.top, g_sharp_width, g_sharp_height,
+               g_sharp_dc, 0, 0, SRCCOPY);
+        return;
+    }
     /* Nearest pixel unless smoothing was chosen: HALFTONE filters the whole
        frame on the CPU, about 5 ms per frame at 1024x781. */
-    SetStretchBltMode(screen, g_scale_mode == SCALE_FIT_SMOOTH
+    SetStretchBltMode(screen, g_scale_mode == SCALE_FIT_SMOOTH ||
+                              g_scale_mode == SCALE_FIT_SHARP_SMOOTH
                                   ? HALFTONE : COLORONCOLOR);
     StretchBlt(screen, viewport.left, viewport.top,
                viewport.right - viewport.left, viewport.bottom - viewport.top,
