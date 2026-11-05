@@ -355,6 +355,9 @@ static void e2e_write_state(void)
         fprintf(file, "paint_count %lu\npaint_blended %lu\npaint_rate %u\n",
                 g_paint_count, g_paint_blended_count,
                 g_paint_rates[g_paint_rate_index]);
+        fprintf(file, "options_open %d\noptions_row %d\nload_paused %d\nclip_all %d\n",
+                g_options_open, g_options_row, g_load_starts_paused,
+                g_clip_all_training);
         fprintf(file, "panic_shown %d\npanic_frame %d\n",
                 island_panic_flag_shown(), g_panic_pulse_frame);
     }

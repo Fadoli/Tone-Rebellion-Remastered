@@ -2373,7 +2373,8 @@ static void draw_clipboard_strip(RenderSurface *surface)
             static int registered_count = -1;
             int count = (int)game_session_clip_building_count(&g_game_session,
                 (uint8_t)g_menu.selected_tribe);
-            if (count != registered_count) {
+            /* Remake options: "Selection (original)" skips the fill. */
+            if (count != registered_count && g_clip_all_training) {
                 game_session_clip_auto_register(&g_game_session,
                                                 (uint8_t)g_menu.selected_tribe);
                 registered_count = count;

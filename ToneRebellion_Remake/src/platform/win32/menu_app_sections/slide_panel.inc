@@ -15,6 +15,10 @@ static int g_music_volume = 100;
 static int g_music_volume_pending;
 static SpriteSheet g_slide_art;
 static void apply_music_volume(void);
+/* remake_options.inc */
+static int g_load_starts_paused;
+static void options_toggle(void);
+static void render_options_claw_caption(RenderSurface *surface, int d);
 
 /* Table DAT_004a33f0 (xmin, ymin, xmax, ymax): 0 Save, 1 Load, 2 pause,
    3 quit to the title (writes resume.gam), 4 music, 5 sound. The first
@@ -124,6 +128,12 @@ static void slide_panel_close_now(void)
    player resumes it from the pause zone. */
 static void slide_panel_open_paused(void)
 {
+    /* The remake options can turn it off (original behaviour). */
+    if (!g_load_starts_paused) {
+        slide_panel_close_now();
+        g_paused = 0;
+        return;
+    }
     g_slide_phase = 2;
     g_slide_pos = SLIDE_OPEN_HEIGHT;
     g_paused = 1;
@@ -228,6 +238,27 @@ static void slide_panel_end_drag(void)
 }
 
 /* Left press at logical (x, y); returns nonzero when the panel took it. */
+static void slide_toggle_music(void)
+{
+    g_music_enabled = !g_music_enabled;
+    save_audio_settings();
+    if (!g_music_enabled) {
+        stop_background_tune();
+    } else {
+        apply_music_volume();
+        if (g_music_resume_tune[0] != '\0') {
+            set_background_tune_mode(g_music_resume_tune, g_music_resume_loop);
+            apply_music_volume();
+        }
+    }
+}
+
+static void slide_toggle_sound(void)
+{
+    g_sound_enabled = !g_sound_enabled;
+    save_audio_settings();
+}
+
 static int slide_panel_press(HWND window, int x, int y)
 {
     int hit;
@@ -306,20 +337,12 @@ static int slide_panel_press(HWND window, int x, int y)
         g_game_session_valid = 0;
         g_menu.screen = SCREEN_MAIN_MENU;
     } else if (hit == 4) {
-        g_music_enabled = !g_music_enabled;
-        save_audio_settings();
-        if (!g_music_enabled) {
-            stop_background_tune();
-        } else {
-            apply_music_volume();
-            if (g_music_resume_tune[0] != '\0') {
-                set_background_tune_mode(g_music_resume_tune, g_music_resume_loop);
-                apply_music_volume();
-            }
-        }
+        slide_toggle_music();
     } else if (hit == 5) {
-        g_sound_enabled = !g_sound_enabled;
-        save_audio_settings();
+        slide_toggle_sound();
+    } else if (x >= 6 && x <= 88 && y >= 6 && y <= 92) {
+        /* Remake: the left claw opens the remake options. */
+        options_toggle();
     }
     (void)window;
     return 1;
@@ -380,4 +403,5 @@ static void render_slide_panel(RenderSurface *surface)
     if (hover >= 0)
         draw_sprite(surface, &g_slide_art, (uint32_t)hover + 1U,
                     k_slide_rects[hover].left, k_slide_rects[hover].top + d);
+    render_options_claw_caption(surface, d);
 }

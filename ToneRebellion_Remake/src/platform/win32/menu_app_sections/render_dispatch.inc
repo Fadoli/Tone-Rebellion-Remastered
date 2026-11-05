@@ -338,6 +338,9 @@ static void render_back_buffer_now(RenderSurface *back)
     if (g_menu.screen == SCREEN_WORLD_MAP || g_menu.screen == SCREEN_ISLAND) {
         render_pause_eye(back);
         render_slide_panel(back);
+        render_options_panel(back);
+    } else {
+        g_options_open = 0;
     }
     /* End-sequence fade (FUN_00410765 through the screen palette): every
        channel is scaled by (256 - level) / 256. The native fade starts from

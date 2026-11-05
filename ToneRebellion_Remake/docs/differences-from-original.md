@@ -23,7 +23,7 @@ This page lists every behaviour of the remake that knowingly differs from `FLOAT
 |---|---|---|
 | Save format | 0x80-byte header and four engine streams (`FUN_0045749a` / `FUN_004576c7`). | Same header, then a remake body: the `GameSession` field table and the raw session. A later build copies the fields by name, so a save survives added, removed or resized fields ([build and validation](build-and-validation.md)). Original saves are still read. |
 | Save location | Game directory. | A `saves` directory next to the executable (or `TONE_REBELLION_SAVE_DIR`); the game directory is never written. |
-| Loaded game | Resumes running. | Opens paused, with the options panel open; the player resumes from the pause zone. |
+| Loaded game | Resumes running. | Opens paused by default, with the options panel open; the player resumes from the pause zone. The remake options can turn this off. |
 | Several played tribes | No such case (one local tribe). | Loading a game where two or more tribes were played (more than the starting Hall, a building order, or a queued task) opens the New Game screen as a tribe choice: unplayed tribes drawn black and not selectable, world size and difficulty locked; NEWGAME continues as the picked tribe. |
 
 ## Keyboard and mouse
@@ -57,5 +57,6 @@ This page lists every behaviour of the remake that knowingly differs from `FLOAT
 | Topic | Original | Remake |
 |---|---|---|
 | Systems | Windows 9x, DirectX. | Win32 and SDL3 builds, and a browser build (Emscripten). |
-| Display rate | The island and the world map are drawn once per 20 frames/s game frame, with 1 to 3 simulation ticks each (game speed), so motion steps by up to 3 ticks per picture. | The game frame still runs at 20 frames/s, but the picture is painted at 20, 40, 60 (default) or 120 Hz: units, shots, spell effects and the world-map orbits are blended between the last two game frames, one frame (50 ms) behind. 20 Hz paints as the original. Shift+F12 or the window menu changes it; `video.cfg` keeps it (`fps`). Sprite frames stay the original ones. |
+| Remake options | — | F2 on the island or the world map, or the left claw of the options panel (Escape), opens a panel for the remake's own settings: display rate, scaling, game speed, music, sound effects, whether a loaded game starts paused, and whether the clipboard is filled with every training building (remake) or only the selected one (original). Arrows or clicks change them; `video.cfg` (`loadpaused`, `clipall`) and `audio.cfg` keep them. |
+| Display rate | The island and the world map are drawn once per 20 frames/s game frame, with 1 to 3 simulation ticks each (game speed), so motion steps by up to 3 ticks per picture. | The game frame still runs at 20 frames/s, but the picture is painted at 20, 40, 60 (default) or 120 Hz: units, shots, spell effects and the world-map orbits are blended between the last two game frames, one frame (50 ms) behind. 20 Hz paints as the original. Shift+F12, the window menu or the remake options change it; `video.cfg` keeps it (`fps`). Sprite frames stay the original ones. |
 | Browser data | — | The page asks for the game folder or the CD image (`.iso`, ISO 9660, read by slices); files stay in the browser storage. |

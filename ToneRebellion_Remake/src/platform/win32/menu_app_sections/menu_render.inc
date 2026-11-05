@@ -12,6 +12,10 @@ static unsigned game_random(void)
 enum { SCALE_INTEGER, SCALE_FIT_SHARP, SCALE_FIT_SMOOTH, SCALE_MODE_COUNT };
 static int g_scale_mode = SCALE_FIT_SHARP;
 
+/* remake_options.inc: defined there with their defaults (1). */
+static int g_load_starts_paused;
+static int g_clip_all_training;
+
 static int video_settings_path(char *path, size_t capacity)
 {
     char directory[MAX_PATH];
@@ -27,8 +31,9 @@ static void save_video_settings(void)
     if (!video_settings_path(path, sizeof(path))) return;
     file = fopen(path, "w");
     if (file == NULL) return;
-    (void)fprintf(file, "scale %d\nfps %u\n", g_scale_mode,
-                  g_paint_rates[g_paint_rate_index]);
+    (void)fprintf(file, "scale %d\nfps %u\nloadpaused %d\nclipall %d\n",
+                  g_scale_mode, g_paint_rates[g_paint_rate_index],
+                  g_load_starts_paused, g_clip_all_training);
     (void)fclose(file);
     platform_storage_changed();
 }
@@ -47,9 +52,14 @@ static void load_video_settings(void)
     {
         unsigned rate;
         int index;
+        int flag;
         if (fscanf(file, " fps %u", &rate) == 1)
             for (index = 0; index < PAINT_RATE_COUNT; ++index)
                 if (g_paint_rates[index] == rate) g_paint_rate_index = index;
+        if (fscanf(file, " loadpaused %d", &flag) == 1)
+            g_load_starts_paused = flag != 0;
+        if (fscanf(file, " clipall %d", &flag) == 1)
+            g_clip_all_training = flag != 0;
     }
     (void)fclose(file);
 }

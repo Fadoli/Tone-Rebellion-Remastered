@@ -548,6 +548,24 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             RECT panel_client;
             RECT panel_viewport;
             platform_client_rect(window, &panel_client);
+            if (g_options_open && !options_screen()) g_options_open = 0;
+            if (g_options_open) {
+                int px = -1, py = -1;
+                if (logical_viewport(panel_client.right - panel_client.left,
+                                     panel_client.bottom - panel_client.top,
+                                     &panel_viewport) &&
+                    panel_viewport.right > panel_viewport.left &&
+                    panel_viewport.bottom > panel_viewport.top) {
+                    px = ((GET_X_LPARAM(lparam) - panel_viewport.left) *
+                          LOGICAL_WIDTH) / (panel_viewport.right - panel_viewport.left);
+                    py = ((GET_Y_LPARAM(lparam) - panel_viewport.top) *
+                          LOGICAL_HEIGHT) / (panel_viewport.bottom - panel_viewport.top);
+                }
+                (void)options_press(window, px, py);
+                g_swallow_left_button_up = 1;
+                platform_invalidate(window);
+                return 0;
+            }
             if ((g_menu.screen == SCREEN_WORLD_MAP || g_menu.screen == SCREEN_ISLAND) &&
                 logical_viewport(panel_client.right - panel_client.left,
                                  panel_client.bottom - panel_client.top,
@@ -651,6 +669,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
     case WM_RBUTTONDOWN:
         return 0;
     case WM_RBUTTONUP: {
+        if (g_options_open) return 0;
         RECT client;
         RECT viewport;
         int width;
@@ -708,6 +727,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         return 0;
     }
     case WM_MOUSEWHEEL:
+        if (g_options_open) return 0;
         if (g_menu.screen == SCREEN_ISLAND) {
             int direction = GET_WHEEL_DELTA_WPARAM(wparam) > 0 ? -1 : 1;
             g_island_scroll_x += direction * 128;
@@ -729,6 +749,17 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         }
         /* The original logo loop polls no input. */
         if (g_menu.screen == SCREEN_LOGO) return 0;
+        /* Remake options: F2 opens or closes them; while open they take
+           every key. */
+        if (wparam == VK_F2 && !g_options_open && options_screen()) {
+            options_toggle();
+            platform_invalidate(window);
+            return 0;
+        }
+        if (options_key(window, wparam)) {
+            platform_invalidate(window);
+            return 0;
+        }
         if (g_menu.screen == SCREEN_NET_SETUP) {
             /* Typed text arrives as WM_CHAR; keys here only navigate. */
             net_setup_key(window, wparam);

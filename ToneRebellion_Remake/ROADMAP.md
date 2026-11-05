@@ -24,7 +24,7 @@ State on 2026-11-05. Remaining work: [TODO](TODO.md); ported features: [implemen
 - Bridge crossing: the `+0x3c` order is kept in `handoff_resume_action`; it resumes on the same tick as the original, with no observable difference.
 - Building move: the old site fades out over 8 to 16 ticks as in the original (`FUN_00450a71`), but its game state is cleared at the placement so the Hall is never found twice.
 - CONSTR: the port keeps action 4 where the original carries action 5 (`FA_Build`), with no observed effect.
-- Clipboard: filled with every owned training building (`game_session_clip_auto_register`); original: only the selected one. Removing the call in `island_view_render.inc` gives the original behaviour.
+- Clipboard: filled with every owned training building by default (`game_session_clip_auto_register`); the remake options switch to the original (only the selected one).
 - Every remake choice visible to the player (network pause, save and load, Escape shortcut, end screen click, repair button, paused load, tribe choice) is listed in [differences from the original game](docs/differences-from-original.md).
 
 Out of scope and open points: [TODO](TODO.md).
