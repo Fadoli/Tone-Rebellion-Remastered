@@ -14,7 +14,7 @@ This page lists every behaviour of the remake that knowingly differs from `FLOAT
 | Save | Refused in a network game. | The Save zone, `Shift+F5` and the `F5` quicksave save a local copy of the shared session; turns go on while the Save screen is open. Loaded outside a network game, such a save continues as a solo game. |
 | Load | Refused in a network game. | The host loads: `L` in the lobby, or the Load zone of the options panel during a game (guests cannot). A pick during a game sends every machine back to the lobby. The file goes to each guest (`NET_RECORD_SAVE_DATA`, 2 KB chunks); every machine applies the same bytes and acknowledges; the lobby becomes the tribe choice below; the start waits for every acknowledgement. |
 | Game speed | Keys `8`/`9` (and numpad `-`/`+`) allowed only with `multispeed` in `FLOAT.CFG`; a network game starts at speed 2 (`GAMEENV +0x130`), plus catch-up ticks `DAT_004bf114`. | Always allowed; any player changes the speed for every machine on the same turn (`GAME_COMMAND_SET_NETWORK_SPEED`, 1..3 ticks per turn). A network game starts at speed 1. |
-| Debug end sequence | Key `W` with the debug flag `DAT_004c2b74` sends world command 0x15. | `F11` in a network game sends the same command (`GAME_COMMAND_START_END_SEQUENCE`). |
+| Debug end sequence | Key `W` with the debug flag `DAT_004c2b74` sends world command 0x15. | Debug builds only (`TONE_REBELLION_DEBUG_KEYS`): `F11` in a network game sends the same command (`GAME_COMMAND_START_END_SEQUENCE`). |
 | End screen cards | `ENDGNONP` cards drawn in a network game. | Same; the remake draws them from the scores taken when the screen opens. |
 
 ## Saving and loading
@@ -34,7 +34,7 @@ This page lists every behaviour of the remake that knowingly differs from `FLOAT
 | End screen | A click on the player card, the story text or a card leaves to the title (`SetState(0)`); nothing skips the scroll. | A click skips the text scroll and the card reveal; Escape leaves to the title and ends the game. |
 | Save screen | No known entry key. | `Shift+F5` on the map or the island (`F5` when quicksave is turned off). |
 | Shift + right click | Not a merge shortcut. | Orders the selected floater to merge. |
-| Test aids | None. | `Ctrl+F6` producer, `Ctrl+F7` remove the tribe's floaters, `Ctrl+F8` building for the next tribe, `Ctrl+F9` training building (bare keys only in e2e runs with `TONE_REBELLION_E2E_TEST_AIDS`), `F11` end screen preview (solo); `C`, `H`, `R` only with `TONE_REBELLION_E2E_STATE`. |
+| Test aids | None. | Debug builds only (CMake option `TONE_REBELLION_DEBUG_KEYS`, on for `CMAKE_BUILD_TYPE=Debug`; release builds ignore these keys): `Ctrl+F6` producer, `Ctrl+F7` remove the tribe's floaters, `Ctrl+F8` building for the next tribe, `Ctrl+F9` training building (bare keys only in e2e runs with `TONE_REBELLION_E2E_TEST_AIDS`), `F11` end screen preview (solo); `C`, `H`, `R` only with `TONE_REBELLION_E2E_STATE`. |
 
 ## Interface
 

@@ -297,11 +297,21 @@ static void set_scale_mode(HWND window, int mode)
     platform_invalidate(window);
 }
 
+/* Developer shortcuts (the F6..F9 test aids, the F11 end sequence, the e2e
+   keys H/C/R) exist only in builds made with TONE_REBELLION_DEBUG_KEYS (on
+   by default for CMAKE_BUILD_TYPE=Debug); release builds ignore them. */
+#ifdef TONE_DEBUG_KEYS
+enum { DEBUG_KEYS = 1 };
+#else
+enum { DEBUG_KEYS = 0 };
+#endif
+
 /* The port's test aids (F6..F9) need Ctrl; e2e scripts, which post keys
    without modifiers, set TONE_REBELLION_E2E_TEST_AIDS instead. */
 static int test_aid_keys(void)
 {
     char value[8];
+    if (!DEBUG_KEYS) return 0;
     return platform_ctrl_down() ||
         (e2e_enabled() &&
          platform_environment("TONE_REBELLION_E2E_TEST_AIDS", value, sizeof(value)));
@@ -779,7 +789,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             platform_invalidate(window);
             return 0;
         }
-        if (wparam == 'H' && g_menu.screen == SCREEN_WORLD_MAP &&
+        if (DEBUG_KEYS && wparam == 'H' && g_menu.screen == SCREEN_WORLD_MAP &&
             e2e_enabled() && g_game_session_valid &&
             g_menu.selected_tribe >= 0 &&
             g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
@@ -790,7 +800,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             platform_invalidate(window);
             return 0;
         }
-        if (wparam == 'C' && e2e_enabled() && g_game_session_valid &&
+        if (DEBUG_KEYS && wparam == 'C' && e2e_enabled() && g_game_session_valid &&
             g_menu.selected_tribe >= 0 &&
             g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
             /* Test aid (only with TONE_REBELLION_E2E_STATE): the Hall
@@ -799,7 +809,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 g_menu.selected_tribe, GAME_RESOURCE_BUILD_TONE);
             return 0;
         }
-        if (wparam == 'R' && g_menu.screen == SCREEN_WORLD_MAP &&
+        if (DEBUG_KEYS && wparam == 'R' && g_menu.screen == SCREEN_WORLD_MAP &&
             e2e_enabled() && g_menu.selected_map_island >= 0) {
             /* Test aid (only with TONE_REBELLION_E2E_STATE): reopen the last
                island without aiming at its orbiting map icon. */
@@ -961,8 +971,8 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             platform_invalidate(window);
             return 0;
         }
-        if (wparam == VK_F11 && (g_menu.screen == SCREEN_WORLD_MAP ||
-                                 g_menu.screen == SCREEN_ISLAND)) {
+        if (DEBUG_KEYS && wparam == VK_F11 &&
+            (g_menu.screen == SCREEN_WORLD_MAP || g_menu.screen == SCREEN_ISLAND)) {
             /* Port-only aid. In a network game it sends world command 0x15
                like the native debug key 'W' (FUN_0046a5b7 0x46a92a, gated by
                DAT_004c2b74): every machine jumps to sequence state 3. Solo

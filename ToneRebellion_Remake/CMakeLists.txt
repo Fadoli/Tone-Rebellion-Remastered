@@ -295,13 +295,24 @@ if(BUILD_TESTING)
     enable_test_assertions(test_island_cob)
 endif()
 
+# Developer shortcuts (test aids, end-sequence key, e2e keys): Debug builds
+# only, unless asked for. A build with them does not replace the player's
+# ToneRebellion_Remake.exe (the e2e scripts run build/debug/remake_sdl.exe).
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(tone_debug_keys_default ON)
+else()
+    set(tone_debug_keys_default OFF)
+endif()
+option(TONE_REBELLION_DEBUG_KEYS "Developer shortcuts in the game" ${tone_debug_keys_default})
+
 # The game: the SDL3 shell (src/platform/sdl) over the game code in
 # src/platform/win32/menu_app.c (the folder name is historical: the GDI
 # build was dropped on 2026-11-06). MSYS2: mingw-w64-ucrt-x86_64-sdl3.
 if(NOT EMSCRIPTEN)
     find_package(SDL3 CONFIG REQUIRED)
     add_executable(remake_sdl WIN32 src/platform/win32/menu_app.c src/platform/net_socket.c)
-    target_compile_definitions(remake_sdl PRIVATE TONE_PLATFORM_SDL=1)
+    target_compile_definitions(remake_sdl PRIVATE TONE_PLATFORM_SDL=1
+        $<$<BOOL:${TONE_REBELLION_DEBUG_KEYS}>:TONE_DEBUG_KEYS=1>)
     target_link_libraries(remake_sdl PRIVATE tone_core tone_render SDL3::SDL3)
     target_compile_features(remake_sdl PRIVATE c_std_11)
     if(NOT MSVC)
@@ -330,17 +341,26 @@ if(NOT EMSCRIPTEN)
                 list(APPEND remake_sdl_runtime_dlls "${sdl3_dll_dir}/libiconv-2.dll")
             endif()
         endif()
-        add_custom_command(TARGET remake_sdl POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${remake_sdl_runtime_dlls} $<TARGET_FILE_DIR:remake_sdl>
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "$<TARGET_FILE:remake_sdl>"
-                "${CMAKE_CURRENT_SOURCE_DIR}/ToneRebellion_Remake.exe"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${remake_sdl_runtime_dlls} "${CMAKE_CURRENT_SOURCE_DIR}"
-            COMMENT "Updating the ready-to-launch ToneRebellion_Remake.exe, SDL3.dll and its DLLs"
-            COMMAND_EXPAND_LISTS
-        )
+        if(TONE_REBELLION_DEBUG_KEYS)
+            add_custom_command(TARGET remake_sdl POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${remake_sdl_runtime_dlls} $<TARGET_FILE_DIR:remake_sdl>
+                COMMENT "Copying SDL3.dll and its DLLs beside the debug build"
+                COMMAND_EXPAND_LISTS
+            )
+        else()
+            add_custom_command(TARGET remake_sdl POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${remake_sdl_runtime_dlls} $<TARGET_FILE_DIR:remake_sdl>
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "$<TARGET_FILE:remake_sdl>"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/ToneRebellion_Remake.exe"
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${remake_sdl_runtime_dlls} "${CMAKE_CURRENT_SOURCE_DIR}"
+                COMMENT "Updating the ready-to-launch ToneRebellion_Remake.exe, SDL3.dll and its DLLs"
+                COMMAND_EXPAND_LISTS
+            )
+        endif()
     endif()
 endif()
 
@@ -351,7 +371,8 @@ endif()
 if(EMSCRIPTEN)
     find_package(SDL3 CONFIG REQUIRED)
     add_executable(remake_sdl src/platform/win32/menu_app.c src/platform/net_socket.c)
-    target_compile_definitions(remake_sdl PRIVATE TONE_PLATFORM_SDL=1)
+    target_compile_definitions(remake_sdl PRIVATE TONE_PLATFORM_SDL=1
+        $<$<BOOL:${TONE_REBELLION_DEBUG_KEYS}>:TONE_DEBUG_KEYS=1>)
     target_link_libraries(remake_sdl PRIVATE tone_core tone_render SDL3::SDL3-static)
     target_compile_features(remake_sdl PRIVATE c_std_11)
     set_target_properties(remake_sdl PROPERTIES

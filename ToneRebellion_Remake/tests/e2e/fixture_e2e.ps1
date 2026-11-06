@@ -4,7 +4,8 @@
 # Saves and settings go to a temporary folder (TONE_REBELLION_SAVE_DIR).
 # Usage: powershell -File tests/e2e/fixture_e2e.ps1 [-Exe path] [-OutDir dir]
 param(
-    [string]$Exe = (Join-Path $PSScriptRoot "..\..\ToneRebellion_Remake.exe"),
+    # A build with the developer shortcuts (TONE_REBELLION_DEBUG_KEYS).
+    [string]$Exe = (Join-Path $PSScriptRoot "..\..\build\debug\remake_sdl.exe"),
     [string]$OutDir = (Join-Path $env:TEMP "remake_fixture_e2e")
 )
 Add-Type -AssemblyName System.Drawing

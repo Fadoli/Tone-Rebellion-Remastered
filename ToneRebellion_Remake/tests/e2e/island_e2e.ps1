@@ -5,7 +5,8 @@
 # in a temporary folder: the player's saves are never read or written.
 # Usage: powershell -File tests/e2e/island_e2e.ps1 [-Exe path] [-OutDir dir]
 param(
-    [string]$Exe = (Join-Path $PSScriptRoot "..\..\ToneRebellion_Remake.exe"),
+    # A build with the developer shortcuts (TONE_REBELLION_DEBUG_KEYS).
+    [string]$Exe = (Join-Path $PSScriptRoot "..\..\build\debug\remake_sdl.exe"),
     [string]$OutDir = (Join-Path $env:TEMP "remake_e2e")
 )
 Add-Type -AssemblyName System.Drawing
@@ -323,7 +324,7 @@ try {
     } else { "SKIP  bridge entry (no clear constructed bridge on the island)" }
 
     # --- Hall island: the test-only 'H' key on the world map opens it.
-    Key 0x1B
+    Click 30 350    # GOTOMAP -> world map
     Key 0x48
     $st = WaitState { param($s) $s.screen -eq 3 -and $s.island -eq $s.hall_island } 4
     Check ($st.screen -eq 3 -and $st.island -eq $st.hall_island) "the Hall island opens" "island $($st.island) hall $($st.hall_island)"

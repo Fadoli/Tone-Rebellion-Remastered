@@ -279,6 +279,8 @@ static int shortcut_key(HWND window, int key)
     if (!g_shortcuts_enabled || g_menu.screen != SCREEN_ISLAND || !g_game_session_valid ||
         g_options_open || !shortcut_key_allowed(key)) return 0;
     if (!g_shortcut_keys_loaded) load_shortcut_keys();
+    for (i = 0; i < SHORTCUT_COUNT && g_shortcut_keys[i] != key; ++i) {}
+    if (i == SHORTCUT_COUNT) return 0;   /* unbound: no side effect */
     /* A click below the open SlideWindow only closes it: close it first. */
     if (g_slide_phase != 0) slide_panel_close_now();
     back = g_mouse_inside ? logical_to_client_lparam(window, g_mouse_x, g_mouse_y)
