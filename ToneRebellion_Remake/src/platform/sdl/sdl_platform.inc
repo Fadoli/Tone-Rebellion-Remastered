@@ -33,6 +33,71 @@ static int platform_window_focused(HWND window)
         (SDL_GetWindowFlags(g_sdl_window) & SDL_WINDOW_INPUT_FOCUS) != 0;
 }
 
+/* Row-parallel helper for the presented-frame upscaler: splits [0, rows)
+   over a few persistent worker threads plus the calling thread and returns
+   when every slice is done. Falls back to one thread when none start. */
+typedef void (*PlatformRowJob)(void *context, int y0, int y1);
+enum { PLATFORM_MAX_WORKERS = 7 };
+static SDL_Semaphore *g_pool_start[PLATFORM_MAX_WORKERS];
+static SDL_Semaphore *g_pool_done;
+static int g_pool_workers = -1;
+static PlatformRowJob g_pool_job;
+static void *g_pool_context;
+static int g_pool_ranges[PLATFORM_MAX_WORKERS + 1][2];
+
+static int SDLCALL platform_pool_worker(void *parameter)
+{
+    int index = (int)(intptr_t)parameter;
+    for (;;) {
+        SDL_WaitSemaphore(g_pool_start[index]);
+        g_pool_job(g_pool_context, g_pool_ranges[index + 1][0], g_pool_ranges[index + 1][1]);
+        SDL_SignalSemaphore(g_pool_done);
+    }
+    return 0;
+}
+
+static void platform_pool_init(void)
+{
+    int wanted, i;
+    g_pool_workers = 0;
+    wanted = SDL_GetNumLogicalCPUCores() - 1;
+    if (wanted > PLATFORM_MAX_WORKERS) wanted = PLATFORM_MAX_WORKERS;
+    if (wanted <= 0) return;
+    g_pool_done = SDL_CreateSemaphore(0);
+    if (g_pool_done == NULL) return;
+    for (i = 0; i < wanted; ++i) {
+        SDL_Thread *thread;
+        g_pool_start[i] = SDL_CreateSemaphore(0);
+        if (g_pool_start[i] == NULL) break;
+        thread = SDL_CreateThread(platform_pool_worker, "upscale", (void *)(intptr_t)i);
+        if (thread == NULL) break;
+        SDL_DetachThread(thread);
+        g_pool_workers = i + 1;
+    }
+}
+
+static void platform_parallel_rows(PlatformRowJob job, void *context, int rows)
+{
+    int parts, i;
+    if (rows <= 0) return;
+    if (g_pool_workers < 0) platform_pool_init();
+    parts = g_pool_workers + 1;
+    if (parts > rows / 16) parts = rows / 16;
+    if (parts <= 1) {
+        job(context, 0, rows);
+        return;
+    }
+    g_pool_job = job;
+    g_pool_context = context;
+    for (i = 0; i < parts; ++i) {
+        g_pool_ranges[i][0] = rows * i / parts;
+        g_pool_ranges[i][1] = rows * (i + 1) / parts;
+    }
+    for (i = 1; i < parts; ++i) SDL_SignalSemaphore(g_pool_start[i - 1]);
+    job(context, g_pool_ranges[0][0], g_pool_ranges[0][1]);
+    for (i = 1; i < parts; ++i) SDL_WaitSemaphore(g_pool_done);
+}
+
 static int platform_ctrl_down(void)
 {
     return (SDL_GetModState() & SDL_KMOD_CTRL) != 0;

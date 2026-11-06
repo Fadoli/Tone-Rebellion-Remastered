@@ -27,33 +27,32 @@ static int sdl_ensure_back_buffer(void)
 
 /* Scales the back buffer into the window like present_back_buffer: black
    bars, nearest pixel unless the smooth mode is chosen. */
-/* Sharp bilinear (SCALE_FIT_SHARP_SMOOTH): a render target at the whole
-   prescale factor, filled nearest-pixel, then drawn linearly. */
-static SDL_Texture *g_sdl_prescaled;
-static int g_sdl_prescale_factor;
+/* The upscaled frame (every filter but nearest): a streaming texture of the
+   viewport size, filled on the CPU by present_upscale and drawn 1:1. */
+static SDL_Texture *g_sdl_scaled;
+static int g_sdl_scaled_width, g_sdl_scaled_height;
 
-static SDL_Texture *sdl_prescaled_frame(int factor)
+static SDL_Texture *sdl_upscaled_frame(int width, int height)
 {
-    SDL_FRect whole;
-    if (g_sdl_prescaled == NULL || g_sdl_prescale_factor != factor) {
-        if (g_sdl_prescaled != NULL) SDL_DestroyTexture(g_sdl_prescaled);
-        g_sdl_prescaled = SDL_CreateTexture(g_sdl_renderer, SDL_PIXELFORMAT_XRGB8888,
-                                            SDL_TEXTUREACCESS_TARGET,
-                                            LOGICAL_WIDTH * factor,
-                                            LOGICAL_HEIGHT * factor);
-        g_sdl_prescale_factor = g_sdl_prescaled != NULL ? factor : 0;
-        if (g_sdl_prescaled == NULL) return NULL;
-        (void)SDL_SetTextureScaleMode(g_sdl_prescaled, SDL_SCALEMODE_LINEAR);
+    void *pixels;
+    int pitch;
+    if (g_sdl_scaled == NULL || g_sdl_scaled_width != width ||
+        g_sdl_scaled_height != height) {
+        if (g_sdl_scaled != NULL) SDL_DestroyTexture(g_sdl_scaled);
+        g_sdl_scaled = SDL_CreateTexture(g_sdl_renderer, SDL_PIXELFORMAT_XRGB8888,
+                                         SDL_TEXTUREACCESS_STREAMING, width, height);
+        g_sdl_scaled_width = g_sdl_scaled != NULL ? width : 0;
+        g_sdl_scaled_height = g_sdl_scaled != NULL ? height : 0;
+        if (g_sdl_scaled == NULL) return NULL;
+        (void)SDL_SetTextureScaleMode(g_sdl_scaled, SDL_SCALEMODE_NEAREST);
     }
-    if (!SDL_SetRenderTarget(g_sdl_renderer, g_sdl_prescaled)) return NULL;
-    whole.x = 0.0f;
-    whole.y = 0.0f;
-    whole.w = (float)(LOGICAL_WIDTH * factor);
-    whole.h = (float)(LOGICAL_HEIGHT * factor);
-    (void)SDL_SetTextureScaleMode(g_sdl_texture, SDL_SCALEMODE_NEAREST);
-    (void)SDL_RenderTexture(g_sdl_renderer, g_sdl_texture, NULL, &whole);
-    (void)SDL_SetRenderTarget(g_sdl_renderer, NULL);
-    return g_sdl_prescaled;
+    if (!SDL_LockTexture(g_sdl_scaled, NULL, &pixels, &pitch)) return NULL;
+    if (!present_upscale(g_sdl_pixels, (uint32_t *)pixels, pitch / 4, width, height)) {
+        SDL_UnlockTexture(g_sdl_scaled);
+        return NULL;
+    }
+    SDL_UnlockTexture(g_sdl_scaled);
+    return g_sdl_scaled;
 }
 
 static void sdl_present(void)
@@ -73,15 +72,13 @@ static void sdl_present(void)
         target.y = (float)viewport.top;
         target.w = (float)(viewport.right - viewport.left);
         target.h = (float)(viewport.bottom - viewport.top);
-        SDL_Texture *prescaled = g_scale_mode == SCALE_FIT_SHARP_SMOOTH
-            ? sdl_prescaled_frame(sharp_prescale_factor(&viewport)) : NULL;
-        if (prescaled != NULL) {
-            (void)SDL_RenderTexture(g_sdl_renderer, prescaled, NULL, &target);
+        SDL_Texture *scaled = g_upscale_filter != UPSCALE_NEAREST
+            ? sdl_upscaled_frame(viewport.right - viewport.left,
+                                 viewport.bottom - viewport.top) : NULL;
+        if (scaled != NULL) {
+            (void)SDL_RenderTexture(g_sdl_renderer, scaled, NULL, &target);
         } else {
-            (void)SDL_SetTextureScaleMode(g_sdl_texture,
-                g_scale_mode == SCALE_FIT_SMOOTH ||
-                g_scale_mode == SCALE_FIT_SHARP_SMOOTH ? SDL_SCALEMODE_LINEAR
-                                                       : SDL_SCALEMODE_NEAREST);
+            (void)SDL_SetTextureScaleMode(g_sdl_texture, SDL_SCALEMODE_NEAREST);
             (void)SDL_RenderTexture(g_sdl_renderer, g_sdl_texture, NULL, &target);
         }
     }
@@ -120,8 +117,8 @@ static void sdl_destroy_window(void)
     stop_background_tune();
     sfx_close();
     sdl_audio_close();
-    if (g_sdl_prescaled != NULL) SDL_DestroyTexture(g_sdl_prescaled);
-    g_sdl_prescaled = NULL;
+    if (g_sdl_scaled != NULL) SDL_DestroyTexture(g_sdl_scaled);
+    g_sdl_scaled = NULL;
     if (g_sdl_texture != NULL) SDL_DestroyTexture(g_sdl_texture);
     if (g_sdl_renderer != NULL) SDL_DestroyRenderer(g_sdl_renderer);
     if (g_sdl_window != NULL) SDL_DestroyWindow(g_sdl_window);

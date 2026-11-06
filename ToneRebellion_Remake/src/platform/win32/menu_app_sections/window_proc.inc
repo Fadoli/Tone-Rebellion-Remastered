@@ -267,12 +267,11 @@ static unsigned frame_clock_due(void)
 
 /* Window (system) menu entries for the scaling modes; system command IDs
    keep their low four bits clear and stay below 0xF000. */
-enum { SYSCOMMAND_SCALE_FIRST = 0x0100, SYSCOMMAND_RATE_FIRST = 0x0200 };
+enum { SYSCOMMAND_SCALE_FIRST = 0x0100, SYSCOMMAND_RATE_FIRST = 0x0200,
+       SYSCOMMAND_FILTER_FIRST = 0x0300 };
 static const char *const g_scale_mode_labels[SCALE_MODE_COUNT] = {
-    "Scale: whole multiples (sharp, even pixels)",
-    "Scale: fill window (sharp)",
-    "Scale: fill window (smooth)",
-    "Scale: fill window (sharp bilinear: whole multiple, then smooth)"
+    "Scale: whole multiples (even pixels, bars)",
+    "Scale: fill window"
 };
 
 /* remake_sdl has no system menu: F12 cycles the modes. */
@@ -286,6 +285,10 @@ static void update_scale_menu(HWND window)
     (void)CheckMenuRadioItem(menu, SYSCOMMAND_SCALE_FIRST,
                              SYSCOMMAND_SCALE_FIRST + 0x10 * (SCALE_MODE_COUNT - 1),
                              SYSCOMMAND_SCALE_FIRST + 0x10 * (UINT)g_scale_mode,
+                             MF_BYCOMMAND);
+    (void)CheckMenuRadioItem(menu, SYSCOMMAND_FILTER_FIRST,
+                             SYSCOMMAND_FILTER_FIRST + 0x10 * (UPSCALE_FILTER_COUNT - 1),
+                             SYSCOMMAND_FILTER_FIRST + 0x10 * (UINT)g_upscale_filter,
                              MF_BYCOMMAND);
     (void)CheckMenuRadioItem(menu, SYSCOMMAND_RATE_FIRST,
                              SYSCOMMAND_RATE_FIRST + 0x10 * (PAINT_RATE_COUNT - 1),
@@ -308,6 +311,14 @@ static void add_scale_menu(HWND window)
         (void)AppendMenuA(menu, MF_STRING,
                           SYSCOMMAND_SCALE_FIRST + 0x10 * (UINT)mode,
                           g_scale_mode_labels[mode]);
+    (void)AppendMenuA(menu, MF_SEPARATOR, 0, NULL);
+    for (mode = 0; mode < UPSCALE_FILTER_COUNT; ++mode) {
+        char label[64];
+        (void)snprintf(label, sizeof(label), "Filter: %s",
+                       upscale_filter_name((UpscaleFilter)mode));
+        (void)AppendMenuA(menu, MF_STRING,
+                          SYSCOMMAND_FILTER_FIRST + 0x10 * (UINT)mode, label);
+    }
     (void)AppendMenuA(menu, MF_SEPARATOR, 0, NULL);
     for (mode = 0; mode < PAINT_RATE_COUNT; ++mode) {
         char label[64];
@@ -341,6 +352,16 @@ static int test_aid_keys(void)
          platform_environment("TONE_REBELLION_E2E_TEST_AIDS", value, sizeof(value)));
 }
 
+/* Remake: the filter that scales the frame to the window (upscale.h). */
+static void set_upscale_filter(HWND window, int filter)
+{
+    if (filter < 0 || filter >= UPSCALE_FILTER_COUNT) return;
+    g_upscale_filter = filter;
+    save_video_settings();
+    update_scale_menu(window);
+    platform_invalidate(window);
+}
+
 /* Remake: paint rate of the island and world map (render_interp.inc). */
 static void set_paint_rate(HWND window, int index)
 {
@@ -359,6 +380,12 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             (wparam & 0xFFF0U) < SYSCOMMAND_SCALE_FIRST + 0x10 * SCALE_MODE_COUNT) {
             set_scale_mode(window,
                 (int)(((wparam & 0xFFF0U) - SYSCOMMAND_SCALE_FIRST) / 0x10));
+            return 0;
+        }
+        if ((wparam & 0xFFF0U) >= SYSCOMMAND_FILTER_FIRST &&
+            (wparam & 0xFFF0U) < SYSCOMMAND_FILTER_FIRST + 0x10 * UPSCALE_FILTER_COUNT) {
+            set_upscale_filter(window,
+                (int)(((wparam & 0xFFF0U) - SYSCOMMAND_FILTER_FIRST) / 0x10));
             return 0;
         }
         if ((wparam & 0xFFF0U) >= SYSCOMMAND_RATE_FIRST &&
@@ -750,14 +777,18 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         }
         return 0;
     case WM_KEYDOWN:
-        /* Port-only: Shift+F12 cycles the display rate, F12 the scaling
-           mode, on every screen. */
+        /* Port-only, on every screen: F12 cycles the filter, Ctrl+F12 the
+           scaling mode, Shift+F12 the display rate. */
         if (wparam == VK_F12 && platform_shift_down()) {
             set_paint_rate(window, (g_paint_rate_index + 1) % PAINT_RATE_COUNT);
             return 0;
         }
-        if (wparam == VK_F12) {
+        if (wparam == VK_F12 && platform_ctrl_down()) {
             set_scale_mode(window, (g_scale_mode + 1) % SCALE_MODE_COUNT);
+            return 0;
+        }
+        if (wparam == VK_F12) {
+            set_upscale_filter(window, (g_upscale_filter + 1) % UPSCALE_FILTER_COUNT);
             return 0;
         }
         /* The original logo loop polls no input. */

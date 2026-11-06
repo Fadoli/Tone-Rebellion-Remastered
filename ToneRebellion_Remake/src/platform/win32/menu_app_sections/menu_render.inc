@@ -4,18 +4,21 @@ static unsigned game_random(void)
 }
 
 /* Port choice: how the 640x480 frame fills the window. INTEGER keeps every
-   game pixel the same size (largest whole multiple, black bars); FIT_SHARP
-   and FIT_SMOOTH fill the window keeping the aspect ratio, with nearest
-   pixel (uneven pixel sizes) or HALFTONE filtering (blurred, about 5 ms of
-   CPU per frame, bench/gameplay_hotspots.md). F12 and the window menu cycle
-   it; saves\video.cfg keeps it. */
-/* FIT_SHARP_SMOOTH ("sharp bilinear") first scales by the largest whole
-   factor that fits, nearest pixel, then stretches that linearly to the
-   window: pixels stay square and crisp, only their edges are softened. New
-   modes go last so the numbers saved in video.cfg keep their meaning. */
-enum { SCALE_INTEGER, SCALE_FIT_SHARP, SCALE_FIT_SMOOTH, SCALE_FIT_SHARP_SMOOTH,
-       SCALE_MODE_COUNT };
-static int g_scale_mode = SCALE_FIT_SHARP;
+   game pixel the same size (largest whole multiple, black bars); FIT fills
+   the window keeping the aspect ratio. The filter (g_upscale_filter,
+   src/render/upscale.h) says how the pixels are scaled: nearest pixel,
+   bilinear, sharp bilinear (nearest by the whole factor, then linear),
+   bicubic, Lanczos or the pixel-art filters xBR, HQx and ScaleFX. Older
+   video.cfg files stored "scale" 2 (fill, smooth) and 3 (fill, sharp
+   bilinear); load_video_settings maps them to FIT plus a filter. */
+enum { SCALE_INTEGER, SCALE_FIT, SCALE_MODE_COUNT };
+static int g_scale_mode = SCALE_FIT;
+static int g_upscale_filter = UPSCALE_SHARP_BILINEAR;
+/* Options panel and window menu names, in UpscaleFilter order. */
+static const char *const g_upscale_filter_labels[UPSCALE_FILTER_COUNT] = {
+    "Aucun (pixels nets)", "Bilineaire", "Bilineaire net", "Bicubique",
+    "Lanczos", "xBR", "HQx", "ScaleFX"
+};
 
 /* Remake settings (remake_options.inc edits them), saved in video.cfg as
    "key value" lines in any order; unknown keys are ignored. */
@@ -36,7 +39,8 @@ typedef struct RemakeSetting {
 } RemakeSetting;
 
 static const RemakeSetting g_remake_settings[] = {
-    {"scale", &g_scale_mode, 0, SCALE_MODE_COUNT - 1},
+    {"scale", &g_scale_mode, 0, 3},
+    {"filter", &g_upscale_filter, 0, UPSCALE_FILTER_COUNT - 1},
     {"loadpaused", &g_load_starts_paused, 0, 1},
     {"clipall", &g_clip_all_training, 0, 1},
     {"smoothscroll", &g_smooth_scroll, 0, 1},
@@ -95,15 +99,49 @@ static void load_video_settings(void)
                 *g_remake_settings[i].value = value;
     }
     (void)fclose(file);
+    /* Older scale modes: 2 fill smooth, 3 fill sharp bilinear. */
+    if (g_scale_mode >= SCALE_MODE_COUNT) {
+        g_upscale_filter = g_scale_mode == 2 ? UPSCALE_BILINEAR : UPSCALE_SHARP_BILINEAR;
+        g_scale_mode = SCALE_FIT;
+    }
 }
 
-/* Sharp bilinear: the whole prescale factor for a viewport (at least 1). */
-static int sharp_prescale_factor(const RECT *viewport)
+/* Scales the 640x480 back buffer into a w x h destination with the chosen
+   filter, split over the platform worker threads. */
+static UpscaleContext *g_upscaler;
+typedef struct UpscaleJob {
+    const uint32_t *source;
+    uint32_t *destination;
+    int destination_stride;
+} UpscaleJob;
+
+static void upscale_stage1_job(void *context, int y0, int y1)
 {
-    int factor_x = (viewport->right - viewport->left) / LOGICAL_WIDTH;
-    int factor_y = (viewport->bottom - viewport->top) / LOGICAL_HEIGHT;
-    int factor = factor_x < factor_y ? factor_x : factor_y;
-    return factor < 1 ? 1 : factor;
+    const UpscaleJob *job = (const UpscaleJob *)context;
+    upscale_run_stage1(g_upscaler, job->source, LOGICAL_WIDTH, y0, y1);
+}
+
+static void upscale_stage2_job(void *context, int y0, int y1)
+{
+    const UpscaleJob *job = (const UpscaleJob *)context;
+    upscale_run_stage2(g_upscaler, job->source, LOGICAL_WIDTH, job->destination,
+                       job->destination_stride, y0, y1);
+}
+
+static int present_upscale(const uint32_t *source, uint32_t *destination,
+                           int destination_stride, int width, int height)
+{
+    UpscaleJob job;
+    if (g_upscaler == NULL) g_upscaler = upscale_create();
+    if (g_upscaler == NULL ||
+        !upscale_prepare(g_upscaler, (UpscaleFilter)g_upscale_filter, LOGICAL_WIDTH,
+                         LOGICAL_HEIGHT, width, height)) return 0;
+    job.source = source;
+    job.destination = destination;
+    job.destination_stride = destination_stride;
+    platform_parallel_rows(upscale_stage1_job, &job, upscale_stage1_rows(g_upscaler));
+    platform_parallel_rows(upscale_stage2_job, &job, height);
+    return 1;
 }
 
 static int logical_viewport(int client_width, int client_height, RECT *viewport)

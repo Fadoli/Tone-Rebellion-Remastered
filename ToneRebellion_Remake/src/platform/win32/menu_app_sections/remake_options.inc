@@ -8,6 +8,7 @@
 enum {
     OPTION_PAINT_RATE,
     OPTION_SCALE,
+    OPTION_FILTER,
     OPTION_GAME_SPEED,
     OPTION_MUSIC,
     OPTION_SOUND,
@@ -39,6 +40,7 @@ static int g_options_page;
 
 static void set_scale_mode(HWND window, int mode);
 static void set_paint_rate(HWND window, int index);
+static void set_upscale_filter(HWND window, int filter);
 static void slide_toggle_music(void);
 static void slide_toggle_sound(void);
 static void render_shortcut_page(RenderSurface *surface);
@@ -48,6 +50,7 @@ static int shortcut_page_press(HWND window, int x, int y);
 static const char *const g_option_labels[OPTION_COUNT] = {
     "Frequence d'affichage",
     "Mise a l'echelle",
+    "Filtre d'agrandissement",
     "Vitesse du jeu",
     "Musique",
     "Effets sonores",
@@ -87,8 +90,7 @@ static const char *options_yes_no(int value)
 static void options_value_text(int row, char *text, size_t capacity)
 {
     static const char *const scales[SCALE_MODE_COUNT] = {
-        "Multiples entiers", "Remplir (net)", "Remplir (lisse)",
-        "Remplir (net lisse)"
+        "Multiples entiers", "Remplir la fenetre"
     };
     switch (row) {
     case OPTION_PAINT_RATE:
@@ -97,6 +99,9 @@ static void options_value_text(int row, char *text, size_t capacity)
         break;
     case OPTION_SCALE:
         (void)snprintf(text, capacity, "%s", scales[g_scale_mode]);
+        break;
+    case OPTION_FILTER:
+        (void)snprintf(text, capacity, "%s", g_upscale_filter_labels[g_upscale_filter]);
         break;
     case OPTION_GAME_SPEED:
         (void)snprintf(text, capacity, "%d", options_game_speed());
@@ -157,6 +162,10 @@ static void options_change(HWND window, int row, int step)
     case OPTION_SCALE:
         set_scale_mode(window, (g_scale_mode + step + SCALE_MODE_COUNT) %
                                    SCALE_MODE_COUNT);
+        break;
+    case OPTION_FILTER:
+        set_upscale_filter(window, (g_upscale_filter + step + UPSCALE_FILTER_COUNT) %
+                                       UPSCALE_FILTER_COUNT);
         break;
     case OPTION_GAME_SPEED: {
         int32_t speed = (options_game_speed() - 1 + step + 3) % 3 + 1;

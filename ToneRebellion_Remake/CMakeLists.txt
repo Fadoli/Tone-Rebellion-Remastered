@@ -82,8 +82,12 @@ endif()
 # Software rendering onto a plain pixel buffer; no platform headers.
 add_library(tone_render STATIC
     src/render/render_surface.c
+    src/render/upscale.c
 )
 target_include_directories(tone_render PUBLIC src/render)
+if(UNIX)
+    target_link_libraries(tone_render PUBLIC m)
+endif()
 target_compile_features(tone_render PUBLIC c_std_11)
 
 if(MSVC)

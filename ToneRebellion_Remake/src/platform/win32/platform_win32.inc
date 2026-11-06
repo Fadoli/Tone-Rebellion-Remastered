@@ -70,6 +70,73 @@ static int platform_window_focused(HWND window)
     return GetForegroundWindow() == window;
 }
 
+/* Row-parallel helper for the presented-frame upscaler: splits [0, rows)
+   over a few persistent worker threads plus the calling thread and returns
+   when every slice is done. Falls back to one thread when none start. */
+typedef void (*PlatformRowJob)(void *context, int y0, int y1);
+enum { PLATFORM_MAX_WORKERS = 7 };
+static HANDLE g_pool_start[PLATFORM_MAX_WORKERS];
+static HANDLE g_pool_done;
+static int g_pool_workers = -1;
+static PlatformRowJob g_pool_job;
+static void *g_pool_context;
+static int g_pool_ranges[PLATFORM_MAX_WORKERS + 1][2];
+
+static DWORD WINAPI platform_pool_worker(LPVOID parameter)
+{
+    int index = (int)(INT_PTR)parameter;
+    for (;;) {
+        (void)WaitForSingleObject(g_pool_start[index], INFINITE);
+        g_pool_job(g_pool_context, g_pool_ranges[index + 1][0], g_pool_ranges[index + 1][1]);
+        (void)ReleaseSemaphore(g_pool_done, 1, NULL);
+    }
+    return 0;
+}
+
+static void platform_pool_init(void)
+{
+    SYSTEM_INFO info;
+    int wanted, i;
+    g_pool_workers = 0;
+    GetSystemInfo(&info);
+    wanted = (int)info.dwNumberOfProcessors - 1;
+    if (wanted > PLATFORM_MAX_WORKERS) wanted = PLATFORM_MAX_WORKERS;
+    if (wanted <= 0) return;
+    g_pool_done = CreateSemaphoreA(NULL, 0, PLATFORM_MAX_WORKERS, NULL);
+    if (g_pool_done == NULL) return;
+    for (i = 0; i < wanted; ++i) {
+        HANDLE thread;
+        g_pool_start[i] = CreateSemaphoreA(NULL, 0, 1, NULL);
+        if (g_pool_start[i] == NULL) break;
+        thread = CreateThread(NULL, 0, platform_pool_worker, (LPVOID)(INT_PTR)i, 0, NULL);
+        if (thread == NULL) break;
+        CloseHandle(thread);
+        g_pool_workers = i + 1;
+    }
+}
+
+static void platform_parallel_rows(PlatformRowJob job, void *context, int rows)
+{
+    int parts, i;
+    if (rows <= 0) return;
+    if (g_pool_workers < 0) platform_pool_init();
+    parts = g_pool_workers + 1;
+    if (parts > rows / 16) parts = rows / 16;
+    if (parts <= 1) {
+        job(context, 0, rows);
+        return;
+    }
+    g_pool_job = job;
+    g_pool_context = context;
+    for (i = 0; i < parts; ++i) {
+        g_pool_ranges[i][0] = rows * i / parts;
+        g_pool_ranges[i][1] = rows * (i + 1) / parts;
+    }
+    for (i = 1; i < parts; ++i) (void)ReleaseSemaphore(g_pool_start[i - 1], 1, NULL);
+    job(context, g_pool_ranges[0][0], g_pool_ranges[0][1]);
+    for (i = 1; i < parts; ++i) (void)WaitForSingleObject(g_pool_done, INFINITE);
+}
+
 static int platform_ctrl_down(void)
 {
     return (GetKeyState(VK_CONTROL) & 0x8000) != 0;

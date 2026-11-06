@@ -604,6 +604,7 @@ static void select_building_warrior(void)
 
 #include "menu_app_sections/save_and_help_resources.inc"
 
+#include "upscale.h"
 #include "menu_app_sections/render_interp.inc"
 #include "menu_app_sections/menu_render.inc"
 

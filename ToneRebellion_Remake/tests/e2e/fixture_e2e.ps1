@@ -30,7 +30,9 @@ if (Test-Path $saves) { Remove-Item -Recurse -Force $saves }
 New-Item -ItemType Directory -Force $saves | Out-Null
 # Settings for the run only: no sound-device prompt, 1:1 scale for clicks.
 Set-Content -Path (Join-Path $saves "audio.cfg") -Value "0 0 0 0" -Encoding ascii
-Set-Content -Path (Join-Path $saves "video.cfg") -Value "scale 1" -Encoding ascii
+# Nearest-pixel fill, no smooth or edge scrolling: pixel checks and scroll
+# steps stay as in the original (the real cursor may sit on a window edge).
+Set-Content -Path (Join-Path $saves "video.cfg") -Value "scale 1`nfilter 0`nsmoothscroll 0`nedgescroll 0" -Encoding ascii
 $statePath = Join-Path $OutDir "state.txt"
 if (Test-Path $statePath) { Remove-Item $statePath }
 $env:TONE_REBELLION_SAVE_DIR = $saves
