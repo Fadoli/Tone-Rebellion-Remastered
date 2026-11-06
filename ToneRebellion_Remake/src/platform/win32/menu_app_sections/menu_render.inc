@@ -30,6 +30,8 @@ static int g_clip_all_training = 1;
 static int g_smooth_scroll = 1;
 static int g_edge_scroll = 1;
 static int g_event_alerts = 1;
+/* Original random island captions (gamey.txt CRYPTIC0..20); off by default. */
+static int g_cryptic_messages;
 static int g_shortcuts_enabled = 1;
 static int g_quicksave_enabled = 1;
 /* Minutes between autosaves; 0 = off. */
@@ -51,6 +53,7 @@ static const RemakeSetting g_remake_settings[] = {
     {"smoothscroll", &g_smooth_scroll, 0, 1},
     {"edgescroll", &g_edge_scroll, 0, 1},
     {"alerts", &g_event_alerts, 0, 1},
+    {"cryptic", &g_cryptic_messages, 0, 1},
     {"shortcuts", &g_shortcuts_enabled, 0, 1},
     {"quicksave", &g_quicksave_enabled, 0, 1},
     {"autosave", &g_autosave_minutes, 0, 60},

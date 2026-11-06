@@ -26,7 +26,6 @@ static void simulate_session_tick(uint32_t source_tick)
         int32_t bond;
         if (game_session_leviathan_bond_notice(&g_game_session, &bond)) {
             queue_leviathan_bond_notice(bond);
-            alert_leviathan_wave();
         }
     }
     while (game_session_pop_world_event(&g_game_session,

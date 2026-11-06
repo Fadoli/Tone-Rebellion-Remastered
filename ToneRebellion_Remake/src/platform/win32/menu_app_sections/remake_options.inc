@@ -16,6 +16,7 @@ enum {
     OPTION_SMOOTH_SCROLL,
     OPTION_EDGE_SCROLL,
     OPTION_ALERTS,
+    OPTION_CRYPTIC,
     OPTION_SHORTCUTS,
     OPTION_SHORTCUT_KEYS,
     OPTION_QUICKSAVE,
@@ -27,7 +28,7 @@ enum {
 
 enum {
     OPTIONS_LEFT = 100, OPTIONS_TOP = 56, OPTIONS_WIDTH = 440,
-    OPTIONS_ROW_TOP = 92, OPTIONS_ROW_HEIGHT = 22,
+    OPTIONS_ROW_TOP = 92, OPTIONS_ROW_HEIGHT = 20,
     OPTIONS_VALUE_LEFT = 340, OPTIONS_VALUE_RIGHT = 525,
     /* SlideWindow left claw (no native control there). */
     OPTIONS_CLAW_LEFT = 6, OPTIONS_CLAW_TOP = 6,
@@ -59,6 +60,7 @@ static const char *const g_option_labels[OPTION_COUNT] = {
     "Defilement fluide",
     "Defilement par les bords",
     "Alertes (Espace: y aller)",
+    "Messages cryptiques",
     "Raccourcis clavier",
     "Configurer les raccourcis",
     "Sauvegarde rapide F5/F9",
@@ -126,6 +128,9 @@ static void options_value_text(int row, char *text, size_t capacity)
         break;
     case OPTION_ALERTS:
         (void)snprintf(text, capacity, "%s", options_yes_no(g_event_alerts));
+        break;
+    case OPTION_CRYPTIC:
+        (void)snprintf(text, capacity, "%s", g_cryptic_messages ? "Oui (original)" : "Non");
         break;
     case OPTION_SHORTCUTS:
         (void)snprintf(text, capacity, "%s", options_yes_no(g_shortcuts_enabled));
@@ -204,6 +209,7 @@ static void options_change(HWND window, int row, int step)
     case OPTION_SMOOTH_SCROLL: options_flip(&g_smooth_scroll); break;
     case OPTION_EDGE_SCROLL: options_flip(&g_edge_scroll); break;
     case OPTION_ALERTS: options_flip(&g_event_alerts); break;
+    case OPTION_CRYPTIC: options_flip(&g_cryptic_messages); break;
     case OPTION_SHORTCUTS: options_flip(&g_shortcuts_enabled); break;
     case OPTION_SHORTCUT_KEYS:
         g_options_page = 1;

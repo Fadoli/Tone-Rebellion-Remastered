@@ -572,12 +572,6 @@ static void alerts_observe(void)
     g_alert_primed = 1;
 }
 
-/* The Leviathan's periodic notice (world event 10). */
-static void alert_leviathan_wave(void)
-{
-    if (g_event_alerts) alert_push("Le Leviathan rompt un lien", -1, 0);
-}
-
 /* Space: to the newest alert's island and spot. */
 static int alert_jump(HWND window)
 {

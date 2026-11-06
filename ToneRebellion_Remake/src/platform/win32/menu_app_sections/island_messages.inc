@@ -137,6 +137,8 @@ static int cryptic_rand(void)
 static void roll_cryptic_message(void)
 {
     int index;
+    /* Remake option: the random captions are off unless turned on. */
+    if (!g_cryptic_messages) return;
     if (++g_cryptic_counter <= 600U) return;
     if (cryptic_rand() * 1000 / 32768 != 0) return;
     g_cryptic_counter = 0;
