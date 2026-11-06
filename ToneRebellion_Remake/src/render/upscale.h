@@ -5,15 +5,15 @@
  *
  * Usage per paint:
  *   upscale_prepare(ctx, filter, src_w, src_h, dst_w, dst_h);   cheap when unchanged
- *   stage 1 over source rows [0, upscale_stage1_rows(ctx)) (split across threads),
- *   barrier,
- *   stage 2 over destination rows [0, dst_h) (split across threads).
- * Calls covering disjoint row ranges of the same stage may run concurrently.
- * Stage 1 writes internal buffers that stage 2 reads, so stage 2 must not start
- * before every stage 1 slice has finished.
- *
- * Stage 1 is used by every filter except NEAREST: the pixel-art filters
- * prescale there, the separable filters run their horizontal pass there.
+ *   for pass in [0, upscale_pass_count(ctx)):
+ *       upscale_run_pass(ctx, pass, ...) over rows [0, upscale_pass_rows(ctx, pass)),
+ *       split across threads; barrier.
+ * Calls covering disjoint row ranges of the same pass may run concurrently.
+ * Earlier passes write internal buffers read by later passes, possibly at
+ * neighbouring rows, so pass k+1 must not start before every slice of pass k
+ * has finished. Only the last pass writes dst (its rows are destination rows);
+ * earlier passes are split over source rows. Output does not depend on how a
+ * pass is sliced.
  */
 #ifndef TONE_RENDER_UPSCALE_H
 #define TONE_RENDER_UPSCALE_H
@@ -47,18 +47,19 @@ void upscale_destroy(UpscaleContext *ctx);
 int upscale_prepare(UpscaleContext *ctx, UpscaleFilter filter,
                     int src_w, int src_h, int dst_w, int dst_h);
 
-/* Stage 1: source rows [y0, y1). No-op for filters that do not need it. */
-void upscale_run_stage1(UpscaleContext *ctx, const uint32_t *src, int src_stride,
-                        int y0, int y1);
+/* Number of passes of the prepared filter (>= 1). */
+int upscale_pass_count(const UpscaleContext *ctx);
 
-/* Number of source rows stage 1 is split over (0 when stage 1 is a no-op). */
-int upscale_stage1_rows(const UpscaleContext *ctx);
+/* Number of rows pass `pass` is split over (0 for an invalid pass/context). */
+int upscale_pass_rows(const UpscaleContext *ctx, int pass);
 
-/* Stage 2: destination rows [y0, y1). */
-void upscale_run_stage2(UpscaleContext *ctx, const uint32_t *src, int src_stride,
-                        uint32_t *dst, int dst_stride, int y0, int y1);
+/* Runs rows [y0, y1) of pass `pass`. src is read by the passes that need the
+ * source (every pass gets the same src/dst arguments); dst is written only by
+ * the last pass. */
+void upscale_run_pass(UpscaleContext *ctx, int pass, const uint32_t *src, int src_stride,
+                      uint32_t *dst, int dst_stride, int y0, int y1);
 
-/* Single-thread convenience: both stages over the whole image. */
+/* Single-thread convenience: every pass over the whole image. */
 void upscale_run(UpscaleContext *ctx, const uint32_t *src, int src_stride,
                  uint32_t *dst, int dst_stride);
 

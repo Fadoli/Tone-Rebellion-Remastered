@@ -23,3 +23,14 @@ Windows executable beside this file: `ToneRebellion_Remake.exe` (SDL3 build) wit
 - [Differences from the original game](docs/differences-from-original.md) (network pause, save and load, Escape shortcut, end screen, saves)
 - [Movement traces](MOVEMENT_REVERSE_ENGINEERING.md)
 - [Original behavior and evidence](../FUNCTION_GUIDE.md)
+
+## Third-party code
+
+The upscaling filters include ports of third-party code, each file keeping its notice:
+
+- `src/render/upscale_xbr.c`: xBR (Hyllian), adapted from FFmpeg `libavfilter/vf_xbr.c`, LGPL-2.1-or-later.
+- `src/render/upscale_hqx.c`: hq2x/hq3x/hq4x (Maxim Stepin), adapted from grom358/hqx, LGPL-2.1-or-later.
+- `src/render/upscale_scalefx.c`: ScaleFX (Sp00kyFox), from the libretro slang-shaders preset, MIT.
+
+The two LGPL files are linked statically into the executable; distributing a build therefore requires offering their source (this repository) so they can be relinked.
+

@@ -113,19 +113,14 @@ typedef struct UpscaleJob {
     const uint32_t *source;
     uint32_t *destination;
     int destination_stride;
+    int pass;
 } UpscaleJob;
 
-static void upscale_stage1_job(void *context, int y0, int y1)
+static void upscale_pass_job(void *context, int y0, int y1)
 {
     const UpscaleJob *job = (const UpscaleJob *)context;
-    upscale_run_stage1(g_upscaler, job->source, LOGICAL_WIDTH, y0, y1);
-}
-
-static void upscale_stage2_job(void *context, int y0, int y1)
-{
-    const UpscaleJob *job = (const UpscaleJob *)context;
-    upscale_run_stage2(g_upscaler, job->source, LOGICAL_WIDTH, job->destination,
-                       job->destination_stride, y0, y1);
+    upscale_run_pass(g_upscaler, job->pass, job->source, LOGICAL_WIDTH,
+                     job->destination, job->destination_stride, y0, y1);
 }
 
 static int present_upscale(const uint32_t *source, uint32_t *destination,
@@ -139,8 +134,10 @@ static int present_upscale(const uint32_t *source, uint32_t *destination,
     job.source = source;
     job.destination = destination;
     job.destination_stride = destination_stride;
-    platform_parallel_rows(upscale_stage1_job, &job, upscale_stage1_rows(g_upscaler));
-    platform_parallel_rows(upscale_stage2_job, &job, height);
+    /* Each pass finishes on every thread before the next one starts. */
+    for (job.pass = 0; job.pass < upscale_pass_count(g_upscaler); ++job.pass)
+        platform_parallel_rows(upscale_pass_job, &job,
+                               upscale_pass_rows(g_upscaler, job.pass));
     return 1;
 }
 
