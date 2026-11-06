@@ -624,6 +624,7 @@ static void clear_island_messages(void);
 
 #include "menu_app_sections/slide_panel.inc"
 #include "menu_app_sections/remake_options.inc"
+#include "menu_app_sections/remake_qol.inc"
 
 #include "menu_app_sections/hall_support_render.inc"
 

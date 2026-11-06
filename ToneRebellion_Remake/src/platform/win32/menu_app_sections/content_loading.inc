@@ -943,7 +943,9 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
        waits for the next paint itself. */
     for (;;) {
         int quit = 0;
-        (void)MsgWaitForMultipleObjects(0, NULL, FALSE, render_interp_wait_ms(),
+        (void)MsgWaitForMultipleObjects(0, NULL, FALSE,
+                                        ui_motion_active(window) ? 4U
+                                                                 : render_interp_wait_ms(),
                                         QS_ALLINPUT);
         while (PeekMessageA(&message, NULL, 0, 0, PM_REMOVE)) {
             if (message.message == WM_QUIT) {
@@ -954,7 +956,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
             DispatchMessageA(&message);
         }
         if (quit) break;
-        if (render_interp_paint_due()) {
+        if (ui_motion_tick(window) | render_interp_paint_due()) {
             platform_invalidate(window);
             UpdateWindow(window);
         }

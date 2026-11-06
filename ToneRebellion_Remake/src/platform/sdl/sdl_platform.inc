@@ -26,6 +26,18 @@ static void platform_client_rect(HWND window, RECT *out)
     out->bottom = height;
 }
 
+static int platform_window_focused(HWND window)
+{
+    (void)window;
+    return g_sdl_window != NULL &&
+        (SDL_GetWindowFlags(g_sdl_window) & SDL_WINDOW_INPUT_FOCUS) != 0;
+}
+
+static int platform_ctrl_down(void)
+{
+    return (SDL_GetModState() & SDL_KMOD_CTRL) != 0;
+}
+
 static int platform_shift_down(void)
 {
     return (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;

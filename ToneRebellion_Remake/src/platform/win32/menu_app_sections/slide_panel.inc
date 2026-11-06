@@ -16,7 +16,6 @@ static int g_music_volume_pending;
 static SpriteSheet g_slide_art;
 static void apply_music_volume(void);
 /* remake_options.inc */
-static int g_load_starts_paused;
 static void options_toggle(void);
 static void render_options_claw_caption(RenderSurface *surface, int d);
 

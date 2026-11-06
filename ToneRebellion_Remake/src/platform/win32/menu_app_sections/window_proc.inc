@@ -24,8 +24,10 @@ static void simulate_session_tick(uint32_t source_tick)
     game_session_tick_leviathan_ai(&g_game_session);
     {
         int32_t bond;
-        if (game_session_leviathan_bond_notice(&g_game_session, &bond))
+        if (game_session_leviathan_bond_notice(&g_game_session, &bond)) {
             queue_leviathan_bond_notice(bond);
+            alert_leviathan_wave();
+        }
     }
     while (game_session_pop_world_event(&g_game_session,
                                         &world_event)) {
@@ -202,6 +204,8 @@ static void run_ui_frame(HWND window, WPARAM wparam)
         if (!g_net_in_game && run_world_sequence_step(window)) break;
         }
         render_interp_end_frame();
+        alerts_observe();
+        autosave_tick();
         /* Redraw the full animated screen at every 20 Hz frame,
            including while the Tasks panel is open. */
         platform_invalidate(window);
@@ -325,6 +329,16 @@ static void set_scale_mode(HWND window, int mode)
     update_scale_menu(window);
     /* The bars change size: repaint the whole client. */
     platform_invalidate(window);
+}
+
+/* The port's test aids (F6..F9) need Ctrl; e2e scripts, which post keys
+   without modifiers, set TONE_REBELLION_E2E_TEST_AIDS instead. */
+static int test_aid_keys(void)
+{
+    char value[8];
+    return platform_ctrl_down() ||
+        (e2e_enabled() &&
+         platform_environment("TONE_REBELLION_E2E_TEST_AIDS", value, sizeof(value)));
 }
 
 /* Remake: paint rate of the island and world map (render_interp.inc). */
@@ -731,9 +745,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         if (g_options_open) return 0;
         if (g_menu.screen == SCREEN_ISLAND) {
             int direction = GET_WHEEL_DELTA_WPARAM(wparam) > 0 ? -1 : 1;
-            g_island_scroll_x += direction * 128;
-            g_island_scroll_x = island_clamp_scroll(g_island_scroll_x);
-            g_hovered_location = -1;
+            island_scroll_by(direction * 128);
             platform_invalidate(window);
         }
         return 0;
@@ -758,6 +770,15 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             return 0;
         }
         if (options_key(window, wparam)) {
+            platform_invalidate(window);
+            return 0;
+        }
+        /* Remake shortcuts for the island controls (remake_qol.inc). */
+        if (shortcut_key(window, (int)wparam)) {
+            platform_invalidate(window);
+            return 0;
+        }
+        if (wparam == VK_SPACE && options_screen() && alert_jump(window)) {
             platform_invalidate(window);
             return 0;
         }
@@ -790,9 +811,18 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         }
         if (wparam == VK_F5 && (g_menu.screen == SCREEN_WORLD_MAP ||
                                 g_menu.screen == SCREEN_ISLAND)) {
-            /* Port shortcut for the Save screen (state 5); the native entry
-               point is not established. */
-            enter_save_screen();
+            /* Remake: F5 quicksaves; Shift+F5 (or F5 with quicksave off)
+               opens the Save screen (state 5), whose native entry point is
+               not established. */
+            if (g_quicksave_enabled && !platform_shift_down()) quick_save();
+            else enter_save_screen();
+            platform_invalidate(window);
+            return 0;
+        }
+        if (wparam == VK_F9 && g_quicksave_enabled && options_screen() &&
+            !test_aid_keys()) {
+            quick_load(window, platform_shift_down());
+            update_window_title(window);
             platform_invalidate(window);
             return 0;
         }
@@ -824,7 +854,8 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             platform_invalidate(window);
             return 0;
         }
-        if (wparam == VK_F9 && g_menu.screen == SCREEN_ISLAND && !g_net_in_game &&
+        if (wparam == VK_F9 && test_aid_keys() &&
+            g_menu.screen == SCREEN_ISLAND && !g_net_in_game &&
             g_game_session_valid && g_menu.selected_tribe >= 0 &&
             g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
             /* Port-only test aid: place the first training building
@@ -880,7 +911,8 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             platform_invalidate(window);
             return 0;
         }
-        if (wparam == VK_F7 && g_menu.screen == SCREEN_ISLAND && !g_net_in_game &&
+        if (wparam == VK_F7 && test_aid_keys() &&
+            g_menu.screen == SCREEN_ISLAND && !g_net_in_game &&
             g_game_session_valid && g_menu.selected_tribe >= 0 &&
             g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
             /* Port-only test aid: remove every floater of the tribe so the
@@ -894,7 +926,8 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             }
             return 0;
         }
-        if (wparam == VK_F6 && g_menu.screen == SCREEN_ISLAND && !g_net_in_game &&
+        if (wparam == VK_F6 && test_aid_keys() &&
+            g_menu.screen == SCREEN_ISLAND && !g_net_in_game &&
             g_game_session_valid && g_menu.selected_tribe >= 0 &&
             g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
             /* Port-only test aid: place a producer (0x25..0x27) on a free site
@@ -939,7 +972,8 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             platform_invalidate(window);
             return 0;
         }
-        if (wparam == VK_F8 && g_menu.screen == SCREEN_ISLAND && !g_net_in_game &&
+        if (wparam == VK_F8 && test_aid_keys() &&
+            g_menu.screen == SCREEN_ISLAND && !g_net_in_game &&
             g_game_session_valid && g_menu.selected_tribe >= 0 &&
             g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {
             /* Port-only test aid: give the next tribe a base-0x28 block on a
@@ -1066,9 +1100,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             platform_invalidate(window);
         } else if (g_menu.screen == SCREEN_ISLAND &&
                    (wparam == VK_LEFT || wparam == VK_RIGHT)) {
-            g_island_scroll_x += wparam == VK_RIGHT ? 160 : -160;
-            g_island_scroll_x = island_clamp_scroll(g_island_scroll_x);
-            g_hovered_location = -1;
+            island_scroll_by(wparam == VK_RIGHT ? 160 : -160);
             platform_invalidate(window);
         } else if (g_menu.screen == SCREEN_NEW_GAME && g_net_mode != NET_MODE_NONE &&
                    (wparam == VK_LEFT || wparam == VK_RIGHT)) {

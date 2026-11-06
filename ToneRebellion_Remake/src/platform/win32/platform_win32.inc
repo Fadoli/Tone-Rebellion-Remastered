@@ -65,6 +65,16 @@ static void platform_client_rect(HWND window, RECT *out)
     (void)GetClientRect(window, out);
 }
 
+static int platform_window_focused(HWND window)
+{
+    return GetForegroundWindow() == window;
+}
+
+static int platform_ctrl_down(void)
+{
+    return (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+}
+
 static int platform_shift_down(void)
 {
     return (GetKeyState(VK_SHIFT) & 0x8000) != 0;

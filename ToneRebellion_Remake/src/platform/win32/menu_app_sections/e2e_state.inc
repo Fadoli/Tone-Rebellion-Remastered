@@ -358,6 +358,19 @@ static void e2e_write_state(void)
         fprintf(file, "options_open %d\noptions_row %d\nload_paused %d\nclip_all %d\n",
                 g_options_open, g_options_row, g_load_starts_paused,
                 g_clip_all_training);
+        fprintf(file, "options_page %d\nshortcut_waiting %d\nscroll_animating %d\n",
+                g_options_page, g_shortcut_waiting, g_scroll_animating);
+        {
+            const RemakeAlert *newest =
+                &g_alerts[(g_alert_next + ALERT_SLOTS - 1U) % ALERT_SLOTS];
+            unsigned alerts = 0, n;
+            for (n = 0; n < ALERT_SLOTS; ++n)
+                if (g_alerts[n].since_ms != 0) ++alerts;
+            fprintf(file, "alerts %u\nalert_island %d\n", alerts,
+                    newest->since_ms != 0 ? newest->island : -1);
+            fprintf(file, "alert_text %s\n", newest->since_ms != 0 && newest->text[0]
+                    ? newest->text : "-");
+        }
         fprintf(file, "panic_shown %d\npanic_frame %d\n",
                 island_panic_flag_shown(), g_panic_pulse_frame);
     }

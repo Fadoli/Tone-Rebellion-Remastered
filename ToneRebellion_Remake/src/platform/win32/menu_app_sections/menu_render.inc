@@ -17,9 +17,36 @@ enum { SCALE_INTEGER, SCALE_FIT_SHARP, SCALE_FIT_SMOOTH, SCALE_FIT_SHARP_SMOOTH,
        SCALE_MODE_COUNT };
 static int g_scale_mode = SCALE_FIT_SHARP;
 
-/* remake_options.inc: defined there with their defaults (1). */
-static int g_load_starts_paused;
-static int g_clip_all_training;
+/* Remake settings (remake_options.inc edits them), saved in video.cfg as
+   "key value" lines in any order; unknown keys are ignored. */
+static int g_load_starts_paused = 1;
+static int g_clip_all_training = 1;
+static int g_smooth_scroll = 1;
+static int g_edge_scroll = 1;
+static int g_event_alerts = 1;
+static int g_shortcuts_enabled = 1;
+static int g_quicksave_enabled = 1;
+/* Minutes between autosaves; 0 = off. */
+static int g_autosave_minutes = 5;
+
+typedef struct RemakeSetting {
+    const char *key;
+    int *value;
+    int min, max;
+} RemakeSetting;
+
+static const RemakeSetting g_remake_settings[] = {
+    {"scale", &g_scale_mode, 0, SCALE_MODE_COUNT - 1},
+    {"loadpaused", &g_load_starts_paused, 0, 1},
+    {"clipall", &g_clip_all_training, 0, 1},
+    {"smoothscroll", &g_smooth_scroll, 0, 1},
+    {"edgescroll", &g_edge_scroll, 0, 1},
+    {"alerts", &g_event_alerts, 0, 1},
+    {"shortcuts", &g_shortcuts_enabled, 0, 1},
+    {"quicksave", &g_quicksave_enabled, 0, 1},
+    {"autosave", &g_autosave_minutes, 0, 60}
+};
+enum { REMAKE_SETTING_COUNT = sizeof(g_remake_settings) / sizeof(g_remake_settings[0]) };
 
 static int video_settings_path(char *path, size_t capacity)
 {
@@ -33,12 +60,14 @@ static void save_video_settings(void)
 {
     char path[MAX_PATH];
     FILE *file;
+    unsigned i;
     if (!video_settings_path(path, sizeof(path))) return;
     file = fopen(path, "w");
     if (file == NULL) return;
-    (void)fprintf(file, "scale %d\nfps %u\nloadpaused %d\nclipall %d\n",
-                  g_scale_mode, g_paint_rates[g_paint_rate_index],
-                  g_load_starts_paused, g_clip_all_training);
+    (void)fprintf(file, "fps %u\n", g_paint_rates[g_paint_rate_index]);
+    for (i = 0; i < REMAKE_SETTING_COUNT; ++i)
+        (void)fprintf(file, "%s %d\n", g_remake_settings[i].key,
+                      *g_remake_settings[i].value);
     (void)fclose(file);
     platform_storage_changed();
 }
@@ -46,25 +75,24 @@ static void save_video_settings(void)
 static void load_video_settings(void)
 {
     char path[MAX_PATH];
+    char key[32];
+    int value;
     FILE *file;
-    int mode;
     if (!video_settings_path(path, sizeof(path))) return;
     file = fopen(path, "r");
     if (file == NULL) return;
-    if (fscanf(file, "scale %d", &mode) == 1 && mode >= 0 &&
-        mode < SCALE_MODE_COUNT)
-        g_scale_mode = mode;
-    {
-        unsigned rate;
-        int index;
-        int flag;
-        if (fscanf(file, " fps %u", &rate) == 1)
+    while (fscanf(file, " %31s %d", key, &value) == 2) {
+        unsigned i;
+        if (strcmp(key, "fps") == 0) {
+            int index;
             for (index = 0; index < PAINT_RATE_COUNT; ++index)
-                if (g_paint_rates[index] == rate) g_paint_rate_index = index;
-        if (fscanf(file, " loadpaused %d", &flag) == 1)
-            g_load_starts_paused = flag != 0;
-        if (fscanf(file, " clipall %d", &flag) == 1)
-            g_clip_all_training = flag != 0;
+                if (g_paint_rates[index] == (unsigned)value) g_paint_rate_index = index;
+            continue;
+        }
+        for (i = 0; i < REMAKE_SETTING_COUNT; ++i)
+            if (strcmp(key, g_remake_settings[i].key) == 0 &&
+                value >= g_remake_settings[i].min && value <= g_remake_settings[i].max)
+                *g_remake_settings[i].value = value;
     }
     (void)fclose(file);
 }

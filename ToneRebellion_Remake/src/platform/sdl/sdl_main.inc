@@ -82,6 +82,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     if (net_poll(g_sdl_window_token)) platform_invalidate(g_sdl_window_token);
     while (due-- != 0U) run_ui_frame(g_sdl_window_token, 1);
     if (render_interp_paint_due()) g_sdl_dirty = 1;
+    if (ui_motion_tick(g_sdl_window_token)) g_sdl_dirty = 1;
     if (SDL_GetTicks() - g_sdl_tune_check >= 1000U) {
         g_sdl_tune_check = SDL_GetTicks();
         run_ui_frame(g_sdl_window_token, 2);

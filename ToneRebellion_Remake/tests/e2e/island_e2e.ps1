@@ -27,6 +27,8 @@ $script:proc = $null
 
 $script:statePath = Join-Path $OutDir "state.txt"
 $env:TONE_REBELLION_E2E_STATE = $script:statePath
+# Bare F6..F9 test aids (players need Ctrl).
+$env:TONE_REBELLION_E2E_TEST_AIDS = "1"
 $saves = Join-Path $OutDir "saves"
 if (Test-Path $saves) { Remove-Item -Recurse -Force $saves }
 New-Item -ItemType Directory -Force $saves | Out-Null

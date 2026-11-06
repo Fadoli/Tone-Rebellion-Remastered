@@ -11,15 +11,22 @@ enum {
     OPTION_GAME_SPEED,
     OPTION_MUSIC,
     OPTION_SOUND,
+    OPTION_SMOOTH_SCROLL,
+    OPTION_EDGE_SCROLL,
+    OPTION_ALERTS,
+    OPTION_SHORTCUTS,
+    OPTION_SHORTCUT_KEYS,
+    OPTION_QUICKSAVE,
+    OPTION_AUTOSAVE,
     OPTION_LOAD_PAUSED,
     OPTION_CLIPBOARD,
     OPTION_COUNT
 };
 
 enum {
-    OPTIONS_LEFT = 110, OPTIONS_TOP = 70, OPTIONS_WIDTH = 420,
-    OPTIONS_ROW_TOP = 112, OPTIONS_ROW_HEIGHT = 24,
-    OPTIONS_VALUE_LEFT = 330, OPTIONS_VALUE_RIGHT = 515,
+    OPTIONS_LEFT = 100, OPTIONS_TOP = 56, OPTIONS_WIDTH = 440,
+    OPTIONS_ROW_TOP = 92, OPTIONS_ROW_HEIGHT = 22,
+    OPTIONS_VALUE_LEFT = 340, OPTIONS_VALUE_RIGHT = 525,
     /* SlideWindow left claw (no native control there). */
     OPTIONS_CLAW_LEFT = 6, OPTIONS_CLAW_TOP = 6,
     OPTIONS_CLAW_RIGHT = 88, OPTIONS_CLAW_BOTTOM = 92
@@ -27,14 +34,16 @@ enum {
 
 static int g_options_open;
 static int g_options_row;
-/* Remake choices kept in video.cfg. */
-static int g_load_starts_paused = 1;
-static int g_clip_all_training = 1;
+/* 0: settings, 1: shortcut keys (remake_qol.inc draws and drives it). */
+static int g_options_page;
 
 static void set_scale_mode(HWND window, int mode);
 static void set_paint_rate(HWND window, int index);
 static void slide_toggle_music(void);
 static void slide_toggle_sound(void);
+static void render_shortcut_page(RenderSurface *surface);
+static int shortcut_page_key(HWND window, WPARAM key);
+static int shortcut_page_press(HWND window, int x, int y);
 
 static const char *const g_option_labels[OPTION_COUNT] = {
     "Frequence d'affichage",
@@ -42,9 +51,19 @@ static const char *const g_option_labels[OPTION_COUNT] = {
     "Vitesse du jeu",
     "Musique",
     "Effets sonores",
+    "Defilement fluide",
+    "Defilement par les bords",
+    "Alertes (Espace: y aller)",
+    "Raccourcis clavier",
+    "Configurer les raccourcis",
+    "Sauvegarde rapide F5/F9",
+    "Sauvegarde automatique",
     "Partie chargee en pause",
     "Presse-papiers"
 };
+
+static const int g_autosave_choices[] = {0, 2, 5, 10, 15, 30};
+enum { AUTOSAVE_CHOICE_COUNT = 6 };
 
 static int options_screen(void)
 {
@@ -58,6 +77,11 @@ static int options_game_speed(void)
                g_game_session.network_speed <= 3U
                    ? (int)g_game_session.network_speed : 1;
     return (int)g_sim_speed;
+}
+
+static const char *options_yes_no(int value)
+{
+    return value ? "Oui" : "Non (original)";
 }
 
 static void options_value_text(int row, char *text, size_t capacity)
@@ -83,6 +107,29 @@ static void options_value_text(int row, char *text, size_t capacity)
     case OPTION_SOUND:
         (void)snprintf(text, capacity, "%s", g_sound_enabled ? "Oui" : "Non");
         break;
+    case OPTION_SMOOTH_SCROLL:
+        (void)snprintf(text, capacity, "%s", options_yes_no(g_smooth_scroll));
+        break;
+    case OPTION_EDGE_SCROLL:
+        (void)snprintf(text, capacity, "%s", options_yes_no(g_edge_scroll));
+        break;
+    case OPTION_ALERTS:
+        (void)snprintf(text, capacity, "%s", options_yes_no(g_event_alerts));
+        break;
+    case OPTION_SHORTCUTS:
+        (void)snprintf(text, capacity, "%s", options_yes_no(g_shortcuts_enabled));
+        break;
+    case OPTION_SHORTCUT_KEYS:
+        (void)snprintf(text, capacity, "Entree");
+        break;
+    case OPTION_QUICKSAVE:
+        (void)snprintf(text, capacity, "%s", g_quicksave_enabled
+            ? "Oui (Maj+F5: ecran)" : "Non (F5: ecran)");
+        break;
+    case OPTION_AUTOSAVE:
+        if (g_autosave_minutes <= 0) (void)snprintf(text, capacity, "Non");
+        else (void)snprintf(text, capacity, "Toutes les %d min", g_autosave_minutes);
+        break;
     case OPTION_LOAD_PAUSED:
         (void)snprintf(text, capacity, "%s", g_load_starts_paused ? "Oui" : "Non (original)");
         break;
@@ -91,6 +138,12 @@ static void options_value_text(int row, char *text, size_t capacity)
             ? "Tous les batiments" : "Selection (original)");
         break;
     }
+}
+
+static void options_flip(int *flag)
+{
+    *flag = !*flag;
+    save_video_settings();
 }
 
 /* Steps the row's value by `step` (+1 / -1), wrapping. */
@@ -120,14 +173,25 @@ static void options_change(HWND window, int row, int step)
     case OPTION_SOUND:
         slide_toggle_sound();
         break;
-    case OPTION_LOAD_PAUSED:
-        g_load_starts_paused = !g_load_starts_paused;
+    case OPTION_SMOOTH_SCROLL: options_flip(&g_smooth_scroll); break;
+    case OPTION_EDGE_SCROLL: options_flip(&g_edge_scroll); break;
+    case OPTION_ALERTS: options_flip(&g_event_alerts); break;
+    case OPTION_SHORTCUTS: options_flip(&g_shortcuts_enabled); break;
+    case OPTION_SHORTCUT_KEYS:
+        g_options_page = 1;
+        break;
+    case OPTION_QUICKSAVE: options_flip(&g_quicksave_enabled); break;
+    case OPTION_AUTOSAVE: {
+        int index = 0, i;
+        for (i = 0; i < AUTOSAVE_CHOICE_COUNT; ++i)
+            if (g_autosave_choices[i] == g_autosave_minutes) index = i;
+        index = (index + step + AUTOSAVE_CHOICE_COUNT) % AUTOSAVE_CHOICE_COUNT;
+        g_autosave_minutes = g_autosave_choices[index];
         save_video_settings();
         break;
-    default:
-        g_clip_all_training = !g_clip_all_training;
-        save_video_settings();
-        break;
+    }
+    case OPTION_LOAD_PAUSED: options_flip(&g_load_starts_paused); break;
+    default: options_flip(&g_clip_all_training); break;
     }
 }
 
@@ -135,6 +199,7 @@ static void options_toggle(void)
 {
     if (!g_options_open && !options_screen()) return;
     g_options_open = !g_options_open;
+    g_options_page = 0;
     if (g_options_open) slide_panel_close_now();
 }
 
@@ -164,6 +229,7 @@ static int options_press(HWND window, int x, int y)
         g_options_open = 0;
         return 1;
     }
+    if (g_options_page == 1) return shortcut_page_press(window, x, y);
     row = options_row_at(x, y);
     if (row >= 0) {
         g_options_row = row;
@@ -177,7 +243,10 @@ static int options_press(HWND window, int x, int y)
 static int options_key(HWND window, WPARAM key)
 {
     if (!g_options_open) return 0;
-    if (key == VK_ESCAPE || key == VK_F2 || key == VK_RETURN) {
+    if (g_options_page == 1) return shortcut_page_key(window, key);
+    if (key == VK_RETURN && g_options_row == OPTION_SHORTCUT_KEYS) {
+        g_options_page = 1;
+    } else if (key == VK_ESCAPE || key == VK_F2 || key == VK_RETURN) {
         g_options_open = 0;
     } else if (key == VK_UP) {
         g_options_row = (g_options_row + OPTION_COUNT - 1) % OPTION_COUNT;
@@ -231,7 +300,11 @@ static void render_options_panel(RenderSurface *surface)
                        OPTIONS_LEFT + OPTIONS_WIDTH - 3, bottom - 3, frame);
     options_label(surface, title,
                   OPTIONS_LEFT + (OPTIONS_WIDTH - options_text_width(title)) / 2,
-                  OPTIONS_TOP + 14, accent);
+                  OPTIONS_TOP + 10, accent);
+    if (g_options_page == 1) {
+        render_shortcut_page(surface);
+        return;
+    }
     for (row = 0; row < OPTION_COUNT; ++row) {
         char value[64];
         int y = OPTIONS_ROW_TOP + row * OPTIONS_ROW_HEIGHT;
@@ -254,7 +327,7 @@ static void render_options_panel(RenderSurface *surface)
         const char *help = "Fleches: choisir   F2 ou Echap: fermer";
         options_label(surface, help,
                       OPTIONS_LEFT + (OPTIONS_WIDTH - options_text_width(help)) / 2,
-                      bottom - 24, dim);
+                      bottom - 22, dim);
     }
 }
 
