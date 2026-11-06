@@ -101,6 +101,14 @@ static void sdl_redraw(void)
     g_sdl_dirty = 0;
 }
 
+/* In the browser the canvas fills the page and follows its size, at the
+   screen's pixel density so the filters work on real pixels. */
+#ifdef __EMSCRIPTEN__
+#define SDL_WINDOW_PAGE_FLAGS (SDL_WINDOW_FILL_DOCUMENT | SDL_WINDOW_HIGH_PIXEL_DENSITY)
+#else
+#define SDL_WINDOW_PAGE_FLAGS 0
+#endif
+
 /* Creates the hidden SDL window. The game code passes its handle around as
    a window token; only the SDL services use it. */
 static HWND sdl_create_window(void)
@@ -111,7 +119,7 @@ static HWND sdl_create_window(void)
     gl_set_attributes();
     g_sdl_window = SDL_CreateWindow("Tone Rebellion - New Game", 1024, 781,
                                     SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN |
-                                    SDL_WINDOW_OPENGL);
+                                    SDL_WINDOW_OPENGL | SDL_WINDOW_PAGE_FLAGS);
     /* TONE_REBELLION_NO_GL (test aid): the path of a machine without
        OpenGL. */
     if (g_sdl_window != NULL && getenv("TONE_REBELLION_NO_GL") == NULL &&
@@ -122,7 +130,8 @@ static HWND sdl_create_window(void)
     }
     if (g_sdl_window != NULL) SDL_DestroyWindow(g_sdl_window);
     g_sdl_window = SDL_CreateWindow("Tone Rebellion - New Game", 1024, 781,
-                                    SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN);
+                                    SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN |
+                                    SDL_WINDOW_PAGE_FLAGS);
     if (g_sdl_window == NULL) return NULL;
     if (!filter_available(g_upscale_filter)) g_upscale_filter = FILTER_NEAREST;
     g_sdl_renderer = SDL_CreateRenderer(g_sdl_window, NULL);

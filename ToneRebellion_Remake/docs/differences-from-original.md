@@ -56,7 +56,7 @@ This page lists every behaviour of the remake that knowingly differs from `FLOAT
 
 | Topic | Original | Remake |
 |---|---|---|
-| Systems | Windows 9x, DirectX. | SDL3 build (Windows; the Win32/GDI build was dropped on 2026-11-06) and a browser build (Emscripten). |
+| Systems | Windows 9x, DirectX. | SDL3 build (Windows; the Win32/GDI build was dropped on 2026-11-06) and a browser build (Emscripten) whose picture fills the page at the screen's pixel density. |
 | Island scrolling | Arrow keys (160 px) and the wheel (128 px) jump the view. | Smooth scrolling glides those jumps (about 160 ms); edge scrolling moves the view while the pointer is at the left or right edge of the window (900 px/s). Smooth scrolling is off by default, edge scrolling on; both are set in the remake options. |
 | Keyboard shortcuts | None for the island controls. | Keys for the island buttons, the Hall commands, the building controls and the spells (defaults: M map, P panic, R realms, T tasks, G/I/K/B/D Hall pages, V move, O on/off, U upgrade, F repair, L obtain, A/S/Z/X/Q orders, 1..7 spells). A key replays a click on the control, so it does nothing when the control is not shown. Rebound in the remake options, kept in `keys.cfg`; off by default (remake options). |
 | Alerts | Island messages only for the island in view. | Attacks on the tribe's units or buildings, a lost building, and Leviathan units appearing where the tribe is present are listed at the top right on other islands and the map; Space jumps to the newest one. Off by default (remake options). |
