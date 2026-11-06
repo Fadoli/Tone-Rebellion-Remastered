@@ -265,79 +265,11 @@ static unsigned frame_clock_due(void)
     return due;
 }
 
-/* Window (system) menu entries for the scaling modes; system command IDs
-   keep their low four bits clear and stay below 0xF000. */
-enum { SYSCOMMAND_SCALE_FIRST = 0x0100, SYSCOMMAND_RATE_FIRST = 0x0200,
-       SYSCOMMAND_FILTER_FIRST = 0x0300 };
-static const char *const g_scale_mode_labels[SCALE_MODE_COUNT] = {
-    "Scale: whole multiples (even pixels, bars)",
-    "Scale: fill window"
-};
-
-/* remake_sdl has no system menu: F12 cycles the modes. */
-static void update_scale_menu(HWND window)
-{
-#ifdef TONE_PLATFORM_SDL
-    (void)window;
-#else
-    HMENU menu = GetSystemMenu(window, FALSE);
-    if (menu == NULL) return;
-    (void)CheckMenuRadioItem(menu, SYSCOMMAND_SCALE_FIRST,
-                             SYSCOMMAND_SCALE_FIRST + 0x10 * (SCALE_MODE_COUNT - 1),
-                             SYSCOMMAND_SCALE_FIRST + 0x10 * (UINT)g_scale_mode,
-                             MF_BYCOMMAND);
-    (void)CheckMenuRadioItem(menu, SYSCOMMAND_FILTER_FIRST,
-                             SYSCOMMAND_FILTER_FIRST + 0x10 * (UPSCALE_FILTER_COUNT - 1),
-                             SYSCOMMAND_FILTER_FIRST + 0x10 * (UINT)g_upscale_filter,
-                             MF_BYCOMMAND);
-    (void)CheckMenuRadioItem(menu, SYSCOMMAND_RATE_FIRST,
-                             SYSCOMMAND_RATE_FIRST + 0x10 * (PAINT_RATE_COUNT - 1),
-                             SYSCOMMAND_RATE_FIRST + 0x10 * (UINT)g_paint_rate_index,
-                             MF_BYCOMMAND);
-#endif
-}
-
-static void add_scale_menu(HWND window)
-{
-#ifdef TONE_PLATFORM_SDL
-    (void)window;
-    (void)g_scale_mode_labels;
-#else
-    HMENU menu = GetSystemMenu(window, FALSE);
-    int mode;
-    if (menu == NULL) return;
-    (void)AppendMenuA(menu, MF_SEPARATOR, 0, NULL);
-    for (mode = 0; mode < SCALE_MODE_COUNT; ++mode)
-        (void)AppendMenuA(menu, MF_STRING,
-                          SYSCOMMAND_SCALE_FIRST + 0x10 * (UINT)mode,
-                          g_scale_mode_labels[mode]);
-    (void)AppendMenuA(menu, MF_SEPARATOR, 0, NULL);
-    for (mode = 0; mode < UPSCALE_FILTER_COUNT; ++mode) {
-        char label[64];
-        (void)snprintf(label, sizeof(label), "Filter: %s",
-                       upscale_filter_name((UpscaleFilter)mode));
-        (void)AppendMenuA(menu, MF_STRING,
-                          SYSCOMMAND_FILTER_FIRST + 0x10 * (UINT)mode, label);
-    }
-    (void)AppendMenuA(menu, MF_SEPARATOR, 0, NULL);
-    for (mode = 0; mode < PAINT_RATE_COUNT; ++mode) {
-        char label[64];
-        (void)snprintf(label, sizeof(label), "Display rate: %u Hz%s",
-                       g_paint_rates[mode],
-                       mode == 0 ? " (original, no blending)" : "");
-        (void)AppendMenuA(menu, MF_STRING,
-                          SYSCOMMAND_RATE_FIRST + 0x10 * (UINT)mode, label);
-    }
-    update_scale_menu(window);
-#endif
-}
-
 static void set_scale_mode(HWND window, int mode)
 {
     if (mode < 0 || mode >= SCALE_MODE_COUNT) return;
     g_scale_mode = mode;
     save_video_settings();
-    update_scale_menu(window);
     /* The bars change size: repaint the whole client. */
     platform_invalidate(window);
 }
@@ -358,7 +290,6 @@ static void set_upscale_filter(HWND window, int filter)
     if (filter < 0 || filter >= UPSCALE_FILTER_COUNT) return;
     g_upscale_filter = filter;
     save_video_settings();
-    update_scale_menu(window);
     platform_invalidate(window);
 }
 
@@ -368,44 +299,18 @@ static void set_paint_rate(HWND window, int index)
     if (index < 0 || index >= PAINT_RATE_COUNT) return;
     g_paint_rate_index = index;
     save_video_settings();
-    update_scale_menu(window);
 }
 
 static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                                           WPARAM wparam, LPARAM lparam)
 {
     switch (message) {
-    case WM_SYSCOMMAND:
-        if ((wparam & 0xFFF0U) >= SYSCOMMAND_SCALE_FIRST &&
-            (wparam & 0xFFF0U) < SYSCOMMAND_SCALE_FIRST + 0x10 * SCALE_MODE_COUNT) {
-            set_scale_mode(window,
-                (int)(((wparam & 0xFFF0U) - SYSCOMMAND_SCALE_FIRST) / 0x10));
-            return 0;
-        }
-        if ((wparam & 0xFFF0U) >= SYSCOMMAND_FILTER_FIRST &&
-            (wparam & 0xFFF0U) < SYSCOMMAND_FILTER_FIRST + 0x10 * UPSCALE_FILTER_COUNT) {
-            set_upscale_filter(window,
-                (int)(((wparam & 0xFFF0U) - SYSCOMMAND_FILTER_FIRST) / 0x10));
-            return 0;
-        }
-        if ((wparam & 0xFFF0U) >= SYSCOMMAND_RATE_FIRST &&
-            (wparam & 0xFFF0U) < SYSCOMMAND_RATE_FIRST + 0x10 * PAINT_RATE_COUNT) {
-            set_paint_rate(window,
-                (int)(((wparam & 0xFFF0U) - SYSCOMMAND_RATE_FIRST) / 0x10));
-            return 0;
-        }
-        break;
     case WM_SETCURSOR:
         if (LOWORD(lparam) == HTCLIENT) {
             update_interaction_cursor();
             return TRUE;
         }
         break;
-#ifndef TONE_PLATFORM_SDL
-    case WM_PAINT:
-        paint_window(window);
-        return 0;
-#endif
     case WM_ERASEBKGND:
         return 1;
     case WM_TIMER:
@@ -419,9 +324,6 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
     case WM_MOUSEMOVE: {
         RECT client;
         RECT viewport;
-#ifndef TONE_PLATFORM_SDL
-        TRACKMOUSEEVENT track;
-#endif
         int width;
         int height;
         int x;
@@ -498,14 +400,6 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         g_mouse_x = (x - viewport.left) * LOGICAL_WIDTH / (viewport.right - viewport.left);
         g_mouse_y = (y - viewport.top) * LOGICAL_HEIGHT / (viewport.bottom - viewport.top);
         g_mouse_inside = 1;
-#ifndef TONE_PLATFORM_SDL
-        /* WM_MOUSELEAVE (SDL sends SDL_EVENT_WINDOW_MOUSE_LEAVE itself). */
-        ZeroMemory(&track, sizeof(track));
-        track.cbSize = sizeof(track);
-        track.dwFlags = TME_LEAVE;
-        track.hwndTrack = window;
-        (void)TrackMouseEvent(&track);
-#endif
         if (update_hover_help(g_mouse_x, g_mouse_y) |
             update_newgame_text(g_mouse_x, g_mouse_y) |
             update_world_map_hover(g_mouse_x, g_mouse_y) |
@@ -1173,23 +1067,11 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
     case WM_DESTROY:
         net_shutdown();
         write_resume_file();
-#ifndef TONE_PLATFORM_SDL
-        destroy_paint_buffer();
-#endif
         stop_background_tune();
-#ifndef TONE_PLATFORM_SDL
-        PostQuitMessage(0);
-#endif
         return 0;
     default:
         break;
     }
-#ifdef TONE_PLATFORM_SDL
     /* SDL has handled the window itself. */
     return 0;
-#else
-    /* Cases that `break` (other system commands such as move, size and
-       close; cursors outside the client area) get the default handling. */
-    return DefWindowProcA(window, message, wparam, lparam);
-#endif
 }

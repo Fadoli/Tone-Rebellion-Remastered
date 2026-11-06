@@ -10,7 +10,7 @@ cmake --build build/release --parallel 4
 ctest --test-dir build/release --output-on-failure
 ```
 
-Windows executables beside this file: `ToneRebellion_Remake.exe`, and `ToneRebellion_Remake_sdl.exe` with `SDL3.dll` and `libiconv-2.dll` (SDL3 builds only). See [build and validation details](docs/build-and-validation.md).
+Windows executable beside this file: `ToneRebellion_Remake.exe` (SDL3 build) with `SDL3.dll` and `libiconv-2.dll`; SDL3 is required (the Win32/GDI build was dropped on 2026-11-06). See [build and validation details](docs/build-and-validation.md).
 
 ## Documentation
 

@@ -296,38 +296,27 @@ if(BUILD_TESTING)
     enable_test_assertions(test_island_cob)
 endif()
 
-if(WIN32)
-    add_executable(remake_menu WIN32 src/platform/win32/menu_app.c src/platform/net_socket.c)
-    target_link_libraries(remake_menu PRIVATE tone_core tone_render user32 gdi32 winmm ws2_32)
-    target_compile_features(remake_menu PRIVATE c_std_11)
+# The game: the SDL3 shell (src/platform/sdl) over the game code in
+# src/platform/win32/menu_app.c (the folder name is historical: the GDI
+# build was dropped on 2026-11-06). MSYS2: mingw-w64-ucrt-x86_64-sdl3.
+if(NOT EMSCRIPTEN)
+    find_package(SDL3 CONFIG REQUIRED)
+    add_executable(remake_sdl WIN32 src/platform/win32/menu_app.c src/platform/net_socket.c)
+    target_compile_definitions(remake_sdl PRIVATE TONE_PLATFORM_SDL=1)
+    target_link_libraries(remake_sdl PRIVATE tone_core tone_render SDL3::SDL3)
+    target_compile_features(remake_sdl PRIVATE c_std_11)
     if(NOT MSVC)
-        target_link_libraries(remake_menu PRIVATE m)
+        target_link_libraries(remake_sdl PRIVATE m)
     endif()
-    add_custom_command(TARGET remake_menu POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "$<TARGET_FILE:remake_menu>"
-            "${CMAKE_CURRENT_SOURCE_DIR}/ToneRebellion_Remake.exe"
-        COMMENT "Updating the ready-to-launch ToneRebellion_Remake.exe"
-        VERBATIM
-    )
-
-    # SDL3 shell over the same game code (Web port step 3); built when
-    # an SDL3 package is found (MSYS2: mingw-w64-ucrt-x86_64-sdl3).
-    find_package(SDL3 CONFIG QUIET)
-    if(SDL3_FOUND)
-        add_executable(remake_sdl WIN32 src/platform/win32/menu_app.c src/platform/net_socket.c)
-        target_compile_definitions(remake_sdl PRIVATE TONE_PLATFORM_SDL=1)
+    if(WIN32)
         # The shell reaches the system only through SDL, except the TCP
         # sockets of net_socket.c (SDL has none): Winsock here.
-        target_link_libraries(remake_sdl PRIVATE tone_core tone_render SDL3::SDL3 ws2_32)
-        target_compile_features(remake_sdl PRIVATE c_std_11)
-        if(NOT MSVC)
-            target_link_libraries(remake_sdl PRIVATE m)
-        endif()
+        target_link_libraries(remake_sdl PRIVATE ws2_32)
         # UTF-8 process code page, so fopen accepts the UTF-8 paths SDL
         # returns (a game folder named with accents, for example).
         enable_language(RC)
-        target_sources(remake_sdl PRIVATE src/platform/sdl/remake_sdl.rc)
+        target_sources(remake_sdl PRIVATE src/platform/sdl/remake_sdl.rc
+                                          src/platform/sdl/e2e_input_win.c)
         # The DLLs SDL3.dll itself needs are not in TARGET_RUNTIME_DLLS. The
         # MSYS2 build imports libiconv-2.dll; without its own copy beside the
         # executable, Windows takes the first one on PATH (Git's 1.16), which
@@ -346,10 +335,10 @@ if(WIN32)
                 ${remake_sdl_runtime_dlls} $<TARGET_FILE_DIR:remake_sdl>
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "$<TARGET_FILE:remake_sdl>"
-                "${CMAKE_CURRENT_SOURCE_DIR}/ToneRebellion_Remake_sdl.exe"
+                "${CMAKE_CURRENT_SOURCE_DIR}/ToneRebellion_Remake.exe"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 ${remake_sdl_runtime_dlls} "${CMAKE_CURRENT_SOURCE_DIR}"
-            COMMENT "Updating the ready-to-launch ToneRebellion_Remake_sdl.exe, SDL3.dll and its DLLs"
+            COMMENT "Updating the ready-to-launch ToneRebellion_Remake.exe, SDL3.dll and its DLLs"
             COMMAND_EXPAND_LISTS
         )
     endif()

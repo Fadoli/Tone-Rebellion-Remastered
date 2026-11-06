@@ -716,7 +716,6 @@ static int app_load_content(const char *command_line)
    the lobby directly. */
 static void app_start(HWND window, const char *command_line)
 {
-    add_scale_menu(window);
     g_net_window = window;
     {
         char net_value[128];
@@ -888,81 +887,4 @@ static void app_release_content(void)
     free(g_island_height_data);
 }
 
-#ifdef TONE_PLATFORM_SDL
 #include "../../sdl/sdl_main.inc"
-#else
-int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
-                   LPSTR command_line, int show_command)
-{
-    WNDCLASSA window_class;
-    HWND window;
-    MSG message;
-    int exit_code;
-    (void)previous_instance;
-    if (!app_load_content(command_line)) return 1;
-    memset(&window_class, 0, sizeof(window_class));
-    window_class.lpfnWndProc = menu_window_proc;
-    window_class.hInstance = instance;
-    window_class.hCursor = LoadCursor(NULL, IDC_ARROW);
-    window_class.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
-    window_class.lpszClassName = "ToneRebellionRemakeMenu";
-    if (!RegisterClassA(&window_class)) {
-        platform_message_box(NULL, "Could not register the menu window class.",
-                             "Tone Rebellion remake", 1);
-        return 1;
-    }
-    window = CreateWindowExA(0, window_class.lpszClassName,
-                             "Tone Rebellion - New Game",
-                             WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
-                             1040, 820, NULL, NULL, instance, NULL);
-    if (window == NULL) {
-        platform_message_box(NULL, "Could not create the menu window.",
-                             "Tone Rebellion remake", 1);
-        return 1;
-    }
-    app_start(window, command_line);
-    /* frame_limit 20: frame_clock_due releases one frame per 50 ms; the
-       10 ms timer and 1 ms timer resolution only keep it punctual. */
-    (void)timeBeginPeriod(1);
-    /* The dump set only renders: its window stays hidden. */
-    if (command_line != NULL && strstr(command_line, "--bench") != NULL &&
-        strstr(command_line, "--bench-dump-set") == NULL) {
-        ShowWindow(window, show_command);
-        UpdateWindow(window);
-    }
-    if (app_run_bench(window, command_line, &exit_code)) {
-        (void)timeEndPeriod(1);
-        return exit_code;
-    }
-    (void)SetTimer(window, 1, 10, NULL);
-    (void)SetTimer(window, 2, 1000, NULL);
-    ShowWindow(window, show_command);
-    UpdateWindow(window);
-    /* Messages, plus the display-rate paints between game frames
-       (render_interp.inc): SetTimer cannot go below 10 ms, so the loop
-       waits for the next paint itself. */
-    for (;;) {
-        int quit = 0;
-        (void)MsgWaitForMultipleObjects(0, NULL, FALSE,
-                                        ui_motion_active(window) ? 4U
-                                                                 : render_interp_wait_ms(),
-                                        QS_ALLINPUT);
-        while (PeekMessageA(&message, NULL, 0, 0, PM_REMOVE)) {
-            if (message.message == WM_QUIT) {
-                quit = 1;
-                break;
-            }
-            TranslateMessage(&message);
-            DispatchMessageA(&message);
-        }
-        if (quit) break;
-        if (ui_motion_tick(window) | render_interp_paint_due()) {
-            platform_invalidate(window);
-            UpdateWindow(window);
-        }
-    }
-    (void)timeEndPeriod(1);
-    app_release_content();
-    return (int)message.wParam;
-}
-#endif

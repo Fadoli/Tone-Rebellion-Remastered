@@ -28,189 +28,11 @@ typedef struct BenchSample {
 static volatile LONG g_bench_phase;
 static volatile LONG g_bench_sampling;
 static volatile LONG g_bench_stop;
-#ifndef TONE_PLATFORM_SDL
-static BenchSample *g_bench_samples;
-static volatile LONG g_bench_sample_count;
-static HANDLE g_bench_main_thread;
-static uintptr_t g_bench_stack_low;
-static uintptr_t g_bench_stack_high;
-#endif
 
 static const char *const g_bench_phase_names[BENCH_PHASE_COUNT] = {
     "idle", "sim", "render", "present"
 };
 
-#ifndef TONE_PLATFORM_SDL
-/* --bench-profile samples with Win32 thread suspension; remake_sdl runs
-   the timings and dumps without it. */
-
-/* Stack walk over the frame-pointer (EBP/RBP) chain of the suspended main thread. Frames must
-   stay inside its stack and grow upwards; system DLLs keep frame pointers,
-   the bench build adds -fno-omit-frame-pointer for ours. */
-static DWORD WINAPI bench_sampler_thread(LPVOID parameter)
-{
-    (void)parameter;
-    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
-    while (!g_bench_stop) {
-        Sleep(1);
-        if (!g_bench_sampling) continue;
-        if (g_bench_sample_count >= BENCH_MAX_SAMPLES) continue;
-        if (SuspendThread(g_bench_main_thread) == (DWORD)-1) continue;
-        {
-            CONTEXT context;
-            BenchSample *sample = &g_bench_samples[g_bench_sample_count];
-            ZeroMemory(&context, sizeof(context));
-            context.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-            if (GetThreadContext(g_bench_main_thread, &context)) {
-#if defined(_M_X64) || defined(__x86_64__)
-                uintptr_t frame = (uintptr_t)context.Rbp;
-                uintptr_t pc = (uintptr_t)context.Rip;
-#else
-                uintptr_t frame = (uintptr_t)context.Ebp;
-                uintptr_t pc = (uintptr_t)context.Eip;
-#endif
-                unsigned depth = 0;
-                sample->phase = (uint8_t)g_bench_phase;
-                sample->frames[depth++] = pc;
-                while (depth < BENCH_STACK_DEPTH &&
-                       frame >= g_bench_stack_low &&
-                       frame + 2U * sizeof(uintptr_t) <= g_bench_stack_high &&
-                       (frame & (sizeof(uintptr_t) - 1U)) == 0U) {
-                    const uintptr_t *record = (const uintptr_t *)frame;
-                    uintptr_t next = record[0];
-                    sample->frames[depth++] = record[1];
-                    if (next <= frame) break;
-                    frame = next;
-                }
-                sample->depth = (uint8_t)depth;
-                ++g_bench_sample_count;
-            }
-        }
-        ResumeThread(g_bench_main_thread);
-    }
-    return 0;
-}
-
-/* Nearest export at or below address in a loaded system module, read from
-   its in-memory export directory. */
-static const char *bench_nearest_export(HMODULE module, uintptr_t address,
-                                        DWORD *out_offset)
-{
-    const unsigned char *base = (const unsigned char *)module;
-    const IMAGE_DOS_HEADER *dos = (const IMAGE_DOS_HEADER *)base;
-    const IMAGE_NT_HEADERS *nt;
-    const IMAGE_DATA_DIRECTORY *directory;
-    const IMAGE_EXPORT_DIRECTORY *exports;
-    const DWORD *functions;
-    const DWORD *names;
-    const WORD *ordinals;
-    DWORD rva = (DWORD)(address - (uintptr_t)module);
-    DWORD best_rva = 0;
-    const char *best = NULL;
-    DWORD size;
-    DWORD i;
-    if (address < (uintptr_t)module) return NULL;
-    /* Stack garbage can point into any mapped image, including ones not
-       laid out as loaded modules: bound every table by SizeOfImage. */
-    if (dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0 ||
-        dos->e_lfanew > 4096) return NULL;
-    nt = (const IMAGE_NT_HEADERS *)(base + dos->e_lfanew);
-    if (nt->Signature != IMAGE_NT_SIGNATURE) return NULL;
-    size = nt->OptionalHeader.SizeOfImage;
-    if (rva >= size) return NULL;
-    directory = &nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
-    if (directory->VirtualAddress == 0 ||
-        directory->VirtualAddress > size - sizeof(*exports)) return NULL;
-    exports = (const IMAGE_EXPORT_DIRECTORY *)(base + directory->VirtualAddress);
-    if (exports->AddressOfFunctions >= size ||
-        exports->NumberOfFunctions > (size - exports->AddressOfFunctions) / 4U ||
-        exports->AddressOfNames >= size ||
-        exports->NumberOfNames > (size - exports->AddressOfNames) / 4U ||
-        exports->AddressOfNameOrdinals >= size ||
-        exports->NumberOfNames >
-            (size - exports->AddressOfNameOrdinals) / 2U) return NULL;
-    functions = (const DWORD *)(base + exports->AddressOfFunctions);
-    names = (const DWORD *)(base + exports->AddressOfNames);
-    ordinals = (const WORD *)(base + exports->AddressOfNameOrdinals);
-    for (i = 0; i < exports->NumberOfNames; ++i) {
-        DWORD function_rva;
-        if (ordinals[i] >= exports->NumberOfFunctions || names[i] >= size)
-            continue;
-        function_rva = functions[ordinals[i]];
-        if (function_rva <= rva && function_rva >= best_rva) {
-            best_rva = function_rva;
-            best = (const char *)(base + names[i]);
-        }
-    }
-    *out_offset = rva - best_rva;
-    return best;
-}
-
-/* Our own frames are written as image offsets for bench/hotspots.js; the
-   others as module!export+offset, memoised per address (export scans are
-   slow and the same few system addresses repeat in every sample). */
-enum { BENCH_FRAME_CACHE = 8192 };
-typedef struct BenchFrameName {
-    uintptr_t address;
-    char text[96];
-} BenchFrameName;
-static BenchFrameName *g_bench_frame_names;
-
-static void bench_write_frame(FILE *file, uintptr_t address)
-{
-    HMODULE module = NULL;
-    HMODULE self = GetModuleHandleA(NULL);
-    const IMAGE_NT_HEADERS *nt = (const IMAGE_NT_HEADERS *)
-        ((const unsigned char *)self + ((const IMAGE_DOS_HEADER *)self)->e_lfanew);
-    uintptr_t self_base = (uintptr_t)self;
-    BenchFrameName *entry;
-    char path[MAX_PATH];
-    const char *name;
-    const char *symbol;
-    DWORD offset = 0;
-    if (address >= self_base &&
-        address - self_base < nt->OptionalHeader.SizeOfImage) {
-        fprintf(file, " @%lx", (unsigned long)(address - self_base));
-        return;
-    }
-    if (g_bench_frame_names == NULL)
-        g_bench_frame_names = (BenchFrameName *)calloc(BENCH_FRAME_CACHE,
-                                                       sizeof(BenchFrameName));
-    if (g_bench_frame_names == NULL) return;
-    entry = &g_bench_frame_names[(uint32_t)((uint32_t)address * 2654435761U) >> 19];
-    if (entry->address == address && entry->text[0] != '\0') {
-        fprintf(file, " %s", entry->text);
-        return;
-    }
-    /* A module's pages share its image base as allocation base. */
-    {
-        MEMORY_BASIC_INFORMATION memory;
-        if (VirtualQuery((LPCVOID)(uintptr_t)address, &memory,
-                         sizeof(memory)) == sizeof(memory) &&
-            memory.Type == MEM_IMAGE)
-            module = (HMODULE)memory.AllocationBase;
-    }
-    if (module == NULL) {
-        (void)snprintf(entry->text, sizeof(entry->text), "?%08lx",
-                       (unsigned long)address);
-    } else {
-        /* Only loaded modules: a data-file mapping (FLOAT.EXE's cursors)
-           has no module name and is not laid out by RVA. */
-        int loaded = GetModuleFileNameA(module, path, sizeof(path)) != 0;
-        if (!loaded) path[0] = '\0';
-        name = strrchr(path, '\\');
-        name = name != NULL ? name + 1 : path;
-        symbol = loaded ? bench_nearest_export(module, address, &offset) : NULL;
-        if (symbol != NULL)
-            (void)snprintf(entry->text, sizeof(entry->text), "%s!%s+%lx",
-                           name, symbol, (unsigned long)offset);
-        else
-            (void)snprintf(entry->text, sizeof(entry->text), "%s!?", name);
-    }
-    entry->address = address;
-    fprintf(file, " %s", entry->text);
-}
-#endif
 
 static double bench_seconds(int64_t ticks)
 {
@@ -222,7 +44,6 @@ static int64_t bench_now(void)
     return (int64_t)platform_counter();
 }
 
-#ifdef TONE_PLATFORM_SDL
 /* No portable thread / process CPU time: the report shows 0. */
 static int64_t bench_thread_cpu(void)
 {
@@ -233,29 +54,6 @@ static int64_t bench_process_cpu(void)
 {
     return 0;
 }
-#else
-static LONGLONG bench_filetime(const FILETIME *time)
-{
-    return ((LONGLONG)time->dwHighDateTime << 32) | time->dwLowDateTime;
-}
-
-/* User + kernel CPU of the main thread, in 100 ns units. */
-static LONGLONG bench_thread_cpu(void)
-{
-    FILETIME created, exited, kernel, user;
-    if (!GetThreadTimes(GetCurrentThread(), &created, &exited, &kernel, &user))
-        return 0;
-    return bench_filetime(&kernel) + bench_filetime(&user);
-}
-
-static LONGLONG bench_process_cpu(void)
-{
-    FILETIME created, exited, kernel, user;
-    if (!GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user))
-        return 0;
-    return bench_filetime(&kernel) + bench_filetime(&user);
-}
-#endif
 
 static int bench_compare_double(const void *a, const void *b)
 {
@@ -326,72 +124,38 @@ static int bench_open_home_island(HWND window)
 
 static void bench_pump_messages(void)
 {
-#ifdef TONE_PLATFORM_SDL
     /* Window events are not input to replay. */
     SDL_PumpEvents();
     SDL_FlushEvents(SDL_EVENT_FIRST, SDL_EVENT_LAST);
-#else
-    MSG message;
-    while (PeekMessageA(&message, NULL, 0, 0, PM_REMOVE)) {
-        if (message.message == WM_PAINT) {
-            ValidateRect(message.hwnd, NULL);
-            continue;
-        }
-        TranslateMessage(&message);
-        DispatchMessageA(&message);
-    }
-#endif
 }
 
 /* Presentation through the shell in use: GDI StretchBlt or the SDL
    texture. */
 static int bench_begin_present(HWND window, HDC *screen)
 {
-#ifdef TONE_PLATFORM_SDL
     (void)window;
     *screen = NULL;
     return sdl_ensure_back_buffer();
-#else
-    *screen = GetDC(window);
-    return ensure_paint_buffer(*screen);
-#endif
 }
 
 static void bench_end_present(HWND window, HDC screen)
 {
-#ifdef TONE_PLATFORM_SDL
     (void)window;
     (void)screen;
-#else
-    ReleaseDC(window, screen);
-#endif
 }
 
 static void bench_present(HDC screen, const RECT *client)
 {
-#ifdef TONE_PLATFORM_SDL
     (void)screen;
     (void)client;
     sdl_present();
-#else
-    present_back_buffer(screen, client);
-    (void)GdiFlush();
-#endif
 }
 
 static void bench_set_client_size(HWND window, unsigned width, unsigned height)
 {
-#ifdef TONE_PLATFORM_SDL
     (void)window;
     (void)SDL_SetWindowSize(g_sdl_window, (int)width, (int)height);
     (void)SDL_SyncWindow(g_sdl_window);
-#else
-    RECT frame = {0, 0, (LONG)width, (LONG)height};
-    (void)AdjustWindowRect(&frame, WS_OVERLAPPEDWINDOW, FALSE);
-    SetWindowPos(window, NULL, 0, 0, frame.right - frame.left,
-                 frame.bottom - frame.top,
-                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
-#endif
     bench_pump_messages();
 }
 
@@ -605,9 +369,6 @@ static int bench_run(HWND window, const char *command_line)
     double phase_max[BENCH_PHASE_COUNT] = {0};
     int64_t wall_start, wall_end, thread_cpu_start, thread_cpu_end;
     int64_t process_cpu_start, process_cpu_end;
-#ifndef TONE_PLATFORM_SDL
-    HANDLE sampler = NULL;
-#endif
     FILE *file;
     unsigned frame;
     unsigned active = 0;
@@ -663,25 +424,7 @@ static int bench_run(HWND window, const char *command_line)
         return 1;
     }
 
-#ifdef TONE_PLATFORM_SDL
     (void)profile;
-#else
-    if (profile) {
-        NT_TIB *tib = (NT_TIB *)NtCurrentTeb();
-        g_bench_samples = (BenchSample *)calloc(BENCH_MAX_SAMPLES,
-                                                sizeof(BenchSample));
-        if (g_bench_samples != NULL &&
-            DuplicateHandle(GetCurrentProcess(), GetCurrentThread(),
-                            GetCurrentProcess(), &g_bench_main_thread,
-                            THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT,
-                            FALSE, 0)) {
-            g_bench_stack_low = (uintptr_t)tib->StackLimit;
-            g_bench_stack_high = (uintptr_t)tib->StackBase;
-            sampler = CreateThread(NULL, 0, bench_sampler_thread, NULL, 0, NULL);
-        }
-        g_bench_sampling = sampler != NULL;
-    }
-#endif
 
     wall_start = bench_now();
     thread_cpu_start = bench_thread_cpu();
@@ -709,11 +452,7 @@ static int bench_run(HWND window, const char *command_line)
         bench_present(screen, &client);
         t3 = bench_now();
         g_bench_phase = BENCH_PHASE_IDLE;
-#ifdef TONE_PLATFORM_SDL
         g_sdl_dirty = 0;
-#else
-        ValidateRect(window, NULL);
-#endif
         phase_ms[BENCH_PHASE_IDLE] = 0.0;
         phase_ms[BENCH_PHASE_SIM] = bench_seconds(t1 - t0) * 1000.0;
         phase_ms[BENCH_PHASE_RENDER] = bench_seconds(t2 - t1) * 1000.0;
@@ -730,12 +469,6 @@ static int bench_run(HWND window, const char *command_line)
     process_cpu_end = bench_process_cpu();
     g_bench_sampling = 0;
     g_bench_stop = 1;
-#ifndef TONE_PLATFORM_SDL
-    if (sampler != NULL) {
-        WaitForSingleObject(sampler, INFINITE);
-        CloseHandle(sampler);
-    }
-#endif
     bench_end_present(window, screen);
     if (frame < frames) frames = frame + 1U;
     {
@@ -775,31 +508,8 @@ static int bench_run(HWND window, const char *command_line)
             fprintf(file, "phase %s mean_ms %.3f max_ms %.3f\n",
                     g_bench_phase_names[phase], phase_total[phase] / frames,
                     phase_max[phase]);
-#ifndef TONE_PLATFORM_SDL
-        if (g_bench_samples != NULL) {
-            LONG count = g_bench_sample_count;
-            LONG s;
-            fprintf(file, "image_base %llx\nsamples %ld\n",
-                    (unsigned long long)(uintptr_t)GetModuleHandleA(NULL), (long)count);
-            for (s = 0; s < count; ++s) {
-                const BenchSample *sample = &g_bench_samples[s];
-                unsigned f;
-                fprintf(file, "s %s", g_bench_phase_names[sample->phase]);
-                for (f = 0; f < sample->depth; ++f)
-                    bench_write_frame(file, sample->frames[f]);
-                fputc('\n', file);
-            }
-        }
-#endif
         fclose(file);
     }
     free(frame_ms);
-#ifndef TONE_PLATFORM_SDL
-    free(g_bench_samples);
-    g_bench_samples = NULL;
-    free(g_bench_frame_names);
-    g_bench_frame_names = NULL;
-    if (g_bench_main_thread != NULL) CloseHandle(g_bench_main_thread);
-#endif
     return file != NULL ? 0 : 1;
 }

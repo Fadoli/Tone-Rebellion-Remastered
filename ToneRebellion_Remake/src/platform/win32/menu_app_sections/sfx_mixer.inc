@@ -25,13 +25,7 @@ typedef struct SfxVoice {
     double gain_right;
 } SfxVoice;
 
-#ifdef TONE_PLATFORM_SDL
 static SDL_AudioStream *g_sfx_stream;
-#else
-static HWAVEOUT g_sfx_device;
-static WAVEHDR g_sfx_headers[SFX_BUFFERS];
-static int16_t g_sfx_buffers[SFX_BUFFERS][SFX_BUFFER_FRAMES * 2];
-#endif
 static int g_sfx_open;
 static int g_sfx_failed;
 static SfxVoice g_sfx_voices[SFX_VOICES];
@@ -147,7 +141,6 @@ static void sfx_fill(int16_t *buffer)
     }
 }
 
-#ifdef TONE_PLATFORM_SDL
 /* Runs on SDL's audio thread with the stream locked, so the voices the main
    thread changes under SDL_LockAudioStream stay consistent. */
 static void SDLCALL sfx_stream_callback(void *userdata, SDL_AudioStream *stream,
@@ -199,76 +192,6 @@ static void sfx_close(void)
         g_sfx_cache_keys[i] = NULL;
     }
 }
-#else
-static int sfx_open(void)
-{
-    WAVEFORMATEX format;
-    unsigned int i;
-    if (g_sfx_open) return 1;
-    if (g_sfx_failed) return 0;
-    memset(&format, 0, sizeof(format));
-    format.wFormatTag = WAVE_FORMAT_PCM;
-    format.nChannels = 2;
-    format.nSamplesPerSec = SFX_RATE;
-    format.wBitsPerSample = 16;
-    format.nBlockAlign = 4;
-    format.nAvgBytesPerSec = SFX_RATE * 4;
-    if (waveOutOpen(&g_sfx_device, WAVE_MAPPER, &format, 0, 0,
-                    CALLBACK_NULL) != MMSYSERR_NOERROR) {
-        g_sfx_failed = 1;
-        return 0;
-    }
-    for (i = 0; i < SFX_BUFFERS; ++i) {
-        memset(&g_sfx_headers[i], 0, sizeof(g_sfx_headers[i]));
-        g_sfx_headers[i].lpData = (LPSTR)g_sfx_buffers[i];
-        g_sfx_headers[i].dwBufferLength = sizeof(g_sfx_buffers[i]);
-        g_sfx_headers[i].dwFlags = WHDR_DONE;
-    }
-    g_sfx_open = 1;
-    return 1;
-}
-
-/* Refill every finished buffer; called each UI frame (50 ms) and after a
-   new voice starts. Four 1024-frame buffers cover about 186 ms. */
-static void sfx_pump(void)
-{
-    unsigned int i;
-    if (!g_sfx_open) return;
-    for (i = 0; i < SFX_BUFFERS; ++i) {
-        WAVEHDR *header = &g_sfx_headers[i];
-        if ((header->dwFlags & WHDR_DONE) == 0) continue;
-        if ((header->dwFlags & WHDR_PREPARED) != 0)
-            (void)waveOutUnprepareHeader(g_sfx_device, header, sizeof(*header));
-        sfx_fill((int16_t *)header->lpData);
-        header->dwFlags = 0;
-        if (waveOutPrepareHeader(g_sfx_device, header, sizeof(*header)) !=
-                MMSYSERR_NOERROR ||
-            waveOutWrite(g_sfx_device, header, sizeof(*header)) !=
-                MMSYSERR_NOERROR) {
-            header->dwFlags = WHDR_DONE;
-        }
-    }
-}
-
-static void sfx_close(void)
-{
-    unsigned int i;
-    if (!g_sfx_open) return;
-    (void)waveOutReset(g_sfx_device);
-    for (i = 0; i < SFX_BUFFERS; ++i) {
-        if ((g_sfx_headers[i].dwFlags & WHDR_PREPARED) != 0)
-            (void)waveOutUnprepareHeader(g_sfx_device, &g_sfx_headers[i],
-                                         sizeof(g_sfx_headers[i]));
-    }
-    (void)waveOutClose(g_sfx_device);
-    g_sfx_open = 0;
-    for (i = 0; i < SFX_CACHE; ++i) {
-        free(g_sfx_cache[i].pcm);
-        g_sfx_cache[i].pcm = NULL;
-        g_sfx_cache_keys[i] = NULL;
-    }
-}
-#endif
 
 /* FUN_0045afb9(sound, volume %, pan): volume and pan are DirectSound
    hundredths of a dB after FUN_004595cc; the effects slider scales every
@@ -290,9 +213,7 @@ static void sfx_play(const unsigned char *wav, int volume, int pan, int restart)
     right = gain;
     if (pan > 0) left *= pow(10.0, -pan / 2000.0);
     else if (pan < 0) right *= pow(10.0, pan / 2000.0);
-#ifdef TONE_PLATFORM_SDL
     if (!SDL_LockAudioStream(g_sfx_stream)) return;
-#endif
     for (v = 0; v < SFX_VOICES; ++v) {
         if (g_sfx_voices[v].sample == sample) {
             if (restart) free_voice = v;
@@ -308,9 +229,7 @@ static void sfx_play(const unsigned char *wav, int volume, int pan, int restart)
         g_sfx_voices[free_voice].gain_left = left;
         g_sfx_voices[free_voice].gain_right = right;
     }
-#ifdef TONE_PLATFORM_SDL
     (void)SDL_UnlockAudioStream(g_sfx_stream);
-#endif
     if (free_voice < SFX_VOICES) sfx_pump();
 }
 

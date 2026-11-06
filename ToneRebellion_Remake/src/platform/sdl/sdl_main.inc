@@ -7,6 +7,18 @@ static char g_sdl_command_line[4096];
 static int g_sdl_started;
 static Uint64 g_sdl_tune_check;
 
+#ifdef _WIN32
+/* e2e_input_win.c: test input straight to menu_window_proc. */
+void e2e_install_input_hook(void);
+void e2e_deliver_input(unsigned message, uintptr_t wparam, intptr_t lparam);
+void e2e_deliver_input(unsigned message, uintptr_t wparam, intptr_t lparam)
+{
+    if (g_sdl_window_token != NULL)
+        (void)menu_window_proc(g_sdl_window_token, (UINT)message, (WPARAM)wparam,
+                               (LPARAM)lparam);
+}
+#endif
+
 /* The arguments as the single command line the game code parses (WinMain's
    lpCmdLine): arguments with spaces are quoted. */
 static void sdl_join_arguments(int argc, char *argv[])
@@ -33,6 +45,11 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     sdl_join_arguments(argc, argv);
     if (!app_load_content(g_sdl_command_line)) return SDL_APP_FAILURE;
     g_sdl_window_token = sdl_create_window();
+#ifdef _WIN32
+    if (getenv("TONE_REBELLION_E2E_STATE") != NULL &&
+        getenv("TONE_REBELLION_E2E_STATE")[0] != 0)
+        e2e_install_input_hook();
+#endif
     if (g_sdl_window_token == NULL) {
         platform_message_box(NULL, SDL_GetError(), "Tone Rebellion remake - SDL", 1);
         return SDL_APP_FAILURE;

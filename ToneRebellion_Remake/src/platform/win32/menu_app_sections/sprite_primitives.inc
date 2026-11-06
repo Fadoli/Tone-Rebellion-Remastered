@@ -238,12 +238,7 @@ static int resolve_music_directory(const char *file_name,
 static void stop_background_tune(void)
 {
     if (g_music_device_open) {
-#ifdef TONE_PLATFORM_SDL
         sdl_music_close();
-#else
-        (void)mciSendStringA("stop tone_music", NULL, 0, NULL);
-        (void)mciSendStringA("close tone_music", NULL, 0, NULL);
-#endif
         g_music_device_open = 0;
     }
     g_current_tune[0] = '\0';
@@ -253,7 +248,6 @@ static void stop_background_tune(void)
 static void keep_background_tune_playing(void)
 {
     if (!g_music_device_open || g_current_tune[0] == '\0') return;
-#ifdef TONE_PLATFORM_SDL
     /* The stream callback rewinds a looping tune itself. */
     if (sdl_music_stopped()) {
         if (g_music_loops) {
@@ -262,16 +256,6 @@ static void keep_background_tune_playing(void)
             stop_background_tune();
             set_background_tune(tune);
         } else {
-#else
-    char mode[32];
-    MCIERROR result;
-
-    result = mciSendStringA("status tone_music mode", mode, sizeof(mode), NULL);
-    if (result == 0 && strcmp(mode, "stopped") == 0) {
-        if (g_music_loops) {
-            (void)mciSendStringA("play tone_music from 0", NULL, 0, NULL);
-        } else {
-#endif
             /* FUN_0041c46f requests the `start` tune once; the title handler
                then requests the looping `ambi1` menu bed. */
             stop_background_tune();
@@ -285,10 +269,6 @@ static void set_background_tune_mode(const char *tune_id, int loop)
     char path[MAX_PATH];
     size_t i;
     const char *file_name = NULL;
-#ifndef TONE_PLATFORM_SDL
-    char command[MAX_PATH + 64];
-    MCIERROR result;
-#endif
 
     if (tune_id == NULL || strcmp(g_current_tune, tune_id) == 0) return;
     if (!g_music_enabled) {
@@ -308,26 +288,9 @@ static void set_background_tune_mode(const char *tune_id, int loop)
         !resolve_music_directory(file_name, path, sizeof(path))) return;
 
     stop_background_tune();
-#ifdef TONE_PLATFORM_SDL
     /* Silent until apply_music_volume below sets the slider gain. */
     if (!sdl_music_open(path, loop, 0.0)) return;
     g_music_device_open = 1;
-#else
-    {
-        int command_length = snprintf(
-            command, sizeof(command),
-            "open \"%s\" type mpegvideo alias tone_music", path);
-        if (command_length < 0 || (size_t)command_length >= sizeof(command)) return;
-    }
-    result = mciSendStringA(command, NULL, 0, NULL);
-    if (result != 0) return;
-    g_music_device_open = 1;
-    result = mciSendStringA("play tone_music", NULL, 0, NULL);
-    if (result != 0) {
-        stop_background_tune();
-        return;
-    }
-#endif
     (void)strncpy(g_current_tune, tune_id, sizeof(g_current_tune) - 1);
     g_current_tune[sizeof(g_current_tune) - 1] = '\0';
     g_music_loops = loop;

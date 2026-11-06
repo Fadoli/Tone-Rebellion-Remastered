@@ -219,13 +219,7 @@ static void net_default_name(void)
 /* Win32: readiness arrives as WM_NET_SOCKET. remake_sdl polls instead. */
 static void net_watch(NetSocket socket_handle)
 {
-#ifdef TONE_PLATFORM_SDL
     (void)socket_handle;
-#else
-    if (g_net_window != NULL)
-        (void)WSAAsyncSelect((SOCKET)socket_handle, g_net_window, WM_NET_SOCKET,
-                             FD_ACCEPT | FD_CONNECT | FD_READ | FD_CLOSE);
-#endif
 }
 
 /* Outgoing bytes the system did not take yet, per peer. A full system

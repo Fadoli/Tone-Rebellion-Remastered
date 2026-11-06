@@ -1,4 +1,3 @@
-#ifdef TONE_PLATFORM_SDL
 /* remake_sdl: SDL3 shell (src/platform/sdl/sdl_app.inc), without
    <windows.h>; the same code builds for the web with Emscripten. */
 #define SDL_MAIN_USE_CALLBACKS 1 /* entry: ../sdl/sdl_main.inc */
@@ -8,13 +7,6 @@
 #include <emscripten.h>
 #endif
 #include "../sdl/win32_compat.h"
-#else
-#define WIN32_LEAN_AND_MEAN
-/* Winsock 2 must precede windows.h (net_session.inc). */
-#include <winsock2.h>
-#include <windows.h>
-#include <windowsx.h>
-#endif
 
 #include "cob_archive.h"
 #include "iso9660.h"
@@ -53,15 +45,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifndef TONE_PLATFORM_SDL
-#include <mmsystem.h>
-#endif
 
-#ifdef TONE_PLATFORM_SDL
 #include "../sdl/sdl_platform.inc"
-#else
-#include "platform_win32.inc"
-#endif
 
 enum { LOGICAL_WIDTH = 640, LOGICAL_HEIGHT = 480, ISLAND_NAME_COUNT = 15,
        BUILDING_NAME_COUNT = 64, BUILDING_NAME_CAPACITY = 128,
@@ -397,11 +382,6 @@ static int g_mouse_inside;
 /* The 640x480 back buffer every screen is composed into. Its pixels live in
    a DIB section (render_dispatch.inc) that only present_back_buffer reads. */
 static RenderSurface g_back_surface;
-#ifndef TONE_PLATFORM_SDL
-static HDC g_paint_buffer_dc;
-static HBITMAP g_paint_buffer_bitmap;
-static HGDIOBJ g_paint_buffer_original_bitmap;
-#endif
 
 /* RenderSurface pixel (0x00RRGGBB, alpha 0 like GDI fills) of a colour. */
 static uint32_t colorref_pixel(COLORREF color)
@@ -429,7 +409,6 @@ static double volume_gain(int volume)
     return volume <= 0 ? 0.0 : pow(10.0, volume_attenuation(volume) / 2000.0);
 }
 
-#ifdef TONE_PLATFORM_SDL
 #include "../sdl/sdl_audio.inc"
 
 static void sfx_play(const unsigned char *wav, int volume, int pan, int restart);
@@ -444,72 +423,6 @@ static BOOL play_effect_sound(LPCSTR sound, HMODULE module, DWORD flags)
         sfx_play((const unsigned char *)sound, 100, 0, 1);
     return TRUE;
 }
-#else
-/* The SlideWindow sound toggle and effects slider act on every sound effect:
-   in-memory WAV effects are copied and their PCM samples scaled by the slider
-   attenuation (DirectSound-style volume, which PlaySound lacks). */
-static BOOL play_effect_sound(LPCSTR sound, HMODULE module, DWORD flags)
-{
-    static unsigned char *ring[8];
-    static size_t ring_capacity[8];
-    static unsigned int ring_next;
-    const unsigned char *wav = (const unsigned char *)sound;
-    size_t total;
-    size_t offset;
-    unsigned int slot;
-    unsigned int bits = 0;
-    double gain;
-    if (sound == NULL) return PlaySoundA(NULL, module, flags);
-    if (!g_sound_enabled || g_sound_volume <= 0) return TRUE;
-    if ((flags & SND_MEMORY) == 0 || g_sound_volume >= 100)
-        return PlaySoundA(sound, module, flags);
-    if (memcmp(wav, "RIFF", 4) != 0 || memcmp(wav + 8, "WAVE", 4) != 0)
-        return PlaySoundA(sound, module, flags);
-    total = 8U + (size_t)(wav[4] | (wav[5] << 8) | (wav[6] << 16) |
-                          ((unsigned)wav[7] << 24));
-    if (total < 44U || total > 64U * 1024U * 1024U)
-        return PlaySoundA(sound, module, flags);
-    slot = ring_next++ & 7U;
-    if (ring_capacity[slot] < total) {
-        unsigned char *grown = (unsigned char *)realloc(ring[slot], total);
-        if (grown == NULL) return PlaySoundA(sound, module, flags);
-        ring[slot] = grown;
-        ring_capacity[slot] = total;
-    }
-    memcpy(ring[slot], wav, total);
-    gain = volume_gain(g_sound_volume);
-    for (offset = 12; offset + 8U <= total;) {
-        size_t chunk = (size_t)(ring[slot][offset + 4] |
-            (ring[slot][offset + 5] << 8) | (ring[slot][offset + 6] << 16) |
-            ((unsigned)ring[slot][offset + 7] << 24));
-        if (memcmp(ring[slot] + offset, "fmt ", 4) == 0 && chunk >= 16U &&
-            offset + 8U + 16U <= total)
-            bits = (unsigned)(ring[slot][offset + 8 + 14] |
-                              (ring[slot][offset + 8 + 15] << 8));
-        if (memcmp(ring[slot] + offset, "data", 4) == 0) {
-            size_t start = offset + 8U;
-            size_t end = start + chunk;
-            size_t i;
-            if (end > total) end = total;
-            if (bits == 16U) {
-                for (i = start; i + 1U < end; i += 2U) {
-                    int sample = (short)(ring[slot][i] | (ring[slot][i + 1] << 8));
-                    sample = (int)(sample * gain);
-                    ring[slot][i] = (unsigned char)sample;
-                    ring[slot][i + 1] = (unsigned char)(sample >> 8);
-                }
-            } else if (bits == 8U) {
-                for (i = start; i < end; ++i)
-                    ring[slot][i] = (unsigned char)(128 +
-                        (int)(((int)ring[slot][i] - 128) * gain));
-            }
-            break;
-        }
-        offset += 8U + chunk + (chunk & 1U);
-    }
-    return PlaySoundA((LPCSTR)ring[slot], module, flags);
-}
-#endif
 #define PlaySoundA(sound, module, flags) play_effect_sound((sound), (module), (flags))
 
 /* Ordered source fragments share private Win32 state in this one
@@ -655,9 +568,7 @@ static void clear_island_messages(void);
 
 #include "menu_app_sections/e2e_state.inc"
 #include "menu_app_sections/window_proc.inc"
-#ifdef TONE_PLATFORM_SDL
 #include "../sdl/sdl_app.inc"
-#endif
 #include "menu_app_sections/bench.inc"
 
 #include "menu_app_sections/content_loading.inc"

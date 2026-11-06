@@ -1,5 +1,5 @@
 /* Platform services, SDL3 shell (Web port step 2): the functions of
-   ../win32/platform_win32.inc on SDL. The window parameter is ignored; the
+   the former Win32 services (platform_win32.inc, dropped 2026-11-06). The window parameter is ignored; the
    SDL window is the one sdl_app.inc creates. */
 
 static SDL_Window *g_sdl_window;
