@@ -83,6 +83,7 @@ typedef ptrdiff_t GLsizeiptr;
     X(void, glDrawArrays, (GLenum, GLint, GLsizei)) \
     X(void, glPixelStorei, (GLenum, GLint)) \
     X(void, glDisable, (GLenum)) \
+    X(void, glFinish, (void)) \
     X(void, glActiveTexture, (GLenum)) \
     X(void, glGenFramebuffers, (GLsizei, GLuint *)) \
     X(void, glBindFramebuffer, (GLenum, GLuint)) \

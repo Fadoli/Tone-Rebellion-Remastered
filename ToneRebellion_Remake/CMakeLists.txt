@@ -315,7 +315,8 @@ if(NOT EMSCRIPTEN)
         # returns (a game folder named with accents, for example).
         enable_language(RC)
         target_sources(remake_sdl PRIVATE src/platform/sdl/remake_sdl.rc
-                                          src/platform/sdl/e2e_input_win.c)
+                                          src/platform/sdl/e2e_input_win.c
+                                          src/platform/sdl/process_time_win.c)
         # The DLLs SDL3.dll itself needs are not in TARGET_RUNTIME_DLLS. The
         # MSYS2 build imports libiconv-2.dll; without its own copy beside the
         # executable, Windows takes the first one on PATH (Git's 1.16), which

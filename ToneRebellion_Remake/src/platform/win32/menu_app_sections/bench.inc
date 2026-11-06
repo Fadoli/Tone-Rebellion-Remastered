@@ -356,6 +356,163 @@ static int bench_dump_set(HWND window, const char *directory)
 }
 
 /* Runs the benchmark and returns the process exit code. */
+/* --bench-rate N: the real loop at a display rate of N Hz for
+   --bench-seconds S (default 10): the 20 Hz game frame (run_ui_frame) when
+   the frame clock is due, a paint (render_back_buffer with the blending of
+   render_interp.inc, then sdl_present) on every game frame and whenever the
+   paint clock is due in between, polled at twice the rate like
+   SDL_AppIterate. --bench-filter N picks the scaling filter, --bench-gpu-sync
+   waits for the GPU after each present (glFinish), so present then includes
+   the GPU's work. Reports achieved rates, per-phase times and the process's
+   CPU time as a share of one core. */
+#ifdef _WIN32
+double tone_process_cpu_seconds(void);
+#else
+static double tone_process_cpu_seconds(void) { return -1.0; }
+#endif
+
+typedef struct BenchStat {
+    double total, max;
+    unsigned count;
+    double *samples;
+} BenchStat;
+
+static void bench_stat_add(BenchStat *stat, double ms, unsigned capacity)
+{
+    if (stat->count < capacity) stat->samples[stat->count] = ms;
+    ++stat->count;
+    stat->total += ms;
+    if (ms > stat->max) stat->max = ms;
+}
+
+static void bench_stat_print(FILE *file, const char *name, BenchStat *stat,
+                             unsigned capacity)
+{
+    unsigned n = stat->count < capacity ? stat->count : capacity;
+    if (n == 0) {
+        fprintf(file, "%s count 0\n", name);
+        return;
+    }
+    qsort(stat->samples, n, sizeof(double), bench_compare_double);
+    fprintf(file, "%s count %u mean_ms %.3f p50_ms %.3f p95_ms %.3f p99_ms %.3f max_ms %.3f\n",
+            name, stat->count, stat->total / stat->count, stat->samples[n / 2],
+            stat->samples[(n * 95U) / 100U], stat->samples[(n * 99U) / 100U], stat->max);
+}
+
+static int bench_rate_run(HWND window, const char *command_line)
+{
+    enum { CAPACITY = 200000 };
+    char scenario[32] = "idle";
+    char out_path[MAX_PATH];
+    unsigned rate = bench_option(command_line, "--bench-rate", 120U);
+    unsigned seconds = bench_option(command_line, "--bench-seconds", 10U);
+    unsigned filter = bench_option(command_line, "--bench-filter",
+                                   (unsigned)g_upscale_filter);
+    int gpu_sync = strstr(command_line, "--bench-gpu-sync") != NULL;
+    BenchStat sim = {0}, render = {0}, present = {0}, paint = {0}, gap = {0};
+    unsigned active = 0, index, frames = 0, paints = 0;
+    int bench_screen;
+    int64_t start, end, last_paint = 0;
+    double cpu_start, cpu_end;
+    uint64_t poll_ns;
+    RECT client;
+    HDC screen;
+    FILE *file;
+
+    if (!command_line_value(command_line, "--bench-out", out_path, sizeof(out_path))) {
+        if (platform_executable_directory(out_path, sizeof(out_path) - 1U))
+            (void)strcat(out_path, "/");
+        else
+            out_path[0] = '\0';
+        strncat(out_path, "bench_report.txt", sizeof(out_path) - strlen(out_path) - 1U);
+    }
+    if (!bench_prepare(window, command_line, scenario, sizeof(scenario), &bench_screen,
+                       &active)) return 1;
+    {
+        char size[32];
+        unsigned width, height;
+        if (command_line_value(command_line, "--bench-client", size, sizeof(size)) &&
+            sscanf(size, "%ux%u", &width, &height) == 2 && width > 0U && height > 0U)
+            bench_set_client_size(window, width, height);
+    }
+    platform_client_rect(window, &client);
+    if (!bench_begin_present(window, &screen)) return 1;
+    for (index = 0; index < PAINT_RATE_COUNT; ++index)
+        if (g_paint_rates[index] == rate) g_paint_rate_index = (int)index;
+    if (filter < FILTER_COUNT && filter_available((int)filter)) g_upscale_filter = (int)filter;
+    sim.samples = (double *)calloc(CAPACITY, sizeof(double));
+    render.samples = (double *)calloc(CAPACITY, sizeof(double));
+    present.samples = (double *)calloc(CAPACITY, sizeof(double));
+    paint.samples = (double *)calloc(CAPACITY, sizeof(double));
+    gap.samples = (double *)calloc(CAPACITY, sizeof(double));
+    if (!sim.samples || !render.samples || !present.samples || !paint.samples ||
+        !gap.samples) return 1;
+    poll_ns = 1000000000ULL / (2U * (rate > 50U ? rate : 50U));
+
+    cpu_start = tone_process_cpu_seconds();
+    start = bench_now();
+    end = start + (int64_t)seconds * (int64_t)platform_counter_frequency();
+    while (bench_now() < end && g_menu.screen == bench_screen) {
+        unsigned due = frame_clock_due();
+        int paint_now = due != 0U;
+        bench_pump_messages();
+        while (due-- != 0U) {
+            int64_t t0 = bench_now();
+            run_ui_frame(window, 1);
+            bench_stat_add(&sim, bench_seconds(bench_now() - t0) * 1000.0, CAPACITY);
+            ++frames;
+        }
+        if (!paint_now) paint_now = render_interp_paint_due();
+        if (paint_now) {
+            int64_t t0 = bench_now(), t1, t2;
+            render_back_buffer(&g_back_surface);
+            t1 = bench_now();
+            sdl_present();
+            if (gpu_sync && g_gl_ready) GLX(glFinish)();
+            t2 = bench_now();
+            g_sdl_dirty = 0;
+            bench_stat_add(&render, bench_seconds(t1 - t0) * 1000.0, CAPACITY);
+            bench_stat_add(&present, bench_seconds(t2 - t1) * 1000.0, CAPACITY);
+            bench_stat_add(&paint, bench_seconds(t2 - t0) * 1000.0, CAPACITY);
+            if (last_paint != 0)
+                bench_stat_add(&gap, bench_seconds(t0 - last_paint) * 1000.0, CAPACITY);
+            last_paint = t0;
+            ++paints;
+        }
+        SDL_DelayPrecise(poll_ns);
+    }
+    {
+        double wall = bench_seconds(bench_now() - start);
+        cpu_end = tone_process_cpu_seconds();
+        bench_end_present(window, screen);
+        file = fopen(out_path, "wb");
+        if (file == NULL) return 1;
+        fprintf(file, "scenario %s\nfloaters %u\nclient %ldx%ld\nrate_hz %u\n"
+                "filter %d %s\ngl %d\ngpu_sync %d\nwall_s %.3f\n",
+                scenario, active, (long)(client.right - client.left),
+                (long)(client.bottom - client.top), g_paint_rates[g_paint_rate_index],
+                g_upscale_filter, g_upscale_filter_labels[g_upscale_filter], g_gl_ready,
+                gpu_sync, wall);
+        fprintf(file, "game_frames_per_s %.2f\npaints_per_s %.2f\n", frames / wall,
+                paints / wall);
+        if (cpu_start >= 0.0 && cpu_end >= 0.0)
+            fprintf(file, "process_cpu_pct_of_one_core %.2f\n",
+                    (cpu_end - cpu_start) / wall * 100.0);
+        bench_stat_print(file, "sim", &sim, CAPACITY);
+        bench_stat_print(file, "render", &render, CAPACITY);
+        bench_stat_print(file, "present", &present, CAPACITY);
+        bench_stat_print(file, "paint", &paint, CAPACITY);
+        bench_stat_print(file, "paint_interval", &gap, CAPACITY);
+        fclose(file);
+    }
+    free(sim.samples);
+    free(render.samples);
+    free(present.samples);
+    free(paint.samples);
+    free(gap.samples);
+    return 0;
+}
+
 static int bench_run(HWND window, const char *command_line)
 {
     char scenario[32] = "idle";
@@ -377,6 +534,8 @@ static int bench_run(HWND window, const char *command_line)
     HDC screen;
 
     if (frames == 0U) frames = 1U;
+    if (strstr(command_line, "--bench-rate") != NULL)
+        return bench_rate_run(window, command_line);
     {
         char directory[MAX_PATH];
         if (command_line_value(command_line, "--bench-dump-set", directory,
