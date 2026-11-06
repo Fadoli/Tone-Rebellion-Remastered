@@ -1,6 +1,7 @@
 #!/bin/sh
 # Web build (TODO_WEB.md step 4) from an MSYS2 UCRT64 shell with the
-# mingw-w64-ucrt-x86_64-emscripten package installed.
+# mingw-w64-ucrt-x86_64-emscripten package installed, or any shell with emcc
+# on PATH (the release workflow uses emsdk on Linux).
 #
 #   tools/build_web.sh [SDL3 source directory] [build directory]
 #
@@ -14,7 +15,11 @@ set -e
 here=$(cd "$(dirname "$0")/.." && pwd)
 sdl_source=$1
 game_build=${2:-$here/build/web/game}
-. /ucrt64/etc/profile.d/emscripten.sh
+# MSYS2 puts Emscripten behind a profile script; elsewhere (CI, emsdk) emcc
+# is already on PATH.
+if [ -f /ucrt64/etc/profile.d/emscripten.sh ]; then
+    . /ucrt64/etc/profile.d/emscripten.sh
+fi
 # wasm-opt's thread pool deadlocked here on Windows (no CPU, the link never
 # ends); with one thread the link takes about 25 s.
 export BINARYEN_CORES=1

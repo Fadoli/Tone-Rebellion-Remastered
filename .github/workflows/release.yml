@@ -1,0 +1,156 @@
+# Release on tag: pushing a tag such as v0.2.0 builds the Windows game and
+# the web build, attaches both to a GitHub release, and publishes the web
+# build to GitHub Pages. "Run workflow" (workflow_dispatch) does the builds
+# and the Pages deployment without a release.
+#
+# One-time repository setting: Settings > Pages > Source = "GitHub Actions".
+# Neither build contains game data: the player supplies their own copy of
+# Tone Rebellion (folder or CD image).
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  SDL_VERSION: "3.4.18"
+  EMSDK_VERSION: "6.0.13"
+
+jobs:
+  windows:
+    name: Windows build
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+        working-directory: ToneRebellion_Remake
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          path-type: inherit # node, for the documentation test
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-sdl3
+
+      - name: Configure
+        run: cmake -S . -B build/ci -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build/ci
+
+      - name: Unit tests
+        run: ctest --test-dir build/ci --output-on-failure
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $name = "ToneRebellion_Remake-${{ github.ref_name }}-windows-x64"
+          $dir = "dist/$name"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          # The post-build step copies the game and its DLLs beside CMakeLists.txt.
+          Copy-Item ToneRebellion_Remake.exe, SDL3.dll, libiconv-2.dll $dir
+          Copy-Item README.md "$dir/README-remake.md"
+          Copy-Item ../LICENSE.md $dir
+          Compress-Archive -Path "$dir/*" -DestinationPath "dist/$name.zip"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows
+          path: ToneRebellion_Remake/dist/*.zip
+          if-no-files-found: error
+
+  web:
+    name: Web build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: ${{ env.EMSDK_VERSION }}
+          actions-cache-folder: emsdk-cache
+
+      - name: Ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: SDL3 source
+        run: |
+          curl -sSL -o sdl3.tar.gz \
+            "https://github.com/libsdl-org/SDL/releases/download/release-${SDL_VERSION}/SDL3-${SDL_VERSION}.tar.gz"
+          tar -xzf sdl3.tar.gz
+
+      - name: Build
+        run: sh ToneRebellion_Remake/tools/build_web.sh "$PWD/SDL3-${SDL_VERSION}"
+
+      - name: Site and archive
+        run: |
+          mkdir -p site
+          cp ToneRebellion_Remake/web/out/ToneRebellion_Remake.js \
+             ToneRebellion_Remake/web/out/ToneRebellion_Remake.wasm site/
+          cp ToneRebellion_Remake/web/out/ToneRebellion_Remake.html site/index.html
+          touch site/.nojekyll
+          name="ToneRebellion_Remake-${{ github.ref_name }}-web"
+          (cd site && zip -r "../$name.zip" .)
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: web
+          path: ToneRebellion_Remake-*-web.zip
+          if-no-files-found: error
+
+  pages:
+    name: Publish to GitHub Pages
+    needs: web
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
+
+  release:
+    name: GitHub release
+    needs: [windows, web]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: assets
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: assets/*.zip
+          generate_release_notes: true
+          body: |
+            Tone Rebellion remake ${{ github.ref_name }}.
+
+            - Windows: unzip and run `ToneRebellion_Remake.exe`. It finds your copy of Tone Rebellion in `C:\Program Files\Tone`, on a mounted CD, or as a `.iso` placed next to the executable; you can also drop the game folder or the `.iso` onto the executable, or pass `--game-dir <folder>`.
+            - Browser: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/ asks for the game folder or the CD image; the files stay in your browser.
+
+            No game data is included.

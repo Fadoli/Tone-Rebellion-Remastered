@@ -1,16 +1,34 @@
 # Tone Rebellion remake
 
-Independent C11 remake informed by static analysis and local game data. The original executable is a read-only reference and is not run.
+Independent C11 remake of *Tone Rebellion* (1997), informed by static analysis of the original executable and its data. The original executable is a read-only reference and is never run. No game data is included: the remake reads your own copy of the game.
+
+## Play
+
+- **Windows:** download `ToneRebellion_Remake-<version>-windows-x64.zip` from the [releases](https://github.com/Fadoli/Tone-Rebellion-Remastered/releases), unzip it and run `ToneRebellion_Remake.exe`. It finds the game in `C:\Program Files\Tone`, on a mounted CD, or as a `.iso` placed next to the executable; you can also drop the game folder or the `.iso` onto the executable, or pass `--game-dir <folder>` / `--iso <file>`.
+- **Browser:** [fadoli.github.io/Tone-Rebellion-Remastered](https://fadoli.github.io/Tone-Rebellion-Remastered/) asks for the game folder or the CD image (`.iso`); the files stay in the browser's storage, nothing is uploaded.
+
+Remake keys on the island and the world map: `F2` remake options (display rate, scaling filter, scrolling, alerts, shortcuts and their keys, saves), `Esc` options panel, `F5` quicksave, `F9` quickload, `Shift+F9` autosave, `Space` jump to the newest alert, `8`/`9` game speed, `F12` scaling filter. Everything the remake changes on purpose is listed in [differences from the original game](docs/differences-from-original.md).
 
 ## Build and check
 
-```powershell
-cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
-cmake --build build/release --parallel 4
-ctest --test-dir build/release --output-on-failure
+Windows, from an MSYS2 UCRT64 shell (packages `mingw-w64-ucrt-x86_64-gcc`, `-cmake`, `-ninja`, `-sdl3`):
+
+```sh
+cmake -S . -B build/ucrt64 -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build/ucrt64
+ctest --test-dir build/ucrt64 --output-on-failure
 ```
 
-Windows executable beside this file: `ToneRebellion_Remake.exe` (SDL3 build) with `SDL3.dll` and `libiconv-2.dll`; SDL3 is required (the Win32/GDI build was dropped on 2026-11-06). See [build and validation details](docs/build-and-validation.md).
+The build refreshes `ToneRebellion_Remake.exe`, `SDL3.dll` and `libiconv-2.dll` beside this file. The browser build is `tools/build_web.sh <SDL3 source directory>` (Emscripten; output in `web/out/`). Details, the e2e scripts and the benchmarks: [build and validation](docs/build-and-validation.md), [bench/](bench/).
+
+## Releases
+
+Pushing a tag `v*` runs [`.github/workflows/release.yml`](../.github/workflows/release.yml): it builds and tests the Windows game, builds the web version, attaches both zips to a GitHub release and publishes the web version to GitHub Pages ("Run workflow" does the builds and the Pages deployment without a release). One-time setting: *Settings > Pages > Source = GitHub Actions*.
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
 
 ## Documentation
 
@@ -20,7 +38,7 @@ Windows executable beside this file: `ToneRebellion_Remake.exe` (SDL3 build) wit
 - [Graphics notes by screen](GRAPHICS_RECONSTRUCTION.md)
 - [Roadmap](ROADMAP.md) and [open tasks](TODO.md)
 - [Ported features and limits](docs/implemented.md)
-- [Differences from the original game](docs/differences-from-original.md) (network pause, save and load, Escape shortcut, end screen, saves)
+- [Differences from the original game](docs/differences-from-original.md)
 - [Movement traces](MOVEMENT_REVERSE_ENGINEERING.md)
 - [Original behavior and evidence](../FUNCTION_GUIDE.md)
 
@@ -33,4 +51,4 @@ The upscaling filters run on the GPU with libretro GLSL shaders, copied under `s
 - `scalefx/`: ScaleFX (Sp00kyFox), MIT.
 - `cubic/catmull-rom.glsl`: MIT; `interpolation/sharp-bilinear.glsl`: public domain.
 
-`shaders/remake/` (nearest/linear copy, Lanczos 3) is the remake's own. The HQx shaders are LGPL: distributing a build requires offering their source (this repository).
+`shaders/remake/` (nearest/linear copy, Lanczos 3) is the remake's own. The HQx shaders are LGPL: distributing a build requires offering their source (this repository). SDL3 (zlib licence) is linked dynamically on Windows and statically in the browser build.
