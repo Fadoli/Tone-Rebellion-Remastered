@@ -1,5 +1,5 @@
 /* Worker scheduler (FUN_0042219e / FUN_00422031) outputs and task-leg
-   behaviour (FUN_004211bb cases 3/4). See behavior/island-tasks.md,
+   behaviour (FUN_004211bb cases 3/4). See decompilation/behavior/island-tasks.md,
    "Répartition des ouvriers (refonte 2026-11-01)". */
 
 enum {

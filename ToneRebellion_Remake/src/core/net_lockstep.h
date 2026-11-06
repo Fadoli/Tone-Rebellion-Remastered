@@ -6,7 +6,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* In-game synchronisation (behavior/multiplayer.md). Native model: every
+/* In-game synchronisation (decompilation/behavior/multiplayer.md). Native model: every
    command is queued with a common future execution tick (FUN_004133f2), the
    host sends the latency period to everyone (channel 4 type 1 -> +0x1278),
    only validates the next period once each guest reported progress

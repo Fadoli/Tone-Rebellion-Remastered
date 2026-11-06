@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* Multiplayer lobby model (behavior/multiplayer.md). The original reaches the
+/* Multiplayer lobby model (decompilation/behavior/multiplayer.md). The original reaches the
    New Game screen (state 1) through a DirectPlay session; that screen is the
    lobby: the session host owns world size and difficulty, every player picks
    a tribe, and BEGINGAME (message 52) broadcasts record type 9. Record types

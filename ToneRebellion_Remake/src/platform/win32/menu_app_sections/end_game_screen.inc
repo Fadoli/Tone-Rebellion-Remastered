@@ -5,7 +5,7 @@
    (SetState(7)) or the F11 preview key. Native: a left click on the
    player card, the text or a card leaves to the title (SetState(0), REA
    2026-11-04). Remake choice: the click skips the scroll and the card
-   reveal, Escape leaves (see behavior/end-game.md). */
+   reveal, Escape leaves (see decompilation/behavior/end-game.md). */
 
 enum {
     END_GAME_PANE_LEFT = 211,

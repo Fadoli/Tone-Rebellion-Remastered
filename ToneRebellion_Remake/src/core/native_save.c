@@ -32,7 +32,7 @@ enum {
     PLAYER_POLICY_ROW = 0xd8,    /* DAT_00619290 */
     PLAYER_RECIPIENT_ROW = 0xe8, /* DAT_006192a0 */
     PLAYER_STOCK_MODES = 0x13d0, /* DAT_0061a588: u16 per resource */
-    /* FUN_004204bc's score row (behavior/end-game.md): kills per Leviathan
+    /* FUN_004204bc's score row (decompilation/behavior/end-game.md): kills per Leviathan
        subtype, kills per player faction, then the tribe's own losses. */
     PLAYER_LEVIATHAN_KILLS = 0x146c,
     PLAYER_FACTION_KILLS = 0x1490,
@@ -615,7 +615,7 @@ static int restore_leviathan_site_order(const GameSession *session,
     return 1;
 }
 
-/* Attack / defend orders (docs: MOVEMENT_LOCAL_ATTACK.md, MOVEMENT_LOCAL_DEFEND.md).
+/* Attack / defend orders (docs/movement/local-attack.md, docs/movement/local-defend.md).
    Targets are floater slots, which keep their file numbering, so this runs
    after every floater exists. The saves available hold no such order; the
    mapping follows the documented encoding and is unverified on real data.

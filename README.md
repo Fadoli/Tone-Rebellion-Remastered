@@ -1,29 +1,55 @@
-# Tone Rebellion — static decompilation workspace
+# Tone Rebellion Remastered
 
-## Play the remake
+A remake of *Tone Rebellion* (The Logic Factory, 1997), the real-time strategy game of floating islands, tones and the Leviathan. It is rebuilt in portable C11 from a static analysis of the original Windows executable.
 
-The C11 remake built from this analysis lives in [ToneRebellion_Remake/](ToneRebellion_Remake/README.md). Windows builds are on the [releases page](https://github.com/Fadoli/Tone-Rebellion-Remastered/releases) and the browser version is at [fadoli.github.io/Tone-Rebellion-Remastered](https://fadoli.github.io/Tone-Rebellion-Remastered/). Both need your own copy of *Tone Rebellion* (installed folder, CD or `.iso`); no game data is distributed here. A tag `v*` builds and publishes both ([release workflow](.github/workflows/release.yml)).
+Two parts live here:
 
-## Target and method
+- **The remake** ([ToneRebellion_Remake/](ToneRebellion_Remake/README.md)): a new engine that loads the original game data and reproduces its rules, screens and sounds. It runs on modern Windows and in the browser.
+- **The decompilation workspace** ([decompilation/](decompilation/README.md)): notes, an index and pseudocode for `FLOAT.EXE` 1.16F. The remake is built from these, so every ported behaviour can be traced back to its evidence.
 
-Static analysis of `C:\Program Files\Tone\FLOAT.EXE` (x86 PE, version 1.16F) with Ghidra 12.1.4 through REA. The binary, the COB archives and the Ghidra projects are immutable references; the original game is never run.
+No game data is included. You need your own copy of *Tone Rebellion*: the installed folder, the CD, or a `.iso` image.
 
-Observed facts, interpretations and unknowns are kept apart. Names and types reconstructed by Ghidra are provisional. The method and the instructions for picking the work up are in [AGENTS.md](AGENTS.md).
+## Play
 
-## Local data
+- **Windows:** download `ToneRebellion_Remake-<version>-windows-x64.zip` from the [releases](https://github.com/Fadoli/Tone-Rebellion-Remastered/releases), unzip it and run `ToneRebellion_Remake.exe`. It finds the game in `C:\Program Files\Tone`, on a mounted CD, or as a `.iso` next to the executable. You can also drop the folder or the `.iso` onto the executable.
+- **Browser:** [fadoli.github.io/Tone-Rebellion-Remastered](https://fadoli.github.io/Tone-Rebellion-Remastered/). Pick the game folder or the `.iso`; the files stay in your browser and nothing is uploaded.
 
-The extracted corpus is under `C:\git\ToneRebellion_Raw\original_content`; the unpacked ISO is under `C:\toneIso`. The 483 COB members are indexed in [archive_index.jsonl](archive_index.jsonl). Do not search for or download the corpus online.
+## What the remake adds
 
-## Coverage
+The remake aims at the original behaviour, and every deliberate change can be turned off. All of them are listed in [differences from the original game](ToneRebellion_Remake/docs/differences-from-original.md).
 
-The inventory has 2,410 procedures: 1,507 decompiled bodies, 780 thunks and 123 externals. Details and limits: [evidence/manifest.md](evidence/manifest.md), [unknowns.md](unknowns.md).
+- **Display:** any window size; GPU upscaling filters (sharp bilinear, Lanczos, xBR, HQx, ScaleFX, and others); a display rate of 20 to 120 Hz, blended between the game's 20 Hz frames; optional vsync.
+- **Comfort:** smooth and edge scrolling; rebindable keyboard shortcuts for the island controls; alerts with a jump key; quicksave, quickload and autosave. Press `F2` in game to reach these settings.
+- **Network:** TCP lockstep play, with pause, game speed, save and load, and reconnection. It does not use DirectPlay.
+- **Saves:** loads the original saves too. Saves are written to a `saves` folder, never to the game folder.
 
-## Navigation
+## Build
 
-- [FUNCTION_GUIDE.md](FUNCTION_GUIDE.md) — function index with links to the detailed evidence.
-- [behavior_map.md](behavior_map.md) and [behavior/](behavior/) — flows and behaviour by area (notes kept in French, the analysis language).
-- [functions/](functions/) — Ghidra pseudocode and metadata.
-- [data_catalog.md](data_catalog.md), [cob_archives.md](cob_archives.md) — formats and resources.
-- [ToneRebellion_Remake/README.md](ToneRebellion_Remake/README.md) — remake: play, build, tests, releases.
-- [ToneRebellion_Remake/TODO.md](ToneRebellion_Remake/TODO.md) — next remake tasks.
-- [ToneRebellion_Remake/docs/differences-from-original.md](ToneRebellion_Remake/docs/differences-from-original.md) — where the remake knowingly differs from the original game (network pause, save and load, Escape shortcut, end screen, saves).
+Windows uses an MSYS2 UCRT64 shell with the `gcc`, `cmake`, `ninja` and `sdl3` packages:
+
+```sh
+cd ToneRebellion_Remake
+cmake -S . -B build/ucrt64 -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build/ucrt64
+ctest --test-dir build/ucrt64 --output-on-failure
+```
+
+The browser build uses Emscripten: `tools/build_web.sh <SDL3 source directory>`. For tests, e2e scripts and benchmarks, see [build and validation](ToneRebellion_Remake/docs/build-and-validation.md). Pushing a tag `v*` runs the [release workflow](.github/workflows/release.yml), which builds both versions, attaches them to a GitHub release and publishes the browser version.
+
+## How it was made
+
+The original `FLOAT.EXE` (x86 PE, version 1.16F) was studied statically with Ghidra through REA. It was never run or modified. The inventory covers 2,410 procedures: 1,507 decompiled bodies, 780 thunks and 123 externals ([manifest](decompilation/evidence/manifest.md), [unknowns](decompilation/unknowns.md)).
+
+The notes keep three things apart: what Ghidra shows, what we interpret from it, and what is still unknown. Names such as `FUN_...`, and all reconstructed types, are provisional. Working rules for contributors and agents are in [AGENTS.md](AGENTS.md).
+
+## Repository map
+
+| Path | Content |
+|---|---|
+| [ToneRebellion_Remake/](ToneRebellion_Remake/README.md) | Remake: sources (`src/`), tests, shaders, tools, benchmarks |
+| [ToneRebellion_Remake/docs/](ToneRebellion_Remake/docs/) | Remake docs: [ported features](ToneRebellion_Remake/docs/implemented.md), [roadmap](ToneRebellion_Remake/docs/roadmap.md), [open tasks](ToneRebellion_Remake/docs/todo.md), [movement](ToneRebellion_Remake/docs/movement/README.md), UI and rendering notes |
+| [decompilation/](decompilation/README.md) | Analysis of `FLOAT.EXE`: function guide, behaviour notes (in French), pseudocode, data formats, COB archives, coverage and unknowns |
+
+## Licence
+
+The remake's code and the documentation are under the [MIT licence](LICENSE.md). The upscaling shaders come from libretro under their own licences; the details are in the [remake README](ToneRebellion_Remake/README.md#third-party-code). *Tone Rebellion* and its data belong to their owners and are not distributed here.

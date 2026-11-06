@@ -23,7 +23,7 @@ The build refreshes `ToneRebellion_Remake.exe`, `SDL3.dll` and `libiconv-2.dll` 
 
 ## Releases
 
-Pushing a tag `v*` runs [`.github/workflows/release.yml`](../.github/workflows/release.yml): it builds and tests the Windows game, builds the web version, attaches both zips to a GitHub release and publishes the web version to GitHub Pages ("Run workflow" does the builds and the Pages deployment without a release). One-time setting: *Settings > Pages > Source = GitHub Actions*.
+Pushing a tag `v*` runs [`.github/workflows/release.yml`](../.github/workflows/release.yml): it builds and tests the Windows game, builds the web version, attaches both zips to a GitHub release and publishes the web version to GitHub Pages ("Run workflow" does the builds and the Pages deployment without a release).
 
 ```sh
 git tag v0.1.0
@@ -35,12 +35,12 @@ git push origin v0.1.0
 - [Menu, map, and island UI](docs/menu-and-island-ui.md)
 - [World start and initial simulation](docs/world-start.md)
 - [Building rendering](docs/building-rendering.md)
-- [Graphics notes by screen](GRAPHICS_RECONSTRUCTION.md)
-- [Roadmap](ROADMAP.md) and [open tasks](TODO.md)
+- [Graphics notes by screen](docs/graphics-reconstruction.md)
+- [Roadmap](docs/roadmap.md) and [open tasks](docs/todo.md)
 - [Ported features and limits](docs/implemented.md)
 - [Differences from the original game](docs/differences-from-original.md)
-- [Movement traces](MOVEMENT_REVERSE_ENGINEERING.md)
-- [Original behavior and evidence](../FUNCTION_GUIDE.md)
+- [Movement traces](docs/movement/README.md)
+- [Original behavior and evidence](../decompilation/FUNCTION_GUIDE.md)
 
 ## Third-party code
 

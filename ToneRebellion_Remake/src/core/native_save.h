@@ -8,7 +8,7 @@
 
 /*
  * Reader for the original game's NN.SAV files (FUN_0045749a / FUN_004576c7).
- * Layout and evidence: behavior/save-format.md. The file is a raw dump of the
+ * Layout and evidence: decompilation/behavior/save-format.md. The file is a raw dump of the
  * 0x80-byte header, three dwords, then the four engine streams. Only the
  * parts the remake models are applied; everything else keeps the value the
  * fresh session for the same world and tribe already has.

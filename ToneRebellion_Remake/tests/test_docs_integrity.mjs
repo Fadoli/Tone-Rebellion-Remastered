@@ -77,7 +77,7 @@ function checkLocalLinks() {
 }
 
 function checkFunctionReferences() {
-    const indexPath = path.join(repoRoot, 'index.jsonl');
+    const indexPath = path.join(repoRoot, 'decompilation', 'index.jsonl');
     const knownFunctions = new Set();
     for (const line of readFileSync(indexPath, 'utf8').split(/\r?\n/)) {
         if (!line) continue;

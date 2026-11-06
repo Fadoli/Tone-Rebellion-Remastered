@@ -3,7 +3,6 @@
 # build to GitHub Pages. "Run workflow" (workflow_dispatch) does the builds
 # and the Pages deployment without a release.
 #
-# One-time repository setting: Settings > Pages > Source = "GitHub Actions".
 # Neither build contains game data: the player supplies their own copy of
 # Tone Rebellion (folder or CD image).
 name: Release

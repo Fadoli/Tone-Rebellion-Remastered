@@ -1,4 +1,4 @@
-/* Multiplayer lobby transport (behavior/multiplayer.md). The original opens a
+/* Multiplayer lobby transport (decompilation/behavior/multiplayer.md). The original opens a
    DirectPlay session outside the game screens and then uses the New Game
    screen (state 1) as the lobby; DirectPlay is not available to the remake,
    so it carries the core NetLobby records over a plain TCP connection: one

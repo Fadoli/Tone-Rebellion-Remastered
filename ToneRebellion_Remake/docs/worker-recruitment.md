@@ -30,12 +30,12 @@ audio adapter. The birth event has no sprite sequence of its own. The visible
 animation is the tribe site's PROD cycle: `FUN_004532e2` sets site flag 2,
 clears `+0x42`, links the floater at site `+0x2e` and holds it with `0x801`.
 The class-1 tick runs 100 ticks, then releases the worker at `(x, y - 0x28)`
-(`FUN_00450a71` cases 0/1, `../functions/0015_batch_0011/details-04-02.md`).
+(`FUN_00450a71` cases 0/1, `decompilation/functions/0015_batch_0011/details-04-02.md`).
 The remake follows this through `leviathan_spawned_floater`.
 
 Birth visual (static reading of conserved pseudocode; REA session closed):
 the world floater loop `FUN_00435f4d` skips any floater with `+0x1c & 1`
-(`ev_9466be6d877d3a7686cb6bcf7838301774c412a8e560a476b938307aac8b32ad`, `../functions/0012_batch_0008/details-06-02.md`), so the held
+(`ev_9466be6d877d3a7686cb6bcf7838301774c412a8e560a476b938307aac8b32ad`, `decompilation/functions/0012_batch_0008/details-06-02.md`), so the held
 newborn is not drawn as a floater. `FUN_0040bf98` gives class-1 items 0/5 the
 POOL shape `DAT_004a4b70`, which has no PROD row in `bldinf.txt`. The class-1
 site drawer `FUN_0040b09a` (dispatched through thunk `0x401780` from
@@ -54,6 +54,6 @@ and legs sheets equals native shape frame 0.
 Evidence: `FUN_0045eaa7` (`ev_d0241191e19be6e3ec7ab4c4a16172c22e772b518c82aeef201ad3125475226d`),
 `FUN_004532e2` (`ev_f568b5a3b8f15baa665610518ba92d8599e54715db51c26ef29d327af6893104`),
 and `FUN_00466fe4` (`ev_0ca802ac15043c61c073f6d68546619fc924a4ba10fd4d9f04e203668dc62ed7`).
-Detailed pseudocode is in `../functions/0017_batch_0013/details-01-02.md`,
-`../functions/0015_batch_0011/details-05-02.md`, and
-`../functions/0017_batch_0013/details-06-01.md`.
+Detailed pseudocode is in `decompilation/functions/0017_batch_0013/details-01-02.md`,
+`decompilation/functions/0015_batch_0011/details-05-02.md`, and
+`decompilation/functions/0017_batch_0013/details-06-01.md`.

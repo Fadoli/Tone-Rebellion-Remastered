@@ -543,7 +543,7 @@ static void clear_island_messages(void);
 
 /* The Hall, task, trade, inventory, unit-detail and construction panels draw
    their text with SMFONT in palette index 6 (REA: callers of the 0x4014c9
-   accessor, see behavior/ui-fonts.md), so route their labels to it. */
+   accessor, see decompilation/behavior/ui-fonts.md), so route their labels to it. */
 #define draw_bitmap_label(dc, text, x, y, color) draw_small_label((dc), (text), (x), (y), panel_text_color(color))
 #define draw_bitmap_label_pixels(text, x, y, color) draw_small_label_pixels((text), (x), (y), panel_text_color(color))
 #define measure_bitmap_text(context, text, length) measure_small_text((text), (length))

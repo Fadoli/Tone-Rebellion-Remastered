@@ -9,7 +9,7 @@
 /* One player action that changes the shared GameSession. The original sends
    such actions as channel-1 records (FUN_00414081) and every machine runs
    them at the same scheduled tick (FUN_00466221 -> FUN_00465793 /
-   FUN_004672ef; behavior/multiplayer.md). The remake wraps the existing
+   FUN_004672ef; decompilation/behavior/multiplayer.md). The remake wraps the existing
    session mutators so a solo click and a networked command take the same
    path. Kinds and argument order are the remake's own. */
 

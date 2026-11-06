@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Layout constants mirror native_save.c (behavior/save-format.md). */
+/* Layout constants mirror native_save.c (decompilation/behavior/save-format.md). */
 enum {
     HEADER_SIZE = 0x80,
     STREAM1_SIZE = 0x148,

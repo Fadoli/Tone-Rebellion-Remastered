@@ -1,12 +1,12 @@
 # Differences from the original game
 
-This page lists every behaviour of the remake that knowingly differs from `FLOAT.EXE` 1.16F, so a player or a reviewer can tell remake choices from ported behaviour. Everything else aims at the original behaviour; the evidence for it is in `../behavior/` and [FUNCTION_GUIDE.md](../../FUNCTION_GUIDE.md). Gaps that are not choices (behaviour not ported yet) are listed in the [TODO](../TODO.md).
+This page lists every behaviour of the remake that knowingly differs from `FLOAT.EXE` 1.16F, so a player or a reviewer can tell remake choices from ported behaviour. Everything else aims at the original behaviour; the evidence for it is in `decompilation/behavior/` and [FUNCTION_GUIDE.md](../../decompilation/FUNCTION_GUIDE.md). Gaps that are not choices (behaviour not ported yet) are listed in the [TODO](todo.md).
 
 ## Network play
 
 | Topic | Original | Remake |
 |---|---|---|
-| Transport | DirectPlay sessions, native channels and turn rate. | Own TCP records (port 28610 by default) and lockstep turns of one tick (50 ms); see [multiplayer](../../behavior/multiplayer.md). No chat. A slow player makes the others wait (with an "En attente de" message) instead of being dropped. |
+| Transport | DirectPlay sessions, native channels and turn rate. | Own TCP records (port 28610 by default) and lockstep turns of one tick (50 ms); see [multiplayer](../../decompilation/behavior/multiplayer.md). No chat. A slow player makes the others wait (with an "En attente de" message) instead of being dropped. |
 | Lost connection | The player leaves the session. | The player's slot is kept for 2 minutes while the game goes on; its machine reconnects by itself and receives the current session (`NET_RECORD_REJOIN`, `NET_RECORD_RESYNC`); a player who restarted the game gets the slot back by joining again with the same name. Both sides must run the same build (session layout tag in `HELLO`). A link silent for 15 s counts as lost. After 2 minutes the tribe hands its glyphs back, as when a player leaves. |
 | Lobby entry | DirectPlay property sheet (`FUN_0044c2b9`). | "Multijoueur" title button (`M`), the remake setup screen, `H`/`J` on the title, or `--host` / `--join address`. |
 | Tribes | One player per tribe. | Several players may share a tribe (co-operation). |
