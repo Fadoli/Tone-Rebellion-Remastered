@@ -27,12 +27,12 @@ static const char *const g_upscale_filter_labels[FILTER_COUNT] = {
    "key value" lines in any order; unknown keys are ignored. */
 static int g_load_starts_paused = 1;
 static int g_clip_all_training = 1;
-static int g_smooth_scroll = 1;
+static int g_smooth_scroll;
 static int g_edge_scroll = 1;
-static int g_event_alerts = 1;
+static int g_event_alerts;
 /* Original random island captions (gamey.txt CRYPTIC0..20); off by default. */
 static int g_cryptic_messages;
-static int g_shortcuts_enabled = 1;
+static int g_shortcuts_enabled;
 static int g_quicksave_enabled = 1;
 /* Minutes between autosaves; 0 = off. */
 static int g_autosave_minutes = 5;
