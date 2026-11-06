@@ -358,6 +358,13 @@ static void e2e_write_state(void)
         fprintf(file, "options_open %d\noptions_row %d\nload_paused %d\nclip_all %d\n",
                 g_options_open, g_options_row, g_load_starts_paused,
                 g_clip_all_training);
+        {
+            int filter, available = 0;
+            for (filter = 0; filter < FILTER_COUNT; ++filter)
+                if (filter_available(filter)) available |= 1 << filter;
+            fprintf(file, "gl_ready %d\nfilters_available %d\nfilter %d\n", gl_is_ready(),
+                    available, g_upscale_filter);
+        }
         fprintf(file, "options_page %d\nshortcut_waiting %d\nscroll_animating %d\n",
                 g_options_page, g_shortcut_waiting, g_scroll_animating);
         {

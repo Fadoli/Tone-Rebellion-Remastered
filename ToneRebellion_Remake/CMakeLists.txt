@@ -82,10 +82,6 @@ endif()
 # Software rendering onto a plain pixel buffer; no platform headers.
 add_library(tone_render STATIC
     src/render/render_surface.c
-    src/render/upscale.c
-    src/render/upscale_hqx.c
-    src/render/upscale_scalefx.c
-    src/render/upscale_xbr.c
 )
 target_include_directories(tone_render PUBLIC src/render)
 if(UNIX)
@@ -367,6 +363,8 @@ if(EMSCRIPTEN)
         -sSTACK_SIZE=4MB
         -sINVOKE_RUN=0
         -sFORCE_FILESYSTEM=1
+        -sMIN_WEBGL_VERSION=2
+        -sMAX_WEBGL_VERSION=2
         "-sEXPORTED_RUNTIME_METHODS=['callMain','FS','IDBFS']"
         -lidbfs.js
         "--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html")

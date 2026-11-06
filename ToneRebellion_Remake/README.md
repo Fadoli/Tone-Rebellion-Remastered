@@ -26,11 +26,11 @@ Windows executable beside this file: `ToneRebellion_Remake.exe` (SDL3 build) wit
 
 ## Third-party code
 
-The upscaling filters include ports of third-party code, each file keeping its notice:
+The upscaling filters run on the GPU with libretro GLSL shaders, copied under `shaders/libretro/` with their notices and embedded by `tools/embed_shaders.py` into `src/platform/sdl/sdl_gl_shaders.h`:
 
-- `src/render/upscale_xbr.c`: xBR (Hyllian), adapted from FFmpeg `libavfilter/vf_xbr.c`, LGPL-2.1-or-later.
-- `src/render/upscale_hqx.c`: hq2x/hq3x/hq4x (Maxim Stepin), adapted from grom358/hqx, LGPL-2.1-or-later.
-- `src/render/upscale_scalefx.c`: ScaleFX (Sp00kyFox), from the libretro slang-shaders preset, MIT.
+- `xbr/`: xBR level 2 (Hyllian), MIT. `xbr-lv2.glsl` is modified: three global initializers became macros for GLSL ES (marked in the file).
+- `hqx/`: hq2x/hq3x/hq4x (Maxim Stepin, Cameron Zemek, Jules Blok), LGPL-2.1-or-later, with their lookup images.
+- `scalefx/`: ScaleFX (Sp00kyFox), MIT.
+- `cubic/catmull-rom.glsl`: MIT; `interpolation/sharp-bilinear.glsl`: public domain.
 
-The two LGPL files are linked statically into the executable; distributing a build therefore requires offering their source (this repository) so they can be relinked.
-
+`shaders/remake/` (nearest/linear copy, Lanczos 3) is the remake's own. The HQx shaders are LGPL: distributing a build requires offering their source (this repository).

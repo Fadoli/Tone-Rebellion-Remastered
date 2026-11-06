@@ -284,10 +284,10 @@ static int test_aid_keys(void)
          platform_environment("TONE_REBELLION_E2E_TEST_AIDS", value, sizeof(value)));
 }
 
-/* Remake: the filter that scales the frame to the window (upscale.h). */
+/* Remake: the filter that scales the frame to the window (sdl_gl.inc). */
 static void set_upscale_filter(HWND window, int filter)
 {
-    if (filter < 0 || filter >= UPSCALE_FILTER_COUNT) return;
+    if (filter < 0 || filter >= FILTER_COUNT || !filter_available(filter)) return;
     g_upscale_filter = filter;
     save_video_settings();
     platform_invalidate(window);
@@ -682,7 +682,12 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             return 0;
         }
         if (wparam == VK_F12) {
-            set_upscale_filter(window, (g_upscale_filter + 1) % UPSCALE_FILTER_COUNT);
+            int filter = g_upscale_filter, n;
+            for (n = 0; n < FILTER_COUNT; ++n) {
+                filter = (filter + 1) % FILTER_COUNT;
+                if (filter_available(filter)) break;
+            }
+            set_upscale_filter(window, filter);
             return 0;
         }
         /* The original logo loop polls no input. */

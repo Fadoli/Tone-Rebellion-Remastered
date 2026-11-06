@@ -164,8 +164,15 @@ static void options_change(HWND window, int row, int step)
                                    SCALE_MODE_COUNT);
         break;
     case OPTION_FILTER:
-        set_upscale_filter(window, (g_upscale_filter + step + UPSCALE_FILTER_COUNT) %
-                                       UPSCALE_FILTER_COUNT);
+    {
+        /* Only the filters this machine can run. */
+        int filter = g_upscale_filter, n;
+        for (n = 0; n < FILTER_COUNT; ++n) {
+            filter = (filter + step + FILTER_COUNT) % FILTER_COUNT;
+            if (filter_available(filter)) break;
+        }
+        set_upscale_filter(window, filter);
+    }
         break;
     case OPTION_GAME_SPEED: {
         int32_t speed = (options_game_speed() - 1 + step + 3) % 3 + 1;

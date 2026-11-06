@@ -25,62 +25,70 @@ static int sdl_ensure_back_buffer(void)
     return 1;
 }
 
-/* Scales the back buffer into the window like present_back_buffer: black
-   bars, nearest pixel unless the smooth mode is chosen. */
-/* The upscaled frame (every filter but nearest): a streaming texture of the
-   viewport size, filled on the CPU by present_upscale and drawn 1:1. */
-static SDL_Texture *g_sdl_scaled;
-static int g_sdl_scaled_width, g_sdl_scaled_height;
+#include "sdl_gl.inc"
 
-static SDL_Texture *sdl_upscaled_frame(int width, int height)
+/* Filter -> preset of sdl_gl_shaders.h (HQx by the whole scale factor). */
+static int filter_preset(int filter, const RECT *viewport)
 {
-    void *pixels;
-    int pitch;
-    if (g_sdl_scaled == NULL || g_sdl_scaled_width != width ||
-        g_sdl_scaled_height != height) {
-        if (g_sdl_scaled != NULL) SDL_DestroyTexture(g_sdl_scaled);
-        g_sdl_scaled = SDL_CreateTexture(g_sdl_renderer, SDL_PIXELFORMAT_XRGB8888,
-                                         SDL_TEXTUREACCESS_STREAMING, width, height);
-        g_sdl_scaled_width = g_sdl_scaled != NULL ? width : 0;
-        g_sdl_scaled_height = g_sdl_scaled != NULL ? height : 0;
-        if (g_sdl_scaled == NULL) return NULL;
-        (void)SDL_SetTextureScaleMode(g_sdl_scaled, SDL_SCALEMODE_NEAREST);
+    static const int presets[FILTER_COUNT] = {0, 1, 2, 3, 4, 5, 6, 9};
+    if (filter == FILTER_HQX && viewport != NULL) {
+        int k_x = (viewport->right - viewport->left) / LOGICAL_WIDTH;
+        int k_y = (viewport->bottom - viewport->top) / LOGICAL_HEIGHT;
+        int k = k_x < k_y ? k_x : k_y;
+        if (k < 2) k = 2;
+        if (k > 4) k = 4;
+        return 6 + (k - 2);
     }
-    if (!SDL_LockTexture(g_sdl_scaled, NULL, &pixels, &pitch)) return NULL;
-    if (!present_upscale(g_sdl_pixels, (uint32_t *)pixels, pitch / 4, width, height)) {
-        SDL_UnlockTexture(g_sdl_scaled);
-        return NULL;
-    }
-    SDL_UnlockTexture(g_sdl_scaled);
-    return g_sdl_scaled;
+    return filter >= 0 && filter < FILTER_COUNT ? presets[filter] : 0;
 }
 
+static int gl_is_ready(void)
+{
+    return g_gl_ready;
+}
+
+static int filter_available(int filter)
+{
+    if (filter < 0 || filter >= FILTER_COUNT) return 0;
+    if (!g_gl_ready) return filter == FILTER_NEAREST || filter == FILTER_BILINEAR;
+    if (filter == FILTER_HQX)
+        return gl_preset_usable(6) && gl_preset_usable(7) && gl_preset_usable(8);
+    return gl_preset_usable(filter_preset(filter, NULL));
+}
+
+/* Scales the back buffer into the window: black bars and the chosen
+   filter, on the GPU (sdl_gl.inc), or through the SDL renderer (nearest or
+   linear) when this machine has no OpenGL. */
 static void sdl_present(void)
 {
     int width = 0;
     int height = 0;
     RECT viewport;
-    SDL_FRect target;
-    if (g_sdl_texture == NULL || g_sdl_pixels == NULL) return;
+    if (g_sdl_pixels == NULL) return;
+    if (g_gl_ready) {
+        (void)SDL_GetWindowSizeInPixels(g_sdl_window, &width, &height);
+        if (logical_viewport(width, height, &viewport))
+            (void)gl_present(filter_preset(g_upscale_filter, &viewport), g_sdl_pixels,
+                             &viewport, width, height);
+        (void)SDL_GL_SwapWindow(g_sdl_window);
+        return;
+    }
+    if (g_sdl_texture == NULL) return;
     (void)SDL_UpdateTexture(g_sdl_texture, NULL, g_sdl_pixels,
                             LOGICAL_WIDTH * (int)sizeof(uint32_t));
     (void)SDL_GetCurrentRenderOutputSize(g_sdl_renderer, &width, &height);
     (void)SDL_SetRenderDrawColor(g_sdl_renderer, 0, 0, 0, 255);
     (void)SDL_RenderClear(g_sdl_renderer);
     if (logical_viewport(width, height, &viewport)) {
+        SDL_FRect target;
         target.x = (float)viewport.left;
         target.y = (float)viewport.top;
         target.w = (float)(viewport.right - viewport.left);
         target.h = (float)(viewport.bottom - viewport.top);
-        SDL_Texture *scaled = g_upscale_filter != UPSCALE_NEAREST
-            ? sdl_upscaled_frame(viewport.right - viewport.left,
-                                 viewport.bottom - viewport.top) : NULL;
-        if (scaled != NULL) {
-            (void)SDL_RenderTexture(g_sdl_renderer, scaled, NULL, &target);
-        } else {
-            (void)SDL_SetTextureScaleMode(g_sdl_texture, SDL_SCALEMODE_NEAREST);
-            (void)SDL_RenderTexture(g_sdl_renderer, g_sdl_texture, NULL, &target);
-        }
+        (void)SDL_SetTextureScaleMode(g_sdl_texture, g_upscale_filter == FILTER_BILINEAR
+                                                         ? SDL_SCALEMODE_LINEAR
+                                                         : SDL_SCALEMODE_NEAREST);
+        (void)SDL_RenderTexture(g_sdl_renderer, g_sdl_texture, NULL, &target);
     }
     (void)SDL_RenderPresent(g_sdl_renderer);
 }
@@ -98,9 +106,25 @@ static void sdl_redraw(void)
 static HWND sdl_create_window(void)
 {
     if (!SDL_Init(SDL_INIT_VIDEO)) return NULL;
+    /* OpenGL first (the filters run there); a plain window and the SDL
+       renderer when no OpenGL context comes. */
+    gl_set_attributes();
+    g_sdl_window = SDL_CreateWindow("Tone Rebellion - New Game", 1024, 781,
+                                    SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN |
+                                    SDL_WINDOW_OPENGL);
+    /* TONE_REBELLION_NO_GL (test aid): the path of a machine without
+       OpenGL. */
+    if (g_sdl_window != NULL && getenv("TONE_REBELLION_NO_GL") == NULL &&
+        gl_init(g_sdl_window)) {
+        if (!filter_available(g_upscale_filter)) g_upscale_filter = FILTER_NEAREST;
+        if (!sdl_ensure_back_buffer()) return NULL;
+        return (HWND)g_sdl_window;
+    }
+    if (g_sdl_window != NULL) SDL_DestroyWindow(g_sdl_window);
     g_sdl_window = SDL_CreateWindow("Tone Rebellion - New Game", 1024, 781,
                                     SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN);
     if (g_sdl_window == NULL) return NULL;
+    if (!filter_available(g_upscale_filter)) g_upscale_filter = FILTER_NEAREST;
     g_sdl_renderer = SDL_CreateRenderer(g_sdl_window, NULL);
     if (g_sdl_renderer == NULL) return NULL;
     g_sdl_texture = SDL_CreateTexture(g_sdl_renderer, SDL_PIXELFORMAT_XRGB8888,
@@ -117,8 +141,9 @@ static void sdl_destroy_window(void)
     stop_background_tune();
     sfx_close();
     sdl_audio_close();
-    if (g_sdl_scaled != NULL) SDL_DestroyTexture(g_sdl_scaled);
-    g_sdl_scaled = NULL;
+    if (g_gl_context != NULL) SDL_GL_DestroyContext(g_gl_context);
+    g_gl_context = NULL;
+    g_gl_ready = 0;
     if (g_sdl_texture != NULL) SDL_DestroyTexture(g_sdl_texture);
     if (g_sdl_renderer != NULL) SDL_DestroyRenderer(g_sdl_renderer);
     if (g_sdl_window != NULL) SDL_DestroyWindow(g_sdl_window);

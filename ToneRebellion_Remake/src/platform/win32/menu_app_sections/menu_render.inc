@@ -5,17 +5,20 @@ static unsigned game_random(void)
 
 /* Port choice: how the 640x480 frame fills the window. INTEGER keeps every
    game pixel the same size (largest whole multiple, black bars); FIT fills
-   the window keeping the aspect ratio. The filter (g_upscale_filter,
-   src/render/upscale.h) says how the pixels are scaled: nearest pixel,
-   bilinear, sharp bilinear (nearest by the whole factor, then linear),
-   bicubic, Lanczos or the pixel-art filters xBR, HQx and ScaleFX. Older
+   the window keeping the aspect ratio. The filter (g_upscale_filter) says
+   how the GPU scales the pixels (src/platform/sdl/sdl_gl.inc): nearest
+   pixel, bilinear, sharp bilinear (nearest by the whole factor, then
+   linear), bicubic, Lanczos or the pixel-art filters xBR, HQx and ScaleFX.
+   Without OpenGL only nearest and bilinear exist. Older
    video.cfg files stored "scale" 2 (fill, smooth) and 3 (fill, sharp
    bilinear); load_video_settings maps them to FIT plus a filter. */
 enum { SCALE_INTEGER, SCALE_FIT, SCALE_MODE_COUNT };
 static int g_scale_mode = SCALE_FIT;
-static int g_upscale_filter = UPSCALE_SHARP_BILINEAR;
+enum { FILTER_NEAREST, FILTER_BILINEAR, FILTER_SHARP_BILINEAR, FILTER_BICUBIC,
+       FILTER_LANCZOS, FILTER_XBR, FILTER_HQX, FILTER_SCALEFX, FILTER_COUNT };
+static int g_upscale_filter = FILTER_SHARP_BILINEAR;
 /* Options panel and window menu names, in UpscaleFilter order. */
-static const char *const g_upscale_filter_labels[UPSCALE_FILTER_COUNT] = {
+static const char *const g_upscale_filter_labels[FILTER_COUNT] = {
     "Aucun (pixels nets)", "Bilineaire", "Bilineaire net", "Bicubique",
     "Lanczos", "xBR", "HQx", "ScaleFX"
 };
@@ -40,7 +43,7 @@ typedef struct RemakeSetting {
 
 static const RemakeSetting g_remake_settings[] = {
     {"scale", &g_scale_mode, 0, 3},
-    {"filter", &g_upscale_filter, 0, UPSCALE_FILTER_COUNT - 1},
+    {"filter", &g_upscale_filter, 0, FILTER_COUNT - 1},
     {"loadpaused", &g_load_starts_paused, 0, 1},
     {"clipall", &g_clip_all_training, 0, 1},
     {"smoothscroll", &g_smooth_scroll, 0, 1},
@@ -101,45 +104,15 @@ static void load_video_settings(void)
     (void)fclose(file);
     /* Older scale modes: 2 fill smooth, 3 fill sharp bilinear. */
     if (g_scale_mode >= SCALE_MODE_COUNT) {
-        g_upscale_filter = g_scale_mode == 2 ? UPSCALE_BILINEAR : UPSCALE_SHARP_BILINEAR;
+        g_upscale_filter = g_scale_mode == 2 ? FILTER_BILINEAR : FILTER_SHARP_BILINEAR;
         g_scale_mode = SCALE_FIT;
     }
 }
 
-/* Scales the 640x480 back buffer into a w x h destination with the chosen
-   filter, split over the platform worker threads. */
-static UpscaleContext *g_upscaler;
-typedef struct UpscaleJob {
-    const uint32_t *source;
-    uint32_t *destination;
-    int destination_stride;
-    int pass;
-} UpscaleJob;
-
-static void upscale_pass_job(void *context, int y0, int y1)
-{
-    const UpscaleJob *job = (const UpscaleJob *)context;
-    upscale_run_pass(g_upscaler, job->pass, job->source, LOGICAL_WIDTH,
-                     job->destination, job->destination_stride, y0, y1);
-}
-
-static int present_upscale(const uint32_t *source, uint32_t *destination,
-                           int destination_stride, int width, int height)
-{
-    UpscaleJob job;
-    if (g_upscaler == NULL) g_upscaler = upscale_create();
-    if (g_upscaler == NULL ||
-        !upscale_prepare(g_upscaler, (UpscaleFilter)g_upscale_filter, LOGICAL_WIDTH,
-                         LOGICAL_HEIGHT, width, height)) return 0;
-    job.source = source;
-    job.destination = destination;
-    job.destination_stride = destination_stride;
-    /* Each pass finishes on every thread before the next one starts. */
-    for (job.pass = 0; job.pass < upscale_pass_count(g_upscaler); ++job.pass)
-        platform_parallel_rows(upscale_pass_job, &job,
-                               upscale_pass_rows(g_upscaler, job.pass));
-    return 1;
-}
+/* sdl_app.inc: whether the filter can run here (OpenGL and its shaders). */
+static int filter_available(int filter);
+/* sdl_app.inc: whether the frame is drawn through OpenGL. */
+static int gl_is_ready(void);
 
 static int logical_viewport(int client_width, int client_height, RECT *viewport)
 {
