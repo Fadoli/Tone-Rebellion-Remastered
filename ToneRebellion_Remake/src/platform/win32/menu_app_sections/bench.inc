@@ -360,8 +360,8 @@ static int bench_dump_set(HWND window, const char *directory)
    --bench-seconds S (default 10): the 20 Hz game frame (run_ui_frame) when
    the frame clock is due, a paint (render_back_buffer with the blending of
    render_interp.inc, then sdl_present) on every game frame and whenever the
-   paint clock is due in between, polled at twice the rate like
-   SDL_AppIterate. --bench-filter N picks the scaling filter, --bench-gpu-sync
+   paint clock is due in between, waiting for the next deadline like
+   SDL_AppIterate (ui_wait_for_next_deadline). --bench-filter N picks the scaling filter, --bench-gpu-sync
    waits for the GPU after each present (glFinish), so present then includes
    the GPU's work. Reports achieved rates, per-phase times and the process's
    CPU time as a share of one core. */
@@ -414,7 +414,6 @@ static int bench_rate_run(HWND window, const char *command_line)
     int bench_screen;
     int64_t start, end, last_paint = 0;
     double cpu_start, cpu_end;
-    uint64_t poll_ns;
     RECT client;
     HDC screen;
     FILE *file;
@@ -447,14 +446,17 @@ static int bench_rate_run(HWND window, const char *command_line)
     gap.samples = (double *)calloc(CAPACITY, sizeof(double));
     if (!sim.samples || !render.samples || !present.samples || !paint.samples ||
         !gap.samples) return 1;
-    poll_ns = 1000000000ULL / (2U * (rate > 50U ? rate : 50U));
 
     cpu_start = tone_process_cpu_seconds();
     start = bench_now();
     end = start + (int64_t)seconds * (int64_t)platform_counter_frequency();
     while (bench_now() < end && g_menu.screen == bench_screen) {
-        unsigned due = frame_clock_due();
-        int paint_now = due != 0U;
+        unsigned due;
+        int paint_now;
+        /* The game's own pacing (SDL_AppIterate): sleep to the deadline. */
+        ui_wait_for_next_deadline(window);
+        due = frame_clock_due();
+        paint_now = due != 0U;
         bench_pump_messages();
         while (due-- != 0U) {
             int64_t t0 = bench_now();
@@ -479,7 +481,6 @@ static int bench_rate_run(HWND window, const char *command_line)
             last_paint = t0;
             ++paints;
         }
-        SDL_DelayPrecise(poll_ns);
     }
     {
         double wall = bench_seconds(bench_now() - start);

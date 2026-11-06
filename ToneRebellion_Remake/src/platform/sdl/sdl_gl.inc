@@ -462,8 +462,9 @@ static int gl_init(SDL_Window *window)
     GL_FUNCS(GL_LOAD_FUNC)
 #undef GL_LOAD_FUNC
 #endif
-    /* Presentation is paced by the game's own clock (render_interp.inc). */
-    (void)SDL_GL_SetSwapInterval(0);
+    /* Presentation is paced by the game's own clocks; vsync (setting)
+       additionally waits for the monitor's refresh at each swap. */
+    (void)SDL_GL_SetSwapInterval(g_vsync ? 1 : 0);
     GLX(glGenVertexArrays)(1, &g_gl_vertex_array);
     GLX(glBindVertexArray)(g_gl_vertex_array);
     GLX(glGenBuffers)(1, &g_gl_vertex_buffer);

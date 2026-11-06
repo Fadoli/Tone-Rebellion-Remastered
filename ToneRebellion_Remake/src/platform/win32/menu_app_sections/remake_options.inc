@@ -9,6 +9,7 @@ enum {
     OPTION_PAINT_RATE,
     OPTION_SCALE,
     OPTION_FILTER,
+    OPTION_VSYNC,
     OPTION_GAME_SPEED,
     OPTION_MUSIC,
     OPTION_SOUND,
@@ -51,6 +52,7 @@ static const char *const g_option_labels[OPTION_COUNT] = {
     "Frequence d'affichage",
     "Mise a l'echelle",
     "Filtre d'agrandissement",
+    "Synchro verticale",
     "Vitesse du jeu",
     "Musique",
     "Effets sonores",
@@ -102,6 +104,10 @@ static void options_value_text(int row, char *text, size_t capacity)
         break;
     case OPTION_FILTER:
         (void)snprintf(text, capacity, "%s", g_upscale_filter_labels[g_upscale_filter]);
+        break;
+    case OPTION_VSYNC:
+        (void)snprintf(text, capacity, "%s", !gl_is_ready() ? "Non (OpenGL requis)"
+                       : g_vsync ? "Oui" : "Non");
         break;
     case OPTION_GAME_SPEED:
         (void)snprintf(text, capacity, "%d", options_game_speed());
@@ -173,6 +179,12 @@ static void options_change(HWND window, int row, int step)
         }
         set_upscale_filter(window, filter);
     }
+        break;
+    case OPTION_VSYNC:
+        if (gl_is_ready()) {
+            options_flip(&g_vsync);
+            (void)SDL_GL_SetSwapInterval(g_vsync ? 1 : 0);
+        }
         break;
     case OPTION_GAME_SPEED: {
         int32_t speed = (options_game_speed() - 1 + step + 3) % 3 + 1;

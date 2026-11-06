@@ -250,19 +250,43 @@ static int run_world_sequence_step(HWND window)
    1 ms resolution now polls this high-resolution clock, which releases
    one frame per elapsed 50 ms; a late timer runs the missed frames (at
    most four, then the clock resynchronises). */
+static uint64_t g_frame_clock_next;
+
 static unsigned frame_clock_due(void)
 {
-    static uint64_t next;
     uint64_t period = platform_counter_frequency() / 20U;
     uint64_t now = platform_counter();
     unsigned due = 0;
-    if (next == 0) next = now;
-    while (now >= next && due < 4U) {
-        next += period;
+    if (g_frame_clock_next == 0) g_frame_clock_next = now;
+    while (now >= g_frame_clock_next && due < 4U) {
+        g_frame_clock_next += period;
         ++due;
     }
-    if (now >= next) next = now + period;
+    if (now >= g_frame_clock_next) g_frame_clock_next = now + period;
     return due;
+}
+
+/* Main-loop pacing: sleeps until the earliest deadline (the next game
+   frame, the next paint while blending, at once while the view glides),
+   at most 2 ms so input and network keep flowing. A fixed poll let each
+   paint land up to one poll late (bench/rate120.md). Not in the browser,
+   whose frame callback paces the loop. */
+static void ui_wait_for_next_deadline(HWND window)
+{
+#ifndef __EMSCRIPTEN__
+    uint64_t frequency = platform_counter_frequency();
+    uint64_t now = platform_counter();
+    uint64_t deadline = g_frame_clock_next != 0 ? g_frame_clock_next : now;
+    uint64_t limit = now + frequency / 500U;
+    if (render_interp_alpha() < 256 && g_interp_next_paint < deadline)
+        deadline = g_interp_next_paint;
+    if (ui_motion_active(window)) deadline = now;
+    if (deadline > limit) deadline = limit;
+    if (deadline > now)
+        SDL_DelayPrecise((Uint64)((deadline - now) * 1000000000ULL / frequency));
+#else
+    (void)window;
+#endif
 }
 
 static void set_scale_mode(HWND window, int mode)

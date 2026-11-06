@@ -1,5 +1,7 @@
 # Frame cost at a 120 Hz display rate (2026-11-06)
 
+The first two tables are the polled loop; the last section is after the pacing fix.
+
 ## Harness
 
 `ToneRebellion_Remake.exe --bench --bench-rate 120` (`src/platform/win32/menu_app_sections/bench.inc`,
@@ -95,3 +97,48 @@ Rate 120 Hz, 8 s per run, glFinish after each present.
   (`SDL_HINT_MAIN_CALLBACK_RATE` 240), so each one can land up to one poll late, and the swap
   has no vsync (`SDL_GL_SetSwapInterval(0)`), so a late paint can also tear. Sleeping until the
   next due paint (and an optional vsync matched to the monitor) would even this out.
+
+## After the pacing fix
+
+`ui_wait_for_next_deadline` (`window_proc.inc`) now sleeps (`SDL_DelayPrecise`) until the
+earliest deadline: the next game frame, the next paint while blending, or at once while the view
+glides, at most 2 ms so input and network keep flowing; SDL only caps the loop at 1000
+iterations/s. The bench loop uses the same function. A vsync setting (remake options,
+`video.cfg` `vsync`) can also make the swap wait for the monitor; off by default and not
+measured here.
+
+Rate 120 Hz, 6 s per run.
+
+| client | scenario | filter | paints/s | game frames/s | CPU % of one core | sim ms (mean) | render ms (mean / p95) | present ms (mean / p95) | paint interval ms (p95 / max) |
+|---|---|---|---|---|---|---|---|---|---|
+| 1280x960 | idle | nearest | 120.15 | 20.16 | 9.63 | 0.03 | 0.40 / 0.67 | 0.20 / 0.43 | 8.99 / 13.93 |
+| 1280x960 | idle | sharp bilinear | 120.16 | 20.16 | 4.69 | 0.02 | 0.36 / 0.41 | 0.19 / 0.42 | 8.95 / 14.37 |
+| 1280x960 | idle | Lanczos 3 | 120.15 | 20.16 | 5.99 | 0.02 | 0.36 / 0.42 | 0.19 / 0.42 | 8.91 / 14.63 |
+| 1280x960 | idle | xBR | 120.15 | 20.16 | 5.99 | 0.02 | 0.36 / 0.41 | 0.19 / 0.43 | 8.98 / 14.16 |
+| 1280x960 | idle | HQx | 120.16 | 20.16 | 9.89 | 0.02 | 0.35 / 0.40 | 0.20 / 0.47 | 8.97 / 13.65 |
+| 1280x960 | idle | ScaleFX | 119.99 | 20.16 | 8.33 | 0.02 | 0.36 / 0.42 | 0.21 / 0.44 | 8.97 / 19.37 |
+| 1280x960 | battle | nearest | 120.14 | 20.16 | 7.81 | 0.03 | 0.51 / 0.58 | 0.18 / 0.41 | 9.01 / 13.96 |
+| 1280x960 | battle | sharp bilinear | 120.15 | 20.16 | 5.99 | 0.03 | 0.52 / 0.59 | 0.18 / 0.41 | 9.02 / 14.08 |
+| 1280x960 | battle | Lanczos 3 | 120.14 | 20.16 | 9.89 | 0.03 | 0.51 / 0.58 | 0.19 / 0.43 | 9.00 / 13.41 |
+| 1280x960 | battle | xBR | 120.14 | 20.16 | 9.37 | 0.03 | 0.56 / 0.79 | 0.22 / 0.44 | 9.01 / 14.02 |
+| 1280x960 | battle | HQx | 120.15 | 20.16 | 11.20 | 0.03 | 0.52 / 0.59 | 0.21 / 0.42 | 9.01 / 14.15 |
+| 1280x960 | battle | ScaleFX | 119.97 | 20.16 | 15.62 | 0.03 | 0.51 / 0.58 | 0.21 / 0.44 | 9.01 / 18.38 |
+| 1024x768 | idle | nearest | 120.14 | 20.16 | 7.81 | 0.02 | 0.36 / 0.40 | 0.20 / 0.44 | 8.98 / 12.21 |
+| 1024x768 | idle | sharp bilinear | 120.15 | 20.16 | 8.59 | 0.02 | 0.36 / 0.41 | 0.18 / 0.42 | 8.98 / 12.34 |
+| 1024x768 | idle | Lanczos 3 | 120.15 | 20.16 | 6.77 | 0.02 | 0.35 / 0.41 | 0.19 / 0.43 | 8.91 / 13.50 |
+| 1024x768 | idle | xBR | 120.14 | 20.16 | 8.59 | 0.02 | 0.36 / 0.42 | 0.18 / 0.42 | 8.96 / 12.82 |
+| 1024x768 | idle | HQx | 120.15 | 20.16 | 9.11 | 0.02 | 0.35 / 0.42 | 0.21 / 0.44 | 9.01 / 12.29 |
+| 1024x768 | idle | ScaleFX | 119.99 | 20.16 | 8.33 | 0.02 | 0.36 / 0.42 | 0.21 / 0.44 | 8.95 / 17.42 |
+| 1024x768 | battle | nearest | 120.15 | 20.16 | 12.50 | 0.04 | 0.55 / 0.89 | 0.19 / 0.43 | 9.00 / 11.92 |
+| 1024x768 | battle | sharp bilinear | 120.15 | 20.16 | 13.28 | 0.03 | 0.51 / 0.58 | 0.19 / 0.42 | 9.02 / 12.26 |
+| 1024x768 | battle | Lanczos 3 | 120.15 | 20.16 | 11.98 | 0.03 | 0.53 / 0.60 | 0.18 / 0.42 | 9.02 / 13.32 |
+| 1024x768 | battle | xBR | 120.14 | 20.16 | 9.63 | 0.03 | 0.51 / 0.57 | 0.18 / 0.41 | 9.01 / 11.87 |
+| 1024x768 | battle | HQx | 120.15 | 20.16 | 7.29 | 0.03 | 0.52 / 0.57 | 0.20 / 0.43 | 9.00 / 13.30 |
+| 1024x768 | battle | ScaleFX | 119.99 | 20.16 | 9.11 | 0.03 | 0.52 / 0.59 | 0.20 / 0.43 | 9.02 / 17.47 |
+
+- Every case is at 120 paints/s; the paint interval p95 went from 9.2-9.6 ms to about 9.0 ms
+  (mean 8.33 ms) and the worst gap from 16-30 ms to 12-19 ms.
+- CPU fell to about 5-13 % of one core (the loop sleeps instead of polling at 240/s).
+- What is left: about 0.7 ms of jitter around 8.33 ms, and rare 12-19 ms gaps (largest with
+  ScaleFX, the heaviest GPU filter), outside the loop's control without vsync.
+

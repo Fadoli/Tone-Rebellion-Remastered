@@ -34,6 +34,8 @@ static int g_shortcuts_enabled = 1;
 static int g_quicksave_enabled = 1;
 /* Minutes between autosaves; 0 = off. */
 static int g_autosave_minutes = 5;
+/* OpenGL only: swaps wait for the monitor's refresh. */
+static int g_vsync;
 
 typedef struct RemakeSetting {
     const char *key;
@@ -51,7 +53,8 @@ static const RemakeSetting g_remake_settings[] = {
     {"alerts", &g_event_alerts, 0, 1},
     {"shortcuts", &g_shortcuts_enabled, 0, 1},
     {"quicksave", &g_quicksave_enabled, 0, 1},
-    {"autosave", &g_autosave_minutes, 0, 60}
+    {"autosave", &g_autosave_minutes, 0, 60},
+    {"vsync", &g_vsync, 0, 1}
 };
 enum { REMAKE_SETTING_COUNT = sizeof(g_remake_settings) / sizeof(g_remake_settings[0]) };
 
