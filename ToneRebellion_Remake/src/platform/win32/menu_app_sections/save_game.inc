@@ -393,7 +393,7 @@ static int net_host_pick_save(const char *path, int native)
     unsigned char *bytes = read_whole_file(path, &length);
     unsigned tribe;
     if (bytes == NULL) {
-        net_set_status("Sauvegarde illisible");
+        net_set_status(TR(T_NET_SAVE_UNREADABLE));
         return 0;
     }
     if (g_net_in_game) {
@@ -411,7 +411,7 @@ static int net_host_pick_save(const char *path, int native)
     g_net_save_native = native ? 1U : 0U;
     if (!net_load_apply()) {
         net_save_clear();
-        net_set_status("Sauvegarde illisible");
+        net_set_status(TR(T_NET_SAVE_UNREADABLE));
         return 0;
     }
     g_net_save_ready = 1;
@@ -424,7 +424,7 @@ static int net_host_pick_save(const char *path, int native)
         (void)net_lobby_set_tribe(&g_net_lobby, 0, (uint8_t)tribe);
     }
     net_host_broadcast_state();
-    net_set_status("Partie chargee : envoi aux joueurs...");
+    net_set_status(TR(T_NET_SAVE_SENDING));
     return 1;
 }
 

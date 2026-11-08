@@ -533,7 +533,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             RECT panel_client;
             RECT panel_viewport;
             platform_client_rect(window, &panel_client);
-            if (g_options_open && !options_screen()) g_options_open = 0;
+            if (g_options_open && !options_panel_screen()) g_options_open = 0;
             if (g_options_open) {
                 int px = -1, py = -1;
                 if (logical_viewport(panel_client.right - panel_client.left,
@@ -750,7 +750,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         if (g_menu.screen == SCREEN_LOGO) return 0;
         /* Remake options: F2 opens or closes them; while open they take
            every key. */
-        if (wparam == VK_F2 && !g_options_open && options_screen()) {
+        if (wparam == VK_F2 && !g_options_open && options_panel_screen()) {
             options_toggle();
             platform_invalidate(window);
             return 0;
@@ -1068,7 +1068,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             }
             platform_invalidate(window);
         } else if (g_menu.screen == SCREEN_MAIN_MENU && wparam == 'M') {
-            enter_net_setup_screen();
+            net_setup_open();
             g_net_setup_swallow_char = 1;
             platform_invalidate(window);
         } else if (g_menu.screen == SCREEN_MAIN_MENU && wparam == 'L') {
@@ -1125,7 +1125,11 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             platform_invalidate(window);
         return 0;
     case WM_KEYUP:
-        if (wparam == 'M') g_net_setup_swallow_char = 0;
+        if (wparam == 'M' && g_net_setup_swallow_char) {
+            /* The text event can trail the key release a little. */
+            g_net_setup_swallow_char = 0;
+            g_net_setup_swallow_until = platform_ticks_ms() + 100U;
+        }
         return 0;
     case WM_NET_SOCKET:
         if (net_poll(window)) platform_invalidate(window);

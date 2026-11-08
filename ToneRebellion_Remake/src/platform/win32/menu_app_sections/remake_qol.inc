@@ -116,42 +116,42 @@ typedef enum ShortcutCheck {
 
 typedef struct ShortcutAction {
     const char *name;        /* windows.txt control, also the keys.cfg key */
-    const char *label;       /* options panel */
+    RemakeTextId label;      /* options panel (T_SC_SPELL: + spell number) */
     ShortcutCheck check;
     int arg;
     int default_key;
 } ShortcutAction;
 
 static const ShortcutAction g_shortcut_actions[] = {
-    {"GOTOMAP", "Carte du monde", SHORTCUT_ISLAND_BUTTON, WINDOW_ISLAND_BUTTON_MAP, 'M'},
-    {"PANIC", "Panique", SHORTCUT_ISLAND_BUTTON, WINDOW_ISLAND_BUTTON_PANIC, 'P'},
-    {"TOGREALM", "Royaumes", SHORTCUT_ISLAND_BUTTON, WINDOW_ISLAND_BUTTON_REALM, 'R'},
-    {"TASKLIST", "Taches", SHORTCUT_ISLAND_BUTTON, WINDOW_ISLAND_BUTTON_TASKS, 'T'},
-    {"BC_GenInfo", "Hall: general", SHORTCUT_HALL_COMMAND, WINDOW_ISLAND_PANEL_GENERAL, 'G'},
-    {"BC_Storage", "Hall: inventaire", SHORTCUT_HALL_COMMAND, WINDOW_ISLAND_PANEL_INVENTORY, 'I'},
-    {"BC_Knowledge", "Hall: glyphes", SHORTCUT_HALL_COMMAND, WINDOW_ISLAND_PANEL_GLYPHS, 'K'},
-    {"BC_Trade", "Hall: commerce", SHORTCUT_HALL_COMMAND, WINDOW_ISLAND_PANEL_TRADE, 'B'},
-    {"BC_Diplomacy", "Hall: diplomatie", SHORTCUT_HALL_COMMAND, WINDOW_ISLAND_PANEL_DIPLOMACY, 'D'},
-    {"IWMove", "Deplacer", SHORTCUT_LOCATION_MOVE, 0, 'V'},
-    {"IWHallMove", "Deplacer le Hall", SHORTCUT_LOCATION_MOVE, 0, 'V'},
-    {"BC_OnOff", "Marche/arret", SHORTCUT_ONOFF, 0, 'O'},
-    {"BC_Upgrade", "Ameliorer", SHORTCUT_UPGRADE, 0, 'U'},
-    {"BC_UpgSpread", "Propager l'amelioration", SHORTCUT_UPGSPREAD, 0, 'U'},
-    {"BC_Repair", "Reparer", SHORTCUT_REPAIR, 0, 'F'},
-    {"BC_Obtain", "Obtenir", SHORTCUT_OBTAIN, 0, 'L'},
-    {"BC_AttackFlt", "Attaquer une unite", SHORTCUT_ORDER, 0, 'A'},
-    {"BC_AttackLoc", "Attaquer un site", SHORTCUT_ORDER, 1, 'S'},
-    {"BC_DefendFlt", "Defendre une unite", SHORTCUT_ORDER, 2, 'Z'},
-    {"BC_DefendArea", "Defendre une zone", SHORTCUT_ORDER, 3, 'X'},
-    {"BC_Recall", "Rappeler", SHORTCUT_ORDER, 4, 'Q'},
-    {"BC_Spell1", "Sort 1", SHORTCUT_SPELL, 0, '1'},
-    {"BC_Spell2", "Sort 2", SHORTCUT_SPELL, 1, '2'},
-    {"BC_Spell3", "Sort 3", SHORTCUT_SPELL, 2, '3'},
-    {"BC_Spell4", "Sort 4", SHORTCUT_SPELL, 3, '4'},
-    {"BC_Spell5", "Sort 5", SHORTCUT_SPELL, 4, '5'},
-    {"BC_Spell6", "Sort 6", SHORTCUT_SPELL, 5, '6'},
-    {"BC_Spell7", "Sort 7", SHORTCUT_SPELL, 6, '7'},
-    {"BC_Spell8", "Sort 8", SHORTCUT_SPELL, 7, 0}
+    {"GOTOMAP", T_SC_MAP, SHORTCUT_ISLAND_BUTTON, WINDOW_ISLAND_BUTTON_MAP, 'M'},
+    {"PANIC", T_SC_PANIC, SHORTCUT_ISLAND_BUTTON, WINDOW_ISLAND_BUTTON_PANIC, 'P'},
+    {"TOGREALM", T_SC_REALMS, SHORTCUT_ISLAND_BUTTON, WINDOW_ISLAND_BUTTON_REALM, 'R'},
+    {"TASKLIST", T_SC_TASKS, SHORTCUT_ISLAND_BUTTON, WINDOW_ISLAND_BUTTON_TASKS, 'T'},
+    {"BC_GenInfo", T_SC_HALL_GENERAL, SHORTCUT_HALL_COMMAND, WINDOW_ISLAND_PANEL_GENERAL, 'G'},
+    {"BC_Storage", T_SC_HALL_INVENTORY, SHORTCUT_HALL_COMMAND, WINDOW_ISLAND_PANEL_INVENTORY, 'I'},
+    {"BC_Knowledge", T_SC_HALL_GLYPHS, SHORTCUT_HALL_COMMAND, WINDOW_ISLAND_PANEL_GLYPHS, 'K'},
+    {"BC_Trade", T_SC_HALL_TRADE, SHORTCUT_HALL_COMMAND, WINDOW_ISLAND_PANEL_TRADE, 'B'},
+    {"BC_Diplomacy", T_SC_HALL_DIPLOMACY, SHORTCUT_HALL_COMMAND, WINDOW_ISLAND_PANEL_DIPLOMACY, 'D'},
+    {"IWMove", T_SC_MOVE, SHORTCUT_LOCATION_MOVE, 0, 'V'},
+    {"IWHallMove", T_SC_MOVE_HALL, SHORTCUT_LOCATION_MOVE, 0, 'V'},
+    {"BC_OnOff", T_SC_ONOFF, SHORTCUT_ONOFF, 0, 'O'},
+    {"BC_Upgrade", T_SC_UPGRADE, SHORTCUT_UPGRADE, 0, 'U'},
+    {"BC_UpgSpread", T_SC_UPGSPREAD, SHORTCUT_UPGSPREAD, 0, 'U'},
+    {"BC_Repair", T_SC_REPAIR, SHORTCUT_REPAIR, 0, 'F'},
+    {"BC_Obtain", T_SC_OBTAIN, SHORTCUT_OBTAIN, 0, 'L'},
+    {"BC_AttackFlt", T_SC_ATTACK_UNIT, SHORTCUT_ORDER, 0, 'A'},
+    {"BC_AttackLoc", T_SC_ATTACK_SITE, SHORTCUT_ORDER, 1, 'S'},
+    {"BC_DefendFlt", T_SC_DEFEND_UNIT, SHORTCUT_ORDER, 2, 'Z'},
+    {"BC_DefendArea", T_SC_DEFEND_AREA, SHORTCUT_ORDER, 3, 'X'},
+    {"BC_Recall", T_SC_RECALL, SHORTCUT_ORDER, 4, 'Q'},
+    {"BC_Spell1", T_SC_SPELL, SHORTCUT_SPELL, 0, '1'},
+    {"BC_Spell2", T_SC_SPELL, SHORTCUT_SPELL, 1, '2'},
+    {"BC_Spell3", T_SC_SPELL, SHORTCUT_SPELL, 2, '3'},
+    {"BC_Spell4", T_SC_SPELL, SHORTCUT_SPELL, 3, '4'},
+    {"BC_Spell5", T_SC_SPELL, SHORTCUT_SPELL, 4, '5'},
+    {"BC_Spell6", T_SC_SPELL, SHORTCUT_SPELL, 5, '6'},
+    {"BC_Spell7", T_SC_SPELL, SHORTCUT_SPELL, 6, '7'},
+    {"BC_Spell8", T_SC_SPELL, SHORTCUT_SPELL, 7, 0}
 };
 enum { SHORTCUT_COUNT = sizeof(g_shortcut_actions) / sizeof(g_shortcut_actions[0]) };
 
@@ -213,8 +213,8 @@ static void shortcut_key_name(int key, char *text, size_t capacity)
     if (key == 0) (void)snprintf(text, capacity, "-");
     else if ((key >= 'A' && key <= 'Z') || (key >= '0' && key <= '9'))
         (void)snprintf(text, capacity, "%c", key);
-    else if (key == VK_SPACE) (void)snprintf(text, capacity, "Espace");
-    else if (key == VK_TAB) (void)snprintf(text, capacity, "Tab");
+    else if (key == VK_SPACE) (void)snprintf(text, capacity, "%s", TR(T_KEY_SPACE));
+    else if (key == VK_TAB) (void)snprintf(text, capacity, "%s", TR(T_KEY_TAB));
     else (void)snprintf(text, capacity, "#%d", key);
 }
 
@@ -392,25 +392,28 @@ static void render_shortcut_page(RenderSurface *surface)
     const COLORREF accent = RGB(255, 210, 120);
     int hover = g_mouse_inside ? shortcut_page_row_at(g_mouse_x, g_mouse_y) : -1;
     int line;
-    const char *help = g_shortcut_waiting
-        ? "Appuyez sur la touche (Suppr: aucune, Echap: annuler)"
-        : "Entree: changer   Suppr: effacer   Echap: retour";
+    const char *help = TR(g_shortcut_waiting ? T_SC_WAITING_HELP : T_SC_HELP);
     if (!g_shortcut_keys_loaded) load_shortcut_keys();
     for (line = 0; line < SHORTCUT_PAGE_ROWS; ++line) {
         int row = g_shortcut_first + line;
         int y = OPTIONS_ROW_TOP + line * OPTIONS_ROW_HEIGHT;
         char key[16];
+        char label[64];
         if (row > SHORTCUT_COUNT) break;
         if (row == g_shortcut_row || row == hover)
             fill_rect(surface, OPTIONS_LEFT + 10, y - 2,
                       OPTIONS_LEFT + OPTIONS_WIDTH - 10, y + OPTIONS_ROW_HEIGHT - 4,
                       row == g_shortcut_row ? RGB(60, 34, 44) : RGB(38, 24, 32));
         if (row == SHORTCUT_COUNT) {
-            options_label(surface, "Retablir les touches par defaut", OPTIONS_LEFT + 20,
+            options_label(surface, TR(T_SC_RESET), OPTIONS_LEFT + 20,
                           y + 3, row == g_shortcut_row ? accent : text);
             continue;
         }
-        options_label(surface, g_shortcut_actions[row].label, OPTIONS_LEFT + 20, y + 3,
+        if (g_shortcut_actions[row].label == T_SC_SPELL)
+            (void)snprintf(label, sizeof(label), TR(T_SC_SPELL), g_shortcut_actions[row].arg + 1);
+        else
+            (void)snprintf(label, sizeof(label), "%s", TR(g_shortcut_actions[row].label));
+        options_label(surface, label, OPTIONS_LEFT + 20, y + 3,
                       row == g_shortcut_row ? accent : text);
         if (g_shortcut_waiting && row == g_shortcut_row)
             (void)snprintf(key, sizeof(key), "...");
@@ -534,13 +537,13 @@ static void alerts_observe(void)
             if (g_alert_primed && g_event_alerts) {
                 if (g_alert_site_owner[island][location] == (int8_t)tribe && !mine &&
                     site->move_fade_item_10 == 0) {
-                    (void)snprintf(text, sizeof(text), "Batiment perdu: %s",
+                    (void)snprintf(text, sizeof(text), TR(T_ALERT_BUILDING_LOST),
                                    alert_island_name((int)island));
                     alert_push(text, (int)island, site->x);
                 } else if (mine && site->source_value_34 >= 0 &&
                            site->source_value_34 < g_alert_site_hp[island][location] &&
                            alert_cooldown(&g_alert_attack_ms[island], now)) {
-                    (void)snprintf(text, sizeof(text), "Attaque sur %s",
+                    (void)snprintf(text, sizeof(text), TR(T_ALERT_ATTACK),
                                    alert_island_name((int)island));
                     alert_push(text, (int)island, site->x);
                 }
@@ -557,13 +560,13 @@ static void alerts_observe(void)
             if (f->owner_slot == (uint8_t)tribe && g_alert_floater_live[i] &&
                 f->current_hit_points < g_alert_floater_hp[i] &&
                 alert_cooldown(&g_alert_attack_ms[f->island_index], now)) {
-                (void)snprintf(text, sizeof(text), "Attaque sur %s",
+                (void)snprintf(text, sizeof(text), TR(T_ALERT_ATTACK),
                                alert_island_name(f->island_index));
                 alert_push(text, f->island_index, f->x);
             } else if (f->type_index == 4 && !g_alert_floater_live[i] &&
                        (present & (1U << f->island_index)) != 0 &&
                        alert_cooldown(&g_alert_leviathan_ms[f->island_index], now)) {
-                (void)snprintf(text, sizeof(text), "Le Leviathan se renforce sur %s",
+                (void)snprintf(text, sizeof(text), TR(T_ALERT_LEVIATHAN),
                                alert_island_name(f->island_index));
                 alert_push(text, f->island_index, f->x);
             }
@@ -605,7 +608,7 @@ static void render_alerts(RenderSurface *surface)
         if (alert->since_ms == 0 || now - alert->since_ms >= ALERT_SHOW_MS ||
             (!g_event_alerts && !alert->notice)) continue;
         (void)snprintf(line, sizeof(line), "%s%s", alert->text,
-                       n == 0 && alert->island >= 0 ? "  (Espace: y aller)" : "");
+                       n == 0 && alert->island >= 0 ? TR(T_ALERT_GO_SUFFIX) : "");
         width = options_text_width(line);
         fill_rect(surface, LOGICAL_WIDTH - width - 16, y - 3, LOGICAL_WIDTH - 4, y + 16,
                   RGB(24, 12, 20));
@@ -642,8 +645,8 @@ static void quick_save(void)
     if (!g_game_session_valid || !options_screen()) return;
     remake_notice(remake_save_path("quick.sav", path, sizeof(path)) &&
                   write_save_file(path)
-                  ? "Sauvegarde rapide faite (F9 pour la charger)"
-                  : "Sauvegarde rapide impossible");
+                  ? TR(T_QUICKSAVE_DONE)
+                  : TR(T_QUICKSAVE_FAILED));
 }
 
 static void quick_load(HWND window, int automatic)
@@ -651,23 +654,23 @@ static void quick_load(HWND window, int automatic)
     char path[MAX_PATH];
     FILE *file;
     if (g_net_in_game) {
-        remake_notice("Chargement rapide indisponible en reseau");
+        remake_notice(TR(T_QUICKLOAD_NETWORK));
         return;
     }
     if (!remake_save_path(automatic ? "auto.sav" : "quick.sav", path, sizeof(path)) ||
         (file = fopen(path, "rb")) == NULL) {
-        remake_notice(automatic ? "Pas de sauvegarde automatique"
-                                : "Pas de sauvegarde rapide (F5)");
+        remake_notice(automatic ? TR(T_NO_AUTOSAVE)
+                                : TR(T_NO_QUICKSAVE));
         return;
     }
     (void)fclose(file);
     if (read_save_file(window, path)) {
         slide_panel_open_paused();
         alerts_reset();
-        remake_notice(automatic ? "Sauvegarde automatique chargee"
-                                : "Sauvegarde rapide chargee");
+        remake_notice(automatic ? TR(T_AUTOSAVE_LOADED)
+                                : TR(T_QUICKSAVE_LOADED));
     } else {
-        remake_notice("Chargement impossible");
+        remake_notice(TR(T_LOAD_FAILED));
     }
 }
 
@@ -690,6 +693,6 @@ static void autosave_tick(void)
         char path[MAX_PATH];
         played = 0;
         if (remake_save_path("auto.sav", path, sizeof(path)) && write_save_file(path))
-            remake_notice("Sauvegarde automatique (Maj+F9 pour la charger)");
+            remake_notice(TR(T_AUTOSAVE_DONE));
     }
 }

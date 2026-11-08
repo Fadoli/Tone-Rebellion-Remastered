@@ -17,11 +17,51 @@ static int g_scale_mode = SCALE_FIT;
 enum { FILTER_NEAREST, FILTER_BILINEAR, FILTER_SHARP_BILINEAR, FILTER_BICUBIC,
        FILTER_LANCZOS, FILTER_XBR, FILTER_HQX, FILTER_SCALEFX, FILTER_COUNT };
 static int g_upscale_filter = FILTER_SHARP_BILINEAR;
-/* Options panel and window menu names, in UpscaleFilter order. */
+/* Filter names in UpscaleFilter order (bench output; the options panel uses
+   upscale_filter_label, translated). */
 static const char *const g_upscale_filter_labels[FILTER_COUNT] = {
-    "Aucun (pixels nets)", "Bilineaire", "Bilineaire net", "Bicubique",
+    "None", "Bilinear", "Sharp bilinear", "Bicubic",
     "Lanczos", "xBR", "HQx", "ScaleFX"
 };
+
+static const char *upscale_filter_label(int filter)
+{
+    static const RemakeTextId translated[4] = {
+        T_FILTER_NONE, T_FILTER_BILINEAR, T_FILTER_SHARP_BILINEAR, T_FILTER_BICUBIC};
+    if (filter >= 0 && filter < 4) return TR(translated[filter]);
+    return filter >= 0 && filter < FILTER_COUNT ? g_upscale_filter_labels[filter] : "?";
+}
+
+/* Language of the remake's own texts (remake_text.def): -1 follows the
+   system language, else a RemakeLanguage. Saved in video.cfg ("lang"). */
+static int g_language_setting = -1;
+static int g_detected_language = -1;
+
+/* First system language the remake has; English when none matches. */
+static int detected_language(void)
+{
+    if (g_detected_language < 0) {
+        int count = 0;
+        int i;
+        SDL_Locale **locales = SDL_GetPreferredLocales(&count);
+        g_detected_language = REMAKE_LANG_EN;
+        for (i = 0; locales != NULL && i < count; ++i) {
+            const int language = remake_lang_from_code(locales[i]->language);
+            if (language >= 0) {
+                g_detected_language = language;
+                break;
+            }
+        }
+        SDL_free(locales);
+    }
+    return g_detected_language;
+}
+
+static void apply_language(void)
+{
+    remake_text_set_language(g_language_setting >= 0 ? g_language_setting
+                                                     : detected_language());
+}
 
 /* Remake settings (remake_options.inc edits them), saved in video.cfg as
    "key value" lines in any order; unknown keys are ignored. */
@@ -57,7 +97,8 @@ static const RemakeSetting g_remake_settings[] = {
     {"shortcuts", &g_shortcuts_enabled, 0, 1},
     {"quicksave", &g_quicksave_enabled, 0, 1},
     {"autosave", &g_autosave_minutes, 0, 60},
-    {"vsync", &g_vsync, 0, 1}
+    {"vsync", &g_vsync, 0, 1},
+    {"lang", &g_language_setting, -1, REMAKE_LANG_COUNT - 1}
 };
 enum { REMAKE_SETTING_COUNT = sizeof(g_remake_settings) / sizeof(g_remake_settings[0]) };
 
@@ -91,6 +132,7 @@ static void load_video_settings(void)
     char key[32];
     int value;
     FILE *file;
+    apply_language(); /* the system language until the file says otherwise */
     if (!video_settings_path(path, sizeof(path))) return;
     file = fopen(path, "r");
     if (file == NULL) return;
@@ -108,6 +150,7 @@ static void load_video_settings(void)
                 *g_remake_settings[i].value = value;
     }
     (void)fclose(file);
+    apply_language();
     /* Older scale modes: 2 fill smooth, 3 fill sharp bilinear. */
     if (g_scale_mode >= SCALE_MODE_COUNT) {
         g_upscale_filter = g_scale_mode == 2 ? FILTER_BILINEAR : FILTER_SHARP_BILINEAR;

@@ -68,6 +68,9 @@ add_library(tone_core STATIC
     src/core/floater_motion.c
     src/core/tone_rng.c
     src/core/net_lobby.c
+    src/core/net_server_list.c
+    src/core/remake_lang.c
+    src/core/remake_text.c
     src/core/game_command.c
     src/core/net_lockstep.c
 )

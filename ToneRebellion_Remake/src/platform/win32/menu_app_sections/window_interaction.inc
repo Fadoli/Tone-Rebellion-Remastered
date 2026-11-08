@@ -70,7 +70,7 @@ static void handle_click(HWND window, int x, int y)
                    g_resume_available) {
             char path[MAX_PATH];
             if (!resume_path(path, sizeof(path)) || !read_save_file(window, path))
-                platform_message_box(window, "La partie sauvegardee n'a pas pu etre reprise.",
+                platform_message_box(window, TRU(T_DLG_RESUME_FAILED),
                                      "Tone Rebellion remake", 1);
             else
                 slide_panel_open_paused();
@@ -837,7 +837,7 @@ static void handle_click(HWND window, int x, int y)
                     scan_load_slots();
                     leave_load_screen();
                 } else {
-                    platform_message_box(window, "La sauvegarde n'a pas pu etre ecrite.",
+                    platform_message_box(window, TRU(T_DLG_SAVE_FAILED),
                                          "Tone Rebellion remake", 1);
                 }
             } else if (slot >= 0 && slot < 8 && g_load_slot_valid[slot] &&
@@ -861,7 +861,7 @@ static void handle_click(HWND window, int x, int y)
                 } else {
                     char message[256];
                     (void)snprintf(message, sizeof(message),
-                                   "Cette sauvegarde du jeu d'origine n'a pas pu etre chargee: %s.",
+                                   TRU(T_DLG_ORIGINAL_SAVE_FAILED),
                                    error);
                     platform_message_box(window, message, "Tone Rebellion remake",
                                          1);
@@ -873,7 +873,7 @@ static void handle_click(HWND window, int x, int y)
                     g_load_from_game = 0;
                     slide_panel_open_paused();
                 } else {
-                    platform_message_box(window, "Cette sauvegarde n'a pas pu etre chargee.",
+                    platform_message_box(window, TRU(T_DLG_LOAD_FAILED),
                                          "Tone Rebellion remake", 1);
                 }
             } else {

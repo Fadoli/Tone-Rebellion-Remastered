@@ -275,13 +275,8 @@ static void render_intro(RenderSurface *surface)
 static void render_intro_title_button(RenderSurface *surface)
 {
     if (!INTRO_AVAILABLE) return;
-    if (!draw_remake_button(surface, g_intro_title_button.left, g_intro_title_button.top,
-                            "INTRO", NULL, g_intro_title_hover)) {
-        net_setup_draw_box(surface, &g_intro_title_button, 2, RGB(118, 178, 222),
-                           RGB(66, 92, 176), RGB(24, 30, 92), 256);
-        net_setup_draw_centred_text(surface, &g_intro_title_button, "INTRO",
-                                    RGB(222, 238, 255), RGB(30, 60, 150));
-    }
+    net_setup_draw_button(surface, &g_intro_title_button, T_BTN_INTRO, REMAKE_TEXT_COUNT,
+                          g_intro_title_hover);
 }
 
 /* Returns 1 when the hover changed. */

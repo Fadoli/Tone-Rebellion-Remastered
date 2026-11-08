@@ -31,32 +31,32 @@ static void draw_hall_info_panel(RenderSurface *surface, int panel_state)
                 .stock_mode[resource];
             const char *resource_name = g_task_category_text[resource];
             if (resource_name == NULL || resource_name[0] == '\0')
-                resource_name = "RESOURCE";
+                resource_name = TR(T_HALL_RESOURCE);
             if (mode == 2U) {
                 (void)snprintf(hover_text, sizeof(hover_text),
-                    "%s\nREAPPRO AUTO\nCLIC : CHANGER LE MODE", resource_name);
+                    TR(T_HALL_STOCK_AUTO), resource_name);
             } else {
                 (void)snprintf(hover_text, sizeof(hover_text),
-                    "%s\nMODE %u\nCLIC : CHANGER LE MODE",
+                    TR(T_HALL_STOCK_MODE),
                     resource_name, mode);
             }
             text = hover_text;
         } else {
             switch (g_hovered_hall_command) {
             case WINDOW_ISLAND_PANEL_GENERAL:
-                text = "INFORMATIONS GENERALES";
+                text = TR(T_HALL_GENERAL);
                 break;
             case WINDOW_ISLAND_PANEL_INVENTORY:
-                text = "RESERVE ET INVENTAIRE";
+                text = TR(T_HALL_STORAGE);
                 break;
             case WINDOW_ISLAND_PANEL_GLYPHS:
-                text = "GLYPHES";
+                text = TR(T_HALL_GLYPHS);
                 break;
             case WINDOW_ISLAND_PANEL_DIPLOMACY:
-                text = "DIPLOMATIE";
+                text = TR(T_HALL_DIPLOMACY);
                 break;
             case WINDOW_ISLAND_PANEL_TRADE:
-                text = "COMMERCE";
+                text = TR(T_HALL_TRADE);
                 break;
             default:
                 break;

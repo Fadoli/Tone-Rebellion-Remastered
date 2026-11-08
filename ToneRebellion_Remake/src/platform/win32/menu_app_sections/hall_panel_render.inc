@@ -387,7 +387,7 @@ static void draw_hall_panel(RenderSurface *surface, int hall_player)
                             building->maintenance_tone_cost > maintenance_budget) {
                             char warning[96];
                             (void)snprintf(warning, sizeof(warning),
-                                "Entretien insuffisant %ld/%d",
+                                TR(T_UPKEEP_LOW),
                                 (long)maintenance_budget,
                                 (int)building->maintenance_tone_cost);
                             draw_bitmap_label(surface, warning,

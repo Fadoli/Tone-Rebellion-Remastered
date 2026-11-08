@@ -241,27 +241,85 @@ static void remake_button_label(uint32_t *button, const char *label, int top, in
     }
 }
 
+/* Whether every caption of the current language can be drawn with the
+   original letters. All-or-nothing per language, so one screen never mixes
+   the baked lettering with the font. */
+static int remake_buttons_use_glyphs(void)
+{
+    static const RemakeTextId captions[] = {
+        T_BTN_CREATE1, T_BTN_CREATE2, T_BTN_JOIN1, T_BTN_JOIN2, T_BTN_BACK,
+        T_BTN_ONLINE1, T_BTN_ONLINE2, T_BTN_INTRO};
+    static int cached_language = -1;
+    static int cached;
+    size_t i;
+    if (cached_language == remake_text_language()) return cached;
+    cached_language = remake_text_language();
+    cached = 1;
+    for (i = 0; i < sizeof(captions) / sizeof(captions[0]) && cached; ++i) {
+        const char *text = TR(captions[i]);
+        for (; *text != '\0'; ++text)
+            if (*text != ' ' && remake_glyph(*text) == NULL) {
+                cached = 0;
+                break;
+            }
+    }
+    return cached;
+}
+
+/* A caption line in the game font with a dark one-pixel outline, centred on
+   the button at baseline row `top`. */
+static void remake_button_font_line(RenderSurface *surface, int x, int top,
+                                    const char *text, int hovered)
+{
+    /* Bold (the ink twice, one column apart), as heavy as the baked
+       captions, then outlined around both copies. */
+    static const POINT outline[10] = {
+        {-1, -1}, {0, -1}, {1, -1}, {2, -1}, {-1, 0}, {2, 0},
+        {-1, 1}, {0, 1}, {1, 1}, {2, 1}};
+    const COLORREF ink = hovered ? RGB(255, 255, 255) : RGB(226, 238, 255);
+    const int width = (int)measure_plain_bitmap_text(text, strlen(text)) + 1;
+    const int left = x + (REMAKE_BUTTON_WIDTH - width) / 2;
+    int i;
+    for (i = 0; i < 10; ++i)
+        draw_bitmap_label(surface, text, left + outline[i].x, top + outline[i].y,
+                          RGB(14, 22, 70));
+    draw_bitmap_label(surface, text, left, top, ink);
+    draw_bitmap_label(surface, text, left + 1, top, ink);
+}
+
 /* Draws a button whose top-left corner is (x, y); `second` may be NULL for
-   a one-line caption. Returns 0 when the TITSCRN art is not usable. */
+   a one-line caption. Captions are in the fonts' code page (TR). Returns 0
+   when the TITSCRN art is not usable. */
 static int draw_remake_button(RenderSurface *surface, int x, int y,
                               const char *first, const char *second, int hovered)
 {
     uint32_t button[REMAKE_BUTTON_WIDTH * REMAKE_BUTTON_HEIGHT];
     const uint32_t *texture;
+    const int glyphs = remake_buttons_use_glyphs();
     if (!g_remake_buttons_tried) build_remake_buttons();
     texture = g_remake_button_texture[hovered ? 1 : 0];
     if (texture == NULL) return 0;
     memcpy(button, texture, sizeof(button));
     /* The baked captions sit on rows 10 and 30. */
-    if (second != NULL) {
+    if (glyphs && second != NULL) {
         remake_button_label(button, first, 10, hovered);
         remake_button_label(button, second, 30, hovered);
-    } else {
+    } else if (glyphs) {
         remake_button_label(button, first, 19, hovered);
     }
     render_surface_blit(surface, button, REMAKE_BUTTON_WIDTH, REMAKE_BUTTON_HEIGHT,
                         REMAKE_BUTTON_WIDTH, 0, 0, REMAKE_BUTTON_WIDTH, REMAKE_BUTTON_HEIGHT,
                         x, y, 0x10000U, NULL, NULL);
+    if (!glyphs) {
+        const int height = (int)g_bitmap_font.height;
+        if (second != NULL) {
+            remake_button_font_line(surface, x, y + 24 - height - 1, first, hovered);
+            remake_button_font_line(surface, x, y + 26, second, hovered);
+        } else {
+            remake_button_font_line(surface, x, y + (REMAKE_BUTTON_HEIGHT - height) / 2,
+                                    first, hovered);
+        }
+    }
     return 1;
 }
 

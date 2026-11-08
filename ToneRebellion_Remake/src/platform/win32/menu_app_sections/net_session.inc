@@ -42,6 +42,7 @@ static uint32_t g_net_issue_ms, g_net_issue_tick, g_net_apply_ms, g_net_apply_ti
 
 static void simulate_session_tick(uint32_t source_tick);
 static void enter_net_setup_screen(void);
+static void net_setup_note_host_name(const char *host_name);
 
 /* Network game from a save (remake extension): the host loads a save in the
    lobby, sends the file to every guest in chunks, each machine applies the
@@ -197,9 +198,9 @@ static int net_startup(void)
     if (!net_socket_startup()) {
 #ifdef __EMSCRIPTEN__
         /* The browser has no TCP (Web port step 8). */
-        net_set_status("Multijoueur indisponible dans cette version");
+        net_set_status(TR(T_NET_UNAVAILABLE_BUILD));
 #else
-        net_set_status("Reseau indisponible");
+        net_set_status(TR(T_NET_UNAVAILABLE));
 #endif
         return 0;
     }
@@ -213,7 +214,7 @@ static void net_default_name(void)
     if (g_net_name[0] != '\0') return;
     name = getenv("COMPUTERNAME");
     (void)snprintf(g_net_name, sizeof(g_net_name), "%s",
-                   name != NULL && name[0] != '\0' ? name : "Joueur");
+                   name != NULL && name[0] != '\0' ? name : TR(T_NET_DEFAULT_NAME));
 }
 
 /* Win32: readiness arrives as WM_NET_SOCKET. remake_sdl polls instead. */
@@ -334,13 +335,13 @@ static void net_drop_peer(unsigned slot)
                 memcpy(reserved->name, g_net_lobby.players[slot].name, sizeof(reserved->name));
                 reserved->since_ms = platform_ticks_ms();
                 (void)snprintf(g_net_status, sizeof(g_net_status),
-                               "%s a perdu la connexion, attente de son retour",
+                               TR(T_NET_LOST_WAITING),
                                g_net_lobby.players[slot].name);
                 net_notify_in_game();
             }
             net_lockstep_drop_peer(&g_net_lockstep, (uint8_t)slot);
         } else if (g_net_lobby.players[slot].connected) {
-            (void)snprintf(g_net_status, sizeof(g_net_status), "%s a quitte le lobby",
+            (void)snprintf(g_net_status, sizeof(g_net_status), TR(T_NET_LEFT_LOBBY),
                            g_net_lobby.players[slot].name);
         }
         net_lobby_remove_player(&g_net_lobby, (uint8_t)slot);
@@ -349,7 +350,7 @@ static void net_drop_peer(unsigned slot)
         if (!g_net_in_game) net_host_broadcast_state();
     } else {
         if (!g_net_in_game) {
-            net_lobby_failed("Connexion avec l'hote perdue");
+            net_lobby_failed(TR(T_NET_HOST_LOST));
             return;
         }
         /* In game: reconnect (net_client_reconnect_tick); the world waits. */
@@ -360,7 +361,7 @@ static void net_drop_peer(unsigned slot)
             g_net_reconnecting = 1;
             g_net_reconnect_since_ms = platform_ticks_ms();
             g_net_reconnect_next_ms = g_net_reconnect_since_ms;
-            net_set_status("Connexion perdue, reconnexion...");
+            net_set_status(TR(T_NET_RECONNECTING));
             net_notify_in_game();
         }
     }
@@ -374,7 +375,7 @@ static int net_start_host(void)
     g_net_listen = net_socket_listen(g_net_port);
     if (g_net_listen == NET_SOCKET_INVALID) {
         (void)snprintf(g_net_status, sizeof(g_net_status),
-                       "Port %u indisponible", (unsigned)g_net_port);
+                       TR(T_NET_PORT_BUSY), (unsigned)g_net_port);
         net_shutdown();
         return 0;
     }
@@ -388,7 +389,7 @@ static int net_start_host(void)
     g_net_mode = NET_MODE_HOST;
     net_sync_menu_from_lobby();
     (void)snprintf(g_net_status, sizeof(g_net_status),
-                   "Hote sur le port %u, en attente de joueurs", (unsigned)g_net_port);
+                   TR(T_NET_HOSTING), (unsigned)g_net_port);
     return 1;
 }
 
@@ -401,7 +402,7 @@ static int net_start_join(void)
     /* Blocking name lookup; numeric addresses skip it. */
     g_net_peers[0] = net_socket_connect(g_net_join_address, g_net_port, &lookup_failed);
     if (g_net_peers[0] == NET_SOCKET_INVALID) {
-        net_set_status(lookup_failed ? "Adresse de l'hote introuvable" : "Connexion refusee");
+        net_set_status(lookup_failed ? TR(T_NET_HOST_NOT_FOUND) : TR(T_NET_REFUSED));
         net_shutdown();
         return 0;
     }
@@ -409,7 +410,7 @@ static int net_start_join(void)
     net_lobby_client_init(&g_net_lobby);
     g_net_mode = NET_MODE_CLIENT;
     g_net_connecting = 1;
-    (void)snprintf(g_net_status, sizeof(g_net_status), "Connexion a %s:%u...",
+    (void)snprintf(g_net_status, sizeof(g_net_status), TR(T_NET_CONNECTING),
                    g_net_join_address, (unsigned)g_net_port);
     return 1;
 }
@@ -420,7 +421,7 @@ static void net_apply_game_start(HWND window, const NetGameStart *start)
         ? start->tribes[g_net_lobby.local_slot] : (uint8_t)NET_LOBBY_NO_TRIBE;
     if (tribe >= NET_LOBBY_MAX_PLAYERS ||
         start->world_index >= g_menu.world_map.world_count) {
-        net_set_status("Debut de partie invalide");
+        net_set_status(TR(T_NET_BAD_START));
         return;
     }
     g_menu.world_index = start->world_index;
@@ -444,7 +445,7 @@ static void net_apply_game_start(HWND window, const NetGameStart *start)
         net_heard_all();
         tone_rng_seed(&g_net_local_rng, start->seed ^ platform_ticks_ms());
         g_net_in_game = 1;
-        net_set_status("Partie en reseau");
+        net_set_status(TR(T_NET_GAME));
     }
 }
 
@@ -536,7 +537,7 @@ static void net_host_rejoin_slot(unsigned from, unsigned target, const char *nam
     net_lockstep_add_peer(&g_net_lockstep, (uint8_t)target, turn);
     g_net_round_trip[target] = 0;
     g_net_heard_ms[target] = platform_ticks_ms();
-    (void)snprintf(g_net_status, sizeof(g_net_status), "%s est de retour",
+    (void)snprintf(g_net_status, sizeof(g_net_status), TR(T_NET_BACK),
                    g_net_lobby.players[target].name);
     net_notify_in_game();
 }
@@ -594,7 +595,7 @@ static void net_host_expire_rejoins(void)
             GameCommand command = game_command_make(GAME_COMMAND_HAND_BACK_PLAYER, 1, &arg);
             (void)net_lockstep_queue_command(&g_net_lockstep, &command);
         }
-        (void)snprintf(g_net_status, sizeof(g_net_status), "%s a quitte la partie",
+        (void)snprintf(g_net_status, sizeof(g_net_status), TR(T_NET_LEFT_GAME),
                        reserved->name);
         net_notify_in_game();
     }
@@ -626,7 +627,7 @@ static void net_host_handle_frame(unsigned slot, const NetFrame *frame)
         if (frame->type == NET_RECORD_COMMAND &&
             game_command_decode(frame->payload, frame->length, &command)) {
             if (!net_lockstep_queue_command(&g_net_lockstep, &command))
-                net_set_status("File de commandes pleine: commande perdue");
+                net_set_status(TR(T_NET_QUEUE_FULL));
         } else if (frame->type == NET_RECORD_PONG && frame->length == 4U) {
             uint32_t sent = (uint32_t)frame->payload[0] | ((uint32_t)frame->payload[1] << 8) |
                 ((uint32_t)frame->payload[2] << 16) | ((uint32_t)frame->payload[3] << 24);
@@ -663,7 +664,7 @@ static void net_host_handle_frame(unsigned slot, const NetFrame *frame)
         length = net_lobby_encode_welcome(bytes, sizeof(bytes), (uint8_t)assigned);
         (void)net_send((unsigned)assigned, bytes, length);
         net_host_broadcast_state();
-        (void)snprintf(g_net_status, sizeof(g_net_status), "%s a rejoint la partie",
+        (void)snprintf(g_net_status, sizeof(g_net_status), TR(T_NET_JOINED),
                        g_net_lobby.players[assigned].name);
     } else if (frame->type == NET_RECORD_TRIBE && frame->length == 1U &&
                g_net_lobby.players[slot].connected) {
@@ -678,7 +679,7 @@ static void net_host_handle_frame(unsigned slot, const NetFrame *frame)
                g_net_lobby.players[slot].connected && g_net_save != NULL) {
         g_net_save_acked |= (uint8_t)(1U << slot);
         (void)snprintf(g_net_status, sizeof(g_net_status),
-                       "%s a recu la partie chargee", g_net_lobby.players[slot].name);
+                       TR(T_NET_GOT_SAVE), g_net_lobby.players[slot].name);
     }
 }
 
@@ -701,7 +702,7 @@ static void net_client_receive_save(const NetFrame *frame)
         if (g_net_save == NULL) return;
         g_net_save_length = total;
         g_net_save_native = frame->payload[0];
-        net_set_status("Reception de la partie chargee par l'hote...");
+        net_set_status(TR(T_NET_RECEIVING_SAVE));
     }
     if (g_net_save == NULL || total != g_net_save_length ||
         offset != g_net_save_received) return;
@@ -713,10 +714,10 @@ static void net_client_receive_save(const NetFrame *frame)
         size_t length = net_frame_encode(bytes, sizeof(bytes), NET_RECORD_SAVE_ACK,
                                          g_net_lobby.local_slot, NULL, 0);
         g_net_save_ready = 1;
-        net_set_status("Partie chargee par l'hote : choisissez une tribu jouee");
+        net_set_status(TR(T_NET_SAVE_PICK_TRIBE));
         if (!net_send(0, bytes, length)) net_drop_peer(0);
     } else {
-        net_set_status("La partie chargee par l'hote n'a pas pu etre lue");
+        net_set_status(TR(T_NET_SAVE_UNREADABLE_HOST));
     }
 }
 
@@ -779,7 +780,7 @@ static void net_client_receive_resync(const NetFrame *frame)
     offset = net_le32(frame->payload + 8);
     count = frame->length - 12U;
     if (total != (uint32_t)sizeof(GameSession)) {
-        net_client_give_up("Hote d'une autre version, partie poursuivie en solo");
+        net_client_give_up(TR(T_NET_OTHER_VERSION_SOLO));
         return;
     }
     if (offset == 0U) {
@@ -818,7 +819,7 @@ static void net_client_receive_resync(const NetFrame *frame)
         if (!g_net_in_game) {
             free(g_net_resync);
             g_net_resync = NULL;
-            net_lobby_failed("Retour dans la partie impossible");
+            net_lobby_failed(TR(T_NET_REJOIN_IMPOSSIBLE));
             return;
         }
         net_lockstep_resume_at(&g_net_lockstep, turn);
@@ -842,7 +843,7 @@ static void net_client_receive_resync(const NetFrame *frame)
     g_selected_floater = -1;
     select_location_on_view(-1);
     net_heard_all();
-    net_set_status("Reconnecte a la partie");
+    net_set_status(TR(T_NET_RECONNECTED));
     net_notify_in_game();
 }
 
@@ -854,7 +855,7 @@ static void net_client_reconnect_tick(void)
     int lookup_failed;
     if (!g_net_reconnecting || g_net_peers[0] != NET_SOCKET_INVALID) return;
     if (now - g_net_reconnect_since_ms >= NET_REJOIN_GRACE_MS) {
-        net_client_give_up("Hote injoignable, partie poursuivie en solo");
+        net_client_give_up(TR(T_NET_HOST_UNREACHABLE_SOLO));
         return;
     }
     if ((int32_t)(now - g_net_reconnect_next_ms) < 0) return;
@@ -915,7 +916,7 @@ static void net_poll_peer(HWND window, unsigned slot)
                 }
             } else if (frame.type == NET_RECORD_LOBBY_RETURN && g_net_in_game) {
                 net_back_to_lobby();
-                net_set_status("L'hote charge une autre partie");
+                net_set_status(TR(T_NET_HOST_LOADS_OTHER));
             } else if (frame.type == NET_RECORD_SAVE_DATA && !g_net_in_game) {
                 net_client_receive_save(&frame);
             } else if (frame.type == NET_RECORD_RESYNC &&
@@ -924,7 +925,7 @@ static void net_poll_peer(HWND window, unsigned slot)
                 net_client_receive_resync(&frame);
                 if (g_net_mode == NET_MODE_NONE) return;
             } else if (frame.type == NET_RECORD_REJECT && g_net_reconnecting) {
-                net_client_give_up("Retour refuse par l'hote, partie poursuivie en solo");
+                net_client_give_up(TR(T_NET_REJOIN_REFUSED_SOLO));
                 return;
             } else if (frame.type == NET_RECORD_TURN) {
                 NetTurnBundle bundle;
@@ -936,14 +937,19 @@ static void net_poll_peer(HWND window, unsigned slot)
                 uint8_t reason = 0;
                 int events = net_lobby_client_handle(&g_net_lobby, &frame, &start, &reason);
                 if (events & NET_LOBBY_EVENT_REJECT) {
-                    net_lobby_failed(reason == NET_REJECT_FULL ? "Partie complete"
-                                     : reason == NET_REJECT_STARTED ? "Partie deja lancee"
-                                     : "Version incompatible");
+                    net_lobby_failed(reason == NET_REJECT_FULL ? TR(T_NET_FULL)
+                                     : reason == NET_REJECT_STARTED ? TR(T_NET_STARTED)
+                                     : TR(T_NET_VERSION));
                     return;
                 }
                 if (events & NET_LOBBY_EVENT_WELCOME)
-                    net_set_status("Connecte a l'hote");
-                if (events & NET_LOBBY_EVENT_STATE) net_sync_menu_from_lobby();
+                    net_set_status(TR(T_NET_CONNECTED));
+                if (events & NET_LOBBY_EVENT_STATE) {
+                    net_sync_menu_from_lobby();
+                    /* Slot 0 is the host (net_lobby_host_init). */
+                    if (!g_net_in_game && g_net_lobby.players[0].connected)
+                        net_setup_note_host_name(g_net_lobby.players[0].name);
+                }
                 if (events & NET_LOBBY_EVENT_START) net_apply_game_start(window, &start);
             }
         }
@@ -995,7 +1001,7 @@ static int net_poll(HWND window)
             return 0;
         }
         if (connected < 0) {
-            net_lobby_failed("Connexion refusee");
+            net_lobby_failed(TR(T_NET_REFUSED));
             return 1;
         }
         if (connected > 0 && g_net_reconnecting) {
@@ -1011,13 +1017,13 @@ static int net_poll(HWND window)
             g_net_connecting = 0;
             g_net_heard_ms[0] = platform_ticks_ms();
             if (!net_send(0, bytes, length)) net_drop_peer(0);
-            else net_set_status("Reconnexion: attente de l'etat de la partie");
+            else net_set_status(TR(T_NET_RECONNECT_WAIT_STATE));
         } else if (connected > 0) {
             uint8_t bytes[NET_FRAME_MAX_SIZE];
             size_t length = net_lobby_encode_hello(bytes, sizeof(bytes), g_net_name);
             g_net_connecting = 0;
             if (!net_send(0, bytes, length)) net_drop_peer(0);
-            else net_set_status("Connecte, en attente de l'hote");
+            else net_set_status(TR(T_NET_CONNECTED_WAITING));
         }
     } else {
         for (slot = 0; slot < NET_LOBBY_MAX_PLAYERS && g_net_mode != NET_MODE_NONE; ++slot)
@@ -1071,7 +1077,7 @@ static int net_newgame_message(HWND window, int message)
         uint8_t bytes[NET_FRAME_MAX_SIZE];
         size_t length;
         if (!net_lobby_game_start(&g_net_lobby, &start)) {
-            net_set_status("Il faut deux joueurs et des tribus differentes");
+            net_set_status(TR(T_NET_NEED_TWO));
             return 1;
         }
         if (g_net_save != NULL) {
@@ -1081,12 +1087,12 @@ static int net_newgame_message(HWND window, int message)
             for (slot = 0; slot < NET_LOBBY_MAX_PLAYERS; ++slot) {
                 if (!g_net_lobby.players[slot].connected) continue;
                 if (slot != 0 && (g_net_save_acked & (1U << slot)) == 0) {
-                    net_set_status("Envoi de la partie chargee en cours");
+                    net_set_status(TR(T_NET_SENDING_SAVE));
                     return 1;
                 }
                 if (start.tribes[slot] >= GAME_START_PLAYER_COUNT ||
                     (g_tribe_choice_mask & (1U << start.tribes[slot])) == 0) {
-                    net_set_status("Chaque joueur doit choisir une tribu jouee");
+                    net_set_status(TR(T_NET_PICK_PLAYED_TRIBE));
                     return 1;
                 }
             }
@@ -1119,7 +1125,7 @@ static int issue_command(GameCommandKind kind, size_t count, const int32_t *args
     predicted = game_command_apply(&g_net_predicted_session, &context, &command);
     if (g_net_mode == NET_MODE_HOST) {
         if (!net_lockstep_queue_command(&g_net_lockstep, &command))
-            net_set_status("File de commandes pleine: commande perdue");
+            net_set_status(TR(T_NET_QUEUE_FULL));
     } else {
         uint8_t payload[GAME_COMMAND_ENCODED_SIZE];
         uint8_t bytes[NET_FRAME_MAX_SIZE];
@@ -1160,7 +1166,7 @@ static void net_report_stall(void)
         name = g_net_lobby.players[0].name;
     }
     if (name == NULL) return;
-    (void)snprintf(g_net_status, sizeof(g_net_status), "En attente de %s", name);
+    (void)snprintf(g_net_status, sizeof(g_net_status), TR(T_NET_WAITING_FOR), name);
     net_notify_in_game();
 }
 
@@ -1240,7 +1246,7 @@ static void net_run_frame(HWND window)
         }
         if (g_net_lockstep.desync) {
             (void)snprintf(g_net_status, sizeof(g_net_status),
-                           "Desynchronisation au tour %lu",
+                           TR(T_NET_DESYNC),
                            (unsigned long)g_net_lockstep.desync_turn);
             net_notify_in_game();
             break;
@@ -1264,14 +1270,14 @@ static void render_net_lobby(RenderSurface *surface)
     COLORREF color = RGB(235, 235, 220);
     if (g_net_mode == NET_MODE_NONE && g_net_status[0] == '\0') return;
     if (g_net_mode != NET_MODE_NONE) {
-        draw_small_label(surface, g_net_mode == NET_MODE_HOST ? "Partie reseau (hote)"
-                                                          : "Partie reseau (invite)",
+        draw_small_label(surface, g_net_mode == NET_MODE_HOST ? TR(T_NET_LOBBY_HOST)
+                                                          : TR(T_NET_LOBBY_GUEST),
                          200, 2, color);
         for (slot = 0; slot < NET_LOBBY_MAX_PLAYERS; ++slot) {
             const NetLobbyPlayer *player = &g_net_lobby.players[slot];
             if (!player->connected) continue;
             if (player->tribe < NET_LOBBY_MAX_PLAYERS)
-                (void)snprintf(line, sizeof(line), "%c%u %s - tribu %u",
+                (void)snprintf(line, sizeof(line), TR(T_NET_LOBBY_ROW),
                                slot == g_net_lobby.local_slot ? '>' : ' ', slot + 1U,
                                player->name, player->tribe + 1U);
             else

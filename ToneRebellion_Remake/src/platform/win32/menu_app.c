@@ -36,6 +36,8 @@
 #include "tone_rng.h"
 #include "net_lobby.h"
 #include "net_lockstep.h"
+#include "net_server_list.h"
+#include "remake_text.h"
 #include "../net_socket.h"
 #include "render_surface.h"
 #include "pe_cursor.h"
@@ -45,7 +47,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
+/* A remake text in the current language (src/core/remake_text.def). */
+#define TR(id) remake_text(id)
+/* The same in UTF-8, for the window title and system dialogs. */
+#define TRU(id) remake_text_utf8(id)
 
 #include "../sdl/sdl_platform.inc"
 

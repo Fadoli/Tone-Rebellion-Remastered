@@ -152,16 +152,16 @@ static int begin_new_game(HWND window)
 static const int g_difficulty_count = 5;
 static void update_window_title(HWND window)
 {
-    const char *title = "Tone Rebellion - Title";
+    const char *title = TRU(T_WIN_TITLE);
     if (g_menu.screen == SCREEN_NEW_GAME && g_tribe_choice_mask != 0)
-        title = "Tone Rebellion - Choose Tribe";
-    else if (g_menu.screen == SCREEN_NEW_GAME) title = "Tone Rebellion - New Game";
-    else if (g_menu.screen == SCREEN_NET_SETUP) title = "Tone Rebellion - Multiplayer";
-    else if (g_menu.screen == SCREEN_INTRO) title = "Tone Rebellion - Intro (any key: skip)";
-    else if (g_menu.screen == SCREEN_WORLD_MAP) title = "Tone Rebellion - World Map";
+        title = TRU(T_WIN_CHOOSE_TRIBE);
+    else if (g_menu.screen == SCREEN_NEW_GAME) title = TRU(T_WIN_NEW_GAME);
+    else if (g_menu.screen == SCREEN_NET_SETUP) title = TRU(T_WIN_MULTIPLAYER);
+    else if (g_menu.screen == SCREEN_INTRO) title = TRU(T_WIN_INTRO);
+    else if (g_menu.screen == SCREEN_WORLD_MAP) title = TRU(T_WIN_WORLD_MAP);
     else if (g_menu.screen == SCREEN_ISLAND)
-        title = "Tone Rebellion - Island (arrows: scroll, Esc: options)";
-    else if (g_menu.screen == SCREEN_LOAD_GAME) title = g_load_save_mode ? "Tone Rebellion - Save Game (Esc: back)" : "Tone Rebellion - Load Game (Esc: back)";
+        title = TRU(T_WIN_ISLAND);
+    else if (g_menu.screen == SCREEN_LOAD_GAME) title = g_load_save_mode ? TRU(T_WIN_SAVE) : TRU(T_WIN_LOAD);
     platform_set_title(window, title);
     if (g_menu.screen != SCREEN_ISLAND && g_menu.screen != SCREEN_INTRO) {
         /* FUN_004489c0 requests ambi1 for the title. The remake keeps this

@@ -343,6 +343,10 @@ static void render_back_buffer_now(RenderSurface *back)
         render_slide_panel(back);
         render_alerts(back);
         render_options_panel(back);
+    } else if (g_menu.screen == SCREEN_MAIN_MENU) {
+        /* Remake: F2 opens the options on the title too (language, display). */
+        render_title_options_hint(back);
+        render_options_panel(back);
     } else {
         g_options_open = 0;
     }
