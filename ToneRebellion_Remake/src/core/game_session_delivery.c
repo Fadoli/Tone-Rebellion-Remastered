@@ -1147,6 +1147,14 @@ static void credit_floater_delivery(GameSession *session,
                 (uint8_t)floater->linked_task_slot, 12, &expected);
             block->spread_task_plus1[owner] = 0;
             block->spread_count[owner] = 0;
+            /* Remake: the port recomputes visible spans only on events, so
+               apply the new 0x800 << player link at once; otherwise the
+               widened construction field (300 around the block, see
+               recalculate_island_visibility_for_player) and the shared
+               upkeep wait for some unrelated 0x28 change. */
+            (void)game_session_recalculate_player_island_visibility(session,
+                floater->order_target_island, owner);
+            game_session_refresh_player_maintenance_budgets(session);
         }
         return;
     }

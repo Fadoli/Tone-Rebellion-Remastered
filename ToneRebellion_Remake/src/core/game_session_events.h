@@ -42,6 +42,14 @@ int game_session_queue_inventory_action(GameSession *session,
                                         uint8_t island_index,
                                         uint16_t location_index,
                                         uint8_t item_id);
+/* Remake gate (requested; FUN_0045302a, FUN_0045d5ba and FUN_00452bc5 test
+   no +0x1c build flag): nonzero once the site has left its placement ramp
+   (flag 0x010) and any upgrade transition (0x020) and is not dying (0x080).
+   The staff upgrade request and UpgSpread refuse a site that is not
+   settled, so an unfinished building offers neither on any machine of a
+   network game; the native tier cycle (FUN_004672ef) stays ungated and only
+   the BC_Upgrade button hides. */
+int game_session_location_settled(const GameRuntimeLocation *location);
 /* FUN_004672ef command type 3 cycles the supported player source records
    through capacity tiers 0..3. The source setter resets +0x48 and marks bit
    0x20 only when the tier increases. */

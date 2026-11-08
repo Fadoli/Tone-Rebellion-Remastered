@@ -82,6 +82,11 @@ int game_session_queue_inventory_action(GameSession *session,
         (int16_t)island_index, 4, 0, (int16_t)location_index, (int16_t)item_id);
 }
 
+int game_session_location_settled(const GameRuntimeLocation *location)
+{
+    return location != NULL && (location->source_flags & 0x0b0U) == 0;
+}
+
 int game_session_cycle_source_capacity(GameSession *session,
                                        uint8_t island_index,
                                        uint16_t location_index)
@@ -139,7 +144,8 @@ static int staff_upgrade_eligible(const GameSession *session,
     if (session == NULL || location == NULL ||
         player_slot >= GAME_START_PLAYER_COUNT ||
         island_index >= session->island_count || location->owner_id != player_slot ||
-        location->renderer_class != 0) return 0;
+        location->renderer_class != 0 ||
+        !game_session_location_settled(location)) return 0;
     base_item_id = game_session_base_item_id(location);
     if (base_item_id < 0x2c || base_item_id > 0x2f) return 0;
     type_index = (unsigned int)(base_item_id - 0x2c);
@@ -228,6 +234,7 @@ int game_session_upgspread_available(const GameSession *session,
         location->owner_id < GAME_START_PLAYER_COUNT &&
         location->owner_id != (int32_t)player_slot &&
         game_session_base_item_id(location) == 0x28 &&
+        game_session_location_settled(location) &&
         (location->source_value_22 & (uint16_t)(1U << player_slot)) != 0 &&
         (location->source_flags & (0x800U << player_slot)) == 0;
 }
