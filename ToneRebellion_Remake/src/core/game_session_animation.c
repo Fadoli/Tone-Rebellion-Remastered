@@ -758,19 +758,42 @@ static int32_t leviathan_defense_power(const PadCatalogItem *pad)
     return pad != NULL ? pad->movement_cost[1] : 0;
 }
 
+/* bldinf PROD effect per item 0x10..0x15 (V-SHOT1..3, V-ROD1..3, pad.txt
+   row order): VSHT1B, VSHT2B, VSHT2B, VSHROD, VSHT1B, VSPIRL. */
+static const char *leviathan_projectile_def(const BuildingRenderItem *item,
+                                            int32_t item_id)
+{
+    static const char *const def_by_item[6] = {
+        "VSHT1B", "VSHT2B", "VSHT2B", "VSHROD", "VSHT1B", "VSPIRL"
+    };
+    if (item != NULL && item->prod_effect[0] != '\0') return item->prod_effect;
+    return item_id >= 0x10 && item_id <= 0x15
+        ? def_by_item[item_id - 0x10] : "";
+}
+
 static uint8_t leviathan_projectile_sheet(int32_t item_id)
 {
-    /* effects.txt and shapes.txt: VSHT1B/VSHROD/VSPIRL/VSHT2B resolve to
-       V-SHOT1B/V-MNRB/JOIN4/V-SHT2FX respectively. */
+    /* Platform sheet order: 0 V-SHOT1B (VSHT1B), 1 V-SHT2FX (VSHT2B),
+       2 V-MNRB (VSHROD), 3 JOIN4 (VSPIRL), per effects.txt SHAPE. */
     static const uint8_t sheet_by_item[6] = {0, 1, 1, 2, 0, 3};
     if (item_id < 0x10 || item_id > 0x15) return UINT8_MAX;
     return sheet_by_item[item_id - 0x10];
 }
 
+/* Bullet arrival (FUN_00416ff8) picks the IMPACT by the bullet def's REALM
+   (ev_04c78e7b, ev_20d860a0): VSHT2B (V-SHOT2/3) is SUP, VSHT1B/VSHROD/
+   VSPIRL/DEVIL are ETH. */
 static uint8_t leviathan_projectile_impact_realm(int32_t item_id)
 {
-    /* VSHT2B is SUP; VSHT1B, VSHROD and VSPIRL are ETH. */
     return item_id == 0x11 || item_id == 0x12 ? 1U : 2U;
+}
+
+/* FUN_00416342(site, 1, 1) after a direct FUN_004533a8 hit indexes
+   PHYIMP/SUPIMP/ETHIMP/NATIMP with (ushort)site +0x10 & 3 (asm 0x4163de..
+   0x4163ef, ev_3739aebd): V-ATTCK1..5 = ETH, NAT, PHY, SUP, ETH. */
+static uint8_t leviathan_direct_impact_realm(const GameRuntimeLocation *state)
+{
+    return (uint8_t)((uint16_t)state->record_value_10 & 3U);
 }
 
 static GameDefenseProjectile *allocate_defense_projectile(GameSession *session)
@@ -1050,22 +1073,42 @@ static void tick_leviathan_defense(GameSession *session,
                         leviathan_projectile_impact_realm(item_id));
                 } else {
                     GameFloaterStart *target = &session->floaters[target_index];
-                    int32_t damage = game_session_damage_floater_from_power(
+                    GameDefenseProjectile *impact;
+                    (void)game_session_damage_floater_from_power(
                         session, target_index, leviathan_defense_power(pad));
-                    GameDefenseProjectile *impact =
-                        damage > 0 ? allocate_defense_projectile(session) : NULL;
+                    /* 0x452086..0x4520a0: the FUN_004533a8 result is
+                       discarded and FUN_00416342(site, 1, 1) always follows,
+                       miss included. Level = param_3 / 2 = 0; the instance
+                       offset is FUN_004014bf(15) - 7 on x then y around the
+                       target (asm 0x4164c4..0x41650b, FUN_00414fbf). */
+                    impact = allocate_defense_projectile(session);
                     if (impact != NULL) {
+                        uint8_t realm = leviathan_direct_impact_realm(state);
+                        int32_t jitter_x = tone_rng_bounded(
+                            &session->random_state, 15) - 7;
+                        int32_t jitter_y = tone_rng_bounded(
+                            &session->random_state, 15) - 7;
+                        uint16_t impact_x =
+                            (uint16_t)((int32_t)target->x + jitter_x);
                         impact->active = 1;
                         impact->island_index = island_index;
-                        impact->impact_realm_index =
-                            leviathan_projectile_impact_realm(item_id);
+                        impact->impact_realm_index = realm;
                         impact->target_floater = -1;
                         impact->target_location = -1;
                         impact->attack_power = 0;
                         impact->movement_speed = 0;
-                        begin_defense_impact(session, impact,
-                            impact->impact_realm_index, damage,
-                            target->x, target->y);
+                        impact->impact_phase = 1;
+                        impact->effect_sheet_index = realm;
+                        impact->animation_tick = 0;
+                        impact->impact_frame_start =
+                            session->effect_impact_frame_starts[realm][0];
+                        impact->impact_frame_count =
+                            session->effect_impact_frame_counts[realm][0];
+                        impact->x = impact_x;
+                        impact->y = (uint16_t)((int32_t)target->y + jitter_y);
+                        (void)game_session_queue_effect_sound(session,
+                            game_session_impact_def_index(session, realm),
+                            island_index, impact_x);
                     }
                 }
             }
@@ -1110,15 +1153,14 @@ static void tick_leviathan_defense(GameSession *session,
                     projectile->y = (uint16_t)((int32_t)state->y +
                         (item != NULL && item->prod.present
                             ? item->prod.offset_y : 0));
-                    {
-                        static const char *const bullet_defs[4] = {
-                            "VSHT1B", "VSHROD", "VSPIRL", "VSHT2B"
-                        };
-                        (void)game_session_queue_effect_sound(session,
-                            game_session_effect_def_index(session,
-                                bullet_defs[sheet & 3U]),
-                            island_index, state->x);
-                    }
+                    /* FUN_00416342 takes the bullet def from PROD +0x0e (the
+                       bldinf PROD effect name); FUN_004181a6 queues that
+                       def's SOUND on the first tick at the instance x, i.e.
+                       the launch point (REA ev_3739aebd, ev_9389e28e). */
+                    (void)game_session_queue_effect_sound(session,
+                        game_session_effect_def_index(session,
+                            leviathan_projectile_def(item, item_id)),
+                        island_index, projectile->x);
                 } else {
                     (void)game_session_damage_floater_from_power(session,
                         target_index, attack_power);

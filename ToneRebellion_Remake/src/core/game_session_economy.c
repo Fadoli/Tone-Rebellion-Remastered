@@ -41,7 +41,7 @@ int game_session_credit_resource(GameSession *session, uint8_t player_slot,
     if (hall == NULL || (int)type < GAME_RESOURCE_BUILD_TONE ||
         (int)type >= GAME_RESOURCE_TYPE_COUNT) return 0;
     stock = &hall->resource_stock[type];
-    if (amount > UINT16_MAX - *stock) return 0;
+    if (amount > (uint32_t)(UINT16_MAX - *stock)) return 0;
     *stock = (uint16_t)(*stock + amount);
     return 1;
 }

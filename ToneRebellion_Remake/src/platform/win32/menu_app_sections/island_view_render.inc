@@ -1371,6 +1371,12 @@ static void render_island_view(RenderSurface *surface)
             floater_x = (int)floater->x - g_island_scroll_x;
             if (floater_x < -64 || floater_x >= LOGICAL_WIDTH + 64) continue;
             floater_y = image_top + (int)floater->y;
+            /* FUN_0042822b (floater kinds 0..4, Leviathans included) draws
+               at y + FUN_00426fd0: the hover bob phased by DAT_00618e44 and
+               +0x14, zero for a dying floater (+0x1c & 8). */
+            if ((floater->source_runtime_flags & 0x008U) == 0)
+                floater_y += island_worker_hover_bob(
+                    g_game_session.simulation_tick, floater->animation_seed);
             if (floater->type_index == 4) {
                 draw_island_leviathan_floater(surface, floater, floater_x, floater_y);
                 draw_floater_spell_shimmer(surface, floater, floater_x, floater_y);

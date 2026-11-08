@@ -25,7 +25,7 @@ int game_session_inventory_credit(GameSession *session, uint8_t player_slot,
                                   uint8_t item_id, uint32_t amount)
 {
     uint16_t *count = player_inventory_count(session, player_slot, item_id);
-    if (count == NULL || amount > UINT16_MAX - *count) return 0;
+    if (count == NULL || amount > (uint32_t)(UINT16_MAX - *count)) return 0;
     *count = (uint16_t)(*count + amount);
     return 1;
 }

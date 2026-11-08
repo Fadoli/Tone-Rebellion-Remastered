@@ -93,10 +93,11 @@ compare donc l'île du lanceur à `g_menu.selected_map_island` sur l'écran île
 non plus la tribu. Le nom `FEATnn` prend son indice dans la table par île
 `DAT_005eebf8` (pas `0x14f4`, clef `record+8` = île): son contenu reste inconnu.
 Bullets/impacts (`FUN_00450a71` = tick des items producteurs/défenses,
-`FUN_00416342`): impact `PHYIMP/SUPIMP/ETHIMP/NATIMP` choisi par `item & 3`, sons
-`PREALM/SREALM/EREALM/NREALM`; bullets via l'enregistrement d'attaque `+0x0e`
-(table atteff non lue), 13 effets BULLET tous avec SOUND; tir à `+0x42 == rec+4`
-(30 par défaut). Non porté: le remake ne modélise pas ces bullets d'item.
+`FUN_00416342`): impact direct (`param_2 = 1`) `PHYIMP/SUPIMP/ETHIMP/NATIMP` choisi par
+`(ushort)site+0x10 & 3` (id d'item, 0x4163de), sons `PREALM/SREALM/EREALM/NREALM`;
+bullets via PROD `+0x0e` (effet bldinf), SOUND joué au premier tick à l'x de lancement
+(`FUN_004181a6`, ev_9389e28e…); tir à `+0x42 == rec+4` (30 par défaut). Porté
+(`tick_leviathan_defense`), voir `building-rendering.md`.
 
 ### Règle de lecture des sons d'effet (REA, ev_debaf503…, ev_4bf3fa40…, ev_cacde6bd…, ev_c5d4a510…)
 

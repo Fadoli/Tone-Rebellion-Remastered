@@ -1202,7 +1202,7 @@ static void credit_floater_delivery(GameSession *session,
                            case 4 plays FEAT%02d of the island's WORLDPOS
                            shape (word IB+0x29e0) at the feature x. */
                         {
-                            char feat_name[8];
+                            char feat_name[12];
                             (void)snprintf(feat_name, sizeof(feat_name),
                                 "FEAT%02d",
                                 (int)island->leviathan_marker_shape_id);
