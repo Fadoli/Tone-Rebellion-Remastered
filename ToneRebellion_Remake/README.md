@@ -1,6 +1,8 @@
 # Tone Rebellion remake
 
-Independent C11 remake of *Tone Rebellion* (1997), informed by static analysis of the original executable and its data. The original executable is a read-only reference and is never run. No game data is included: the remake reads your own copy of the game.
+Remaster of *Tone Rebellion* (1997) in C11. It is not a decompilation or a port of the original code: the game is rewritten from a static analysis of the original executable and its data. It aims to reproduce the original game while adding new capabilities: display, comfort, browser and network play. The original executable is a read-only reference and is never run. No game data is included: the remake reads your own copy of the game.
+
+Status: playable, but not complete. What is ported and its limits: [ported features](docs/implemented.md); what remains: [open tasks](docs/todo.md); deliberate changes: [differences from the original game](docs/differences-from-original.md).
 
 ## Play
 

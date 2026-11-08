@@ -1,6 +1,6 @@
 # FLOAT.EXE decompilation workspace
 
-Static analysis of `FLOAT.EXE` (x86 PE, version 1.16F), the executable of *Tone Rebellion*, done with Ghidra through REA. The binary, the COB archives and the Ghidra projects are read-only references; the original game is never run. The [remake](../ToneRebellion_Remake/README.md) is built from these notes.
+Static analysis of `FLOAT.EXE` (x86 PE, version 1.16F), the executable of *Tone Rebellion*, done with Ghidra through REA. The binary, the COB archives and the Ghidra projects are read-only references; the original game is never run. The notes are a reference for the [remaster](../ToneRebellion_Remake/README.md): it is rewritten from them, not decompiled code turned into source.
 
 The notes keep apart what Ghidra shows, what is interpreted from it, and what is still unknown. Names such as `FUN_...`, and all reconstructed types, are provisional; the pseudocode is decompiler output, not the original source. Working rules: [AGENTS.md](../AGENTS.md).
 

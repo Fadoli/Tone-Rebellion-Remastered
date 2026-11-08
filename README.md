@@ -1,11 +1,15 @@
 # Tone Rebellion Remastered
 
-A remake of *Tone Rebellion* (The Logic Factory, 1997), the real-time strategy game of floating islands, tones and the Leviathan. It is rebuilt in portable C11 from a static analysis of the original Windows executable.
+A remaster of *Tone Rebellion* (The Logic Factory, 1997), the real-time strategy game of floating islands, tones and the Leviathan, written in portable C11.
+
+This is not a decompilation or a port: the original source is not available, and the code is not decompiler output. The game is rewritten by hand, with a static analysis of the original Windows executable as the reference. It tries to reproduce the original behaviour, and adds what a modern player expects: any window size, upscaling filters, smoother display, comfort options, browser play and a new network layer.
+
+**Status:** playable from the title screen to the end of a game, but not complete. Some behaviours are not ported yet or are approximations; see the [open tasks](ToneRebellion_Remake/docs/todo.md) and the [ported features](ToneRebellion_Remake/docs/implemented.md).
 
 Two parts live here:
 
-- **The remake** ([ToneRebellion_Remake/](ToneRebellion_Remake/README.md)): a new engine that loads the original game data and reproduces its rules, screens and sounds. It runs on modern Windows and in the browser.
-- **The decompilation workspace** ([decompilation/](decompilation/README.md)): notes, an index and pseudocode for `FLOAT.EXE` 1.16F. The remake is built from these, so every ported behaviour can be traced back to its evidence.
+- **The remaster** ([ToneRebellion_Remake/](ToneRebellion_Remake/README.md)): a new engine that loads the original game data and reproduces its rules, screens and sounds. It runs on modern Windows and in the browser.
+- **The analysis workspace** ([decompilation/](decompilation/README.md)): notes, an index and decompiler pseudocode for `FLOAT.EXE` 1.16F, used as a reference. The remaster is written from these, so every ported behaviour can be traced back to its evidence.
 
 No game data is included. You need your own copy of *Tone Rebellion*: the installed folder, the CD, or a `.iso` image.
 
