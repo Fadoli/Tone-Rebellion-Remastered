@@ -22,15 +22,18 @@ static char g_net_setup_port[NET_SETUP_PORT_CAPACITY];
 static const RECT g_net_setup_panel = {120, 90, 520, 410};
 static const RECT g_net_setup_fields[NET_SETUP_FIELD_COUNT] = {
     {290, 146, 496, 174}, {290, 184, 496, 212}, {290, 222, 380, 250}};
+/* TITSCRN-style buttons (remake_buttons.inc), 102x49. */
 static const RECT g_net_setup_buttons[NET_SETUP_BUTTON_COUNT] = {
-    {150, 310, 300, 352}, {340, 310, 490, 352}, {245, 360, 395, 398}};
+    {174, 300, 276, 349}, {364, 300, 466, 349}, {269, 352, 371, 401}};
 static const char *const g_net_setup_field_labels[NET_SETUP_FIELD_COUNT] = {
     "Nom du joueur", "Adresse de l'hote", "Port"};
-static const char *const g_net_setup_button_labels[NET_SETUP_BUTTON_COUNT] = {
-    "HEBERGER", "REJOINDRE", "RETOUR"};
-/* Title-screen entry, in the free band right of EXITAPP (255..375, 407..469),
-   sized like the TITSCRN buttons. */
-static const RECT g_net_setup_title_button = {448, 414, 598, 458};
+/* Captions use the letters of the original buttons only (no B, J, M, S):
+   host = CREER PARTIE, join = ENTRER PARTIE. */
+static const char *const g_net_setup_button_labels[NET_SETUP_BUTTON_COUNT][2] = {
+    {"CREER", "PARTIE"}, {"ENTRER", "PARTIE"}, {"RETOUR", NULL}};
+/* Title-screen entry where LOADGAME's button stands one row up (LOADGAME
+   draws frame 6 at 402 + 18), level with EXITAPP (407 + 9). */
+static const RECT g_net_setup_title_button = {420, 416, 522, 465};
 
 static int net_setup_point_in(const RECT *rect, int x, int y)
 {
@@ -328,8 +331,14 @@ static void net_setup_draw_centred_text(RenderSurface *surface, const RECT *rect
                              ink, glow);
 }
 
-static void net_setup_draw_button(RenderSurface *surface, const RECT *rect, const char *label, int hovered)
+/* A TITSCRN-style button; without usable TITSCRN frames, a plain box. */
+static void net_setup_draw_button(RenderSurface *surface, const RECT *rect, const char *first,
+                                  const char *second, int hovered)
 {
+    char label[32];
+    if (draw_remake_button(surface, rect->left, rect->top, first, second, hovered)) return;
+    (void)snprintf(label, sizeof(label), "%s%s%s", first, second != NULL ? " " : "",
+                   second != NULL ? second : "");
     net_setup_draw_box(surface, rect, 2, hovered ? RGB(205, 238, 255) : RGB(118, 178, 222),
                        hovered ? RGB(92, 128, 214) : RGB(66, 92, 176),
                        hovered ? RGB(36, 44, 120) : RGB(24, 30, 92), 256);
@@ -341,7 +350,7 @@ static void net_setup_draw_button(RenderSurface *surface, const RECT *rect, cons
 /* Drawn over the title art by render_main_menu's caller. */
 static void render_net_setup_title_button(RenderSurface *surface)
 {
-    net_setup_draw_button(surface, &g_net_setup_title_button, "MULTIJOUEUR",
+    net_setup_draw_button(surface, &g_net_setup_title_button, "PARTIE", "EN LIGNE",
                           g_net_setup_title_hover);
 }
 
@@ -374,11 +383,12 @@ static void render_net_setup(RenderSurface *surface)
                       RGB(205, 238, 255));
         }
     }
-    draw_small_label(surface, "Tab: champ suivant   Entree: rejoindre   Echap: retour",
+    draw_small_label(surface, "Tab: champ suivant   Entree: entrer   Echap: retour",
                      146, 268, RGB(110, 140, 190));
     draw_small_label(surface, g_net_status, 146, 284, RGB(255, 220, 120));
     for (button = 0; button < NET_SETUP_BUTTON_COUNT; ++button)
         net_setup_draw_button(surface, &g_net_setup_buttons[button],
-                              g_net_setup_button_labels[button],
+                              g_net_setup_button_labels[button][0],
+                              g_net_setup_button_labels[button][1],
                               button == g_net_setup_hover);
 }

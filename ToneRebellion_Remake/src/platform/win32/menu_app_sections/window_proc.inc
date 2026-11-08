@@ -106,6 +106,12 @@ static void run_ui_frame(HWND window, WPARAM wparam)
         platform_invalidate(window);
         return;
     }
+    if (wparam == 1 && g_menu.screen == SCREEN_INTRO) {
+        intro_tick();
+        update_window_title(window);
+        platform_invalidate(window);
+        return;
+    }
     if (wparam == 2) {
         keep_background_tune_playing();
         return;
@@ -446,7 +452,8 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             update_glyph_hover(g_mouse_x, g_mouse_y) |
             update_diplomacy_hover(g_mouse_x, g_mouse_y) |
             update_iw_construct_hover(g_mouse_x, g_mouse_y) |
-            update_net_setup_hover(g_mouse_x, g_mouse_y)) {
+            update_net_setup_hover(g_mouse_x, g_mouse_y) |
+            update_intro_hover(g_mouse_x, g_mouse_y)) {
             platform_invalidate(window);
         }
         return 0;
@@ -489,6 +496,14 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
     case WM_LBUTTONDOWN: {
         /* A release lost outside the window must not swallow a later click. */
         g_swallow_left_button_up = 0;
+        if (g_menu.screen == SCREEN_INTRO) {
+            /* Remake: a click ends the movie; its release must not press a
+               title button. */
+            intro_stop();
+            g_swallow_left_button_up = 1;
+            platform_invalidate(window);
+            return 0;
+        }
         if (g_menu.screen == SCREEN_END_GAME) {
             /* Message 6 (left press) on ENDGPLAYER, ENDGTEXT or an ENDGNONP
                card: FUN_0041a7d6 / FUN_0041b575 / FUN_0041afbb queue
@@ -704,6 +719,13 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         }
         return 0;
     case WM_KEYDOWN:
+        if (g_menu.screen == SCREEN_INTRO) {
+            /* Remake: any key ends the movie. */
+            intro_stop();
+            update_window_title(window);
+            platform_invalidate(window);
+            return 0;
+        }
         /* Port-only, on every screen: F12 cycles the filter, Ctrl+F12 the
            scaling mode, Shift+F12 the display rate. */
         if (wparam == VK_F12 && platform_shift_down()) {
@@ -1051,6 +1073,11 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         } else if (g_menu.screen == SCREEN_MAIN_MENU && wparam == 'L') {
             g_menu.screen = SCREEN_LOAD_GAME;
             platform_invalidate(window);
+        } else if (g_menu.screen == SCREEN_MAIN_MENU && wparam == 'I') {
+            /* FUN_0046a5b7 (0x46a830): the intro key, which the original
+               only honours with `nevada` in FLOAT.CFG. */
+            (void)intro_start();
+            platform_invalidate(window);
         } else if (g_menu.screen == SCREEN_NEW_GAME && wparam == 'L' &&
                    g_net_mode == NET_MODE_HOST && !g_net_in_game) {
             /* Remake: the lobby host picks a saved game to continue in
@@ -1103,6 +1130,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         if (net_poll(window)) platform_invalidate(window);
         return 0;
     case WM_DESTROY:
+        intro_close();
         net_shutdown();
         write_resume_file();
         stop_background_tune();

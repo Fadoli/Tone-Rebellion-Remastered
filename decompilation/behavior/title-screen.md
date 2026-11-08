@@ -22,7 +22,7 @@ Revue REA statique (FLOAT.EXE, sans exécution; ev_dd38b933…, ev_b39328dc…, 
 ## Port et écarts
 
 Concordent: pistes `start` et `ambi1`, art `TITSCRN`, positions et frames des boutons.
-Absents du port: logo conditionnel, vidéo `intro.avi`, indicateur `DAT_004a1470`.
+Absents du port: logo conditionnel, indicateur `DAT_004a1470`. `intro.avi`: porté hors `nevada` (bouton remake « Intro » et touche `I`, décodeur Cinepak du remake).
 Possible écart non tranché: le port dessine RESUME sans sauvegarde valide (le clic est refusé par
 `g_resume_available`), alors que le jeu teste l'en-tête de reprise à la création du titre; la lecture
 de `FUN_0046c3bc(…, 2, …)` comme « cacher » n'est pas prouvée pour ces trois boutons, donc le rendu du
@@ -68,7 +68,7 @@ la commande de débogage 0x49 de `FUN_0046a5b7`, conditionnée par la clé `neva
 Port: écran `SCREEN_LOGO` si `FLOAT.CFG` contient `logo` (`logo_splash.inc`): décodeur GIF vérifié identique à PIL sur
 `LOGO.GIF`, palette 6 bits convertie en 8 bits (sans le gamma natif non décodé), fondu d'entrée de 24 tics (~0,8 s), maintien
 de 30 tics, fondu de sortie de 24 tics (cadence choisie par le port: l'original n'a pas de délai), entrées ignorées pendant
-le logo, piste `start` lancée à la fin. Non porté: intro `intro.avi` (hors chemin par défaut), gamma de `FUN_00477599`.
+le logo, piste `start` lancée à la fin. Non porté: gamma de `FUN_00477599`. L'intro est portée sans la garde `nevada` (choix remake).
 
 ## Options de `float.cfg` et valeurs par défaut (REA, ev_4be6368b…, ev_75778593…, ev_64e2e6f4…, ev_a917be91…)
 

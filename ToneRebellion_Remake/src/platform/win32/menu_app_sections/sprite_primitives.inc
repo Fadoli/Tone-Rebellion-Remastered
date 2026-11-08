@@ -157,6 +157,7 @@ static void update_window_title(HWND window)
         title = "Tone Rebellion - Choose Tribe";
     else if (g_menu.screen == SCREEN_NEW_GAME) title = "Tone Rebellion - New Game";
     else if (g_menu.screen == SCREEN_NET_SETUP) title = "Tone Rebellion - Multiplayer";
+    else if (g_menu.screen == SCREEN_INTRO) title = "Tone Rebellion - Intro (any key: skip)";
     else if (g_menu.screen == SCREEN_WORLD_MAP) title = "Tone Rebellion - World Map";
     else if (g_menu.screen == SCREEN_ISLAND)
         title = "Tone Rebellion - Island (arrows: scroll, Esc: options)";

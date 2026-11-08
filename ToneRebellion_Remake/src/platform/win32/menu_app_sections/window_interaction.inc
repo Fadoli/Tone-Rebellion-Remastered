@@ -51,7 +51,9 @@ static void handle_click(HWND window, int x, int y)
     if (g_menu.screen == SCREEN_NET_SETUP) {
         net_setup_click(window, x, y);
     } else if (g_menu.screen == SCREEN_MAIN_MENU && net_setup_title_click(x, y)) {
-        /* Remake-only Multijoueur button over the title art. */
+        /* Remake-only multiplayer button over the title art. */
+    } else if (g_menu.screen == SCREEN_MAIN_MENU && intro_title_click(x, y)) {
+        /* Remake-only Intro button. */
     } else if (g_menu.screen == SCREEN_MAIN_MENU) {
         control = window_catalog_hit_test(&g_window_catalog, 0, x, y);
         if (control != NULL && strcmp(control->message_destination, "WINMGR") == 0) {

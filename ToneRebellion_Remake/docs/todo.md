@@ -22,4 +22,4 @@ None. The 2026-11-04 pass closed the previous ones ([floater states](../../decom
 
 ## Out of scope
 
-HallStk mode and the names of genres 0x2c; exact native multiplayer (DirectPlay, chat); `intro.avi`; `nevada` commands (keyboard rotation and zoom, task keys `U`/`F`: [tasks](../../decompilation/behavior/island-tasks.md)).
+HallStk mode and the names of genres 0x2c; exact native multiplayer (DirectPlay, chat); other `nevada` commands (keyboard rotation and zoom, task keys `U`/`F`: [tasks](../../decompilation/behavior/island-tasks.md)).

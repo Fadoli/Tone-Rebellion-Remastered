@@ -8,7 +8,7 @@ This page lists every behaviour of the remake that knowingly differs from `FLOAT
 |---|---|---|
 | Transport | DirectPlay sessions, native channels and turn rate. | Own TCP records (port 28610 by default) and lockstep turns of one tick (50 ms); see [multiplayer](../../decompilation/behavior/multiplayer.md). No chat. A slow player makes the others wait (with an "En attente de" message) instead of being dropped. |
 | Lost connection | The player leaves the session. | The player's slot is kept for 2 minutes while the game goes on; its machine reconnects by itself and receives the current session (`NET_RECORD_REJOIN`, `NET_RECORD_RESYNC`); a player who restarted the game gets the slot back by joining again with the same name. Both sides must run the same build (session layout tag in `HELLO`). A link silent for 15 s counts as lost. After 2 minutes the tribe hands its glyphs back, as when a player leaves. |
-| Lobby entry | DirectPlay property sheet (`FUN_0044c2b9`). | "Multijoueur" title button (`M`), the remake setup screen, `H`/`J` on the title, or `--host` / `--join address`. |
+| Lobby entry | DirectPlay property sheet (`FUN_0044c2b9`). | "Partie en ligne" title button (`M`), the remake setup screen ("Creer partie" / "Entrer partie"), `H`/`J` on the title, or `--host` / `--join address`. |
 | Tribes | One player per tribe. | Several players may share a tribe (co-operation). |
 | Pause | Refused in a network game (`FUN_004578df`, `DAT_004befe0 != 0`). | The pause zone of the options panel pauses every machine on the same turn (`GAME_COMMAND_SET_NETWORK_PAUSE`); turns keep flowing so the resume can arrive. Any player can pause or resume. |
 | Save | Refused in a network game. | The Save zone, `Shift+F5` and the `F5` quicksave save a local copy of the shared session; turns go on while the Save screen is open. Loaded outside a network game, such a save continues as a solo game. |
@@ -31,6 +31,8 @@ This page lists every behaviour of the remake that knowingly differs from `FLOAT
 | Topic | Original | Remake |
 |---|---|---|
 | Escape on the island or the world map | No effect. | Opens or closes the options panel (save, load, pause, quit, music, sound). It first puts back a held building, or disarms an armed spell or order. The island returns to the map through `GOTOMAP`. |
+| Intro movie | `intro.avi` (state 6, DirectShow `FUN_00449b80`) only through the title's `I` key with `nevada` in `FLOAT.CFG`; the end of playback returns to the title. | "Intro" title button (lower left) and `I` without `nevada`; the remake decodes the Cinepak video itself (`src/data/cinepak.c`). A click or a key ends it early; the title music stops for it and resumes after. Desktop only: the browser build has neither the button nor the key. |
+| Remake buttons | None. | Remake-only buttons reuse the TITSCRN button art: the background and the letters are cut from the four title buttons at run time (`remake_buttons.inc`), so captions only use their letters (A C D E G H I L N O P Q R T U V). |
 | End screen | A click on the player card, the story text or a card leaves to the title (`SetState(0)`); nothing skips the scroll. | A click skips the text scroll and the card reveal; Escape leaves to the title and ends the game. |
 | Save screen | No known entry key. | `Shift+F5` on the map or the island (`F5` when quicksave is turned off). |
 | Shift + right click | Not a merge shortcut. | Orders the selected floater to merge. |

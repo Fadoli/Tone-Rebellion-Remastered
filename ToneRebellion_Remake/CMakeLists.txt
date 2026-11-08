@@ -14,6 +14,7 @@ endif()
 
 add_library(tone_core STATIC
     src/data/cob_archive.c
+    src/data/cinepak.c
     src/data/iso9660.c
     src/data/pe_cursor.c
     src/data/font_image.c

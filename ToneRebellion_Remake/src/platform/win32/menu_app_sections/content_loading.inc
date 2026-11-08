@@ -765,6 +765,7 @@ static int app_run_bench(HWND window, const char *command_line, int *exit_code)
 static void app_release_content(void)
 {
     platform_free_cursors();
+    free_remake_buttons();
     free_sprite_sheet(&g_title_art);
     free_sprite_sheet(&g_new_background);
     free_sprite_sheet(&g_new_buttons);

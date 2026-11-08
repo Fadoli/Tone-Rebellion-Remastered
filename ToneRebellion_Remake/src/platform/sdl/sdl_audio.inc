@@ -197,9 +197,53 @@ static void sdl_music_set_gain(double gain)
         (void)SDL_SetAudioStreamGain(g_sdl_music.stream, (float)gain);
 }
 
+/* Intro movie soundtrack (intro_movie.inc): a stream the main thread fills
+   ahead of the picture with the AVI's PCM chunks. */
+static SDL_AudioStream *g_sdl_movie_stream;
+
+static void sdl_movie_audio_close(void)
+{
+    if (g_sdl_movie_stream != NULL) SDL_DestroyAudioStream(g_sdl_movie_stream);
+    g_sdl_movie_stream = NULL;
+}
+
+/* 8- or 16-bit PCM, 1 or 2 channels. */
+static int sdl_movie_audio_open(int channels, int frequency, int bits, double gain)
+{
+    SDL_AudioSpec spec;
+    sdl_movie_audio_close();
+    if ((bits != 8 && bits != 16) || channels < 1 || channels > 2 || frequency <= 0 ||
+        !sdl_audio_device()) return 0;
+    memset(&spec, 0, sizeof(spec));
+    spec.channels = channels;
+    spec.freq = frequency;
+    spec.format = bits == 8 ? SDL_AUDIO_U8 : SDL_AUDIO_S16LE;
+    g_sdl_movie_stream = SDL_CreateAudioStream(&spec, NULL);
+    if (g_sdl_movie_stream == NULL) return 0;
+    if (!SDL_BindAudioStream(g_sdl_audio_device, g_sdl_movie_stream)) {
+        sdl_movie_audio_close();
+        return 0;
+    }
+    (void)SDL_SetAudioStreamGain(g_sdl_movie_stream, (float)gain);
+    return 1;
+}
+
+static void sdl_movie_audio_put(const void *data, int size)
+{
+    if (g_sdl_movie_stream != NULL && size > 0)
+        (void)SDL_PutAudioStreamData(g_sdl_movie_stream, data, size);
+}
+
+/* Bytes (in the stream's own format) still waiting to be played. */
+static int sdl_movie_audio_queued(void)
+{
+    return g_sdl_movie_stream != NULL ? SDL_GetAudioStreamQueued(g_sdl_movie_stream) : 0;
+}
+
 /* Before SDL_Quit (sdl_destroy_window): the streams and the device. */
 static void sdl_audio_close(void)
 {
+    sdl_movie_audio_close();
     sdl_music_close();
     if (g_sdl_audio_device != 0) {
         SDL_CloseAudioDevice(g_sdl_audio_device);
