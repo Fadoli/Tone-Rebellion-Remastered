@@ -108,7 +108,8 @@ static void run_ui_frame(HWND window, WPARAM wparam)
     }
     if (wparam == 1 && g_menu.screen == SCREEN_INTRO) {
         intro_tick();
-        update_window_title(window);
+        /* The movie may have ended: back on the title. */
+        if (g_menu.screen != SCREEN_INTRO) update_window_title(window);
         platform_invalidate(window);
         return;
     }

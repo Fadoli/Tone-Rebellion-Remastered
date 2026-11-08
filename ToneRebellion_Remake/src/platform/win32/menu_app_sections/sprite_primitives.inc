@@ -163,10 +163,11 @@ static void update_window_title(HWND window)
         title = "Tone Rebellion - Island (arrows: scroll, Esc: options)";
     else if (g_menu.screen == SCREEN_LOAD_GAME) title = g_load_save_mode ? "Tone Rebellion - Save Game (Esc: back)" : "Tone Rebellion - Load Game (Esc: back)";
     platform_set_title(window, title);
-    if (g_menu.screen != SCREEN_ISLAND) {
+    if (g_menu.screen != SCREEN_ISLAND && g_menu.screen != SCREEN_INTRO) {
         /* FUN_004489c0 requests ambi1 for the title. The remake keeps this
            menu bed through setup/map screens. Island-entry music is selected
-           once per realm using FUN_00470fe7's transition table. */
+           once per realm using FUN_00470fe7's transition table. The intro
+           movie plays its own soundtrack alone (intro_movie.inc). */
         set_background_tune("ambi1");
     }
 }
