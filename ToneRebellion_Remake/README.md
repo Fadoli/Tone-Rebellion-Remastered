@@ -28,9 +28,11 @@ The build refreshes `ToneRebellion_Remake.exe`, `SDL3.dll` and `libiconv-2.dll` 
 Pushing a tag `v*` runs [`.github/workflows/release.yml`](../.github/workflows/release.yml): it builds and tests the Windows game, builds the web version, attaches both zips to a GitHub release and publishes the web version to GitHub Pages ("Run workflow" does the builds and the Pages deployment without a release).
 
 ```sh
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.2
+git push origin v0.1.2
 ```
+
+Every player-facing change goes into [CHANGELOG.md](CHANGELOG.md) under the next version (`## <version> - unreleased`); before tagging, date that section. The release text is the install notes plus that section.
 
 ## Documentation
 

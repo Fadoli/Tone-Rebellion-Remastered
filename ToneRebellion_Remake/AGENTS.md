@@ -11,3 +11,4 @@
 - Preserve original record ordering and IDs when loading game data. Reject malformed inputs with explicit errors.
 - Do not claim gameplay parity from parser checks. Compare the remake with independently supplied runtime captures if they become available.
 - Keep build output under `build/`; do not add generated binaries or CMake state to source documentation.
+- Record every player-facing change (feature, default, fix) in `CHANGELOG.md` under the unreleased version, in the commit that makes it.

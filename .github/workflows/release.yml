@@ -137,19 +137,39 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: ToneRebellion_Remake/CHANGELOG.md
+          sparse-checkout-cone-mode: false
+
       - uses: actions/download-artifact@v8
         with:
           path: assets
           merge-multiple: true
 
+      # Release text: the install notes, then this version's CHANGELOG.md
+      # section (from "## <version>" to the next "## ").
+      - name: Release notes
+        env:
+          PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          {
+            echo "Tone Rebellion remake ${GITHUB_REF_NAME}."
+            echo
+            echo '- Windows: unzip and run `ToneRebellion_Remake.exe`. It finds your copy of Tone Rebellion in `C:\Program Files\Tone`, on a mounted CD, or as a `.iso` or `.img` placed next to the executable; you can also drop the game folder or the `.iso`/`.img` onto the executable, or pass `--game-dir <folder>`.'
+            echo "- Browser: ${PAGES_URL} asks for the game folder or the CD image; the files stay in your browser."
+            echo
+            echo "No game data is included."
+            echo
+            awk -v v="$version" '
+              /^## / { if (found) exit; if ($2 == v) { found = 1; next } }
+              found' ToneRebellion_Remake/CHANGELOG.md
+          } > release_notes.md
+          cat release_notes.md
+
       - uses: softprops/action-gh-release@v3
         with:
           files: assets/*.zip
           generate_release_notes: true
-          body: |
-            Tone Rebellion remake ${{ github.ref_name }}.
-
-            - Windows: unzip and run `ToneRebellion_Remake.exe`. It finds your copy of Tone Rebellion in `C:\Program Files\Tone`, on a mounted CD, or as a `.iso` or `.img` placed next to the executable; you can also drop the game folder or the `.iso`/`.img` onto the executable, or pass `--game-dir <folder>`.
-            - Browser: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/ asks for the game folder or the CD image; the files stay in your browser.
-
-            No game data is included.
+          body_path: release_notes.md
