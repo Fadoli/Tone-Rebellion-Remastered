@@ -6,8 +6,8 @@ Status: playable, but not complete. What is ported and its limits: [ported featu
 
 ## Play
 
-- **Windows:** download `ToneRebellion_Remake-<version>-windows-x64.zip` from the [releases](https://github.com/Fadoli/Tone-Rebellion-Remastered/releases), unzip it and run `ToneRebellion_Remake.exe`. It finds the game in `C:\Program Files\Tone`, on a mounted CD, or as a `.iso` placed next to the executable; you can also drop the game folder or the `.iso` onto the executable, or pass `--game-dir <folder>` / `--iso <file>`.
-- **Browser:** [fadoli.github.io/Tone-Rebellion-Remastered](https://fadoli.github.io/Tone-Rebellion-Remastered/) asks for the game folder or the CD image (`.iso`); the files stay in the browser's storage, nothing is uploaded.
+- **Windows:** download `ToneRebellion_Remake-<version>-windows-x64.zip` from the [releases](https://github.com/Fadoli/Tone-Rebellion-Remastered/releases), unzip it and run `ToneRebellion_Remake.exe`. It finds the game in `C:\Program Files\Tone`, on a mounted CD, or as a `.iso` or `.img` placed next to the executable; you can also drop the game folder or the `.iso`/`.img` onto the executable, or pass `--game-dir <folder>` / `--iso <file>`.
+- **Browser:** [fadoli.github.io/Tone-Rebellion-Remastered](https://fadoli.github.io/Tone-Rebellion-Remastered/) asks for the game folder or the CD image (`.iso` or `.img`); the files stay in the browser's storage, nothing is uploaded.
 
 Remake keys on the island and the world map: `F2` remake options (display rate, scaling filter, scrolling, alerts, shortcuts and their keys, saves), `Esc` options panel, `F5` quicksave, `F9` quickload, `Shift+F9` autosave, `Space` jump to the newest alert, `8`/`9` game speed, `F12` scaling filter. Everything the remake changes on purpose is listed in [differences from the original game](docs/differences-from-original.md).
 

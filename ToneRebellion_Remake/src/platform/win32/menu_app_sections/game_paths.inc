@@ -29,8 +29,8 @@ static int game_directory_accept(const char *directory)
     return 1;
 }
 
-/* A disc image (.iso) can be used directly: the files the game needs are
-   copied once into a cache folder (the image itself is never modified) and
+/* A disc image (.iso, or .img with cooked 2048 or raw 2352-byte sectors)
+   can be used directly: the files the game needs are copied once into a cache folder (the image itself is never modified) and
    that folder becomes the game directory. Tunes are copied on first use. */
 static Iso9660 g_iso;
 static int g_iso_open;
@@ -141,13 +141,14 @@ static int visit_game_iso(const char *path, void *context)
     return ok;
 }
 
-/* First *.iso next to the executable that holds the game. */
+/* First *.iso (then *.img) next to the executable that holds the game. */
 static int find_adjacent_iso(const char *directory, char *out, size_t capacity)
 {
     IsoSearch search;
     search.out = out;
     search.capacity = capacity;
-    return platform_each_file(directory, ".iso", visit_game_iso, &search);
+    return platform_each_file(directory, ".iso", visit_game_iso, &search) ||
+           platform_each_file(directory, ".img", visit_game_iso, &search);
 }
 
 static void game_directory_resolve(const char *command_line)
@@ -162,7 +163,7 @@ static void game_directory_resolve(const char *command_line)
         game_directory_accept(candidate)) return;
     if (command_line_value(command_line, "--iso", candidate, sizeof(candidate)) &&
         game_directory_from_iso(candidate)) return;
-    /* Dropping an .iso (or a game folder) on the executable passes it as the
+    /* Dropping an .iso/.img (or a game folder) on the executable passes it as the
        sole argument. */
     if (command_line != NULL) {
         const char *cursor = command_line;

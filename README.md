@@ -11,12 +11,12 @@ Two parts live here:
 - **The remaster** ([ToneRebellion_Remake/](ToneRebellion_Remake/README.md)): a new engine that loads the original game data and reproduces its rules, screens and sounds. It runs on modern Windows and in the browser.
 - **The analysis workspace** ([decompilation/](decompilation/README.md)): notes, an index and decompiler pseudocode for `FLOAT.EXE` 1.16F, used as a reference. The remaster is written from these, so every ported behaviour can be traced back to its evidence.
 
-No game data is included. You need your own copy of *Tone Rebellion*: the installed folder, the CD, or a `.iso` image.
+No game data is included. You need your own copy of *Tone Rebellion*: the installed folder, the CD, or a `.iso` / `.img` image.
 
 ## Play
 
-- **Windows:** download `ToneRebellion_Remake-<version>-windows-x64.zip` from the [releases](https://github.com/Fadoli/Tone-Rebellion-Remastered/releases), unzip it and run `ToneRebellion_Remake.exe`. It finds the game in `C:\Program Files\Tone`, on a mounted CD, or as a `.iso` next to the executable. You can also drop the folder or the `.iso` onto the executable.
-- **Browser:** [fadoli.github.io/Tone-Rebellion-Remastered](https://fadoli.github.io/Tone-Rebellion-Remastered/). Pick the game folder or the `.iso`; the files stay in your browser and nothing is uploaded.
+- **Windows:** download `ToneRebellion_Remake-<version>-windows-x64.zip` from the [releases](https://github.com/Fadoli/Tone-Rebellion-Remastered/releases), unzip it and run `ToneRebellion_Remake.exe`. It finds the game in `C:\Program Files\Tone`, on a mounted CD, or as a `.iso` or `.img` next to the executable. You can also drop the folder or the `.iso`/`.img` onto the executable.
+- **Browser:** [fadoli.github.io/Tone-Rebellion-Remastered](https://fadoli.github.io/Tone-Rebellion-Remastered/). Pick the game folder or the `.iso`/`.img`; the files stay in your browser and nothing is uploaded.
 
 ## What the remake adds
 

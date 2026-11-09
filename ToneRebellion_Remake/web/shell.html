@@ -18,6 +18,7 @@
            background: transparent; color: var(--text); font: inherit; cursor: pointer; }
   #setup button.primary { background: var(--accent); color: #0b0d12; }
   #setup input[type=file] { display: none; }
+  #setup.dropping { border: 2px dashed var(--accent); padding: calc(1.5rem - 1px) calc(1.75rem - 1px); }
   #status { min-height: 1.5em; margin-top: 1rem; color: var(--accent); }
   /* SDL (fill-document window) sizes the canvas to the whole page. */
   #game { display: none; position: fixed; inset: 0; overflow: hidden; }
@@ -30,7 +31,8 @@
   <p>Choisissez le dossier du jeu d'origine : le CD (ou son image extraite) contenant
      <code>THING1</code> et <code>THING2</code>, ou un dossier d'installation contenant
      <code>TONE00.COB</code> et <code>TONE01.COB</code>, ou bien l'image du CD
-     (<code>.iso</code>). Les fichiers restent dans ce
+     (<code>.iso</code> ou <code>.img</code>, à choisir ou à glisser-déposer sur
+     cette page). Les fichiers restent dans ce
      navigateur : ils sont copiés dans son stockage local, rien n'est envoyé.</p>
   <p><label><input type="checkbox" id="music" checked> Copier aussi les musiques
      (<code>THING2\*.WAV</code>, environ 330 Mo)</label></p>
@@ -38,8 +40,8 @@
     <button id="play" class="primary" hidden>Jouer</button>
     <label class="pick">Choisir le dossier du jeu…
       <input type="file" id="folder" webkitdirectory multiple></label>
-    <label class="pick">Choisir l'image du CD (.iso)…
-      <input type="file" id="iso" accept=".iso"></label>
+    <label class="pick">Choisir l'image du CD (.iso, .img)…
+      <input type="file" id="iso" accept=".iso,.img"></label>
   </div>
   <div>
     <button id="export">Exporter les sauvegardes</button>
@@ -115,11 +117,28 @@
      ";1" version suffix dropped. Only the root and its THING1/THING2
      folders are listed. */
   const ISO_SECTOR = 2048;
-  async function isoBytes(file, offset, length) {
-    return new Uint8Array(await file.slice(offset, offset + length).arrayBuffer());
+  /* Sector layouts, as in src/data/iso9660.c: cooked .iso/.img, then raw
+     2352-byte mode 1 and mode 2 form 1 (.img/.bin rips). */
+  const ISO_LAYOUTS = [{ size: 2048, offset: 0 }, { size: 2352, offset: 16 },
+                       { size: 2352, offset: 24 }];
+  /* `length` bytes of user data starting at logical sector `sector`. */
+  async function isoBytes(file, layout, sector, length) {
+    const start = sector * layout.size;
+    if (layout.size === ISO_SECTOR)
+      return new Uint8Array(await file.slice(start, start + length).arrayBuffer());
+    const count = Math.ceil(length / ISO_SECTOR);
+    const raw = new Uint8Array(await file.slice(start, start + count * layout.size).arrayBuffer());
+    const out = new Uint8Array(length);
+    for (let index = 0; index < count; ++index) {
+      const from = index * layout.size + layout.offset;
+      const take = Math.min(ISO_SECTOR, length - index * ISO_SECTOR);
+      if (from + take > raw.length) throw new Error("image du CD tronquée");
+      out.set(raw.subarray(from, from + take), index * ISO_SECTOR);
+    }
+    return out;
   }
-  async function isoDirectory(file, extent, size) {
-    const bytes = await isoBytes(file, extent * ISO_SECTOR, size);
+  async function isoDirectory(file, layout, extent, size) {
+    const bytes = await isoBytes(file, layout, extent, size);
     const view = new DataView(bytes.buffer);
     const entries = [];
     let at = 0;
@@ -145,24 +164,33 @@
     return entries;
   }
   async function isoFiles(file) {
-    const volume = await isoBytes(file, 16 * ISO_SECTOR, ISO_SECTOR);
-    if (volume[0] !== 1 || String.fromCharCode(...volume.subarray(1, 6)) !== "CD001")
-      throw new Error("ce fichier n'est pas une image ISO 9660");
+    let layout = null;
+    let volume = null;
+    for (const candidate of ISO_LAYOUTS) {
+      if ((16 + 1) * candidate.size > file.size) continue;
+      const bytes = await isoBytes(file, candidate, 16, ISO_SECTOR);
+      if (bytes[0] === 1 && String.fromCharCode(...bytes.subarray(1, 6)) === "CD001") {
+        layout = candidate;
+        volume = bytes;
+        break;
+      }
+    }
+    if (layout === null)
+      throw new Error("ce fichier n'est pas une image ISO 9660 (.iso / .img)");
     const rootView = new DataView(volume.buffer, 156, 34);
-    const root = await isoDirectory(file, rootView.getUint32(2, true),
+    const root = await isoDirectory(file, layout, rootView.getUint32(2, true),
                                     rootView.getUint32(10, true));
     const files = [];
     const asFile = (entry, path) => ({
       name: entry.name, webkitRelativePath: path, size: entry.size,
-      arrayBuffer: () => file.slice(entry.extent * ISO_SECTOR,
-                                    entry.extent * ISO_SECTOR + entry.size).arrayBuffer()
+      arrayBuffer: async () => (await isoBytes(file, layout, entry.extent, entry.size)).buffer
     });
     for (const entry of root) {
       const folder = entry.name.toUpperCase();
       if (!entry.directory) {
         files.push(asFile(entry, "CD/" + entry.name));
       } else if (folder === "THING1" || folder === "THING2") {
-        for (const child of await isoDirectory(file, entry.extent, entry.size))
+        for (const child of await isoDirectory(file, layout, entry.extent, entry.size))
           if (!child.directory) files.push(asFile(child, "CD/" + folder + "/" + child.name));
       }
     }
@@ -346,18 +374,55 @@
     try { await importSaves(event.target.files); } catch (error) { setStatus("Erreur : " + error); }
     event.target.value = "";
   });
-  document.getElementById("iso").addEventListener("change", async (event) => {
+  async function importImage(image) {
     playButton.hidden = true;
     try {
-      const image = event.target.files[0];
-      if (image !== undefined) {
-        setStatus("Lecture de l'image du CD…");
-        if (await copyFolder(await isoFiles(image))) start();
-      }
+      setStatus("Lecture de l'image du CD…");
+      if (await copyFolder(await isoFiles(image))) start();
     } catch (error) {
       setStatus("Erreur : " + error.message);
     }
+  }
+  document.getElementById("iso").addEventListener("change", async (event) => {
+    const image = event.target.files[0];
+    if (image !== undefined) await importImage(image);
     event.target.value = "";
+  });
+
+  /* Drag and drop of the CD image anywhere on the page while the setup
+     panel is shown. The browser never opens the dropped file itself. */
+  const setupPanel = document.getElementById("setup");
+  let dragDepth = 0;
+  const carriesFiles = (event) =>
+    event.dataTransfer !== null && Array.from(event.dataTransfer.types).includes("Files");
+  const setupShown = () => setupPanel.style.display !== "none";
+  document.addEventListener("dragenter", (event) => {
+    if (!carriesFiles(event) || !setupShown()) return;
+    event.preventDefault();
+    if (++dragDepth === 1) setupPanel.classList.add("dropping");
+  });
+  document.addEventListener("dragleave", (event) => {
+    if (!carriesFiles(event) || dragDepth === 0) return;
+    if (--dragDepth === 0) setupPanel.classList.remove("dropping");
+  });
+  document.addEventListener("dragover", (event) => {
+    if (!carriesFiles(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = setupShown() ? "copy" : "none";
+  });
+  document.addEventListener("drop", async (event) => {
+    if (!carriesFiles(event)) return;
+    event.preventDefault();
+    dragDepth = 0;
+    setupPanel.classList.remove("dropping");
+    if (!setupShown() || syncing) return;
+    const files = Array.from(event.dataTransfer.files);
+    const image = files.find((file) => /\.(iso|img)$/i.test(file.name));
+    if (image === undefined) {
+      setStatus("Déposez une image du CD (.iso ou .img).");
+      return;
+    }
+    await importImage(image);
   });
   folderInput.addEventListener("change", async () => {
     playButton.hidden = true;

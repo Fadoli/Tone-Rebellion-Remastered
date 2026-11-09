@@ -149,7 +149,7 @@ jobs:
           body: |
             Tone Rebellion remake ${{ github.ref_name }}.
 
-            - Windows: unzip and run `ToneRebellion_Remake.exe`. It finds your copy of Tone Rebellion in `C:\Program Files\Tone`, on a mounted CD, or as a `.iso` placed next to the executable; you can also drop the game folder or the `.iso` onto the executable, or pass `--game-dir <folder>`.
+            - Windows: unzip and run `ToneRebellion_Remake.exe`. It finds your copy of Tone Rebellion in `C:\Program Files\Tone`, on a mounted CD, or as a `.iso` or `.img` placed next to the executable; you can also drop the game folder or the `.iso`/`.img` onto the executable, or pass `--game-dir <folder>`.
             - Browser: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/ asks for the game folder or the CD image; the files stay in your browser.
 
             No game data is included.
