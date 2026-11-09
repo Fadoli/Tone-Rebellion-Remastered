@@ -80,16 +80,28 @@ static int g_quicksave_enabled = 1;
 static int g_autosave_minutes = 5;
 /* OpenGL only: swaps wait for the monitor's refresh. */
 static int g_vsync;
-/* Remake widescreen (off = the original 640x480 frame). On, the frame is
-   g_frame_width x 480, as wide as the window's shape allows up to
-   FRAME_MAX_WIDTH: the 640x480 picture of every screen (the island's lower
-   panel, windows, menus) stays centred at frame x frame_side(), and only the
-   island view (the top 320 rows) fills the whole width. Game coordinates
-   (g_mouse_x, panes, clicks) stay in that centred 640 space, where the
-   island view spans [-frame_side(), LOGICAL_WIDTH + frame_side()). */
+/* Remake widescreen: the widest aspect ratio the frame may take
+   (video.cfg `widescreen`, a WidescreenLimit; 4:3 = the original 640x480
+   frame). Wider, the frame is g_frame_width x 480, as wide as the window's
+   shape allows up to that ratio: the 640x480 picture of every screen (the
+   island's lower panel, windows, menus) stays centred at frame x
+   frame_side(), and only the island view (the top 320 rows) fills the whole
+   width. Game coordinates (g_mouse_x, panes, clicks) stay in that centred
+   640 space, where the island view spans [-frame_side(), LOGICAL_WIDTH +
+   frame_side()). Values keep the order of older video.cfg files (1 was the
+   16:9 on/off switch); the options panel steps through WIDESCREEN_ORDER. */
+enum { WIDESCREEN_4_3, WIDESCREEN_16_9, WIDESCREEN_16_10, WIDESCREEN_21_9,
+       WIDESCREEN_UNLIMITED, WIDESCREEN_COUNT };
 static int g_widescreen;
-/* 16:9 at 480 rows (853.3, rounded to an even width). */
-enum { FRAME_MAX_WIDTH = 854 };
+/* Without a limit: the island art's 2560 width, so the view never shows
+   past the island. */
+enum { FRAME_MAX_WIDTH = 2560 };
+/* Frame width at each limit: 480 rows times the ratio, even. */
+static const int g_widescreen_widths[WIDESCREEN_COUNT] = {
+    640, 854, 768, 1120, FRAME_MAX_WIDTH};
+static const int g_widescreen_order[WIDESCREEN_COUNT] = {
+    WIDESCREEN_4_3, WIDESCREEN_16_10, WIDESCREEN_16_9, WIDESCREEN_21_9,
+    WIDESCREEN_UNLIMITED};
 /* Width of the frame last drawn (render_back_buffer). */
 static int g_frame_width = LOGICAL_WIDTH;
 /* While a frame is drawn: the centred 640x480 picture inside the back
@@ -124,7 +136,7 @@ static const RemakeSetting g_remake_settings[] = {
     {"quicksave", &g_quicksave_enabled, 0, 1},
     {"autosave", &g_autosave_minutes, 0, 60},
     {"vsync", &g_vsync, 0, 1},
-    {"widescreen", &g_widescreen, 0, 1},
+    {"widescreen", &g_widescreen, 0, WIDESCREEN_COUNT - 1},
     {"lang", &g_language_setting, -1, REMAKE_LANG_COUNT - 1}
 };
 enum { REMAKE_SETTING_COUNT = sizeof(g_remake_settings) / sizeof(g_remake_settings[0]) };
@@ -190,13 +202,16 @@ static int filter_available(int filter);
 /* sdl_app.inc: whether the frame is drawn through OpenGL. */
 static int gl_is_ready(void);
 
-/* Frame width for a client area: 640 without widescreen, else the
-   window's width at the frame's 480-row height (whole multiples: the
-   width at the largest factor that fits 640x480), even, 640..FRAME_MAX_WIDTH. */
+/* Frame width for a client area: the window's width at the frame's
+   480-row height (whole multiples: the width at the largest factor that
+   fits 640x480), even, from 640 up to the widescreen limit. */
 static int frame_width_for_client(int client_width, int client_height)
 {
     int width;
-    if (!g_widescreen || client_width <= 0 || client_height <= 0) return LOGICAL_WIDTH;
+    int limit = g_widescreen >= 0 && g_widescreen < WIDESCREEN_COUNT
+        ? g_widescreen_widths[g_widescreen] : LOGICAL_WIDTH;
+    if (limit <= LOGICAL_WIDTH || client_width <= 0 || client_height <= 0)
+        return LOGICAL_WIDTH;
     width = (int)((int64_t)client_width * LOGICAL_HEIGHT / client_height);
     if (g_scale_mode == SCALE_INTEGER) {
         int factor_x = client_width / LOGICAL_WIDTH;
@@ -206,7 +221,7 @@ static int frame_width_for_client(int client_width, int client_height)
     }
     width &= ~1;
     if (width < LOGICAL_WIDTH) width = LOGICAL_WIDTH;
-    if (width > FRAME_MAX_WIDTH) width = FRAME_MAX_WIDTH;
+    if (width > limit) width = limit;
     return width;
 }
 

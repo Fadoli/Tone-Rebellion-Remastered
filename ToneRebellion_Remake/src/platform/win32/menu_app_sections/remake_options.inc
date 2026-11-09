@@ -317,7 +317,14 @@ static void options_value_text(int row, char *text, size_t capacity)
         (void)snprintf(text, capacity, "%s", TR(scales[g_scale_mode]));
         break;
     case OPTION_WIDESCREEN:
-        (void)snprintf(text, capacity, "%s", options_yes_no(g_widescreen));
+        if (g_widescreen == WIDESCREEN_UNLIMITED)
+            (void)snprintf(text, capacity, "%s", TR(T_ASPECT_UNLIMITED));
+        else
+            (void)snprintf(text, capacity, "%s%s",
+                           g_widescreen == WIDESCREEN_16_9 ? "16:9"
+                           : g_widescreen == WIDESCREEN_16_10 ? "16:10"
+                           : g_widescreen == WIDESCREEN_21_9 ? "21:9" : "4:3",
+                           g_widescreen == WIDESCREEN_4_3 ? TR(T_ORIGINAL_SUFFIX) : "");
         break;
     case OPTION_FILTER:
         (void)snprintf(text, capacity, "%s", upscale_filter_label(g_upscale_filter));
@@ -404,11 +411,15 @@ static void options_change(HWND window, int row, int step)
         set_scale_mode(window, (g_scale_mode + step + SCALE_MODE_COUNT) %
                                    SCALE_MODE_COUNT);
         break;
-    case OPTION_WIDESCREEN:
-        options_flip(&g_widescreen);
+    case OPTION_WIDESCREEN: {
+        int at = 0;
+        while (at < WIDESCREEN_COUNT - 1 && g_widescreen_order[at] != g_widescreen) ++at;
+        g_widescreen = g_widescreen_order[(at + step + WIDESCREEN_COUNT) % WIDESCREEN_COUNT];
+        save_video_settings();
         /* The frame changes shape: repaint the whole client. */
         platform_invalidate(window);
         break;
+    }
     case OPTION_FILTER:
     {
         /* Only the filters this machine can run. */
