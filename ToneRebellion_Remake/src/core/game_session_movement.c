@@ -1252,6 +1252,11 @@ static int game_session_create_recruited_worker(GameSession *session,
     floater = &session->floaters[floater_index];
     memset(floater, 0, sizeof(*floater));
     floater->is_active = 1;
+    /* The floater allocator FUN_00466fe4 draws rand(0x100) into +0x14 for
+       every new unit (0x467085..0x467097, ev_7a299ddd), the phase of the
+       FUN_00426fd0 hover bob. */
+    floater->animation_seed = (uint8_t)tone_rng_bounded(
+        &session->random_state, 0x100);
     floater->island_index = island_index;
     floater->type_index = type_index;
     floater->source_subtype = 0;

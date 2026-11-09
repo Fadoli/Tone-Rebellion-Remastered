@@ -195,6 +195,16 @@ int game_session_initialize(const WorldDefinition *world,
                                            &next, &rng, error, error_capacity)) {
         return 0;
     }
+    /* The starting units come from the floater allocator FUN_00466fe4 (via
+       FUN_0046466f -> FUN_00462a87), which draws rand(0x100) into +0x14,
+       the hover bob phase (0x467085..0x467097, ev_7a299ddd). Interpretation:
+       the port draws them here, after the other start draws; their place
+       in the native start sequence is not established. */
+    for (island_index = 0; island_index < GAME_SESSION_MAX_FLOATERS; ++island_index) {
+        if (!next.floaters[island_index].is_active) continue;
+        next.floaters[island_index].animation_seed =
+            (uint8_t)tone_rng_bounded(&rng, 0x100);
+    }
     next.random_state = rng;
 
     /* FUN_004528ca starts newly instantiated pad objects with flags 0x410,

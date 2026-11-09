@@ -174,6 +174,17 @@ par `DAT_00618e44`. Aucun lien vers la table floaters: aucun clic ne sélectionn
 Port: ouvrier synthétique animé (hover + bob, corps frame 0), clic retiré.
 Inconnue: octet de phase `+0x14` non initialisé par le constructeur (pile), le port prend 0.
 
+Phase `+0x14` des vrais floaters (REA haiku 2026-11-09): `FUN_00426fd0` lit l'octet
+`+0x14` (0x426fe9 `MOV CL,[EAX+0x14]`, ev_6035ebb5…). L'allocateur `FUN_00466fe4`,
+appelé par `FUN_00462a87` pour tous les propriétaires 0..4 (0x462b1b, ev_736ded6a…),
+y écrit `rand(0x100)` (`PUSH 0x100; CALL 0x4014bf` puis 0x467097 `MOV [EDX+0x14],AL`,
+ev_7a299ddd…; `FUN_00467260` = LCG `DAT_004a4b78`, ev_7f989937…). Seul écrivain
+octet trouvé (balayage disp8 sans SIB). Port: tirage à la création des ouvriers
+recrutés et des unités de départ (ordre du tirage de départ: interprétation), et
+pour les sauvegardes remake de révision < 2. Inconnues: lequel de `FUN_004532e2`,
+`FUN_0046466f`, `FUN_00464e4d`, `FUN_004672ef` est la naissance d'ouvrier; place
+exacte du tirage dans la séquence de départ.
+
 ### Variante non-résumé du Hall (P+0x18 != -1) — port partiel
 
 Observation (ev_671a14319b…, ev_9bd33459…, ev_7cbbb9a2…, ev_b5f6de1a…, asm

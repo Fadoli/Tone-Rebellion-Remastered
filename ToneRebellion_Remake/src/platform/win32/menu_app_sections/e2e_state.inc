@@ -496,7 +496,7 @@ static void e2e_write_state(void)
                 f->island_index != g_menu.selected_map_island) continue;
             fprintf(file, "floater %u %d %d owner=%d type=%d subtype=%d "
                     "flags=%u link=%d cargo=%d level=%d hp=%d hp_max=%d "
-                    "charge=%d strength=%d range=%d speed=%d\n",
+                    "charge=%d strength=%d range=%d speed=%d phase=%d\n",
                     i, (int)f->x, (int)f->y,
                     (int)f->owner_slot, (int)f->type_index,
                     (int)f->source_subtype, (unsigned)f->source_runtime_flags,
@@ -504,7 +504,8 @@ static void e2e_write_state(void)
                     (int)(f->attack_level_flags & 0x0fU),
                     (int)f->current_hit_points, (int)f->max_hit_points,
                     (int)f->charge_current, (int)f->attack_strength,
-                    (int)f->attack_range, (int)f->movement_speed);
+                    (int)f->attack_range, (int)f->movement_speed,
+                    (int)f->animation_seed);
         }
         for (i = 0; i < island->location_count; ++i) {
             const GameRuntimeLocation *l = &island->locations[i];

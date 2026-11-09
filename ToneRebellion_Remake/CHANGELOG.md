@@ -2,6 +2,12 @@
 
 Player-facing changes of the Tone Rebellion remake, newest first. Each release is a `v*` tag (see [Releases](README.md#releases)); its GitHub release text is the matching section below. Behaviour that knowingly differs from `FLOAT.EXE` is detailed in [differences from the original](docs/differences-from-original.md).
 
+## 0.1.3 - unreleased
+
+### Fixed
+
+- Units no longer all bob up and down in step: each tribe unit gets its own hover phase, as every unit created by the original does. Games saved before this fix get the phases when loaded.
+
 ## 0.1.2 - 2026-11-09
 
 ### Added

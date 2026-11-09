@@ -45,7 +45,8 @@ enum {
      instead); other kind changes drop the field;
    - changing what a value means: bump GAME_SESSION_SAVE_REVISION and add
      the conversion to game_session_schema_upgrade. */
-enum { GAME_SESSION_SAVE_REVISION = 1 };
+/* 2: tribe floaters carry their FUN_00466fe4 hover-bob phase. */
+enum { GAME_SESSION_SAVE_REVISION = 2 };
 
 /* Old name -> current name. field NULL renames the struct type itself;
    otherwise the field of the (current) type named type. */

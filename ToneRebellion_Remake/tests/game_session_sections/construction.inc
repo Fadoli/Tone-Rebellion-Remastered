@@ -1012,7 +1012,11 @@ static void test_initialized_workers_build_from_queued_selection(void)
         const GameFloaterStart *worker = &session.floaters[
             (unsigned int)(start->floater_type_index *
                 GAME_START_FLOATERS_PER_PLAYER) + worker_index];
-        assert(worker->active_order_action == 0);
+        /* Detached: no order, or already the idle FA_Wander home order
+           (0x0e) that FUN_0042219e falls back to; which one depends on the
+           random draws before this tick. */
+        assert(worker->active_order_action == 0 ||
+               worker->active_order_action == 0x0e);
         assert(worker->linked_task_slot == -1);
     }
 }
