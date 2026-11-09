@@ -39,7 +39,10 @@ static int e2e_start_fixture(HWND window)
    (subtypes 12 and 9). TONE_REBELLION_E2E_FIXTURE=enemy_hall builds the
    same game and opens tribe 1's Hall island instead; "spell" adds a stocked
    spell building with a linked caster and selects it; "repair" a damaged
-   0x25 producer (1 hit point), selected. Returns 1 when built. */
+   0x25 producer (1 hit point), selected; "upgrade" a settled 0x2c staff
+   building at tier 0 with a pending upgrade request, "upgrade_max" one at
+   its max tier 2, both selected with every island accessible (the
+   FUN_0045c89b island-count threshold). Returns 1 when built. */
 static int e2e_build_fixture(HWND window)
 {
     char name[32];
@@ -57,7 +60,8 @@ static int e2e_build_fixture(HWND window)
          strcmp(name, "spell") != 0 && strcmp(name, "dying") != 0 &&
          strcmp(name, "obtain") != 0 && strcmp(name, "victory") != 0 &&
          strcmp(name, "messages") != 0 && strcmp(name, "return") != 0 &&
-         strcmp(name, "repair") != 0))
+         strcmp(name, "repair") != 0 && strcmp(name, "upgrade") != 0 &&
+         strcmp(name, "upgrade_max") != 0))
         return 0;
     g_menu.world_index = 0;
     g_menu.selected_tribe = 0;
@@ -200,6 +204,37 @@ static int e2e_build_fixture(HWND window)
                     0, island, location, &site, 0x25, NULL, 0)) continue;
             g_game_session.islands[island].locations[location].source_value_34 = 1;
             x = g_game_session.islands[island].locations[location].x;
+            if (!open_island_view(window, island)) return 0;
+            g_island_scroll_x = island_clamp_scroll((int)x - 0x140);
+            select_location_on_view((int)location);
+            return 1;
+        }
+    }
+    if (strcmp(name, "upgrade") == 0 || strcmp(name, "upgrade_max") == 0) {
+        uint16_t location;
+        unsigned int other;
+        for (other = 0; other < g_game_session.island_count; ++other)
+            g_game_session.islands[other].access_mask |= 1U;
+        for (location = 0;
+             location < g_game_session.islands[island].location_count;
+             ++location) {
+            GameRuntimeLocation *staff;
+            IslandLocation site = {0};
+            site.kind = ISLAND_LOCATION_PAD;
+            site.renderer_subtype =
+                g_game_session.islands[island].locations[location]
+                    .construction_site_size;
+            if (!game_session_place_building(&g_game_session, &g_pad_catalog,
+                    0, island, location, &site, 0x2c, NULL, 0)) continue;
+            staff = &g_game_session.islands[island].locations[location];
+            staff->source_flags &= ~0x0b0U;
+            staff->source_value_48 = 0;
+            if (strcmp(name, "upgrade_max") == 0)
+                staff->source_capacity_4a = 2;
+            else
+                (void)game_session_toggle_staff_upgrade_request(&g_game_session,
+                    0, island, location);
+            x = staff->x;
             if (!open_island_view(window, island)) return 0;
             g_island_scroll_x = island_clamp_scroll((int)x - 0x140);
             select_location_on_view((int)location);

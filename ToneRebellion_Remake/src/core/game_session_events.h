@@ -62,6 +62,19 @@ int game_session_toggle_staff_upgrade_request(GameSession *session,
                                               uint8_t player_slot,
                                               uint8_t island_index,
                                               uint16_t location_index);
+/* IWUpgrade tick FUN_00442799 (ev_924d591f): BC_Upgrade is drawn (+0x38 = 1)
+   only while FUN_0045c89b accepts the site (staff kinds 0x2c..0x2f below
+   their max tier {2,2,1,2}, island-count threshold met); a maxed building
+   has no button. While the +0x4e request is pending (FUN_0045c9fe) the
+   button state cycles frames 1..12. */
+int game_session_staff_upgrade_available(const GameSession *session,
+                                         uint8_t player_slot,
+                                         uint8_t island_index,
+                                         uint16_t location_index);
+int game_session_staff_upgrade_pending(const GameSession *session,
+                                       uint8_t player_slot,
+                                       uint8_t island_index,
+                                       uint16_t location_index);
 /* UpgSpread (BC_UpgSpread, list index 20; FUN_00452bc5 gate, FUN_0045fe62
    entry): offered on another tribe's base-0x28 block while the player has
    neither finished nor refused it. The entry is a type-4 delivery task for

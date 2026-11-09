@@ -1129,6 +1129,41 @@ static void island_panic_pulse_step(void)
     else if (g_panic_pulse_frame == 8) g_panic_pulse_direction = 1;
 }
 
+/* Widescreen (menu_render.inc): switches the island view's drawing to the
+   whole frame and moves the scroll by the frame's side, so the view code
+   keeps its screen x = world x - scroll. Returns that side (0 without
+   widescreen). */
+static int island_view_begin(RenderSurface **surface, RenderSurface **panel)
+{
+    int side;
+    *panel = *surface;
+    if (g_frame_surface == NULL || *surface != &g_panel_surface ||
+        g_frame_surface->width <= LOGICAL_WIDTH) return 0;
+    side = (g_frame_surface->width - LOGICAL_WIDTH) / 2;
+    *surface = g_frame_surface;
+    g_island_scroll_x -= side;
+    return side;
+}
+
+/* Back to the centred panel. Where the view shows island beyond the
+   player's explored extent (island+0x408/+0x40c, the camera bounds of
+   island_clamp_scroll, which a 640 view never passes), the frame's sides
+   are blacked out as the IWLilMap bars show them. */
+static void island_view_end(RenderSurface **surface, RenderSurface *panel, int side)
+{
+    if (side > 0) {
+        int lo, hi;
+        island_explored_extent(&lo, &hi);
+        if (lo > g_island_scroll_x)
+            render_surface_fill_rect(*surface, 0, 0, lo - g_island_scroll_x, 320, 0);
+        if (hi + 1 - g_island_scroll_x < (*surface)->width)
+            render_surface_fill_rect(*surface, hi + 1 - g_island_scroll_x, 0,
+                                     (*surface)->width, 320, 0);
+        g_island_scroll_x += side;
+    }
+    *surface = panel;
+}
+
 static void render_island_view(RenderSurface *surface)
 {
     const int image_top = 0;
@@ -1146,6 +1181,9 @@ static void render_island_view(RenderSurface *surface)
     }
     hall_player = selected_hall_player();
     int saved_dc;
+    RenderSurface *panel = surface;
+    int view_side;
+    int view_width;
     uint16_t i;
     const GameRuntimeIsland *runtime_island = NULL;
     const GameRuntimeLocation *selected_runtime_location = NULL;
@@ -1191,13 +1229,18 @@ static void render_island_view(RenderSurface *surface)
         draw_sprite(surface, &g_island_template_art, 0, 0, status_top);
         return;
     }
+    /* Widescreen: the island view is drawn across the whole frame, with
+       the scroll moved left by the frame's side so that a world x keeps its
+       place under the centred 640-wide panel (island_view_begin). */
+    view_side = island_view_begin(&surface, &panel);
+    view_width = surface->width;
     draw_sprite_region(surface, &g_island_surface_art, 0, g_island_scroll_x, 0,
-                       LOGICAL_WIDTH, 320, 0, image_top);
+                       view_width, 320, 0, image_top);
 
     /* windows.txt defines ISLEVIEW as the 640x320 upper pane. Clip sprites to
        that view so tall SHP frames cannot overwrite the ISLETEMP controls. */
     saved_dc = render_surface_save(surface);
-    render_surface_intersect_clip(surface, 0, 0, LOGICAL_WIDTH, status_top);
+    render_surface_intersect_clip(surface, 0, 0, view_width, status_top);
     for (i = 0; i < g_island_surface_data.location_count; ++i) {
         uint16_t location_index = g_island_draw_order[i];
         const IslandLocation *location = &g_island_surface_data.locations[location_index];
@@ -1247,7 +1290,7 @@ static void render_island_view(RenderSurface *surface)
         if (location->renderer_class == 3 && location->renderer_variant == 3) {
             if (runtime_location == NULL || runtime_location->record_value_10 <= 0) continue;
         }
-        if (x < -4 || x >= LOGICAL_WIDTH + 4) continue;
+        if (x < -4 || x >= view_width + 4) continue;
         if (island_site_is_hidden_pad((int)location_index)) continue;
         /* The original class-2 bridge site is distinct from class-0 pads.
            bldinf.txt defines BR-TRG01's static BASE as frame 1; the COB's
@@ -1369,7 +1412,7 @@ static void render_island_view(RenderSurface *surface)
                 floater->type_index > 4 ||
                 (floater->source_runtime_flags & 0x001U) != 0) continue;
             floater_x = (int)floater->x - g_island_scroll_x;
-            if (floater_x < -64 || floater_x >= LOGICAL_WIDTH + 64) continue;
+            if (floater_x < -64 || floater_x >= view_width + 64) continue;
             floater_y = image_top + (int)floater->y;
             /* FUN_0042822b (floater kinds 0..4, Leviathans included) draws
                at y + FUN_00426fd0: the hover bob phased by DAT_00618e44 and
@@ -1459,7 +1502,7 @@ static void render_island_view(RenderSurface *surface)
             if (effect_art->frame_count == 0) continue;
             x = (int)projectile->x - g_island_scroll_x;
             y = image_top + (int)projectile->y;
-            if (x < -32 || x >= LOGICAL_WIDTH + 32) continue;
+            if (x < -32 || x >= view_width + 32) continue;
             if (projectile->impact_phase != 0) {
                 uint32_t impact_offset = projectile->animation_tick / 2U;
                 if (projectile->impact_frame_count == 0) continue;
@@ -1504,7 +1547,7 @@ static void render_island_view(RenderSurface *surface)
                             : &g_attack_effect_art[def_index];
                     int bolt_x = segments[segment].x - g_island_scroll_x;
                     if (segments[segment].frame >= bolt_art->frame_count ||
-                        bolt_x < -64 || bolt_x >= LOGICAL_WIDTH + 64) continue;
+                        bolt_x < -64 || bolt_x >= view_width + 64) continue;
                     draw_sprite(surface, bolt_art, segments[segment].frame, bolt_x,
                                 image_top + segments[segment].y);
                 }
@@ -1527,7 +1570,7 @@ static void render_island_view(RenderSurface *surface)
             }
             if (effect_frame >= effect_art->frame_count) continue;
             x = (int)world_x - g_island_scroll_x;
-            if (x < -64 || x >= LOGICAL_WIDTH + 64) continue;
+            if (x < -64 || x >= view_width + 64) continue;
             draw_sprite(surface, effect_art, effect_frame, x, image_top + (int)world_y);
         }
         /* Floater attack hit: the realm IMPACT instance FUN_0041e569 starts
@@ -1549,7 +1592,7 @@ static void render_island_view(RenderSurface *surface)
             impact_art = &g_leviathan_impact_art[impact_realm];
             if (impact_frame >= impact_art->frame_count) continue;
             x = (int)world_x - g_island_scroll_x;
-            if (x < -64 || x >= LOGICAL_WIDTH + 64) continue;
+            if (x < -64 || x >= view_width + 64) continue;
             draw_sprite(surface, impact_art, impact_frame, x, image_top + (int)world_y);
         }
         /* FA_Cast visuals (FUN_0041660b names, FUN_00415063 frame stepping).
@@ -1578,7 +1621,7 @@ static void render_island_view(RenderSurface *surface)
                     x = (int)sprite->x - g_island_scroll_x;
                     y = image_top + (int)sprite->y;
                     if (sprite->frame >= cast_art->frame_count ||
-                        x < -64 || x >= LOGICAL_WIDTH + 64) continue;
+                        x < -64 || x >= view_width + 64) continue;
                     if (sprite->stipple >= 8)
                         draw_sprite(surface, cast_art, sprite->frame, x, y);
                     else
@@ -1602,7 +1645,7 @@ static void render_island_view(RenderSurface *surface)
                 g_island_scroll_x;
             y = image_top +
                 (int)g_game_session.cast_effects[projectile_index].effect_y;
-            if (x < -64 || x >= LOGICAL_WIDTH + 64) continue;
+            if (x < -64 || x >= view_width + 64) continue;
             draw_sprite(surface, cast_art, cast_frame, x, y);
         }
     }
@@ -1627,8 +1670,9 @@ static void render_island_view(RenderSurface *surface)
         draw_sprite(surface, &g_inventory_item_art,
                     (uint32_t)(g_selected_inventory_item -
                                GAME_INVENTORY_ITEM_FIRST_ID),
-                    g_mouse_x + 10, g_mouse_y);
+                    g_mouse_x + view_side + 10, g_mouse_y);
     if (saved_dc != 0) render_surface_restore(surface, saved_dc);
+    island_view_end(&surface, panel, view_side);
 
     /* ISLETMP is the original 640x160 bottom template at y=320, matching the
        ISLETMP pane in windows.txt. It uses the active island palette. */
@@ -2591,8 +2635,19 @@ static void draw_location_action_panel(RenderSurface *surface)
             draw_control_with_hover_overlay(surface, &onoff_state,
                 &g_building_command_art, g_hovered_onoff_control);
         }
-        if (selected_upgrade_button_visible()) {
-            draw_control_with_hover_overlay(surface, upgrade_button,
+        if (selected_upgrade_button_visible() && upgrade_button != NULL) {
+            /* FUN_00442799 (IWUpgrade tick, ev_924d591f): while the +0x4e
+               upgrade request is pending (FUN_0045c9fe) the NStateButton
+               state +0x72 steps on odd ticks and wraps from NSTATES 13 back
+               to 1, so frames 1..12 cycle; otherwise state 0. HILITEFRAME 13
+               is the hover overlay. */
+            WindowTemplate upgrade_state = *upgrade_button;
+            if (game_session_staff_upgrade_pending(&g_game_session,
+                    (uint8_t)g_menu.selected_tribe, (uint8_t)selection_island(),
+                    (uint16_t)g_selected_location))
+                upgrade_state.shape_frame = upgrade_button->shape_frame + 1 +
+                    (int)((g_menu.animation_ticks / 2U) % 12U);
+            draw_control_with_hover_overlay(surface, &upgrade_state,
                 &g_upgrade_button_art, g_hovered_upgrade_control);
         }
         if (selected_repair_button_visible()) {

@@ -386,15 +386,14 @@ static int selected_upgrade_button_visible(void)
     if (location->renderer_class != 0 ||
         location->owner_id != g_menu.selected_tribe ||
         location->source_location_slot_18 == -1) return 0;
-    /* Remake choice (requested): no button while the building is still being
-       built (0x010 ramp), in an upgrade transition or dying, unless an
-       upgrade request is pending and the click would cancel it. The core
-       commands refuse the same sites. */
-    if (!game_session_location_settled(location) &&
-        location->upgrade_task_handle < 0) return 0;
-    /* Every kind gets the button ("TrnStkC et Upgrade pour tout genre");
-       a click on anything but 0x2c..0x2f does nothing, as FUN_0045c89b
-       rejects it (staff_upgrade_eligible). */
+    /* IWUpgrade tick FUN_00442799 (ev_924d591f) clears the draw flag +0x38
+       unless FUN_0045c89b accepts the site: only staff kinds 0x2c..0x2f
+       below their max tier (and the island-count threshold) keep the button;
+       a maxed building has none. The port's eligibility also asks for a
+       settled site (remake gate). */
+    if (!game_session_staff_upgrade_available(&g_game_session,
+            (uint8_t)g_menu.selected_tribe, (uint8_t)selection_island(),
+            (uint16_t)g_selected_location)) return 0;
     return 1;
 }
 

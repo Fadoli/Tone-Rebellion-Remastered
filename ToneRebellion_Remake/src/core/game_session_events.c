@@ -185,6 +185,31 @@ static int staff_upgrade_task_matches(const GameSession *session,
         event->payload_12 == 1;
 }
 
+int game_session_staff_upgrade_available(const GameSession *session,
+                                         uint8_t player_slot,
+                                         uint8_t island_index,
+                                         uint16_t location_index)
+{
+    if (session == NULL || island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count)
+        return 0;
+    return staff_upgrade_eligible(session, player_slot, island_index,
+        &session->islands[island_index].locations[location_index]);
+}
+
+int game_session_staff_upgrade_pending(const GameSession *session,
+                                       uint8_t player_slot,
+                                       uint8_t island_index,
+                                       uint16_t location_index)
+{
+    if (session == NULL || island_index >= session->island_count ||
+        location_index >= session->islands[island_index].location_count)
+        return 0;
+    return staff_upgrade_task_matches(session,
+        &session->islands[island_index].locations[location_index],
+        player_slot, island_index, location_index);
+}
+
 int game_session_toggle_staff_upgrade_request(GameSession *session,
                                               uint8_t player_slot,
                                               uint8_t island_index,

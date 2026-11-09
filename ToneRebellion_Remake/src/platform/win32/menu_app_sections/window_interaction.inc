@@ -436,18 +436,12 @@ static void handle_click(HWND window, int x, int y)
                     upgrade_names,
                     sizeof(upgrade_names) / sizeof(upgrade_names[0])) : NULL;
             if (upgrade_control != NULL) {
-                const GameRuntimeLocation *location = &g_game_session.islands[
-                    selection_island()].locations[g_selected_location];
-                int32_t base_item_id = location->record_value_10 -
-                    (int32_t)g_menu.selected_tribe * 16;
-                if (base_item_id >= 0x2c && base_item_id <= 0x2f) {
-                    (void)ISSUE_COMMAND(GAME_COMMAND_TOGGLE_STAFF_UPGRADE, (uint8_t)g_menu.selected_tribe,
-                        (uint8_t)selection_island(),
-                        (uint16_t)g_selected_location);
-                } else {
-                    (void)ISSUE_COMMAND(GAME_COMMAND_CYCLE_SOURCE_CAPACITY, (uint8_t)selection_island(),
-                        (uint16_t)g_selected_location);
-                }
+                /* The button only shows on a site FUN_0045c89b accepts
+                   (staff kinds 0x2c..0x2f), so a click toggles the +0x4e
+                   request (FUN_0045c9b5 / FUN_0045ca1e). */
+                (void)ISSUE_COMMAND(GAME_COMMAND_TOGGLE_STAFF_UPGRADE, (uint8_t)g_menu.selected_tribe,
+                    (uint8_t)selection_island(),
+                    (uint16_t)g_selected_location);
                 platform_invalidate(window);
                 return;
             }
