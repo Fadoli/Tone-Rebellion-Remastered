@@ -507,6 +507,50 @@ int32_t game_session_damage_site_from_power(GameSession *session,
     return damage;
 }
 
+/* FUN_0045c5b8 only writes +0x04 = 0 (subtype), level 0 (FUN_0041ff8b),
+   +0x0c = -1 and clamps +0x20/+0x22: the native floater record caches no
+   other stat, so range, realm, strength, speed, attack frames and the HP /
+   attack-point maxima come back from the subtype-0 (*work) row on the next
+   read. The port caches those row values on the floater, so reload them from
+   the owner's worker row here. +0x20 is clamped to FUN_00420f28 (live HP max)
+   and +0x22 to row +8 of FUN_00464242(type, 0); lower values stay damaged. */
+void game_session_restore_worker_stats(GameSession *session,
+                                       GameFloaterStart *floater)
+{
+    const FloaterStats *stats;
+
+    if (session == NULL || floater == NULL ||
+        floater->owner_slot >= GAME_START_PLAYER_COUNT) return;
+    stats = &session->worker_birth_stats[floater->owner_slot];
+    floater->attack_strength = (uint8_t)stats->attack_strength;
+    floater->attack_realm = stats->attack_realm;
+    if (stats->attack_realm >= 0 && stats->attack_realm < 4) {
+        memcpy(floater->attack_impact_frame_counts,
+               session->worker_birth_impact_frame_counts[floater->owner_slot],
+               sizeof(floater->attack_impact_frame_counts));
+    }
+    floater->attack_range = stats->attack_range;
+    floater->attack_period = stats->attack_period;
+    floater->attack_frame_first = stats->attack_frame_first;
+    floater->attack_frame_last = stats->attack_frame_last;
+    floater->attack_frame_ticks_per_frame = stats->attack_frame_ticks_per_frame;
+    floater->attack_frame_duration = stats->attack_frame_duration;
+    floater->attack_frame_ping_pong = stats->attack_frame_ping_pong;
+    floater->movement_speed = (uint16_t)stats->movement_speed;
+    /* Same FUN_00420f28 scaling trick as a trained floater's refill. */
+    floater->base_max_attack_points = stats->hit_points;
+    game_session_recalculate_floater_attack_points(session, floater);
+    floater->max_hit_points = floater->max_attack_points > 0
+        ? floater->max_attack_points : stats->hit_points;
+    floater->base_max_attack_points = stats->max_attack_points;
+    game_session_recalculate_floater_attack_points(session, floater);
+    if (floater->current_hit_points > floater->max_hit_points)
+        floater->current_hit_points = floater->max_hit_points;
+    if (stats->max_attack_points >= 0 &&
+        floater->charge_current > stats->max_attack_points)
+        floater->charge_current = stats->max_attack_points;
+}
+
 static void clear_destroyed_staff_worker(GameSession *session,
                                          GameRuntimeLocation *source,
                                          unsigned int floater_index,
@@ -554,14 +598,8 @@ static void clear_destroyed_staff_worker(GameSession *session,
     }
     floater->source_subtype = 0;
     floater->attack_level_flags &= 0xfff0U;
-    if (floater->owner_slot < GAME_START_PLAYER_COUNT) {
-        const FloaterStats *birth_stats =
-            &session->worker_birth_stats[floater->owner_slot];
-        if (floater->current_hit_points > birth_stats->hit_points)
-            floater->current_hit_points = birth_stats->hit_points;
-        if (floater->charge_current > birth_stats->attack_strength)
-            floater->charge_current = birth_stats->attack_strength;
-    }
+    if (floater->owner_slot < GAME_START_PLAYER_COUNT)
+        game_session_restore_worker_stats(session, floater);
     floater->source_runtime_flags &= ~0x065U;
     floater->active_order_action = 0;
     floater->movement_state = 0;

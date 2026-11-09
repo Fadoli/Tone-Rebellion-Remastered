@@ -42,7 +42,9 @@ static int e2e_start_fixture(HWND window)
    0x25 producer (1 hit point), selected; "upgrade" a settled 0x2c staff
    building at tier 0 with a pending upgrade request, "upgrade_max" one at
    its max tier 2, both selected with every island accessible (the
-   FUN_0045c89b island-count threshold). Returns 1 when built. */
+   FUN_0045c89b island-count threshold); "demote" a doomed 0x2c staff
+   building with a linked level-2 warrior (FUN_0045c5b8 demotion). Returns 1
+   when built. */
 static int e2e_build_fixture(HWND window)
 {
     char name[32];
@@ -61,7 +63,7 @@ static int e2e_build_fixture(HWND window)
          strcmp(name, "obtain") != 0 && strcmp(name, "victory") != 0 &&
          strcmp(name, "messages") != 0 && strcmp(name, "return") != 0 &&
          strcmp(name, "repair") != 0 && strcmp(name, "upgrade") != 0 &&
-         strcmp(name, "upgrade_max") != 0))
+         strcmp(name, "upgrade_max") != 0 && strcmp(name, "demote") != 0))
         return 0;
     g_menu.world_index = 0;
     g_menu.selected_tribe = 0;
@@ -238,6 +240,47 @@ static int e2e_build_fixture(HWND window)
             if (!open_island_view(window, island)) return 0;
             g_island_scroll_x = island_clamp_scroll((int)x - 0x140);
             select_location_on_view((int)location);
+            return 1;
+        }
+    }
+    if (strcmp(name, "demote") == 0) {
+        /* "demote": a settled 0x2c staff building with one linked level-2
+           warrior (subtype 1) beside it, the building already at lethal
+           damage (flag 0x080, FUN_00450a71 clears it after +0x48 > 100).
+           The cleanup (FUN_0045c5b8) must turn the warrior back into a
+           worker. */
+        uint16_t location;
+        for (location = 0;
+             location < g_game_session.islands[island].location_count;
+             ++location) {
+            GameRuntimeLocation *staff;
+            IslandLocation site = {0};
+            int trainee;
+            site.kind = ISLAND_LOCATION_PAD;
+            site.renderer_subtype =
+                g_game_session.islands[island].locations[location]
+                    .construction_site_size;
+            if (!game_session_place_building(&g_game_session, &g_pad_catalog,
+                    0, island, location, &site, 0x2c, NULL, 0)) continue;
+            staff = &g_game_session.islands[island].locations[location];
+            staff->source_flags &= ~0x0b0U;
+            staff->source_value_48 = 0;
+            staff->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 200;
+            warrior = floater_catalog_find(&g_floater_catalog,
+                g_game_session.player_starts.players[0].floater_type_index, 1);
+            trainee = native_save_add_fixture_floater(&g_game_session,
+                &g_floater_catalog, 0, 1, island, staff->x,
+                (uint16_t)(staff->y - 10), 2,
+                warrior != NULL ? warrior->max_attack_points : 0);
+            if (trainee >= 0)
+                (void)game_session_link_floater_charge(&g_game_session,
+                    (unsigned int)trainee, location);
+            staff->source_value_34 = 0;
+            staff->source_flags |= 0x080U;
+            staff->source_value_48 = 0;
+            x = staff->x;
+            if (!open_island_view(window, island)) return 0;
+            g_island_scroll_x = island_clamp_scroll((int)x - 0x140);
             return 1;
         }
     }
@@ -451,10 +494,16 @@ static void e2e_write_state(void)
             if (!game_session_floater_is_active(f) ||
                 f->island_index != g_menu.selected_map_island) continue;
             fprintf(file, "floater %u %d %d owner=%d type=%d subtype=%d "
-                    "flags=%u link=%d cargo=%d\n", i, (int)f->x, (int)f->y,
+                    "flags=%u link=%d cargo=%d level=%d hp=%d hp_max=%d "
+                    "charge=%d strength=%d range=%d speed=%d\n",
+                    i, (int)f->x, (int)f->y,
                     (int)f->owner_slot, (int)f->type_index,
                     (int)f->source_subtype, (unsigned)f->source_runtime_flags,
-                    (int)f->source_link_0c, (int)f->carried_resource_code);
+                    (int)f->source_link_0c, (int)f->carried_resource_code,
+                    (int)(f->attack_level_flags & 0x0fU),
+                    (int)f->current_hit_points, (int)f->max_hit_points,
+                    (int)f->charge_current, (int)f->attack_strength,
+                    (int)f->attack_range, (int)f->movement_speed);
         }
         for (i = 0; i < island->location_count; ++i) {
             const GameRuntimeLocation *l = &island->locations[i];

@@ -47,6 +47,10 @@ void game_session_recalculate_floater_attack_points(
     const GameSession *session, GameFloaterStart *floater);
 void game_session_refresh_player_attack_points(GameSession *session,
                                                uint8_t player_slot);
+/* Reload a demoted (subtype 0) floater's cached stats from its owner's
+   worker row and clamp current HITS / charge (FUN_0045c5b8). */
+void game_session_restore_worker_stats(GameSession *session,
+                                       GameFloaterStart *floater);
 
 /* Shared runtime pad maximum used during session setup and building updates. */
 static inline int game_session_source_value_34_max(
