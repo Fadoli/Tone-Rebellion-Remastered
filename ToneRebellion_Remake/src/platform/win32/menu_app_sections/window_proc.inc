@@ -59,7 +59,6 @@ static void simulate_session_tick(uint32_t source_tick)
        its own mixer voice with FUN_0045b24d's distance volume and pan. */
     while (game_session_pop_audio_event(&g_game_session, &audio_event)) {
         const unsigned char *sound = NULL;
-        int restart = 0;
         if (!game_session_audio_event_is_audible(&audio_event,
                 g_menu.screen == SCREEN_ISLAND,
                 g_menu.selected_map_island)) continue;
@@ -69,7 +68,6 @@ static void simulate_session_tick(uint32_t source_tick)
         } else if (audio_event.kind == GAME_SESSION_AUDIO_FLOATER_DEATH) {
             sound = audio_event.owner_id == 4
                 ? g_levdeath_sound : g_fltdeath_sound;
-            restart = 1; /* FUN_0045afb9 restarts levdeath/fltdeath */
         } else if (audio_event.kind == GAME_SESSION_AUDIO_BRIDGE) {
             sound = g_bridge_sound;
         } else if (audio_event.kind == GAME_SESSION_AUDIO_FLOATER_BIRTH) {
@@ -82,7 +80,7 @@ static void simulate_session_tick(uint32_t source_tick)
                    audio_event.sound < FLOATER_EFFECT_MAX) {
             sound = g_effect_sounds[audio_event.sound];
         }
-        if (sound != NULL) sfx_play_at(sound, audio_event.x, restart);
+        if (sound != NULL) sfx_play_at(sound, audio_event.x);
     }
     sfx_pump();
 }
@@ -374,6 +372,16 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         if (!logical_viewport(width, height, &viewport)) return 0;
         x = GET_X_LPARAM(lparam);
         y = GET_Y_LPARAM(lparam);
+        if (g_options_drag) {
+            if ((wparam & MK_LBUTTON) == 0 || !g_options_open) {
+                options_bar_release();
+            } else if (viewport.bottom > viewport.top) {
+                options_bar_drag(((y - viewport.top) * LOGICAL_HEIGHT) /
+                                 (viewport.bottom - viewport.top));
+                platform_invalidate(window);
+                return 0;
+            }
+        }
         if (g_slide_drag) {
             if ((wparam & MK_LBUTTON) == 0) {
                 slide_panel_end_drag();
@@ -627,6 +635,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         int y;
         if (g_menu.screen == SCREEN_LOGO || g_menu.screen == SCREEN_END_GAME) return 0;
         slide_panel_end_drag();
+        options_bar_release();
         if (g_lilmap_drag) {
             g_lilmap_drag = 0;
             platform_capture_mouse(NULL, 0);
@@ -712,7 +721,11 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         return 0;
     }
     case WM_MOUSEWHEEL:
-        if (g_options_open) return 0;
+        if (g_options_open) {
+            options_scroll(GET_WHEEL_DELTA_WPARAM(wparam) > 0 ? -3 : 3);
+            platform_invalidate(window);
+            return 0;
+        }
         if (g_menu.screen == SCREEN_ISLAND) {
             int direction = GET_WHEEL_DELTA_WPARAM(wparam) > 0 ? -1 : 1;
             island_scroll_by(direction * 128);

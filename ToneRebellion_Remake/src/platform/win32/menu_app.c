@@ -368,6 +368,9 @@ static int g_load_from_game;
 static int g_music_enabled = 1;
 static int g_sound_enabled = 1;
 static int g_sound_volume = 100;
+/* Remake option: a sound triggered again while it plays overlaps its
+   copies (1) or restarts its one buffer like FUN_0045afb9 (0). */
+static int g_sfx_overlap = 1;
 static char g_music_resume_tune[16];
 static int g_music_resume_loop;
 static void apply_music_volume(void);
@@ -419,7 +422,7 @@ static double volume_gain(int volume)
 
 #include "../sdl/sdl_audio.inc"
 
-static void sfx_play(const unsigned char *wav, int volume, int pan, int restart);
+static void sfx_play(const unsigned char *wav, int volume, int pan);
 
 /* remake_sdl has no PlaySound: the in-memory effect plays centred on a mixer
    voice, restarting like PlaySound's single voice; the mixer applies the
@@ -428,7 +431,7 @@ static BOOL play_effect_sound(LPCSTR sound, HMODULE module, DWORD flags)
 {
     (void)module;
     if (sound != NULL && (flags & SND_MEMORY) != 0)
-        sfx_play((const unsigned char *)sound, 100, 0, 1);
+        sfx_play((const unsigned char *)sound, 100, 0);
     return TRUE;
 }
 #define PlaySoundA(sound, module, flags) play_effect_sound((sound), (module), (flags))

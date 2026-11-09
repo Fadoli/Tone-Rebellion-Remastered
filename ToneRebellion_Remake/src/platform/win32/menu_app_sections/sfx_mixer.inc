@@ -1,13 +1,20 @@
 /* Sound effect mixer. The original plays each effect in its own DirectSound
    buffer (FUN_0045afb9: Stop, SetCurrentPosition(0), SetPan, SetVolume,
-   Play), so several effects sound at once; a buffer already playing is not
-   restarted unless it is a death sound (ev_aabff0f0). PlaySound has one
+   Play), so several effects sound at once. FUN_0045b3a7 gives each sound
+   one buffer (no DuplicateSoundBuffer), so a sound triggered again while it
+   plays restarts from the start with the new volume and pan. Only the
+   float.cfg `simplesound` option (DAT_004c2bc8, never set by default) keeps
+   a playing buffer, except levdeath/fltdeath (ev_930faa59,
+   ev_c2413490, ev_b3bada15). Remake option g_sfx_overlap (default on): a
+   repeat takes its own voice and overlaps the copies still playing; with all
+   voices busy it replaces the one closest to its end. Off restarts the
+   sound's voice like the original. PlaySound has one
    voice and no volume or pan, so the remake mixes the effects itself into a
    waveOut stream (remake_sdl: an SDL audio stream, sdl_audio.inc). */
 
 enum {
     SFX_RATE = 22050,
-    SFX_VOICES = 16,
+    SFX_VOICES = 32,
     SFX_BUFFERS = 4,
     SFX_BUFFER_FRAMES = 1024,
     SFX_CACHE = 160
@@ -195,8 +202,8 @@ static void sfx_close(void)
 
 /* FUN_0045afb9(sound, volume %, pan): volume and pan are DirectSound
    hundredths of a dB after FUN_004595cc; the effects slider scales every
-   voice. `restart` mirrors the death-sound exception. */
-static void sfx_play(const unsigned char *wav, int volume, int pan, int restart)
+   voice. g_sfx_overlap picks overlap (own voice) or restart (same voice). */
+static void sfx_play(const unsigned char *wav, int volume, int pan)
 {
     const SfxSample *sample;
     double gain;
@@ -204,6 +211,7 @@ static void sfx_play(const unsigned char *wav, int volume, int pan, int restart)
     double right;
     unsigned int v;
     unsigned int free_voice = SFX_VOICES;
+    uint32_t least_left = UINT32_MAX;
 
     if (!g_sound_enabled || g_sound_volume <= 0 || volume <= 0) return;
     sample = sfx_sample_for(wav);
@@ -215,13 +223,28 @@ static void sfx_play(const unsigned char *wav, int volume, int pan, int restart)
     else if (pan < 0) right *= pow(10.0, pan / 2000.0);
     if (!SDL_LockAudioStream(g_sfx_stream)) return;
     for (v = 0; v < SFX_VOICES; ++v) {
-        if (g_sfx_voices[v].sample == sample) {
-            if (restart) free_voice = v;
-            else free_voice = SFX_VOICES + 1U; /* already playing */
+        const SfxVoice *voice = &g_sfx_voices[v];
+        uint32_t left_frames;
+        if (!g_sfx_overlap && voice->sample == sample) {
+            free_voice = v; /* Stop, SetCurrentPosition(0), Play */
             break;
         }
-        if (g_sfx_voices[v].sample == NULL && free_voice == SFX_VOICES)
+        if (voice->sample == NULL) {
+            if (g_sfx_overlap) {
+                free_voice = v;
+                break;
+            }
+            if (least_left != 0) {
+                least_left = 0;
+                free_voice = v;
+            }
+            continue;
+        }
+        left_frames = voice->sample->frames - voice->position;
+        if (left_frames < least_left) {
+            least_left = left_frames;
             free_voice = v;
+        }
     }
     if (free_voice < SFX_VOICES) {
         g_sfx_voices[free_voice].sample = sample;
@@ -237,7 +260,7 @@ static void sfx_play(const unsigned char *wav, int volume, int pan, int restart)
    100 * (2000 - min(|d|, 2000)) / 2000, pan magnitude from the same
    attenuation of 100 * (500 - min(|d|, 500)) / 500, to the right when the
    effect is right of the centre (ev_effbb692). x < 0 plays centred. */
-static void sfx_play_at(const unsigned char *wav, int x, int restart)
+static void sfx_play_at(const unsigned char *wav, int x)
 {
     int volume = 100;
     int pan = 0;
@@ -250,5 +273,5 @@ static void sfx_play_at(const unsigned char *wav, int x, int restart)
         pan = -volume_attenuation(100 * (500 - pan_distance) / 500);
         if (d > 0) pan = -pan; /* effect left of the centre */
     }
-    sfx_play(wav, volume, pan, restart);
+    sfx_play(wav, volume, pan);
 }

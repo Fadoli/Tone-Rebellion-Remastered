@@ -310,10 +310,15 @@ static int shortcut_key(HWND window, int key)
 /* Options page 1: the shortcut list. Up/Down pick, Enter (or a click) waits
    for the new key, Delete clears it, Escape goes back. The last row puts
    every default back. */
-enum { SHORTCUT_PAGE_ROWS = 13 };
+enum { SHORTCUT_PAGE_ROWS = OPTIONS_PAGE_ROWS };
 static int g_shortcut_row;
-static int g_shortcut_first;
 static int g_shortcut_waiting;
+
+/* Lines of the shortcut page: every action, then Reset. */
+static int shortcut_page_total(void)
+{
+    return SHORTCUT_COUNT + 1;
+}
 
 static void shortcut_page_follow(void)
 {
@@ -364,10 +369,8 @@ static int shortcut_page_key(HWND window, WPARAM key)
 static int shortcut_page_row_at(int x, int y)
 {
     int row;
-    if (x < OPTIONS_LEFT + 10 || x >= OPTIONS_LEFT + OPTIONS_WIDTH - 10 ||
-        y < OPTIONS_ROW_TOP) return -1;
-    row = (y - OPTIONS_ROW_TOP) / OPTIONS_ROW_HEIGHT;
-    if (row >= SHORTCUT_PAGE_ROWS) return -1;
+    row = options_line_at(x, y);
+    if (row < 0) return -1;
     row += g_shortcut_first;
     return row <= SHORTCUT_COUNT ? row : -1;
 }
@@ -401,8 +404,8 @@ static void render_shortcut_page(RenderSurface *surface)
         char label[64];
         if (row > SHORTCUT_COUNT) break;
         if (row == g_shortcut_row || row == hover)
-            fill_rect(surface, OPTIONS_LEFT + 10, y - 2,
-                      OPTIONS_LEFT + OPTIONS_WIDTH - 10, y + OPTIONS_ROW_HEIGHT - 4,
+            fill_rect(surface, OPTIONS_ROW_LEFT, y - 2,
+                      OPTIONS_ROW_RIGHT, y + OPTIONS_ROW_HEIGHT - 4,
                       row == g_shortcut_row ? RGB(60, 34, 44) : RGB(38, 24, 32));
         if (row == SHORTCUT_COUNT) {
             options_label(surface, TR(T_SC_RESET), OPTIONS_LEFT + 20,

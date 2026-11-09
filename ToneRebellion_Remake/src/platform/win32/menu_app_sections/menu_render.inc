@@ -68,6 +68,8 @@ static void apply_language(void)
 static int g_load_starts_paused = 1;
 static int g_clip_all_training = 1;
 static int g_smooth_scroll;
+/* Options panel: bit n folds section n (remake_options.inc). */
+static int g_options_folds;
 static int g_edge_scroll = 1;
 static int g_event_alerts;
 /* Original random island captions (gamey.txt CRYPTIC0..20); off by default. */
@@ -90,6 +92,8 @@ static const RemakeSetting g_remake_settings[] = {
     {"filter", &g_upscale_filter, 0, FILTER_COUNT - 1},
     {"loadpaused", &g_load_starts_paused, 0, 1},
     {"clipall", &g_clip_all_training, 0, 1},
+    {"sfxoverlap", &g_sfx_overlap, 0, 1},
+    {"optfolds", &g_options_folds, 0, 31},
     {"smoothscroll", &g_smooth_scroll, 0, 1},
     {"edgescroll", &g_edge_scroll, 0, 1},
     {"alerts", &g_event_alerts, 0, 1},
