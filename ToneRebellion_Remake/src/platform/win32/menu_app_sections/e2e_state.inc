@@ -363,6 +363,7 @@ static void e2e_write_state(void)
             g_selected_floater, g_selected_location, g_island_panel_mode,
             g_menu.selected_tribe);
     fprintf(file, "hall_player %d\n", selected_hall_player());
+    fprintf(file, "frame_width %d\n", g_frame_width);
     fprintf(file, "sequence %d\nsequence_tick %d\n",
             g_game_session_valid ? (int)g_game_session.world_sequence_state : -1,
             g_game_session_valid ? (int)g_game_session.world_sequence_tick : -1);

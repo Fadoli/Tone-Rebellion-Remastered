@@ -39,6 +39,10 @@ static void handle_click(HWND window, int x, int y)
 {
     int clicked_tribe = g_menu.screen == SCREEN_NEW_GAME ? tribe_icon_at(x, y) : -1;
     const WindowTemplate *control = NULL;
+    /* Widescreen: the frame's sides next to the lower panel take no clicks
+       (no control there yet). */
+    if (g_menu.screen == SCREEN_ISLAND && y >= 320 &&
+        (x < 0 || x >= LOGICAL_WIDTH)) return;
     g_mouse_inside = 1;
     g_mouse_x = x;
     g_mouse_y = y;
@@ -230,7 +234,7 @@ static void handle_click(HWND window, int x, int y)
                 return;
             }
         }
-        if (g_armed_spell_action != 0 && x >= 0 && x < LOGICAL_WIDTH &&
+        if (g_armed_spell_action != 0 && island_view_holds_x(x) &&
             y >= 0 && y < 320) {
             int clicked_floater = game_session_floater_at(&g_game_session,
                 (uint8_t)g_menu.selected_map_island,
@@ -240,7 +244,7 @@ static void handle_click(HWND window, int x, int y)
                 return;
             }
         }
-        if (g_defend_area_armed != 0 && x >= 0 && x < LOGICAL_WIDTH &&
+        if (g_defend_area_armed != 0 && island_view_holds_x(x) &&
             y >= 0 && y < 320) {
             /* FUN_0042fa0f msg 0x40 in modes 16..19: cat 1 sub 0x10..0x13
                writes the building's order record (FUN_0045d867/FUN_0045d8b2). */
@@ -268,8 +272,8 @@ static void handle_click(HWND window, int x, int y)
             platform_invalidate(window);
             return;
         }
-        if (g_game_session.location_move_active && x >= 0 &&
-            x < LOGICAL_WIDTH && y >= 0 && y < 320) {
+        if (g_game_session.location_move_active && island_view_holds_x(x) &&
+            y >= 0 && y < 320) {
             int target_location = island_location_at(x, y);
             if (target_location >= 0 && ISSUE_COMMAND(GAME_COMMAND_FINISH_LOCATION_MOVE, (uint8_t)g_menu.selected_tribe,
                     (uint8_t)g_menu.selected_map_island,
@@ -619,7 +623,7 @@ static void handle_click(HWND window, int x, int y)
                    3, FUN_0042f755(rec, 1)); any other pick returns
                    to mode 0 (FUN_0042f8f7 / FUN_0042f303(0)) and is handled
                    as a normal click. */
-                if (y < 320 && x >= 0 && x < LOGICAL_WIDTH) {
+                if (y < 320 && island_view_holds_x(x)) {
                     int over_floater = game_session_floater_at(&g_game_session,
                         (uint8_t)g_menu.selected_map_island,
                         (uint16_t)(x + g_island_scroll_x), (uint16_t)y);

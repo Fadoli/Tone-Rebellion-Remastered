@@ -69,7 +69,7 @@ static void draw_bitmap_label(RenderSurface *surface, const char *text, int x,
 static void draw_bitmap_label_pixels(const char *text, int x, int y,
                                      COLORREF color)
 {
-    draw_font_label(&g_back_surface, &g_bitmap_font, text, x, y, color);
+    draw_font_label(&g_panel_surface, &g_bitmap_font, text, x, y, color);
 }
 
 /* draw_bitmap_label advances by the full glyph width; measure_bitmap_text
@@ -209,7 +209,7 @@ static void draw_big_label(RenderSurface *surface, const char *text, int x, int 
 static void draw_small_label_pixels(const char *text, int x, int y,
                                     COLORREF color)
 {
-    draw_font_label(&g_back_surface, &g_small_font, text, x, y, color);
+    draw_font_label(&g_panel_surface, &g_small_font, text, x, y, color);
 }
 
 /* Greedy word wrap with FUN_00428baa's rule: break at the last space whose

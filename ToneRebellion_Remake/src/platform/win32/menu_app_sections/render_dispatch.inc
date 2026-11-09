@@ -303,8 +303,9 @@ static void render_load_game(RenderSurface *surface)
 }
 static void render_back_buffer_now(RenderSurface *back);
 
-/* Composes the current screen into the 640x480 back buffer, with the moving
-   things blended between the last two game frames (render_interp.inc). */
+/* Composes the current screen into the back buffer (640x480, or wider with
+   widescreen), with the moving things blended between the last two game
+   frames (render_interp.inc). */
 static void render_back_buffer(RenderSurface *back)
 {
     render_interp_apply();
@@ -312,9 +313,22 @@ static void render_back_buffer(RenderSurface *back)
     render_interp_restore();
 }
 
-static void render_back_buffer_now(RenderSurface *back)
+static void render_back_buffer_now(RenderSurface *frame)
 {
-    render_surface_reset_clip(back);
+    /* Widescreen: every screen draws its 640x480 picture into the centred
+       window of the wider frame; the island view alone also fills the
+       sides (g_frame_surface). */
+    RenderSurface *back = &g_panel_surface;
+    int side = (frame->width - LOGICAL_WIDTH) / 2;
+    if (side < 0) side = 0;
+    render_surface_reset_clip(frame);
+    if (side > 0)
+        render_surface_fill_rect(frame, 0, 0, frame->width, frame->height, 0);
+    render_surface_init(back, frame->pixels + side,
+                        frame->width < LOGICAL_WIDTH ? frame->width : LOGICAL_WIDTH,
+                        frame->height, frame->stride);
+    g_frame_surface = frame;
+    g_frame_width = frame->width;
     if (g_menu.screen == SCREEN_MAIN_MENU) {
         render_main_menu(back);
         render_net_setup_title_button(back);
@@ -361,9 +375,9 @@ static void render_back_buffer_now(RenderSurface *back)
             uint32_t keep = (uint32_t)(256 - level);
             int row;
             int column;
-            for (row = 0; row < back->height; ++row) {
-                uint32_t *pixel = back->pixels + (size_t)row * (size_t)back->stride;
-                for (column = 0; column < back->width; ++column) {
+            for (row = 0; row < frame->height; ++row) {
+                uint32_t *pixel = frame->pixels + (size_t)row * (size_t)frame->stride;
+                for (column = 0; column < frame->width; ++column) {
                     uint32_t c = pixel[column];
                     pixel[column] = (c & 0xff000000U) |
                         ((((c >> 16) & 0xffU) * keep >> 8) << 16) |

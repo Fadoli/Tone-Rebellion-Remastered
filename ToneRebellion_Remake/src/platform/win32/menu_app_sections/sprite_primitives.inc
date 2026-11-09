@@ -53,12 +53,13 @@ static void rebuild_island_palette_lookup(void)
 static int g_mouse_x;
 static int g_mouse_y;
 static int island_location_at(int x, int y);
+static int island_view_holds_x(int x); /* menu_render.inc */
 
 /* FUN_00435581 hit test under the mouse: 2 = floater, 1 = island site,
    0 = nothing (playfield only). */
 static int island_cursor_hit_kind(void)
 {
-    if (!g_game_session_valid || g_mouse_x < 0 || g_mouse_x >= LOGICAL_WIDTH ||
+    if (!g_game_session_valid || !island_view_holds_x(g_mouse_x) ||
         g_mouse_y < 0 || g_mouse_y >= 320) return 0;
     if (game_session_floater_at(&g_game_session,
             (uint8_t)g_menu.selected_map_island,

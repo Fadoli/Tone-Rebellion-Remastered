@@ -13,6 +13,7 @@ enum {
     OPTION_LANGUAGE,
     OPTION_PAINT_RATE,
     OPTION_SCALE,
+    OPTION_WIDESCREEN,
     OPTION_FILTER,
     OPTION_VSYNC,
     OPTION_MUSIC,
@@ -87,7 +88,8 @@ static int shortcut_page_total(void);
 
 static const RemakeTextId g_option_labels[OPTION_COUNT] = {
     [OPTION_LANGUAGE] = T_OPT_LANGUAGE, [OPTION_PAINT_RATE] = T_OPT_PAINT_RATE,
-    [OPTION_SCALE] = T_OPT_SCALE, [OPTION_FILTER] = T_OPT_FILTER,
+    [OPTION_SCALE] = T_OPT_SCALE, [OPTION_WIDESCREEN] = T_OPT_WIDESCREEN,
+    [OPTION_FILTER] = T_OPT_FILTER,
     [OPTION_VSYNC] = T_OPT_VSYNC, [OPTION_MUSIC] = T_OPT_MUSIC,
     [OPTION_SOUND] = T_OPT_SOUND, [OPTION_SFX_OVERLAP] = T_OPT_SFX_OVERLAP,
     [OPTION_GAME_SPEED] = T_OPT_GAME_SPEED, [OPTION_ALERTS] = T_OPT_ALERTS,
@@ -314,6 +316,9 @@ static void options_value_text(int row, char *text, size_t capacity)
     case OPTION_SCALE:
         (void)snprintf(text, capacity, "%s", TR(scales[g_scale_mode]));
         break;
+    case OPTION_WIDESCREEN:
+        (void)snprintf(text, capacity, "%s", options_yes_no(g_widescreen));
+        break;
     case OPTION_FILTER:
         (void)snprintf(text, capacity, "%s", upscale_filter_label(g_upscale_filter));
         break;
@@ -398,6 +403,11 @@ static void options_change(HWND window, int row, int step)
     case OPTION_SCALE:
         set_scale_mode(window, (g_scale_mode + step + SCALE_MODE_COUNT) %
                                    SCALE_MODE_COUNT);
+        break;
+    case OPTION_WIDESCREEN:
+        options_flip(&g_widescreen);
+        /* The frame changes shape: repaint the whole client. */
+        platform_invalidate(window);
         break;
     case OPTION_FILTER:
     {

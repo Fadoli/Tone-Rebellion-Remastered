@@ -894,11 +894,12 @@ static void draw_island_lilmap_dots(RenderSurface *surface, const WindowTemplate
                             g_island_palette[0]);
             }
         }
-        line_x = mini_map->pane.left + g_island_scroll_x / 10;
+        /* Remake widescreen: the lines frame the wider view. */
+        line_x = mini_map->pane.left + (g_island_scroll_x - frame_side()) / 10;
         lilmap_fill(surface, line_x, mini_map->pane.top, 1, pane_height,
                     g_lilmap_slot_colors[1]);
-        lilmap_fill(surface, line_x + 63, mini_map->pane.top, 1, pane_height,
-                    g_lilmap_slot_colors[1]);
+        lilmap_fill(surface, line_x + 63 + 2 * frame_side() / 10, mini_map->pane.top,
+                    1, pane_height, g_lilmap_slot_colors[1]);
     }
     if (saved != 0) render_surface_restore(surface, saved);
 }
@@ -1145,23 +1146,85 @@ static int island_view_begin(RenderSurface **surface, RenderSurface **panel)
     return side;
 }
 
-/* Back to the centred panel. Where the view shows island beyond the
-   player's explored extent (island+0x408/+0x40c, the camera bounds of
-   island_clamp_scroll, which a 640 view never passes), the frame's sides
-   are blacked out as the IWLilMap bars show them. */
+/* Columns [left, right) of the view: the bare island art at a quarter of
+   its brightness, over whatever was drawn there. */
+static void island_view_fog(RenderSurface *surface, int left, int right)
+{
+    int row;
+    if (left < 0) left = 0;
+    if (right > surface->width) right = surface->width;
+    if (right <= left) return;
+    draw_sprite_region(surface, &g_island_surface_art, 0, g_island_scroll_x + left, 0,
+                       right - left, 320, left, 0);
+    for (row = 0; row < 320 && row < surface->height; ++row) {
+        uint32_t *pixel = surface->pixels + (size_t)row * (size_t)surface->stride;
+        int column;
+        for (column = left; column < right; ++column)
+            pixel[column] = (pixel[column] & 0xff000000U) |
+                            ((pixel[column] >> 2) & 0x003f3f3fU);
+    }
+}
+
+/* Back to the centred panel. The original camera (island_clamp_scroll)
+   never shows island beyond the player's explored extent (island+0x408 /
+   +0x40c, which the IWLilMap bars hide); a wider view can, so there it
+   shows only the island art, darkened, without sites or units. */
 static void island_view_end(RenderSurface **surface, RenderSurface *panel, int side)
 {
     if (side > 0) {
         int lo, hi;
         island_explored_extent(&lo, &hi);
-        if (lo > g_island_scroll_x)
-            render_surface_fill_rect(*surface, 0, 0, lo - g_island_scroll_x, 320, 0);
-        if (hi + 1 - g_island_scroll_x < (*surface)->width)
-            render_surface_fill_rect(*surface, hi + 1 - g_island_scroll_x, 0,
-                                     (*surface)->width, 320, 0);
+        island_view_fog(*surface, 0, lo - g_island_scroll_x);
+        island_view_fog(*surface, hi + 1 - g_island_scroll_x, (*surface)->width);
         g_island_scroll_x += side;
     }
     *surface = panel;
+}
+
+/* Remake widescreen: the frame's sides next to the lower panel hold an
+   empty box framed like the panel's own boxes (no original counterpart;
+   a neutral filler). Its border is ISLETMP's right-edge profile (row 80,
+   x 639 down to 628, outside in), turned round all four sides with rounded
+   corners; the inside stays black. */
+static void draw_island_side_box(RenderSurface *frame, int left, int right)
+{
+    enum { EDGE = 12, BOX_TOP = 320, BOX_HEIGHT = 160 };
+    const SpriteFrame *art;
+    uint32_t profile[EDGE];
+    int width = right - left;
+    int x, y, i;
+    if (width < 2 * EDGE || g_island_template_art.frame_count == 0 ||
+        frame->height < BOX_TOP + BOX_HEIGHT) return;
+    art = &g_island_template_art.frames[0];
+    if (art->pixels == NULL || art->width < LOGICAL_WIDTH || art->height < BOX_HEIGHT)
+        return;
+    for (i = 0; i < EDGE; ++i)
+        profile[i] = art->pixels[80 * art->width + LOGICAL_WIDTH - 1 - i];
+    for (y = 0; y < BOX_HEIGHT; ++y) {
+        uint32_t *row = frame->pixels + (size_t)(BOX_TOP + y) * (size_t)frame->stride + left;
+        int in_y = y < BOX_HEIGHT - 1 - y ? y : BOX_HEIGHT - 1 - y;
+        for (x = 0; x < width; ++x) {
+            int in_x = x < width - 1 - x ? x : width - 1 - x;
+            int depth = in_x < in_y ? in_x : in_y;
+            if (in_x < EDGE && in_y < EDGE) {
+                /* Rounded corner: depth below the circle of radius EDGE
+                   centred EDGE pixels in from both sides. */
+                double ox = EDGE - in_x - 0.5, oy = EDGE - in_y - 0.5;
+                depth = (int)floor(EDGE - sqrt(ox * ox + oy * oy));
+            }
+            row[x] = depth < 0 || depth >= EDGE ? 0U : profile[depth];
+        }
+    }
+}
+
+static void draw_island_side_boxes(void)
+{
+    RenderSurface *frame = g_frame_surface;
+    int side;
+    if (frame == NULL || frame->width <= LOGICAL_WIDTH) return;
+    side = (frame->width - LOGICAL_WIDTH) / 2;
+    draw_island_side_box(frame, 0, side);
+    draw_island_side_box(frame, side + LOGICAL_WIDTH, frame->width);
 }
 
 static void render_island_view(RenderSurface *surface)
@@ -1677,6 +1740,7 @@ static void render_island_view(RenderSurface *surface)
     /* ISLETMP is the original 640x160 bottom template at y=320, matching the
        ISLETMP pane in windows.txt. It uses the active island palette. */
     draw_sprite(surface, &g_island_template_art, 0, 0, status_top);
+    draw_island_side_boxes();
 
     /* windows.txt declares the always-present island controls separately from
        ISLETEMP. FUN_0042fa0f shows GOTOMAP/PANIC/TOGREALM/TASKLIST at entry to

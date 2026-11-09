@@ -405,10 +405,10 @@ static int gl_build_preset(int index)
 
 /* Output textures and framebuffers for the given input and window sizes.
    Returns 0 (and marks the preset unsupported) when a target is refused. */
-static int gl_size_preset(GlPresetRun *run, int width, int height)
+static int gl_size_preset(GlPresetRun *run, int frame_width, int width, int height)
 {
     int i;
-    int in_w = LOGICAL_WIDTH, in_h = LOGICAL_HEIGHT;
+    int in_w = frame_width, in_h = LOGICAL_HEIGHT;
     for (i = 0; i < run->pass_count; ++i) {
         GlPassRun *pass = &run->runs[i];
         int last = i == run->pass_count - 1;
@@ -515,6 +515,23 @@ fail:
     return 0;
 }
 
+/* Widescreen: the frame textures follow the frame width (re-specified in
+   place; the swizzle and the swap framebuffer keep them). */
+static int g_gl_frame_width = LOGICAL_WIDTH;
+static void gl_size_frame(int frame_width)
+{
+    if (frame_width == g_gl_frame_width) return;
+    GLX(glBindTexture)(GL_TEXTURE_2D, g_gl_frame_texture);
+    GLX(glTexImage2D)(GL_TEXTURE_2D, 0, GL_RGBA8, frame_width, LOGICAL_HEIGHT, 0, GL_RGBA,
+                      GL_UNSIGNED_BYTE, NULL);
+#ifdef __EMSCRIPTEN__
+    GLX(glBindTexture)(GL_TEXTURE_2D, g_gl_raw_texture);
+    GLX(glTexImage2D)(GL_TEXTURE_2D, 0, GL_RGBA8, frame_width, LOGICAL_HEIGHT, 0, GL_RGBA,
+                      GL_UNSIGNED_BYTE, NULL);
+#endif
+    g_gl_frame_width = frame_width;
+}
+
 /* Whether preset `index` can run (builds it on first ask). */
 static int gl_preset_usable(int index)
 {
@@ -523,8 +540,8 @@ static int gl_preset_usable(int index)
 }
 
 /* Draws the frame into the viewport of a drawable of width x height. */
-static int gl_present(int preset_index, const uint32_t *pixels, const RECT *viewport,
-                      int drawable_w, int drawable_h)
+static int gl_present(int preset_index, const uint32_t *pixels, int frame_width,
+                      const RECT *viewport, int drawable_w, int drawable_h)
 {
     GlPresetRun *run;
     int width = viewport->right - viewport->left;
@@ -536,10 +553,11 @@ static int gl_present(int preset_index, const uint32_t *pixels, const RECT *view
     if (!gl_preset_usable(preset_index)) preset_index = 0;
     run = &g_gl_runs[preset_index];
     if (run->state <= 0) return 0;
-    if (!gl_size_preset(run, width, height)) {
+    if (!gl_size_preset(run, frame_width, width, height)) {
         run = &g_gl_runs[0];
-        if (!gl_size_preset(run, width, height)) return 0;
+        if (!gl_size_preset(run, frame_width, width, height)) return 0;
     }
+    gl_size_frame(frame_width);
     GLX(glBindVertexArray)(g_gl_vertex_array);
     GLX(glActiveTexture)(GL_TEXTURE0);
 #ifdef __EMSCRIPTEN__
@@ -548,12 +566,12 @@ static int gl_present(int preset_index, const uint32_t *pixels, const RECT *view
     GLX(glBindTexture)(GL_TEXTURE_2D, g_gl_frame_texture);
 #endif
     GLX(glPixelStorei)(GL_UNPACK_ALIGNMENT, 4);
-    GLX(glTexSubImage2D)(GL_TEXTURE_2D, 0, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, GL_RGBA,
+    GLX(glTexSubImage2D)(GL_TEXTURE_2D, 0, 0, 0, frame_width, LOGICAL_HEIGHT, GL_RGBA,
                          GL_UNSIGNED_BYTE, pixels);
 #ifdef __EMSCRIPTEN__
     GLX(glUseProgram)(g_gl_swap_program);
     GLX(glBindFramebuffer)(GL_FRAMEBUFFER, g_gl_swap_framebuffer);
-    GLX(glViewport)(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+    GLX(glViewport)(0, 0, frame_width, LOGICAL_HEIGHT);
     GLX(glDrawArrays)(GL_TRIANGLE_STRIP, 0, 4);
 #endif
     GLX(glBindFramebuffer)(GL_FRAMEBUFFER, 0);
@@ -566,7 +584,7 @@ static int gl_present(int preset_index, const uint32_t *pixels, const RECT *view
         GlPassRun *pass = &run->runs[i];
         int last = i == run->pass_count - 1;
         GLuint input = i == 0 ? g_gl_frame_texture : run->runs[i - 1].texture;
-        int in_w = i == 0 ? LOGICAL_WIDTH : run->runs[i - 1].width;
+        int in_w = i == 0 ? frame_width : run->runs[i - 1].width;
         int in_h = i == 0 ? LOGICAL_HEIGHT : run->runs[i - 1].height;
         GLint at;
         int back;
@@ -580,7 +598,7 @@ static int gl_present(int preset_index, const uint32_t *pixels, const RECT *view
             char name[32];
             int from = i - back;
             GLuint texture = from < 0 ? g_gl_frame_texture : run->runs[from].texture;
-            int w = from < 0 ? LOGICAL_WIDTH : run->runs[from].width;
+            int w = from < 0 ? frame_width : run->runs[from].width;
             int h = from < 0 ? LOGICAL_HEIGHT : run->runs[from].height;
             (void)snprintf(name, sizeof(name), "PassPrev%dTexture", back);
             if ((at = GLX(glGetUniformLocation)(pass->program, name)) < 0) continue;
@@ -597,8 +615,8 @@ static int gl_present(int preset_index, const uint32_t *pixels, const RECT *view
         gl_set_size_uniform(pass->program, "InputSize", in_w, in_h);
         gl_set_size_uniform(pass->program, "TextureSize", in_w, in_h);
         gl_set_size_uniform(pass->program, "OutputSize", pass->width, pass->height);
-        gl_set_size_uniform(pass->program, "OrigTextureSize", LOGICAL_WIDTH, LOGICAL_HEIGHT);
-        gl_set_size_uniform(pass->program, "OrigInputSize", LOGICAL_WIDTH, LOGICAL_HEIGHT);
+        gl_set_size_uniform(pass->program, "OrigTextureSize", frame_width, LOGICAL_HEIGHT);
+        gl_set_size_uniform(pass->program, "OrigInputSize", frame_width, LOGICAL_HEIGHT);
         if ((at = GLX(glGetUniformLocation)(pass->program, "FrameCount")) >= 0)
             GLX(glUniform1i)(at, (GLint)g_gl_frame_count);
         if ((at = GLX(glGetUniformLocation)(pass->program, "FrameDirection")) >= 0)

@@ -37,8 +37,8 @@ static int edge_scroll_direction(HWND window)
 {
     if (!g_edge_scroll || !g_mouse_inside || g_options_open || g_lilmap_drag ||
         g_slide_phase != 0 || !platform_window_focused(window)) return 0;
-    if (g_mouse_x < EDGE_SCROLL_MARGIN) return -1;
-    if (g_mouse_x >= LOGICAL_WIDTH - EDGE_SCROLL_MARGIN) return 1;
+    if (g_mouse_x < EDGE_SCROLL_MARGIN - frame_side()) return -1;
+    if (g_mouse_x >= LOGICAL_WIDTH + frame_side() - EDGE_SCROLL_MARGIN) return 1;
     return 0;
 }
 

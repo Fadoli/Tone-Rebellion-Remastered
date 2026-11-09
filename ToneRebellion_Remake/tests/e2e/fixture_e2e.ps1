@@ -67,9 +67,13 @@ function State {
     }
     $st
 }
+# $lx is in the game's 640 space; with the widescreen option the frame is
+# frame_width wide and that space sits centred in it (negative $lx reaches
+# the island view's left side).
 function Click($lx, $ly) {
     $r = New-Object FixtureE2E+RECT; [FixtureE2E]::GetClientRect($script:h, [ref]$r) | Out-Null
-    $k = [math]::Min($r.R / 640.0, $r.B / 480.0); $ox = ($r.R - 640 * $k) / 2; $oy = ($r.B - 480 * $k) / 2
+    $fw = (State).frame_width; if (-not $fw) { $fw = 640 }
+    $k = [math]::Min($r.R / $fw, $r.B / 480.0); $ox = ($r.R - $fw * $k) / 2 + ($fw - 640) / 2 * $k; $oy = ($r.B - 480 * $k) / 2
     $l = [IntPtr]((([int]($oy + $ly * $k)) -shl 16) -bor ([int]($ox + $lx * $k)))
     [FixtureE2E]::PostMessage($script:h, 0x200, [IntPtr]0, $l) | Out-Null; Start-Sleep -Milliseconds 200
     [FixtureE2E]::PostMessage($script:h, 0x201, [IntPtr]1, $l) | Out-Null; Start-Sleep -Milliseconds 80

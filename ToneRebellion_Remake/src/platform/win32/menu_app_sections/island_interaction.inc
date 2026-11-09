@@ -28,7 +28,43 @@ static int island_clamp_scroll(int scroll)
         if (hi < lo) hi = lo;
         if (lo > 1920) lo = 1920;
     }
+    /* Remake widescreen: the view reaches frame_side() past both ends of
+       the 640 the scroll addresses. Keep it inside the same bounds when they
+       are wide enough, else centred on them, and always on the 2560-wide
+       island art. */
+    if (frame_side() > 0) {
+        int side = frame_side();
+        int wide_lo = lo + side;
+        int wide_hi = hi - side;
+        if (wide_hi < wide_lo) wide_lo = wide_hi = (lo + hi) / 2;
+        if (wide_lo < side) wide_lo = side;
+        if (wide_hi > 1920 - side) wide_hi = 1920 - side;
+        if (wide_hi < wide_lo) wide_hi = wide_lo;
+        lo = wide_lo;
+        hi = wide_hi;
+    }
     return scroll < lo ? lo : scroll > hi ? hi : scroll;
+}
+
+/* World x range the player has explored on the shown island (island+0x408 /
+   +0x40c, floater_min_x / floater_max_x; the IWLilMap bars hide the rest),
+   at least the 640 the original camera always shows. */
+static void island_explored_extent(int *lo, int *hi)
+{
+    *lo = 0;
+    *hi = 2559;
+    if (g_game_session_valid && g_menu.selected_tribe >= 0 &&
+        g_menu.selected_tribe < GAME_FLOATER_CATEGORY_COUNT &&
+        g_menu.selected_map_island >= 0 &&
+        g_menu.selected_map_island < g_game_session.island_count) {
+        const GameRuntimeIsland *island =
+            &g_game_session.islands[g_menu.selected_map_island];
+        *lo = island->floater_min_x[g_menu.selected_tribe];
+        *hi = island->floater_max_x[g_menu.selected_tribe];
+        if (*lo < 0) *lo = 0;
+        if (*hi > 2559) *hi = 2559;
+        if (*hi < *lo + LOGICAL_WIDTH - 1) *hi = *lo + LOGICAL_WIDTH - 1;
+    }
 }
 
 /* Remake: the IWLilMap pane shows the whole 2560x320 island at 1/10 scale, so
@@ -244,7 +280,7 @@ static int island_location_at(int x, int y)
     int map_x = x + g_island_scroll_x;
     int map_y = y;
     int index;
-    if (x < 0 || x >= LOGICAL_WIDTH || map_y < 0 || map_y >= 320) return -1;
+    if (!island_view_holds_x(x) || map_y < 0 || map_y >= 320) return -1;
     /* The native loop returns the first match in record order. */
     for (index = 0; index < (int)g_island_surface_data.location_count; ++index) {
         const IslandLocation *location = &g_island_surface_data.locations[index];

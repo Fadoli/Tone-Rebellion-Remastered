@@ -11,18 +11,32 @@
 static SDL_Renderer *g_sdl_renderer;
 static SDL_Texture *g_sdl_texture;
 static uint32_t *g_sdl_pixels;
+/* Width of g_sdl_texture (the SDL renderer path). */
+static int g_sdl_texture_width;
 
+/* The back buffer, g_frame_width x 480 (room for FRAME_MAX_WIDTH), rows
+   packed for the texture upload. */
 static int sdl_ensure_back_buffer(void)
 {
     if (g_sdl_pixels == NULL) {
-        g_sdl_pixels = (uint32_t *)calloc((size_t)LOGICAL_WIDTH * LOGICAL_HEIGHT,
+        g_sdl_pixels = (uint32_t *)calloc((size_t)FRAME_MAX_WIDTH * LOGICAL_HEIGHT,
                                           sizeof(uint32_t));
         if (g_sdl_pixels == NULL) return 0;
     }
-    if (g_back_surface.pixels != g_sdl_pixels)
-        render_surface_init(&g_back_surface, g_sdl_pixels, LOGICAL_WIDTH,
-                            LOGICAL_HEIGHT, LOGICAL_WIDTH);
+    if (g_back_surface.pixels != g_sdl_pixels || g_back_surface.width != g_frame_width)
+        render_surface_init(&g_back_surface, g_sdl_pixels, g_frame_width,
+                            LOGICAL_HEIGHT, g_frame_width);
     return 1;
+}
+
+/* Widescreen: the frame follows the window's shape (frame_width_for_client). */
+static void sdl_update_frame_width(void)
+{
+    int width = 0;
+    int height = 0;
+    if (g_sdl_window == NULL) return;
+    (void)SDL_GetWindowSizeInPixels(g_sdl_window, &width, &height);
+    g_frame_width = frame_width_for_client(width, height);
 }
 
 #include "sdl_gl.inc"
@@ -32,7 +46,7 @@ static int filter_preset(int filter, const RECT *viewport)
 {
     static const int presets[FILTER_COUNT] = {0, 1, 2, 3, 4, 5, 6, 9};
     if (filter == FILTER_HQX && viewport != NULL) {
-        int k_x = (viewport->right - viewport->left) / LOGICAL_WIDTH;
+        int k_x = (viewport->right - viewport->left) / g_frame_width;
         int k_y = (viewport->bottom - viewport->top) / LOGICAL_HEIGHT;
         int k = k_x < k_y ? k_x : k_y;
         if (k < 2) k = 2;
@@ -67,19 +81,26 @@ static void sdl_present(void)
     if (g_sdl_pixels == NULL) return;
     if (g_gl_ready) {
         (void)SDL_GetWindowSizeInPixels(g_sdl_window, &width, &height);
-        if (logical_viewport(width, height, &viewport))
+        if (frame_viewport(width, height, &viewport))
             (void)gl_present(filter_preset(g_upscale_filter, &viewport), g_sdl_pixels,
-                             &viewport, width, height);
+                             g_frame_width, &viewport, width, height);
         (void)SDL_GL_SwapWindow(g_sdl_window);
         return;
     }
+    if (g_sdl_texture == NULL || g_sdl_texture_width != g_frame_width) {
+        if (g_sdl_texture != NULL) SDL_DestroyTexture(g_sdl_texture);
+        g_sdl_texture = SDL_CreateTexture(g_sdl_renderer, SDL_PIXELFORMAT_XRGB8888,
+                                          SDL_TEXTUREACCESS_STREAMING,
+                                          g_frame_width, LOGICAL_HEIGHT);
+        g_sdl_texture_width = g_frame_width;
+    }
     if (g_sdl_texture == NULL) return;
     (void)SDL_UpdateTexture(g_sdl_texture, NULL, g_sdl_pixels,
-                            LOGICAL_WIDTH * (int)sizeof(uint32_t));
+                            g_frame_width * (int)sizeof(uint32_t));
     (void)SDL_GetCurrentRenderOutputSize(g_sdl_renderer, &width, &height);
     (void)SDL_SetRenderDrawColor(g_sdl_renderer, 0, 0, 0, 255);
     (void)SDL_RenderClear(g_sdl_renderer);
-    if (logical_viewport(width, height, &viewport)) {
+    if (frame_viewport(width, height, &viewport)) {
         SDL_FRect target;
         target.x = (float)viewport.left;
         target.y = (float)viewport.top;
@@ -95,6 +116,7 @@ static void sdl_present(void)
 
 static void sdl_redraw(void)
 {
+    sdl_update_frame_width();
     if (!sdl_ensure_back_buffer()) return;
     render_back_buffer(&g_back_surface);
     sdl_present();
@@ -140,6 +162,7 @@ static HWND sdl_create_window(void)
                                       SDL_TEXTUREACCESS_STREAMING,
                                       LOGICAL_WIDTH, LOGICAL_HEIGHT);
     if (g_sdl_texture == NULL) return NULL;
+    g_sdl_texture_width = LOGICAL_WIDTH;
     if (!sdl_ensure_back_buffer()) return NULL;
     return (HWND)g_sdl_window;
 }

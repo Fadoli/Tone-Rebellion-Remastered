@@ -167,12 +167,12 @@ static void bench_put_u32(unsigned char *p, uint32_t value)
     p[3] = (unsigned char)(value >> 24);
 }
 
-/* Writes the 640x480 back buffer as a top-down 32-bit BMP: a 14-byte file
+/* Writes the back buffer (640x480 unless widescreen) as a top-down 32-bit BMP: a 14-byte file
    header and a 40-byte BITMAPINFOHEADER, written byte by byte. */
 static void bench_dump_back_buffer(const char *path)
 {
     unsigned char header[54];
-    uint32_t bytes = LOGICAL_WIDTH * LOGICAL_HEIGHT * 4U;
+    uint32_t bytes = (uint32_t)g_back_surface.width * LOGICAL_HEIGHT * 4U;
     FILE *file = fopen(path, "wb");
     if (file == NULL || g_back_surface.pixels == NULL) {
         if (file != NULL) fclose(file);
@@ -184,7 +184,7 @@ static void bench_dump_back_buffer(const char *path)
     bench_put_u32(header + 2, (uint32_t)sizeof(header) + bytes);
     bench_put_u32(header + 10, (uint32_t)sizeof(header));
     bench_put_u32(header + 14, 40U);
-    bench_put_u32(header + 18, LOGICAL_WIDTH);
+    bench_put_u32(header + 18, (uint32_t)g_back_surface.width);
     bench_put_u32(header + 22, (uint32_t)-LOGICAL_HEIGHT);
     header[26] = 1;   /* planes */
     header[28] = 32;  /* bits per pixel, BI_RGB */

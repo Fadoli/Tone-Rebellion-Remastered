@@ -399,8 +399,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 g_lilmap_drag = 0;
                 platform_capture_mouse(NULL, 0);
             } else {
-                int logical_x = ((x - viewport.left) * LOGICAL_WIDTH) /
-                    (viewport.right - viewport.left);
+                int logical_x = viewport_logical_x(&viewport, x);
                 int logical_y = ((y - viewport.top) * LOGICAL_HEIGHT) /
                     (viewport.bottom - viewport.top);
                 /* No repaint here: the island screen redraws on every 20 Hz
@@ -410,7 +409,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 return 0;
             }
         }
-        if (x < viewport.left || x >= viewport.right || y < viewport.top || y >= viewport.bottom) {
+        if (!viewport_input_x(&viewport, x) || y < viewport.top || y >= viewport.bottom) {
             int construct_hover_changed = update_iw_construct_hover(-1, -1);
             int inventory_hover_changed = update_inventory_hover(-1, -1);
             int diplomacy_hover_changed = update_diplomacy_hover(-1, -1);
@@ -445,7 +444,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
             if (construct_hover_changed) platform_invalidate(window);
             return 0;
         }
-        g_mouse_x = (x - viewport.left) * LOGICAL_WIDTH / (viewport.right - viewport.left);
+        g_mouse_x = viewport_logical_x(&viewport, x);
         g_mouse_y = (y - viewport.top) * LOGICAL_HEIGHT / (viewport.bottom - viewport.top);
         g_mouse_inside = 1;
         if (update_hover_help(g_mouse_x, g_mouse_y) |
@@ -648,12 +647,11 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         width = client.right - client.left;
         height = client.bottom - client.top;
         if (!logical_viewport(width, height, &viewport)) return 0;
-        if (GET_X_LPARAM(lparam) < viewport.left || GET_X_LPARAM(lparam) >= viewport.right ||
+        if (!viewport_input_x(&viewport, GET_X_LPARAM(lparam)) ||
             GET_Y_LPARAM(lparam) < viewport.top || GET_Y_LPARAM(lparam) >= viewport.bottom) {
             return 0;
         }
-        x = ((GET_X_LPARAM(lparam) - viewport.left) * LOGICAL_WIDTH) /
-            (viewport.right - viewport.left);
+        x = viewport_logical_x(&viewport, GET_X_LPARAM(lparam));
         y = ((GET_Y_LPARAM(lparam) - viewport.top) * LOGICAL_HEIGHT) /
             (viewport.bottom - viewport.top);
         handle_click(window, x, y);
@@ -674,12 +672,10 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         width = client.right - client.left;
         height = client.bottom - client.top;
         if (!logical_viewport(width, height, &viewport) ||
-            GET_X_LPARAM(lparam) < viewport.left ||
-            GET_X_LPARAM(lparam) >= viewport.right ||
+            !viewport_input_x(&viewport, GET_X_LPARAM(lparam)) ||
             GET_Y_LPARAM(lparam) < viewport.top ||
             GET_Y_LPARAM(lparam) >= viewport.bottom) return 0;
-        x = ((GET_X_LPARAM(lparam) - viewport.left) * LOGICAL_WIDTH) /
-            (viewport.right - viewport.left);
+        x = viewport_logical_x(&viewport, GET_X_LPARAM(lparam));
         y = ((GET_Y_LPARAM(lparam) - viewport.top) * LOGICAL_HEIGHT) /
             (viewport.bottom - viewport.top);
         if (adjust_trade_cell(x, y, -1) ||
@@ -695,7 +691,7 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
                 (unsigned int)clipboard_control_at(x, y) - 11U);
             platform_invalidate(window);
         } else if (g_menu.screen == SCREEN_ISLAND && g_game_session_valid &&
-            x >= 0 && x < LOGICAL_WIDTH && y >= 0 && y < 320 &&
+            island_view_holds_x(x) && y >= 0 && y < 320 &&
             g_menu.selected_map_island >= 0 &&
             g_menu.selected_map_island < g_game_session.island_count &&
             g_menu.selected_tribe < GAME_START_PLAYER_COUNT) {

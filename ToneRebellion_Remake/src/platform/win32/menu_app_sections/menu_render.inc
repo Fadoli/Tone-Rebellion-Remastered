@@ -80,6 +80,28 @@ static int g_quicksave_enabled = 1;
 static int g_autosave_minutes = 5;
 /* OpenGL only: swaps wait for the monitor's refresh. */
 static int g_vsync;
+/* Remake widescreen (off = the original 640x480 frame). On, the frame is
+   g_frame_width x 480, as wide as the window's shape allows up to
+   FRAME_MAX_WIDTH: the 640x480 picture of every screen (the island's lower
+   panel, windows, menus) stays centred at frame x frame_side(), and only the
+   island view (the top 320 rows) fills the whole width. Game coordinates
+   (g_mouse_x, panes, clicks) stay in that centred 640 space, where the
+   island view spans [-frame_side(), LOGICAL_WIDTH + frame_side()). */
+static int g_widescreen;
+/* 16:9 at 480 rows (853.3, rounded to an even width). */
+enum { FRAME_MAX_WIDTH = 854 };
+/* Width of the frame last drawn (render_back_buffer). */
+static int g_frame_width = LOGICAL_WIDTH;
+/* While a frame is drawn: the centred 640x480 picture inside the back
+   buffer (the whole buffer without widescreen), and the back buffer
+   itself, which the island view draws across (render_back_buffer_now). */
+static RenderSurface g_panel_surface;
+static RenderSurface *g_frame_surface;
+
+static int frame_side(void)
+{
+    return (g_frame_width - LOGICAL_WIDTH) / 2;
+}
 
 typedef struct RemakeSetting {
     const char *key;
@@ -102,6 +124,7 @@ static const RemakeSetting g_remake_settings[] = {
     {"quicksave", &g_quicksave_enabled, 0, 1},
     {"autosave", &g_autosave_minutes, 0, 60},
     {"vsync", &g_vsync, 0, 1},
+    {"widescreen", &g_widescreen, 0, 1},
     {"lang", &g_language_setting, -1, REMAKE_LANG_COUNT - 1}
 };
 enum { REMAKE_SETTING_COUNT = sizeof(g_remake_settings) / sizeof(g_remake_settings[0]) };
@@ -167,35 +190,108 @@ static int filter_available(int filter);
 /* sdl_app.inc: whether the frame is drawn through OpenGL. */
 static int gl_is_ready(void);
 
-static int logical_viewport(int client_width, int client_height, RECT *viewport)
+/* Frame width for a client area: 640 without widescreen, else the
+   window's width at the frame's 480-row height (whole multiples: the
+   width at the largest factor that fits 640x480), even, 640..FRAME_MAX_WIDTH. */
+static int frame_width_for_client(int client_width, int client_height)
 {
-    if (client_width <= 0 || client_height <= 0 || viewport == NULL) return 0;
+    int width;
+    if (!g_widescreen || client_width <= 0 || client_height <= 0) return LOGICAL_WIDTH;
+    width = (int)((int64_t)client_width * LOGICAL_HEIGHT / client_height);
     if (g_scale_mode == SCALE_INTEGER) {
         int factor_x = client_width / LOGICAL_WIDTH;
         int factor_y = client_height / LOGICAL_HEIGHT;
         int factor = factor_x < factor_y ? factor_x : factor_y;
+        if (factor >= 1) width = client_width / factor;
+    }
+    width &= ~1;
+    if (width < LOGICAL_WIDTH) width = LOGICAL_WIDTH;
+    if (width > FRAME_MAX_WIDTH) width = FRAME_MAX_WIDTH;
+    return width;
+}
+
+/* Where the whole frame (frame_width_for_client wide) sits in the client
+   area: whole multiples with black bars, or fitted keeping its shape. */
+static int frame_viewport(int client_width, int client_height, RECT *viewport)
+{
+    int frame_width = frame_width_for_client(client_width, client_height);
+    if (client_width <= 0 || client_height <= 0 || viewport == NULL) return 0;
+    if (g_scale_mode == SCALE_INTEGER) {
+        int factor_x = client_width / frame_width;
+        int factor_y = client_height / LOGICAL_HEIGHT;
+        int factor = factor_x < factor_y ? factor_x : factor_y;
         /* Below 640x480 there is no whole multiple: fall back to fitting. */
         if (factor >= 1) {
-            viewport->left = (client_width - factor * LOGICAL_WIDTH) / 2;
+            viewport->left = (client_width - factor * frame_width) / 2;
             viewport->top = (client_height - factor * LOGICAL_HEIGHT) / 2;
-            viewport->right = viewport->left + factor * LOGICAL_WIDTH;
+            viewport->right = viewport->left + factor * frame_width;
             viewport->bottom = viewport->top + factor * LOGICAL_HEIGHT;
             return 1;
         }
     }
     if ((int64_t)client_width * LOGICAL_HEIGHT <=
-        (int64_t)client_height * LOGICAL_WIDTH) {
+        (int64_t)client_height * frame_width) {
         viewport->left = 0;
         viewport->right = client_width;
-        viewport->top = (client_height - client_width * LOGICAL_HEIGHT / LOGICAL_WIDTH) / 2;
-        viewport->bottom = viewport->top + client_width * LOGICAL_HEIGHT / LOGICAL_WIDTH;
+        viewport->top = (client_height - client_width * LOGICAL_HEIGHT / frame_width) / 2;
+        viewport->bottom = viewport->top + client_width * LOGICAL_HEIGHT / frame_width;
     } else {
         viewport->top = 0;
         viewport->bottom = client_height;
-        viewport->left = (client_width - client_height * LOGICAL_WIDTH / LOGICAL_HEIGHT) / 2;
-        viewport->right = viewport->left + client_height * LOGICAL_WIDTH / LOGICAL_HEIGHT;
+        viewport->left = (client_width - client_height * frame_width / LOGICAL_HEIGHT) / 2;
+        viewport->right = viewport->left + client_height * frame_width / LOGICAL_HEIGHT;
     }
     return viewport->right > viewport->left && viewport->bottom > viewport->top;
+}
+
+/* The client rectangle of the centred 640x480 picture: every input path
+   maps client points into game coordinates through it. With widescreen the
+   island view reaches past its left and right (viewport_holds_x). */
+static int logical_viewport(int client_width, int client_height, RECT *viewport)
+{
+    int frame_width = frame_width_for_client(client_width, client_height);
+    int side = (frame_width - LOGICAL_WIDTH) / 2;
+    int span;
+    if (!frame_viewport(client_width, client_height, viewport)) return 0;
+    if (side == 0) return 1;
+    span = viewport->right - viewport->left;
+    viewport->right = viewport->left +
+        (int)((int64_t)(side + LOGICAL_WIDTH) * span / frame_width);
+    viewport->left += (int)((int64_t)side * span / frame_width);
+    return viewport->right > viewport->left;
+}
+
+/* Client x -> game x through logical_viewport, rounding down (left of the
+   picture gives negative x, the island view's left side). */
+static int viewport_logical_x(const RECT *viewport, int x)
+{
+    int64_t scaled = (int64_t)(x - viewport->left) * LOGICAL_WIDTH;
+    int64_t span = viewport->right - viewport->left;
+    if (span <= 0) return 0;
+    return (int)(scaled >= 0 ? scaled / span : -((-scaled + span - 1) / span));
+}
+
+/* Whether client x lies on the frame: the picture plus the island view's
+   widescreen sides. */
+static int viewport_holds_x(const RECT *viewport, int x)
+{
+    int side = (int)((int64_t)frame_side() * (viewport->right - viewport->left) /
+                     LOGICAL_WIDTH);
+    return x >= viewport->left - side && x < viewport->right + side;
+}
+
+/* Whether client x takes pointer input: the 640 picture, plus the island
+   view's widescreen sides on the island screen. */
+static int viewport_input_x(const RECT *viewport, int x)
+{
+    if (g_menu.screen == SCREEN_ISLAND) return viewport_holds_x(viewport, x);
+    return x >= viewport->left && x < viewport->right;
+}
+
+/* Whether game x lies on the island view (wider than 640 with widescreen). */
+static int island_view_holds_x(int x)
+{
+    return x >= -frame_side() && x < LOGICAL_WIDTH + frame_side();
 }
 
 static int template_is_in_state(const WindowTemplate *window, int state)
