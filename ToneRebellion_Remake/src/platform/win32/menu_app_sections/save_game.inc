@@ -82,14 +82,21 @@ static int write_save_file(const char *path)
     unsigned char *schema;
     size_t schema_length = game_session_schema_write(NULL, 0);
     unsigned char length_bytes[4];
+    GameSession *stamped;
     int ok;
     if (!g_game_session_valid) return 0;
     schema = (unsigned char *)malloc(schema_length);
-    if (schema == NULL ||
+    /* The file carries this build's revision; the live session is left
+       untouched (network games hash it). */
+    stamped = (GameSession *)malloc(sizeof(GameSession));
+    if (schema == NULL || stamped == NULL ||
         game_session_schema_write(schema, schema_length) != schema_length) {
         free(schema);
+        free(stamped);
         return 0;
     }
+    *stamped = g_game_session;
+    stamped->save_revision = GAME_SESSION_SAVE_REVISION;
     put_le32(length_bytes, (uint32_t)schema_length);
     fill_save_header(header);
     memset(&body, 0, sizeof(body));
@@ -108,15 +115,16 @@ static int write_save_file(const char *path)
     file = fopen(path, "wb");
     if (file == NULL) {
         free(schema);
+        free(stamped);
         return 0;
     }
     ok = fwrite(header, 1, sizeof(header), file) == sizeof(header) &&
          fwrite(&body, 1, sizeof(body), file) == sizeof(body) &&
          fwrite(length_bytes, 1, 4, file) == 4 &&
          fwrite(schema, 1, schema_length, file) == schema_length &&
-         fwrite(&g_game_session, 1, sizeof(g_game_session), file) ==
-             sizeof(g_game_session);
+         fwrite(stamped, 1, sizeof(*stamped), file) == sizeof(*stamped);
     free(schema);
+    free(stamped);
     ok = (fclose(file) == 0) && ok;
     platform_storage_changed();
     return ok;
@@ -231,9 +239,12 @@ static int apply_remake_save_bytes(const unsigned char *bytes, size_t length,
         g_menu.world_index = body->world_index;
         g_menu.selected_tribe = body->selected_tribe;
         g_menu.difficulty = body->difficulty;
-        ok = load_game_session_for_selected_world(error, sizeof(error)) &&
-            game_session_schema_migrate(&g_game_session, schema,
+        ok = load_game_session_for_selected_world(error, sizeof(error));
+        /* A save older than the revision field reads as revision 0. */
+        if (ok) g_game_session.save_revision = 0;
+        ok = ok && game_session_schema_migrate(&g_game_session, schema,
                 schema_length, data, body->session_size);
+        if (ok) game_session_schema_upgrade(&g_game_session);
         if (!ok) {
             g_game_session = *previous;
             g_menu.world_index = previous_world;

@@ -40,6 +40,7 @@ add_library(tone_core STATIC
     src/core/game_session.c
     src/core/game_session_schema.c
     src/core/game_session_schema_io.c
+    src/core/game_session_schema_compat.c
     src/core/game_session_start.c
     src/core/native_save.c
     src/core/game_session_buildings.c

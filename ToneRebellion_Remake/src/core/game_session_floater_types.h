@@ -343,6 +343,9 @@ typedef struct GameSession {
        mark_bridge_constructed_with_contributor. */
     uint8_t shared_bridge_player_mask;
     GameRuntimeIsland islands[WORLD_MAP_MAX_ISLANDS];
+    /* Remake addition: GAME_SESSION_SAVE_REVISION of the build that wrote
+       the save (game_session_schema.h); 0 in saves older than the field. */
+    uint32_t save_revision;
 } GameSession;
 
 /*

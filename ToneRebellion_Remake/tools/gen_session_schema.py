@@ -110,15 +110,24 @@ def owner_ctype(owner):
 
 out.append('#define SCHEMA_FIELD(T, f, e, k) { #f, (uint32_t)offsetof(T, f), \\')
 out.append('    (uint32_t)sizeof(e), (uint32_t)(sizeof(((T *)0)->f) / sizeof(e)), \\')
-out.append('    (uint32_t)__alignof__(e), k }')
+out.append('    (uint32_t)__alignof__(e), k, GAME_SESSION_SCHEMA_STRUCT }')
+out.append('/* Scalar fields: type -1 and the element kind (float, signed, unsigned). */')
+out.append('#define SCHEMA_SCALAR(T, f, e) { #f, (uint32_t)offsetof(T, f), \\')
+out.append('    (uint32_t)sizeof(e), (uint32_t)(sizeof(((T *)0)->f) / sizeof(e)), \\')
+out.append('    (uint32_t)__alignof__(e), -1, \\')
+out.append('    (__typeof__(e))0.5 != 0 ? GAME_SESSION_SCHEMA_FLOAT : \\')
+out.append('    (__typeof__(e))-1 < (__typeof__(e))0 ? GAME_SESSION_SCHEMA_SIGNED : \\')
+out.append('    GAME_SESSION_SCHEMA_UNSIGNED }')
 out.append('')
 for name in order:
     T = owner_ctype(name)
     out.append('static const GameSessionSchemaField k_fields_%s[] = {' % name)
     for typ, fname, dims, inner in structs[name]:
         e = elem_expr(name, fname, len(dims))
-        k = index[typ] if typ in structs else -1
-        out.append('    SCHEMA_FIELD(%s, %s, %s, %d),' % (T, fname, e, k))
+        if typ in structs:
+            out.append('    SCHEMA_FIELD(%s, %s, %s, %d),' % (T, fname, e, index[typ]))
+        else:
+            out.append('    SCHEMA_SCALAR(%s, %s, %s),' % (T, fname, e))
     out.append('};')
 out.append('')
 out.append('const GameSessionSchemaType game_session_schema_types[] = {')

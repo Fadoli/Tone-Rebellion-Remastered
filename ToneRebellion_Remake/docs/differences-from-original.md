@@ -22,7 +22,7 @@ This page lists every behaviour of the remake that knowingly differs from `FLOAT
 
 | Topic | Original | Remake |
 |---|---|---|
-| Save format | 0x80-byte header and four engine streams (`FUN_0045749a` / `FUN_004576c7`). | Same header, then a remake body: the `GameSession` field table and the raw session. A later build copies the fields by name, so a save survives added, removed or resized fields ([build and validation](build-and-validation.md)). Original saves are still read. |
+| Save format | 0x80-byte header and four engine streams (`FUN_0045749a` / `FUN_004576c7`). | Same header, then a remake body: the `GameSession` field table and the raw session. A later build copies the fields by name, so a save survives added, removed, resized or renamed fields and changes of meaning ([build and validation](build-and-validation.md)). Original saves are still read. |
 | Save location | Game directory. | A `saves` directory next to the executable (or `TONE_REBELLION_SAVE_DIR`); the game directory is never written. |
 | Loaded game | Resumes running. | Opens paused by default, with the options panel open; the player resumes from the pause zone. The remake options can turn this off. |
 | Several played tribes | No such case (one local tribe). | Loading a game where two or more tribes were played (more than the starting Hall, a building order, or a queued task) opens the New Game screen as a tribe choice: unplayed tribes drawn black and not selectable, world size and difficulty locked; NEWGAME continues as the picked tribe. |

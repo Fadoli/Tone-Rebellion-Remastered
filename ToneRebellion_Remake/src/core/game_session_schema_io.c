@@ -170,46 +170,164 @@ static int name_equals(const unsigned char *saved, uint16_t length,
     return strlen(name) == length && memcmp(saved, name, length) == 0;
 }
 
-static void migrate_type(const GameSessionSchemaType *type, unsigned char *out,
-                         const SavedSchema *schema, const SavedType *saved,
-                         const unsigned char *in, unsigned int depth)
+typedef struct MigrateContext {
+    const SavedSchema *schema;
+    const GameSessionSchemaRename *renames;
+    uint32_t rename_count;
+} MigrateContext;
+
+/* The saved type name matches the current type, directly or through a
+   type rename. */
+static int type_matches(const MigrateContext *context, const SavedType *saved,
+                        const char *name)
+{
+    uint32_t r;
+    if (name_equals(saved->name, saved->name_length, name)) return 1;
+    for (r = 0; r < context->rename_count; ++r) {
+        const GameSessionSchemaRename *rename = &context->renames[r];
+        if (rename->field == NULL && rename->type != NULL &&
+            strcmp(rename->type, name) == 0 &&
+            name_equals(saved->name, saved->name_length, rename->old_name))
+            return 1;
+    }
+    return 0;
+}
+
+static const SavedField *find_saved_field(const MigrateContext *context,
+                                          const SavedType *saved,
+                                          const char *type_name,
+                                          const char *field_name)
+{
+    uint32_t s;
+    uint32_t r;
+    for (s = 0; s < saved->field_count; ++s)
+        if (name_equals(saved->fields[s].name, saved->fields[s].name_length,
+                        field_name)) return &saved->fields[s];
+    for (r = 0; r < context->rename_count; ++r) {
+        const GameSessionSchemaRename *rename = &context->renames[r];
+        if (rename->field == NULL || rename->type == NULL ||
+            strcmp(rename->type, type_name) != 0 ||
+            strcmp(rename->field, field_name) != 0) continue;
+        for (s = 0; s < saved->field_count; ++s)
+            if (name_equals(saved->fields[s].name, saved->fields[s].name_length,
+                            rename->old_name)) return &saved->fields[s];
+    }
+    return NULL;
+}
+
+static int integer_size(uint32_t size)
+{
+    return size == 1 || size == 2 || size == 4 || size == 8;
+}
+
+/* Integer element of another width: extended with this build's signedness,
+   stored when it fits (otherwise the fresh value stays). Little endian. */
+static void convert_integers(const GameSessionSchemaField *field,
+                             unsigned char *out, const SavedField *match,
+                             const unsigned char *in, uint32_t count)
+{
+    int is_signed = field->kind == GAME_SESSION_SCHEMA_SIGNED;
+    uint32_t i;
+    for (i = 0; i < count; ++i) {
+        const unsigned char *from = in + (size_t)i * match->element_size;
+        unsigned char *to = out + (size_t)i * field->element_size;
+        uint64_t raw = 0;
+        int64_t value;
+        uint32_t b;
+        for (b = 0; b < match->element_size; ++b)
+            raw |= (uint64_t)from[b] << (8u * b);
+        if (is_signed && match->element_size < 8 &&
+            (raw >> (8u * match->element_size - 1u)) != 0)
+            raw |= ~UINT64_C(0) << (8u * match->element_size);
+        value = (int64_t)raw;
+        if (field->element_size < 8) {
+            uint32_t bits = 8u * field->element_size;
+            if (is_signed) {
+                int64_t low = -(INT64_C(1) << (bits - 1u));
+                int64_t high = (INT64_C(1) << (bits - 1u)) - 1;
+                if (value < low || value > high) continue;
+            } else if (raw >> bits != 0) {
+                continue;
+            }
+        } else if (!is_signed && match->element_size < 8 && value < 0) {
+            continue;
+        }
+        for (b = 0; b < field->element_size; ++b)
+            to[b] = (unsigned char)(raw >> (8u * b));
+    }
+}
+
+static void migrate_type(const MigrateContext *context,
+                         const GameSessionSchemaType *type, unsigned char *out,
+                         const SavedType *saved, const unsigned char *in,
+                         unsigned int depth)
 {
     uint32_t f;
     if (depth > 16) return;
     for (f = 0; f < type->field_count; ++f) {
         const GameSessionSchemaField *field = &type->fields[f];
-        const SavedField *match = NULL;
-        uint32_t s;
+        const SavedField *match =
+            find_saved_field(context, saved, type->name, field->name);
         uint32_t count;
         uint32_t i;
-        for (s = 0; s < saved->field_count && match == NULL; ++s) {
-            if (name_equals(saved->fields[s].name, saved->fields[s].name_length,
-                            field->name)) match = &saved->fields[s];
-        }
         if (match == NULL || (match->type == -1) != (field->type == -1))
             continue;
         count = match->count < field->count ? match->count : field->count;
         if (field->type == -1) {
-            /* Scalars and scalar arrays: same element size only. */
+            /* Scalars and scalar arrays: same element size, or an integer
+               of another width. */
             if (match->element_size == field->element_size)
                 memcpy(out + field->offset, in + match->offset,
                        (size_t)count * field->element_size);
+            else if (field->kind != GAME_SESSION_SCHEMA_FLOAT &&
+                     integer_size(field->element_size) &&
+                     integer_size(match->element_size))
+                convert_integers(field, out + field->offset, match,
+                                 in + match->offset, count);
             continue;
         }
         {
             const GameSessionSchemaType *nested =
                 &game_session_schema_types[field->type];
-            const SavedType *saved_nested = &schema->types[match->type];
-            if (!name_equals(saved_nested->name, saved_nested->name_length,
-                             nested->name)) continue;
+            const SavedType *saved_nested = &context->schema->types[match->type];
+            if (!type_matches(context, saved_nested, nested->name)) continue;
             for (i = 0; i < count; ++i)
-                migrate_type(nested,
+                migrate_type(context, nested,
                     out + field->offset + (size_t)i * field->element_size,
-                    schema, saved_nested,
+                    saved_nested,
                     in + match->offset + (size_t)i * match->element_size,
                     depth + 1);
         }
     }
+}
+
+int game_session_schema_migrate_with(GameSession *session,
+                                     const unsigned char *schema_bytes,
+                                     size_t schema_length,
+                                     const unsigned char *data,
+                                     size_t data_length,
+                                     const GameSessionSchemaRename *renames,
+                                     uint32_t rename_count)
+{
+    SavedSchema schema;
+    const SavedType *root;
+    MigrateContext context;
+    if (session == NULL || schema_bytes == NULL || data == NULL ||
+        !parse_saved_schema(schema_bytes, schema_length, &schema)) return 0;
+    context.schema = &schema;
+    context.renames = renames;
+    context.rename_count = renames != NULL ? rename_count : 0;
+    root = &schema.types[schema.root];
+    if (root->size != data_length ||
+        !type_matches(&context, root,
+            game_session_schema_types[game_session_schema_root].name)) {
+        free_saved_schema(&schema);
+        return 0;
+    }
+    migrate_type(&context, &game_session_schema_types[game_session_schema_root],
+                 (unsigned char *)session, root, data, 0);
+    free_saved_schema(&schema);
+    return 1;
 }
 
 int game_session_schema_migrate(GameSession *session,
@@ -218,21 +336,9 @@ int game_session_schema_migrate(GameSession *session,
                                 const unsigned char *data,
                                 size_t data_length)
 {
-    SavedSchema schema;
-    const SavedType *root;
-    if (session == NULL || schema_bytes == NULL || data == NULL ||
-        !parse_saved_schema(schema_bytes, schema_length, &schema)) return 0;
-    root = &schema.types[schema.root];
-    if (root->size != data_length ||
-        !name_equals(root->name, root->name_length,
-            game_session_schema_types[game_session_schema_root].name)) {
-        free_saved_schema(&schema);
-        return 0;
-    }
-    migrate_type(&game_session_schema_types[game_session_schema_root],
-                 (unsigned char *)session, &schema, root, data, 0);
-    free_saved_schema(&schema);
-    return 1;
+    return game_session_schema_migrate_with(session, schema_bytes,
+        schema_length, data, data_length, game_session_schema_renames,
+        game_session_schema_rename_count);
 }
 
 int game_session_schema_check(char *error, size_t error_capacity)
