@@ -202,6 +202,7 @@ static WPARAM sdl_virtual_key(SDL_Keycode key)
     case SDLK_KP_ENTER:
     case SDLK_RETURN: return VK_RETURN;
     case SDLK_ESCAPE: return VK_ESCAPE;
+    case SDLK_PAUSE: return VK_PAUSE;
     case SDLK_BACKSPACE: return VK_BACK;
     case SDLK_TAB: return VK_TAB;
     case SDLK_DELETE: return VK_DELETE;

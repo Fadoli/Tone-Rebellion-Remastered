@@ -339,6 +339,23 @@ static int slide_panel_press(HWND window, int x, int y)
     return 1;
 }
 
+/* Remake: the keyboard Pause key pauses or resumes the game on the island
+   and the world map, like the SlideWindow pause zone (index 2 above),
+   network pause included. Returns 1 when it acted. */
+static int pause_key_toggle(void)
+{
+    if (!g_game_session_valid ||
+        (g_menu.screen != SCREEN_ISLAND && g_menu.screen != SCREEN_WORLD_MAP))
+        return 0;
+    if (g_net_in_game) {
+        int32_t paused = g_game_session.network_paused ? 0 : 1;
+        (void)issue_command(GAME_COMMAND_SET_NETWORK_PAUSE, 1, &paused);
+    } else {
+        g_paused = !g_paused;
+    }
+    return 1;
+}
+
 /* FUN_0046ae19 (0x46b5f7..0x46b707): while DAT_004bf124 is set, frame 0 of
    the PAUSE shape (data\pause.shp, the closed eye) is drawn on the island
    and world map views, centred on its opaque bounds (FUN_00405e11 at the

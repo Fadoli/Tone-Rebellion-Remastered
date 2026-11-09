@@ -757,6 +757,11 @@ static LRESULT CALLBACK menu_window_proc(HWND window, UINT message,
         }
         /* The original logo loop polls no input. */
         if (g_menu.screen == SCREEN_LOGO) return 0;
+        /* Remake: Pause pauses or resumes the game, panels open or not. */
+        if (wparam == VK_PAUSE && pause_key_toggle()) {
+            platform_invalidate(window);
+            return 0;
+        }
         /* Remake options: F2 opens or closes them; while open they take
            every key. */
         if (wparam == VK_F2 && !g_options_open && options_panel_screen()) {

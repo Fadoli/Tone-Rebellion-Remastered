@@ -225,7 +225,7 @@ static int shortcut_key_allowed(int key)
     return key > 0 && key < 256 && key != VK_ESCAPE && key != VK_RETURN &&
         key != VK_LEFT && key != VK_RIGHT && key != VK_UP && key != VK_DOWN &&
         key != '8' && key != '9' && key != VK_ADD && key != VK_SUBTRACT &&
-        key != VK_SHIFT && key != VK_CONTROL && key != VK_BACK &&
+        key != VK_SHIFT && key != VK_CONTROL && key != VK_BACK && key != VK_PAUSE &&
         !(key >= VK_F1 && key <= VK_F1 + 11);
 }
 
