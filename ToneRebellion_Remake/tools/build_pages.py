@@ -156,6 +156,13 @@ def build(page):
     hero, body = body[:hero_end], body[hero_end:]
     hero = re.sub(r'<a class="headerlink"[^>]*>#</a>', "", hero)
     body = body.replace("<table>", '<div class="t"><table>').replace("</table>", "</table></div>")
+    # Interactive parts the Markdown marks with an HTML comment (hidden on
+    # GitHub): <!-- name --> becomes web/<name>-....html, e.g. the combat
+    # calculator.
+    for name, fragment in (("calculator", "combat-calculator.html"),):
+        marker = "<!-- %s -->" % name
+        if marker in body:
+            body = body.replace(marker, (ROOT / "web" / fragment).read_text(encoding="utf-8"))
     with open(ROOT / "web" / page["target"], "w", encoding="utf-8", newline="\n") as out:
         out.write(page_html(page, hero.strip(), toc, body))
 

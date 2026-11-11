@@ -161,3 +161,37 @@ footer { margin-top: 4rem; padding: 1.5rem 0 0; border-top: 1px solid var(--fram
   .brand { letter-spacing: .2em; }
   .brand .long { display: none; }
 }
+
+/* Combat calculator (guide.html, web/combat-calculator.html). */
+.github-only { display: none; }
+.calc { margin: 1rem 0 1.5rem; padding: 1.1rem 1.25rem; max-width: 56rem;
+        background: var(--panel); border: 1px solid var(--frame-bright); border-radius: 10px;
+        box-shadow: inset 0 0 0 1px rgba(122, 166, 238, .1), 0 0 24px rgba(40, 50, 140, .4); }
+.calc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 1rem; }
+.calc fieldset { margin: 0; padding: .6rem .8rem .8rem; border: 1px solid var(--frame); border-radius: 8px; }
+.calc legend { padding: 0 .4rem; color: var(--cyan); font: 600 .78rem var(--display);
+               letter-spacing: .16em; text-transform: uppercase; }
+.calc label { display: block; margin: .45rem 0 0; color: var(--muted); font-size: .88rem; }
+.calc label[hidden] { display: none; }
+.calc select { display: block; width: 100%; margin-top: .2rem; padding: .35rem .4rem;
+               color: var(--text); background: var(--panel-solid); font: inherit; font-size: .88rem;
+               border: 1px solid var(--frame); border-radius: 5px; }
+.calc input[type=checkbox] { accent-color: var(--cyan); }
+.calc input[type=range] { display: block; width: 100%; margin-top: .3rem; accent-color: var(--cyan); }
+.c-tide-ends { display: flex; justify-content: space-between; font-size: .78rem; }
+.calc-out { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem;
+            margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--frame); }
+.calc-out .big { padding: .5rem .7rem; border: 1px solid var(--frame); border-radius: 8px;
+                 background: rgba(58, 79, 174, .18); }
+.calc-out .big span { display: block; color: var(--muted); font-size: .78rem;
+                      letter-spacing: .08em; text-transform: uppercase; }
+.calc-out .big strong { color: #fff; font: 600 1.6rem var(--display);
+                        text-shadow: 0 0 10px rgba(95, 232, 245, .5); }
+.calc-out .sum { grid-column: 1 / -1; margin: 0; font-size: .85rem; }
+.calc-out .bars { grid-column: 1 / -1; }
+.calc .bar { display: grid; grid-template-columns: 1.5rem 1fr 3.5rem; align-items: center;
+             gap: .5rem; font-size: .82rem; color: var(--muted); }
+.calc .bar i { display: block; height: .7rem; border-radius: 3px;
+               background: linear-gradient(90deg, var(--frame-bright), var(--cyan)); }
+.calc .bar b { font-weight: 500; text-align: right; }
+@media (max-width: 560px) { .calc-out { grid-template-columns: 1fr; } }

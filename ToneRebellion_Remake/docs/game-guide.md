@@ -285,11 +285,89 @@ Other Leviathan sites: contamination (7 HP); supply centres Marais de Broont (10
 
 ## Combat rules
 
-**Realms.** Physical beats Supernatural, Supernatural beats Ethereal, Ethereal beats Natural, Natural beats Physical. Attacking the realm you beat adds a bonus to the hit roll, attacking the realm that beats you subtracts it; opposite realms swing with the realm cycle shown in the island view. An uncharged unit fights in its tribe's worker realm.
+Every attack, by a floater, a Leviathan creature or a Leviathan defence, goes through the same three steps.
 
-**Hit chance (%)** = 60 × (A + 7 − D ± realm bonus) / 14 + 10, where A is the attacker's strength and D the target's strength if it is a trained unit (0 for workers and spores). The realm bonus is A / 4, A / 2 or 2A / 3 depending on difficulty.
+### 1. Strength on both sides
 
-**Damage** per hit: the average of three random draws, between 1 and A − 1, at most 10. Every attempt spends one charge, hit or miss.
+**A**, the attacker's strength:
+
+| Attacker | A |
+|---|---|
+| Charged tribe unit | Str + 2 × (level − 1), + 1 with its school's glyph (Tal, Ahn, Nos), + 3 under Courage of the Brave |
+| Uncharged tribe unit (charge 0) or worker | 2 × (level − 1): a worker hits with 0, a level-1 unit with no charge with 0 |
+| Leviathan creature | Str + 3 × level, + rank × Str / 22 (difficulty 2 and above) |
+| Leviathan defence | its Str |
+
+**D**, the defender's strength, is worked out the same way for the target. Workers and spores always count as **D = 0**.
+
+Every attempt spends one charge, hit or miss. An empty unit fights in its tribe's worker realm, at melee range, until it recharges at its school.
+
+### 2. Hit roll
+
+**Hit chance (%) = 10 + 60 × (A + 7 − D + realm bonus) / 14**, rounded down; the game then rolls a number from 0 to 99 and hits when it is lower.
+
+Without any realm bonus that is 61 % between equal strengths, about 4.3 points more for each point of A above D, and 4.3 fewer for each point below.
+
+### 3. Damage
+
+Each hit deals the average of three random draws, from 1 up to A − 1 (at least 1, at most 10):
+
+| A | Damage | Most likely | Average |
+|---|---|---|---|
+| 2 | always 1 | 1 | 1.0 |
+| 3 | 1–2 | 1 (88 %) | 1.1 |
+| 4 | 1–3 | 2 (59 %) | 1.7 |
+| 5 | 1–4 | 2 (53 %) | 2.2 |
+| 6 | 1–5 | 3 (42 %) | 2.7 |
+| 7 | 1–6 | 3 (37 %) | 3.2 |
+| 8 | 1–7 | 4 (31 %) | 3.7 |
+| 10 | 1–9 | 5 (24 %) | 4.7 |
+
+The highest values are rare: a strength-4 hit deals 3 only about once in 27 hits.
+
+### Realms
+
+Physical beats Supernatural, Supernatural beats Ethereal, Ethereal beats Natural, Natural beats Physical. Each realm therefore has one realm it beats, one that beats it, and one **opposite** realm (Physical–Ethereal, Supernatural–Natural).
+
+| Attacker vs target | Realm bonus |
+|---|---|
+| same realm | 0 |
+| attacker beats target | + R |
+| target beats attacker | − R |
+| opposite realms | from − R/2 to + R/2, following the tide (below) |
+
+R depends on the difficulty: A / 4 at level 0 (at least 1), A / 2 at levels 1–2 (at least 2), 2A / 3 at levels 3–4 (at least 3). Leviathan defences never get a realm bonus: the game makes them attack in the target's own realm.
+
+### The tide
+
+The cross with four realm orbs in the lower-left corner of the island screen shows two tides, one per pair of opposite realms. Each tide is a marker that slides slowly from one realm of its pair to the other and back, without stopping:
+
+- **Physical – Ethereal**: one way in about 6.7 minutes (8000 game ticks), a full swing in 13.3 minutes;
+- **Supernatural – Natural**: one way in about 8.3 minutes (10000 ticks), a full swing in 16.7 minutes.
+
+Both start half-way at the beginning of a game, in a random direction. The orbs grow and shrink with them.
+
+The tide only matters between opposite realms. **The realm the marker sits next to is the exposed one**: attacks from its opposite realm on it gain up to + R/2, and its own attacks on the opposite realm lose up to R/2. With the marker half-way the bonus is 0. At difficulty 0 with A = 5 the tide is worth about ± 3 points of hit chance; at difficulty 3–4 about ± 7.
+
+### Examples
+
+At difficulty 0 (R = 1.25 for A = 5):
+
+| Attack | A | D | Realm bonus | Hit chance | Damage per hit |
+|---|---|---|---|---|---|
+| Tark Train 1 level 1, charged (Physical) → Zygon worker (Supernatural) | 5 | 0 | + 1.25 (Physical beats Supernatural) | 66 % | 1–4, average 2.2 |
+| Same unit → Dyla Den of the Beast level 1, charged (Physical) | 5 | 4 | 0 (same realm) | 44 % | 1–4 |
+| Céphéen Banshee level 1 (Ethereal) → Tark worker (Physical), tide marker at Physical | 5 | 0 | + 0.63 | 64 % | 1–4 |
+| Same, marker half-way / at Ethereal | 5 | 0 | 0 / − 0.63 | 61 % / 58 % | 1–4 |
+| Plasid → any worker | 2 | 0 | none | 48 % | always 1 |
+
+The same Tark warrior against the Zygon worker at higher difficulty: 72 % at levels 1–2, 75 % at levels 3–4 (the realm bonus grows), but 56 %, 50 % and 47 % if the realms were the other way round.
+
+### Combat calculator
+
+<p class="github-only">The <a href="https://fadoli.github.io/Tone-Rebellion-Remastered/guide.html#combat-calculator">website version of this guide</a> has an interactive calculator here: pick an attacker, a target, the difficulty and the tide to get the hit chance and the damage.</p>
+
+<!-- calculator -->
 
 ## Sources and limits
 

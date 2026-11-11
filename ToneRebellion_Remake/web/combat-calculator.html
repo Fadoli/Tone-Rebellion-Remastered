@@ -1,0 +1,181 @@
+<div class="calc" id="calc">
+  <div class="calc-grid">
+    <fieldset>
+      <legend>Attacker</legend>
+      <label>Who <select id="c-att"></select></label>
+      <label class="c-lvl">Level <select id="c-att-level"><option>1</option><option>2</option><option>3</option></select></label>
+      <label class="c-elite"><input type="checkbox" id="c-att-elite"> Elite (level 1)</label>
+      <label class="c-charge"><input type="checkbox" id="c-att-charged" checked> Charged</label>
+      <label class="c-charge"><input type="checkbox" id="c-att-glyph"> School glyph (+1)</label>
+      <label class="c-charge"><input type="checkbox" id="c-att-courage"> Courage of the Brave (+3)</label>
+    </fieldset>
+    <fieldset>
+      <legend>Target</legend>
+      <label>Who <select id="c-def"></select></label>
+      <label class="d-lvl">Level <select id="c-def-level"><option>1</option><option>2</option><option>3</option></select></label>
+      <label class="d-elite"><input type="checkbox" id="c-def-elite"> Elite (level 1)</label>
+      <label class="d-charge"><input type="checkbox" id="c-def-charged" checked> Charged</label>
+    </fieldset>
+    <fieldset>
+      <legend>Game</legend>
+      <label>Difficulty <select id="c-diff">
+        <option value="0">0 – timid</option><option value="1">1 – playful</option>
+        <option value="2">2 – sullen</option><option value="3">3 – aggressive</option>
+        <option value="4">4 – destructive</option></select></label>
+      <label class="c-tide">Tide marker
+        <input type="range" id="c-tide" min="0" max="100" value="50">
+        <span class="c-tide-ends"><span id="c-tide-a"></span><span id="c-tide-b"></span></span></label>
+    </fieldset>
+  </div>
+  <div class="calc-out" id="c-out" aria-live="polite"></div>
+</div>
+<script>
+(function () {
+  var REALMS = ['Physical', 'Supernatural', 'Ethereal', 'Natural'];
+  var WORKER_REALM = { Tark: 0, Zygon: 1, 'Céphéen': 2, Dyla: 3 };
+  // [name, tribe, realm, strength, kind]  kind: unit | worker | levi | spore | tower
+  var LIST = [
+    ['Worker', 'Tark', 0, 0, 'worker'],
+    ['Train 1 – Confrérie du Tentacule', 'Tark', 0, 5, 'unit'],
+    ['Train 2 – Contemplatif', 'Tark', 1, 4, 'unit'],
+    ['Train 3 – Confédération de l’Étoile', 'Tark', 0, 5, 'unit3'],
+    ['Wizard – Société des Magiciens', 'Tark', 0, 3, 'unit'],
+    ['Worker', 'Zygon', 1, 0, 'worker'],
+    ['Train 1 – Clan de Sol', 'Zygon', 1, 5, 'unit'],
+    ['Train 2 – Voix de l’Esprit', 'Zygon', 2, 5, 'unit'],
+    ['Train 3 – Guilde de la Lumière', 'Zygon', 1, 6, 'unit3'],
+    ['Wizard – Sorcier du Firmament', 'Zygon', 1, 2, 'unit'],
+    ['Worker', 'Céphéen', 2, 0, 'worker'],
+    ['Train 1 – Fée du requiem', 'Céphéen', 2, 5, 'unit'],
+    ['Train 2 – Prêtre de l’orage', 'Céphéen', 3, 3, 'unit'],
+    ['Train 3 – Explorateur céleste', 'Céphéen', 2, 4, 'unit3'],
+    ['Wizard – Ordre d’Arcania', 'Céphéen', 2, 2, 'unit'],
+    ['Worker', 'Dyla', 3, 0, 'worker'],
+    ['Train 1 – Sorcier Invocateur', 'Dyla', 3, 5, 'unit'],
+    ['Train 2 – Repaire de la Bête', 'Dyla', 0, 4, 'unit'],
+    ['Train 3 – Façonneur du Vent', 'Dyla', 3, 3, 'unit3'],
+    ['Wizard – Druide Enchanteur', 'Dyla', 3, 2, 'unit'],
+    ['Spore', 'Leviathan', 0, 0, 'spore'],
+    ['Rakalingus (Physical melee)', 'Leviathan', 0, 4, 'levi'],
+    ['Zeeth (Physical ranged)', 'Leviathan', 0, 4, 'levi'],
+    ['Drack (Supernatural melee)', 'Leviathan', 1, 3, 'levi'],
+    ['Guêpe du Tone (Supernatural ranged)', 'Leviathan', 1, 3, 'levi'],
+    ['Ronth (Ethereal melee)', 'Leviathan', 2, 5, 'levi'],
+    ['Metha (Ethereal ranged)', 'Leviathan', 2, 4, 'levi'],
+    ['Zwacker (Natural melee)', 'Leviathan', 3, 3, 'levi'],
+    ['Shandi (Natural ranged)', 'Leviathan', 3, 5, 'levi'],
+    ['Quitch', 'Defence', 2, 4, 'tower'], ['Blistin', 'Defence', 3, 5, 'tower'],
+    ['Menace Aveugle', 'Defence', 0, 3, 'tower'], ['Hydron', 'Defence', 1, 7, 'tower'],
+    ['Essaim de Feu', 'Defence', 2, 8, 'tower'], ['Mabus', 'Defence', 2, 10, 'tower'],
+    ['Plasid', 'Defence', 2, 2, 'tower'], ['Anénépode', 'Defence', 1, 6, 'tower'],
+    ['Xylus', 'Defence', 1, 6, 'tower'], ['Grender', 'Defence', 2, 3, 'tower'],
+    ['Mesron', 'Defence', 2, 4, 'tower'], ['Sentinelle mécanique', 'Defence', 2, 5, 'tower']
+  ];
+  var $ = function (id) { return document.getElementById(id); };
+
+  function fill(select, withTowers, pick) {
+    var groups = {};
+    LIST.forEach(function (row, i) {
+      if (row[4] === 'tower' && !withTowers) return;
+      var tribe = row[1];
+      if (!groups[tribe]) {
+        groups[tribe] = document.createElement('optgroup');
+        groups[tribe].label = tribe === 'Defence' ? 'Leviathan defences' :
+          tribe === 'Leviathan' ? 'Leviathan creatures' : tribe;
+        select.appendChild(groups[tribe]);
+      }
+      var option = new Option(row[0] + ' (' + REALMS[row[2]] + ', Str ' + row[3] + ')', i);
+      groups[tribe].appendChild(option);
+    });
+    select.value = pick;
+  }
+
+  function maxLevel(kind) { return kind === 'unit3' ? 2 : kind === 'unit' ? 3 : 1; }
+
+  function side(prefix, rowIndex, attacking) {
+    var row = LIST[rowIndex], kind = row[4];
+    var tribeUnit = kind === 'unit' || kind === 'unit3';
+    var levelBox = $(prefix + '-level');
+    var lvl = Math.min(+levelBox.value, maxLevel(kind));
+    var charged = $(prefix + '-charged').checked;
+    var elite = $(prefix + '-elite').checked;
+    var root = $('calc');
+    root.querySelectorAll('.' + (attacking ? 'c' : 'd') + '-lvl').forEach(function (e) { e.hidden = !tribeUnit; });
+    root.querySelectorAll('.' + (attacking ? 'c' : 'd') + '-charge').forEach(function (e) { e.hidden = !tribeUnit; });
+    root.querySelectorAll('.' + (attacking ? 'c' : 'd') + '-elite').forEach(function (e) { e.hidden = kind !== 'levi'; });
+    Array.prototype.forEach.call(levelBox.options, function (o) { o.disabled = +o.value > maxLevel(kind); });
+    if (+levelBox.value > maxLevel(kind)) levelBox.value = maxLevel(kind);
+    var strength, realm = row[2], note = '';
+    if (kind === 'worker' || kind === 'spore') { strength = 0; }
+    else if (kind === 'levi') { strength = row[3] + (elite ? 3 : 0); }
+    else if (kind === 'tower') { strength = row[3]; }
+    else {
+      strength = 2 * (lvl - 1);
+      if (charged) {
+        strength += row[3];
+        if (attacking && $('c-att-glyph').checked) strength += 1;
+        if (attacking && $('c-att-courage').checked) strength += 3;
+      } else if (attacking) {
+        realm = WORKER_REALM[row[1]];
+        note = 'no charge: fights in the worker realm';
+      }
+    }
+    return { row: row, kind: kind, strength: strength, realm: realm, note: note };
+  }
+
+  function damageTable(A) {
+    var R = Math.max(1, A - 1), counts = {}, total = 0, sum = 0;
+    for (var a = 0; a < R; ++a) for (var b = 0; b < R; ++b) for (var c = 0; c < R; ++c) {
+      var d = Math.min(10, Math.floor((a + b + c + 3) / 3));
+      counts[d] = (counts[d] || 0) + 1; ++total; sum += d;
+    }
+    return { counts: counts, total: total, average: sum / total };
+  }
+
+  function update() {
+    var att = side('c-att', +$('c-att').value, true);
+    var def = side('c-def', +$('c-def').value, false);
+    var diff = +$('c-diff').value;
+    var A = att.strength, D = def.strength;
+    var R = diff === 0 ? Math.max(1, A / 4) : diff <= 2 ? Math.max(2, A / 2) : Math.max(3, A * 2 / 3);
+    var bonus = 0, relation, opposite = false;
+    var ar = att.realm, tr = def.realm;
+    if (att.kind === 'tower') { relation = 'Leviathan defence: no realm bonus'; }
+    else if (def.kind === 'spore') { relation = 'spores take the attacker’s realm: no bonus'; }
+    else if (ar === tr) { relation = REALMS[ar] + ' vs ' + REALMS[tr] + ': same realm'; }
+    else if (((ar + 1) & 3) === tr) { bonus = R; relation = REALMS[ar] + ' beats ' + REALMS[tr]; }
+    else if (((ar + 3) & 3) === tr) { bonus = -R; relation = REALMS[tr] + ' beats ' + REALMS[ar]; }
+    else {
+      opposite = true;
+      bonus = (+$('c-tide').value / 100 - 0.5) * R;
+      relation = REALMS[ar] + ' and ' + REALMS[tr] + ' are opposite: the tide decides';
+    }
+    $('c-tide').closest('label').hidden = !opposite;
+    if (opposite) { $('c-tide-a').textContent = 'at ' + REALMS[ar]; $('c-tide-b').textContent = 'at ' + REALMS[tr]; }
+    var chance = Math.trunc(60 * (A + 7 - D + bonus) / 14) + 10;
+    var shown = Math.max(0, Math.min(100, chance));
+    var dmg = damageTable(A);
+    var bars = '';
+    Object.keys(dmg.counts).forEach(function (k) {
+      var p = 100 * dmg.counts[k] / dmg.total;
+      bars += '<div class="bar"><span>' + k + '</span><i style="width:' + p.toFixed(1) +
+        '%"></i><b>' + (p < 1 ? p.toFixed(1) : Math.round(p)) + ' %</b></div>';
+    });
+    $('c-out').innerHTML =
+      '<div class="big"><span>Hit chance</span><strong>' + shown + ' %</strong></div>' +
+      '<div class="big"><span>Damage per hit</span><strong>' + (dmg.average).toFixed(1) + '</strong></div>' +
+      '<div class="big"><span>Damage per attempt</span><strong>' + (dmg.average * shown / 100).toFixed(2) + '</strong></div>' +
+      '<p class="sum">A = ' + A + ', D = ' + D + ', realm bonus ' + (bonus >= 0 ? '+ ' : '− ') +
+      Math.abs(bonus).toFixed(2) + ' (' + relation + ')' + (att.note ? '; ' + att.note : '') +
+      '<br>10 + 60 × (' + A + ' + 7 − ' + D + (bonus >= 0 ? ' + ' : ' − ') + Math.abs(bonus).toFixed(2) +
+      ') / 14 = ' + chance + (chance !== shown ? ' → ' + shown : '') + ' %</p>' +
+      '<div class="bars">' + bars + '</div>';
+  }
+
+  fill($('c-att'), true, 1);
+  fill($('c-def'), false, 5);
+  $('calc').addEventListener('input', update);
+  $('calc').addEventListener('change', update);
+  update();
+})();
+</script>
