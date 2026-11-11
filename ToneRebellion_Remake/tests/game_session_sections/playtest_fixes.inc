@@ -331,8 +331,51 @@ static void test_freed_leviathan_sites_become_visible_again(void)
     assert((pool->tribe_visibility_mask & 1U) != 0);
 }
 
+static void test_wizard_does_not_attack_on_its_own(void)
+{
+    /* FUN_0041e569 0x41f9ba..0x41fa7b rewrites a subtype-4 floater's home
+       order (action 9, stage 0) after every finished state, without an
+       action-9 test (ev_8578fcc7): it never reaches action 9's target pick
+       near the anchor, so an enemy beside its building is left alone. */
+    static GameSession session;
+    PadCatalog pads;
+    GameFloaterStart *wizard;
+    GameFloaterStart *enemy;
+    unsigned int tick;
+    unsigned int index;
+
+    make_pad_catalog(&pads);
+    memset(&session, 0, sizeof(session));
+    session.island_count = 1;
+    session.islands[0].location_count = 2;
+    session.random_state = 5;
+    for (index = 0; index < 5; ++index)
+        session.islands[0].floater_max_x[index] = 0x9ff;
+    (void)school(&session, 0, 0, 600);
+    (void)school(&session, 1, 1, 1800);
+    session.islands[0].locations[0].record_value_10 = 0x2f;
+    soldier(&session, 0, 0, 700, 0);
+    soldier(&session, 1, 1, 640, 1); /* an enemy soldier near the tower */
+    wizard = &session.floaters[0];
+    enemy = &session.floaters[1];
+    wizard->source_subtype = 4;
+    wizard->attack_range = 0;
+    wizard->previous_movement_state = 9; /* a state just finished */
+    enemy->attack_range = 0;
+    /* The tower guards its own spot (BC_DefendArea, genre 9). */
+    assert(game_session_set_building_order(&session, 0, 0, 0, 9, 0, 600, 200));
+
+    for (tick = 1; tick <= 600; ++tick) {
+        game_session_tick_floater_moves(&session, tick, &pads);
+        assert(wizard->movement_state != 0x0f && wizard->movement_state != 6);
+        assert(wizard->order_target_floater != 1);
+    }
+    assert(enemy->current_hit_points == 60);
+}
+
 static void run_playtest_fix_tests(void)
 {
+    test_wizard_does_not_attack_on_its_own();
     test_freed_leviathan_sites_become_visible_again();
     test_caster_on_another_island_crosses_before_casting();
     test_caster_without_route_keeps_the_pools();

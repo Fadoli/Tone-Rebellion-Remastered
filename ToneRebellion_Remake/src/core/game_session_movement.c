@@ -1957,13 +1957,16 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
             (void)game_session_order_floater_home(session, i);
         /* Same block, subtype 4 (0x41f9ba..0x41fa7b): outside FA_Cast, or
            with flag 0x200 set, it clears 0x200 and takes action 9 toward the
-           site of its building row +0x0c (FUN_0045c3bb, any island). */
+           site of its building row +0x0c (FUN_0045c3bb, any island). The
+           gate has no action-9 test (ev_8578fcc7): every finished state,
+           the walk home included, rewrites the order at stage 0, so a
+           wizard never reaches action 9's target pick (stage 1) and does
+           not attack on its own. */
         if (floater->source_subtype == 4U &&
             floater->previous_movement_state != 0 &&
             floater->movement_state == 0 &&
             (floater->active_order_action != 0x13U ||
              (floater->source_runtime_flags & 0x200U) != 0) &&
-            floater->active_order_action != 9U &&
             !floater->source_order_pending && !floater->has_move_order &&
             floater->source_link_0c >= 0 &&
             floater->charge_source_island < session->island_count &&
