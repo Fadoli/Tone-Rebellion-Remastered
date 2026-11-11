@@ -8,6 +8,7 @@ Player-facing changes of the Tone Rebellion remake, newest first. Each release i
 
 - A spell caster standing on another island than its target crosses the bridges first and casts on arrival, as in the original, instead of casting from afar; its spell is no longer dropped during the crossing.
 - Widescreen island: the view no longer slides past the island's edge (broken drawing) when the explored part is narrow or near an end.
+- A destroyed Leviathan building frees its pad or pool for every tribe at once: the site shows again and can be built on, instead of staying hidden until something else refreshed the island.
 - A trained soldier with enough experience goes back to its building and levels up, as in the original. Before, the building waited for it forever: the soldier stood idle and the building trained no one else.
 - A unit held by a melee attacker answers it: its counter-attack now reaches the holder and strikes, instead of standing still until the holder stops.
 - Tribe 0 Gazers' bullets use their own sheet (`PT2B` is `pt2ball.shp` in `shapes.txt`), with the right colours.

@@ -618,7 +618,6 @@ void game_session_clear_cast_site(GameSession *session, uint8_t island_index,
                                   GameRuntimeLocation *target)
 {
     int32_t previous_owner = target->owner_id;
-    int32_t previous_base_item_id = game_session_base_item_id(target);
     int32_t retained_item = target->record_value_24;
     unsigned int slot;
     unsigned int task_type;
@@ -715,10 +714,16 @@ void game_session_clear_cast_site(GameSession *session, uint8_t island_index,
        if the site's active bit did not change in the earlier damage update. */
     if (previous_owner >= 0 && previous_owner < GAME_START_PLAYER_COUNT)
         game_session_refresh_player_maintenance_budgets(session);
-    if (previous_base_item_id == 0x28 && previous_owner >= 0 &&
-        previous_owner < GAME_START_PLAYER_COUNT) {
-        (void)game_session_recalculate_player_island_visibility(
-            session, island_index, (uint8_t)previous_owner);
+    /* FUN_00466c8b runs FUN_0045e6d3(island) for players 0..3, i.e.
+       FUN_00462285 on this island for each of them, whatever the previous
+       owner (ev_d3776e7d, ev_87b396fb). FUN_00462285 hides Leviathan sites
+       (+0x14 == 4) from every player, so without this a freed Leviathan pad
+       or pool stays hidden until another visibility change. */
+    {
+        uint8_t player;
+        for (player = 0; player < 4U && player < GAME_START_PLAYER_COUNT; ++player)
+            (void)game_session_recalculate_player_island_visibility(
+                session, island_index, player);
     }
 }
 
