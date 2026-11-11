@@ -599,7 +599,8 @@ static int alert_jump(HWND window)
 static void render_alerts(RenderSurface *surface)
 {
     uint32_t now = platform_ticks_ms();
-    int y = 104;
+    /* Top right, newest first, clear of the play area's middle. */
+    int y = 6;
     int right = LOGICAL_WIDTH;
     unsigned n;
     if (g_options_open) return;
