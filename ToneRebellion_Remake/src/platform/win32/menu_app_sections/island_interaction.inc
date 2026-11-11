@@ -98,6 +98,10 @@ static int open_island_view(HWND window, int map_island_index)
     const WorldDefinition *world;
     int island_id;
     char error[256];
+    /* FUN_00470fe7 enters an island from the map only while DAT_006191b4
+       (the end sequence state) is 0 (ev_0068c343); the remake's defeat
+       count stands for the native defeat states. */
+    if (g_menu.screen == SCREEN_WORLD_MAP && end_sequence_running()) return 0;
     if (g_menu.world_index < 0 || g_menu.world_index >= g_menu.world_map.world_count) return 0;
     world = &g_menu.world_map.worlds[g_menu.world_index];
     if (map_island_index < 0 || map_island_index >= world->island_count) return 0;

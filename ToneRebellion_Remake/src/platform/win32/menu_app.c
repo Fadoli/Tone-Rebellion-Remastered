@@ -305,6 +305,13 @@ static int g_hovered_location_grab;
 static int g_hovered_defend_area;
 /* Ticks since the solo tribe lost its last floater (end sequence, FUN_00464e4d). */
 static unsigned g_defeat_ticks;
+/* The end-of-game sequence (victory world sequence, or the defeat count)
+   is running: islands stay closed and its tune keeps playing. */
+static int end_sequence_running(void)
+{
+    return g_game_session_valid &&
+        (g_game_session.world_sequence_state != 0 || g_defeat_ticks != 0U);
+}
 static int g_hovered_upgspread;
 static SpriteSheet g_clip_art;
 static SpriteSheet g_bildicon_art;
