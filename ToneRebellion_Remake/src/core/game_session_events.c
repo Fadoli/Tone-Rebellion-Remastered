@@ -125,7 +125,7 @@ int game_session_cycle_source_capacity(GameSession *session,
 
 static const uint8_t staff_upgrade_max_tier[4] = {2, 2, 1, 2};
 static const uint8_t staff_upgrade_island_thresholds[3][12] = {
-    {1, 4, 6, 2, 5, 20, 20, 20, 3, 20, 20, 20},
+    {1, 4, 6, 2, 5, 20, 20, 20, 20, 3, 20, 20},
     {1, 4, 7, 2, 5, 9, 8, 20, 20, 3, 6, 20},
     {1, 4, 7, 2, 5, 9, 8, 11, 20, 3, 6, 10}
 };
