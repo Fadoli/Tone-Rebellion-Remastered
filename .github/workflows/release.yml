@@ -83,8 +83,10 @@ jobs:
           version: ${{ env.EMSDK_VERSION }}
           actions-cache-folder: emsdk-cache
 
-      - name: Ninja
-        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      # python3-markdown renders the site pages (tools/build_pages.py); the
+      # runner's Python refuses pip installs (PEP 668).
+      - name: Ninja and Markdown
+        run: sudo apt-get update && sudo apt-get install -y ninja-build python3-markdown
 
       - name: SDL3 source
         run: |
@@ -97,7 +99,6 @@ jobs:
 
       - name: Site and archive
         run: |
-          python3 -m pip install markdown
           python3 ToneRebellion_Remake/tools/build_pages.py --site site
           name="ToneRebellion_Remake-${{ github.ref_name }}-web"
           (cd site && zip -r "../$name.zip" .)
