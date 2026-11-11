@@ -256,7 +256,11 @@ static void test_active_cons_and_prod_counters_finish_at_source_limits(void)
     item->item_id = 42;
     item->present = 1;
     item->cons.present = 1;
-    item->cons.fallback_frame = 3; /* bldinf CONS parameter, source +0x0a */
+    /* FUN_00455833 +0x0a: the CONS animation's length, 3 frames x 1 tick. */
+    item->cons.first_frame = 1;
+    item->cons.last_frame = 3;
+    item->cons.ticks_per_frame = 1;
+    item->cons.fallback_frame = 9; /* resting frame only, not the threshold */
     item->prod.present = 1;
     item->prod.threshold = 2;      /* bldinf PROD parameter, source +0x0c */
     /* The PROD cycle lasts as long as its animation: one frame, two ticks. */

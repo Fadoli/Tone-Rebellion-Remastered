@@ -19,6 +19,7 @@ Player-facing changes of the Tone Rebellion remake, newest first. Each release i
 - Hidden building and Hall buttons (orders, spells, training stock, move, on/off, upgrade, repair, Obtain, UpgSpread, Hall stock) no longer react to clicks, hover or shortcut keys in the panels or while the construction window covers them.
 - A destroyed Leviathan building frees its pad or pool for every tribe at once: the site shows again and can be built on, instead of staying hidden until something else refreshed the island.
 - A trained soldier with enough experience goes back to its building and levels up, as in the original. Before, the building waited for it forever: the soldier stood idle and the building trained no one else.
+- Bridges open at the original pace: the bridge trigger's construction animation plays in full (40 ticks) before the opening, instead of being cut after 9.
 - Wizards no longer attack enemies on their own: after each task they head back to their building, as in the original, even when the building guards its spot.
 - A unit held by a melee attacker answers it: its counter-attack now reaches the holder and strikes, instead of standing still until the holder stops.
 - Tribe 0 Gazers' bullets use their own sheet (`PT2B` is `pt2ball.shp` in `shapes.txt`), with the right colours.

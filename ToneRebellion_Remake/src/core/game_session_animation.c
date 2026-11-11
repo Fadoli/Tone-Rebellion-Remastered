@@ -1942,13 +1942,17 @@ void game_session_tick_item_animations_with_floaters(
             }
 
             /* The same source tick advances CONS (+0x40) while flag 0x004 is
-               set. FUN_00456b8d resolves a construction descriptor; its +0x0a
-               threshold is stored as CONS's first parameter by bldinf.txt. */
+               set. FUN_00456b8d resolves a construction descriptor whose +0x0a
+               threshold FUN_00455833 computes as the animation's length,
+               (last - first + 1) * speed, or (last - first) * 2 * speed for
+               ping-pong (ev_64a0d48d, compare ev_05424bff). The trailing
+               number (BR-TRG01's 9) is only the resting frame (+8). */
             if ((state->source_flags & 0x004U) != 0) {
                 ++state->construction_progress;
                 state->source_value_40 = (int16_t)state->construction_progress;
                 if (item->cons.present &&
-                    item->cons.fallback_frame <= state->construction_progress) {
+                    building_render_cons_duration(item) <=
+                        state->construction_progress) {
                     state->source_flags &= ~0x004U;
                     construction_completed = 1;
                 }

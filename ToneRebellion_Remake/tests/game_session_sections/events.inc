@@ -750,6 +750,9 @@ static void test_code_five_delivery_starts_bridge_cons_for_its_owner(void)
     catalog.items[2].item_id = 2;
     catalog.items[2].present = 1;
     catalog.items[2].cons.present = 1;
+    catalog.items[2].cons.first_frame = 1; /* CONS length: 2 ticks */
+    catalog.items[2].cons.last_frame = 2;
+    catalog.items[2].cons.ticks_per_frame = 1;
     catalog.items[2].cons.fallback_frame = 2;
     catalog.items[2].prod.present = 1;
     catalog.items[2].prod.threshold = 2;
