@@ -9,6 +9,7 @@ Player-facing changes of the Tone Rebellion remake, newest first. Each release i
 - The web page is now in English and explains the project: what the remaster is, why your own copy of the game is needed, what it adds, the useful keys, how saves and privacy work, and where to get the Windows version.
 - New game guide (`docs/game-guide.md`, published as `guide.html` beside the browser version): what each world unlocks and when, glyph bonuses, difficulty effects, and unit, spell and building stats.
 - The website gains a What's new page (`changelog.html`, this file) and the guide; both share a site header (Play, Guide, What's new, Download, Source) and a contents sidebar.
+- The website takes the look of the game's title screen: violet starfield, cyan-lit capitals and blue framed buttons, shared by all its pages.
 - The Tasks list shows its scroll arrows only when it is longer than its pane (the original always shows them).
 - Clicking a building's linked unit that stands on another island opens that island on the unit.
 - Clicking the building shown in the lower panel (Hall, soldier house, ...) centres the island view on it, opening its island first.

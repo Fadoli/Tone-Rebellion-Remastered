@@ -5,111 +5,44 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tone Rebellion Remastered</title>
 <meta name="description" content="Play Tone Rebellion (1997) in your browser with your own copy of the game. A fan-made remaster with modern display options; your files are never uploaded.">
+<link rel="stylesheet" href="site.css">
 <style>
-  :root { color-scheme: dark; --bg: #0b0d12; --panel: #161a23; --panel2: #10141c;
-          --text: #e6e8ee; --muted: #9aa1b1; --accent: #7fb2ff; --border: #2a3040;
-          --head: 3.5rem; }
-  * { box-sizing: border-box; }
-  html { scroll-padding-top: calc(var(--head) + 1rem); scroll-behavior: smooth; }
-  html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text);
-               font: 15px/1.6 system-ui, sans-serif; }
-  a { color: var(--accent); }
-  code, kbd { font: .88em ui-monospace, Consolas, monospace; }
-  code { padding: .05em .3em; background: var(--panel); border-radius: 4px; }
-  kbd { padding: .05em .4em; border: 1px solid var(--border); border-bottom-width: 2px;
-        border-radius: 5px; background: var(--panel); color: var(--text); }
+  /* This page only; the rest is web/site.css, shared with guide.html and
+     changelog.html. */
+  .site nav a.play[aria-current] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--frame-bright); }
+  #keys .t { max-width: 40rem; }
+  #keys td:first-child { white-space: nowrap; width: 1%; }
 
-  /* Site header, shared with guide.html and changelog.html (tools/build_pages.py). */
-  .site { position: sticky; top: 0; z-index: 10; height: var(--head);
-          background: rgba(11, 13, 18, .92); backdrop-filter: blur(6px);
-          border-bottom: 1px solid var(--border); }
-  .site .bar { max-width: 76rem; height: 100%; margin: 0 auto; padding: 0 1rem;
-               display: flex; align-items: center; gap: 1.5rem; }
-  .brand { color: var(--text); font-weight: 700; text-decoration: none;
-           white-space: nowrap; letter-spacing: .01em; }
-  .brand span { color: var(--accent); }
-  .site nav { display: flex; gap: .25rem; overflow-x: auto; scrollbar-width: none; }
-  .site nav a { padding: .35rem .7rem; border-radius: 6px; color: var(--muted);
-                text-decoration: none; white-space: nowrap; }
-  .site nav a:hover { color: var(--text); background: var(--panel); }
-  .site nav a.play { color: #0b0d12; background: var(--accent); font-weight: 600; }
-  .site nav a.play[aria-current] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--accent); }
-
-  .layout { max-width: 76rem; margin: 0 auto; padding: 0 1rem;
-            display: grid; grid-template-columns: 15rem minmax(0, 1fr); gap: 2.5rem; }
-  .toc { position: sticky; top: calc(var(--head) + 1.5rem); align-self: start;
-         max-height: calc(100vh - var(--head) - 3rem); overflow-y: auto;
-         padding: .25rem 0 1rem; font-size: .9rem; }
-  .toc summary { display: none; }
-  .toc .label { margin: 0 0 .5rem; color: var(--muted); font-size: .75rem;
-                text-transform: uppercase; letter-spacing: .08em; }
-  .toc ul { list-style: none; margin: 0; padding: 0; }
-  .toc a { display: block; padding: .2rem .6rem; border-left: 2px solid transparent;
-           color: var(--muted); text-decoration: none; }
-  .toc a:hover { color: var(--text); }
-  .toc a.active { color: var(--text); border-left-color: var(--accent); }
-  main { padding: 2.5rem 0 4rem; min-width: 0; }
-
-  .hero h1 { margin: 0; font-size: 2.2rem; line-height: 1.2; }
-  .hero p { max-width: 46rem; margin: .5rem 0 0; color: var(--muted); font-size: 1.05rem; }
-  main section h2 { margin: 3rem 0 .75rem; padding-top: 1.25rem; font-size: 1.5rem;
-                    border-top: 1px solid var(--border); }
-  main p, main li { color: var(--muted); max-width: 52rem; }
-  main strong { color: var(--text); }
-  main ul { padding-left: 1.25rem; margin: .5rem 0; }
-  main li { margin: .3rem 0; }
-  .t { overflow-x: auto; margin: .9rem 0 1.25rem; border: 1px solid var(--border);
-       border-radius: 10px; background: var(--panel2); max-width: 40rem; }
-  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
-  td { padding: .45rem .75rem; text-align: left; vertical-align: top; color: var(--text);
-       border-bottom: 1px solid var(--border); }
-  td:first-child { white-space: nowrap; width: 1%; }
-  tr:last-child td { border-bottom: 0; }
-
-  /* Start panel */
+  /* Start panel: a game window with the title screen's buttons. */
   #setup { margin-top: 2rem; padding: 1.5rem 1.75rem; max-width: 52rem;
-           background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
-  #setup h2 { margin: 0 0 .5rem; padding: 0; border: 0; font-size: 1.35rem; }
+           background: var(--panel); border: 1px solid var(--frame-bright); border-radius: 10px;
+           box-shadow: inset 0 0 0 1px rgba(122, 166, 238, .1), 0 0 24px rgba(40, 50, 140, .45); }
+  #setup h2 { margin: 0 0 .5rem; padding: 0; border: 0; }
   #setup p { margin: .5rem 0; }
-  #setup button, #setup label.pick { display: inline-block; margin: .75rem .5rem 0 0;
-           padding: .55rem 1rem; border-radius: 6px; border: 1px solid var(--accent);
-           background: transparent; color: var(--text); font: inherit; cursor: pointer; }
-  #setup button:hover, #setup label.pick:hover { background: rgba(127, 178, 255, .12); }
-  #setup button.primary { background: var(--accent); color: #0b0d12; font-weight: 600; }
-  #setup .saves { margin-top: 1rem; padding-top: .25rem; border-top: 1px solid var(--border); }
-  #setup .saves button, #setup .saves label.pick { font-size: .9rem; padding: .4rem .8rem; }
+  #setup button, #setup label.pick {
+    display: inline-block; margin: .75rem .5rem 0 0; padding: .6rem 1.1rem;
+    border: 1px solid var(--frame-bright); border-radius: 6px; cursor: pointer;
+    color: #fff; font: 600 .85rem var(--display); letter-spacing: .14em; text-transform: uppercase;
+    background: linear-gradient(var(--button-top), var(--button-bottom));
+    text-shadow: 0 0 8px rgba(95, 232, 245, .7); }
+  #setup button:hover, #setup label.pick:hover { border-color: var(--cyan);
+    box-shadow: 0 0 12px rgba(95, 232, 245, .35); }
+  #setup button.primary { padding: .7rem 1.6rem; font-size: 1rem;
+    background: linear-gradient(#5571dc, #26318a); box-shadow: 0 0 14px rgba(95, 232, 245, .35); }
+  #setup .saves { margin-top: 1rem; padding-top: .25rem; border-top: 1px solid var(--frame); }
+  #setup .saves button, #setup .saves label.pick { font-size: .75rem; padding: .4rem .8rem; }
   /* The display rule above would otherwise show `hidden` buttons (Play). */
   #setup [hidden] { display: none; }
   #setup input[type=file] { display: none; }
-  #setup.dropping { border: 2px dashed var(--accent); padding: calc(1.5rem - 1px) calc(1.75rem - 1px); }
-  #status { min-height: 1.5em; margin-top: 1rem; color: var(--accent); }
-
-  footer { margin-top: 4rem; padding: 1.5rem 0 0; border-top: 1px solid var(--border);
-           color: var(--muted); font-size: .85rem; }
-  .top { position: fixed; right: 1rem; bottom: 1rem; width: 2.5rem; height: 2.5rem;
-         display: grid; place-items: center; border: 1px solid var(--border);
-         border-radius: 50%; background: var(--panel); color: var(--text);
-         text-decoration: none; opacity: 0; pointer-events: none; transition: opacity .2s; }
-  .top.show { opacity: 1; pointer-events: auto; }
-
-  @media (max-width: 900px) {
-    .layout { display: block; }
-    .toc { position: static; max-height: none; margin: 1rem 0 0; padding: 0;
-           border: 1px solid var(--border); border-radius: 10px; background: var(--panel2); }
-    .toc summary { display: block; padding: .6rem .9rem; cursor: pointer; font-weight: 600; }
-    .toc .label { display: none; }
-    .toc > ul { padding: 0 .5rem .75rem; }
-    main { padding-top: 1.5rem; }
-    .hero h1 { font-size: 1.8rem; }
-  }
+  #setup input[type=checkbox] { accent-color: var(--cyan); }
+  #setup.dropping { border: 2px dashed var(--cyan); padding: calc(1.5rem - 1px) calc(1.75rem - 1px); }
+  #status { min-height: 1.5em; margin-top: 1rem; color: var(--cyan); }
   @media (max-width: 560px) {
-    .site .bar { gap: .75rem; }
-    .brand .long { display: none; }
     #setup { padding: 1.1rem 1rem; }
     #setup.dropping { padding: calc(1.1rem - 1px) calc(1rem - 1px); }
   }
   /* SDL (fill-document window) sizes the canvas to the whole page. */
-  #game { display: none; position: fixed; inset: 0; overflow: hidden; }
+  #game { display: none; position: fixed; inset: 0; overflow: hidden; background: #000; }
   #canvas { display: block; outline: none; }
 </style>
 </head>

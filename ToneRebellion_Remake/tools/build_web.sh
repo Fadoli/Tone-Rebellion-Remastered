@@ -41,5 +41,5 @@ cmake --build "$game_build" --target remake_sdl
 mkdir -p "$here/web/out"
 cp "$game_build/ToneRebellion_Remake.html" \
    "$game_build/ToneRebellion_Remake.js" \
-   "$game_build/ToneRebellion_Remake.wasm" "$here/web/out/"
+   "$game_build/ToneRebellion_Remake.wasm" "$here/web/site.css" "$here/web/out/"
 echo "web build: $here/web/out/ToneRebellion_Remake.html"

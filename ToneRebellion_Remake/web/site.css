@@ -1,0 +1,163 @@
+/* Shared look of the website (index / guide / changelog), after the game's
+   title screen: a violet starfield, a thin blue frame, cyan-lit capitals and
+   blue framed buttons. Pure CSS: no game artwork is used. */
+:root {
+  color-scheme: dark;
+  --bg: #07050f;
+  --panel: rgba(16, 18, 46, .82);
+  --panel-solid: #12143a;
+  --row: rgba(40, 52, 120, .18);
+  --text: #e9ecff;
+  --muted: #a7add6;
+  --accent: #8fd8ff;
+  --cyan: #5fe8f5;
+  --frame: #3c4f95;
+  --frame-bright: #7aa6ee;
+  --button-top: #3a4fae;
+  --button-bottom: #1b2464;
+  --head: 3.6rem;
+  --display: Optima, Candara, "Segoe UI", "Trebuchet MS", sans-serif;
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: calc(var(--head) + 1rem); scroll-behavior: smooth; }
+html, body { margin: 0; min-height: 100%; color: var(--text);
+             font: 15px/1.6 system-ui, sans-serif; }
+body {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(1px 1px at 12% 18%, #fff 50%, transparent 51%),
+    radial-gradient(1px 1px at 68% 9%, #cfd8ff 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 41% 72%, #fff 50%, transparent 51%),
+    radial-gradient(1px 1px at 87% 46%, #b9c5ff 50%, transparent 51%),
+    radial-gradient(1px 1px at 23% 88%, #dfe4ff 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 76% 81%, #fff 50%, transparent 51%),
+    radial-gradient(1px 1px at 55% 35%, #9fb0ff 50%, transparent 51%),
+    radial-gradient(1px 1px at 5% 55%, #fff 50%, transparent 51%),
+    radial-gradient(ellipse 60% 45% at 18% 12%, rgba(92, 46, 150, .35), transparent 70%),
+    radial-gradient(ellipse 55% 50% at 85% 70%, rgba(48, 40, 140, .32), transparent 70%),
+    radial-gradient(ellipse 80% 60% at 50% 110%, rgba(70, 30, 110, .30), transparent 70%);
+  background-size: 260px 260px, 310px 310px, 370px 370px, 290px 290px, 230px 230px,
+                   410px 410px, 190px 190px, 340px 340px, 100% 100%, 100% 100%, 100% 100%;
+  background-attachment: fixed;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:hover { color: var(--cyan); }
+code, kbd { font: .88em ui-monospace, Consolas, monospace; }
+code { padding: .05em .35em; background: rgba(60, 79, 149, .28); border-radius: 4px; }
+kbd { padding: .05em .45em; border: 1px solid var(--frame-bright); border-radius: 5px;
+      background: linear-gradient(var(--button-top), var(--button-bottom)); color: #fff;
+      text-shadow: 0 0 6px rgba(95, 232, 245, .6); }
+
+/* Header: the game's blue framed buttons on a dark band. */
+.site { position: sticky; top: 0; z-index: 10; height: var(--head);
+        background: rgba(7, 5, 15, .88); backdrop-filter: blur(6px);
+        border-bottom: 1px solid var(--frame); box-shadow: 0 1px 0 rgba(122, 166, 238, .15); }
+.site .bar { max-width: 76rem; height: 100%; margin: 0 auto; padding: 0 1rem;
+             display: flex; align-items: center; gap: 1.5rem; }
+.brand { color: #fff; text-decoration: none; white-space: nowrap;
+         font: 600 1.05rem var(--display); letter-spacing: .32em; text-transform: uppercase; }
+.brand span { color: var(--cyan); text-shadow: 0 0 10px rgba(95, 232, 245, .7); }
+.brand:hover { color: #fff; }
+.site nav { display: flex; gap: .45rem; overflow-x: auto; scrollbar-width: none; padding: .3rem 0; }
+.site nav a, .button {
+  display: inline-block; padding: .3rem .85rem; border: 1px solid var(--frame);
+  border-radius: 6px; color: #dfe6ff; text-decoration: none; white-space: nowrap;
+  font: 600 .78rem var(--display); letter-spacing: .14em; text-transform: uppercase;
+  background: linear-gradient(rgba(58, 79, 174, .35), rgba(27, 36, 100, .35));
+}
+.site nav a:hover, .site nav a[aria-current] {
+  color: #fff; border-color: var(--frame-bright);
+  background: linear-gradient(var(--button-top), var(--button-bottom));
+  text-shadow: 0 0 8px rgba(95, 232, 245, .8);
+}
+.site nav a.play { color: #fff; border-color: var(--frame-bright);
+                   background: linear-gradient(#4a63c8, #222d7a);
+                   box-shadow: 0 0 10px rgba(95, 232, 245, .25);
+                   text-shadow: 0 0 8px rgba(95, 232, 245, .9); }
+
+/* Page: contents on the left, text on the right. */
+.layout { max-width: 76rem; margin: 0 auto; padding: 0 1rem;
+          display: grid; grid-template-columns: 15rem minmax(0, 1fr); gap: 2.5rem; }
+.toc { position: sticky; top: calc(var(--head) + 1.5rem); align-self: start;
+       max-height: calc(100vh - var(--head) - 3rem); overflow-y: auto;
+       padding: .25rem 0 1rem; font-size: .9rem; }
+.toc summary { display: none; }
+.toc .label { margin: 0 0 .6rem; color: var(--frame-bright); font: 600 .72rem var(--display);
+              letter-spacing: .2em; text-transform: uppercase; }
+.toc ul { list-style: none; margin: 0; padding: 0; }
+.toc ul ul { margin: .1rem 0 .3rem .75rem; font-size: .85rem; }
+.toc a { display: block; padding: .2rem .6rem; border-left: 2px solid var(--frame);
+         color: var(--muted); text-decoration: none; }
+.toc a:hover { color: var(--text); }
+.toc a.active { color: #fff; border-left-color: var(--cyan);
+                text-shadow: 0 0 8px rgba(95, 232, 245, .5); }
+main { padding: 2.5rem 0 4rem; min-width: 0; }
+
+/* Title: the game's two-line logo, TONE in cyan-lit capitals. */
+.hero h1 { margin: 0; color: #fff; font: 400 2.6rem/1.15 var(--display);
+           letter-spacing: .22em; text-transform: uppercase;
+           text-shadow: 0 0 2px var(--cyan), 0 0 14px rgba(95, 232, 245, .45); }
+.hero p { max-width: 46rem; margin: .75rem 0 0; color: var(--muted); font-size: 1.05rem; }
+.chips { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1.1rem 0 0; padding: 0; }
+.chips a { padding: .3rem .8rem; border: 1px solid var(--frame); border-radius: 6px;
+           color: #dfe6ff; text-decoration: none; font: 600 .78rem var(--display);
+           letter-spacing: .12em; text-transform: uppercase;
+           background: linear-gradient(rgba(58, 79, 174, .3), rgba(27, 36, 100, .3)); }
+.chips a:hover { border-color: var(--frame-bright); color: #fff;
+                 text-shadow: 0 0 8px rgba(95, 232, 245, .8); }
+main h2 { margin: 3rem 0 .9rem; padding-top: 1.25rem; color: #fff;
+          font: 600 1.35rem var(--display); letter-spacing: .16em; text-transform: uppercase;
+          border-top: 1px solid var(--frame); text-shadow: 0 0 10px rgba(95, 232, 245, .35); }
+main h3 { margin: 2rem 0 .5rem; color: var(--cyan); font: 600 1.05rem var(--display);
+          letter-spacing: .1em; text-transform: uppercase; }
+.headerlink { margin-left: .5rem; color: var(--frame); text-decoration: none;
+              font-weight: 400; visibility: hidden; }
+h2:hover .headerlink, h3:hover .headerlink { visibility: visible; }
+.headerlink:hover { color: var(--cyan); }
+main p, main li { color: var(--muted); max-width: 52rem; }
+main strong { color: var(--text); }
+main ul { padding-left: 1.25rem; margin: .5rem 0; }
+main li { margin: .3rem 0; }
+main li::marker { color: var(--frame-bright); }
+
+/* Tables and panels: the game's dark windows in a thin blue frame. */
+.t { overflow-x: auto; margin: .9rem 0 1.25rem; border: 1px solid var(--frame);
+     border-radius: 8px; background: var(--panel);
+     box-shadow: inset 0 0 0 1px rgba(122, 166, 238, .08), 0 0 18px rgba(20, 24, 70, .6); }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+th, td { padding: .45rem .75rem; text-align: left; vertical-align: top;
+         border-bottom: 1px solid rgba(60, 79, 149, .45); }
+th { position: sticky; top: 0; color: #fff; white-space: nowrap; font-weight: 600;
+     background: linear-gradient(var(--button-top), var(--button-bottom)); }
+td { color: var(--text); }
+td:first-child { font-weight: 500; }
+tbody tr:nth-child(even) td { background: var(--row); }
+tbody tr:hover td { background: rgba(95, 232, 245, .07); }
+tbody tr:last-child td, tr:last-child td { border-bottom: 0; }
+
+footer { margin-top: 4rem; padding: 1.5rem 0 0; border-top: 1px solid var(--frame);
+         color: var(--muted); font-size: .85rem; }
+.top { position: fixed; right: 1rem; bottom: 1rem; width: 2.6rem; height: 2.6rem;
+       display: grid; place-items: center; border: 1px solid var(--frame-bright);
+       border-radius: 6px; color: #fff; text-decoration: none;
+       background: linear-gradient(var(--button-top), var(--button-bottom));
+       text-shadow: 0 0 8px rgba(95, 232, 245, .9);
+       opacity: 0; pointer-events: none; transition: opacity .2s; }
+.top.show { opacity: 1; pointer-events: auto; }
+
+@media (max-width: 900px) {
+  .layout { display: block; }
+  .toc { position: static; max-height: none; margin: 1rem 0 0; padding: 0;
+         border: 1px solid var(--frame); border-radius: 8px; background: var(--panel); }
+  .toc summary { display: block; padding: .6rem .9rem; cursor: pointer; color: #fff;
+                 font: 600 .85rem var(--display); letter-spacing: .16em; text-transform: uppercase; }
+  .toc .label { display: none; }
+  .toc > ul { padding: 0 .5rem .75rem; }
+  main { padding-top: 1.5rem; }
+  .hero h1 { font-size: 1.9rem; letter-spacing: .16em; }
+}
+@media (max-width: 560px) {
+  .site .bar { gap: .75rem; }
+  .brand { letter-spacing: .2em; }
+  .brand .long { display: none; }
+}
