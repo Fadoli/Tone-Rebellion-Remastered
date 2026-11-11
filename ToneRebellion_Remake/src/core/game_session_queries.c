@@ -114,6 +114,8 @@ uint8_t game_session_active_player_mask(const GameSession *session)
     unsigned int i;
     unsigned int j;
     if (session == NULL) return 0;
+    mask = (uint8_t)(session->shared_bridge_player_mask &
+                     ((1U << GAME_START_PLAYER_COUNT) - 1U));
     for (i = 0; i < session->island_count; ++i) {
         const GameRuntimeIsland *island = &session->islands[i];
         for (j = 0; j < island->location_count; ++j) {

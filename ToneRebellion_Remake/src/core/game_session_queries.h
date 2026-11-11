@@ -50,8 +50,10 @@ typedef struct GameEndGameScore {
 /* Remake: the tribes someone has played in this session, one bit per
    player: more than the starting Hall among its buildings, a building order,
    or a task the player queued (the recruiter's own resource requests,
-   economy.resource_task_slot, do not count). A loaded game with two or more
-   such tribes asks which one to play. */
+   economy.resource_task_slot, do not count), or a tribe a player held in the
+   network game that wrote the save (shared_bridge_player_mask), even one
+   that has not built anything yet. A loaded game with two or more such
+   tribes asks which one to play. */
 uint8_t game_session_active_player_mask(const GameSession *session);
 
 int game_session_end_game_score(const GameSession *session, uint8_t player_slot,

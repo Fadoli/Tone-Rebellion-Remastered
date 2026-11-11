@@ -10,6 +10,7 @@ Player-facing changes of the Tone Rebellion remake, newest first. Each release i
 
 ### Fixed
 
+- Reloading a network save: every tribe a player held in that game can be chosen again, even one that had not built anything yet. Before, the host could not start the reloaded game ("every player must choose a played tribe").
 - New Game screen: the centre art changes the difficulty within 100 pixels and the world size out to 200 pixels, as in the original; the clickable zones were only 10 and 14 pixels wide.
 - Widescreen: the start-up logo (The Logic Factory) is drawn centred instead of as a garbled, sheared image.
 

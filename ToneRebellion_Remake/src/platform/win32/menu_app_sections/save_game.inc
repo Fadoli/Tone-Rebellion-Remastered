@@ -283,22 +283,26 @@ static int read_save_file(HWND window, const char *path)
     size_t length;
     unsigned char *bytes = read_whole_file(path, &length);
     int on_island;
+    int choosing;
     int ok = apply_remake_save_bytes(bytes, length, &body);
     free(bytes);
     if (!ok) return 0;
     /* A save made during a network game continues as a solo game here. */
     g_game_session.config.multiplayer_session = 0;
     g_game_session.network_paused = 0;
-    /* The network-only pools end with the session: no shared glyph bonuses
-       or bridge access between tribes in a solo game. A network reload sets
-       both again from the lobby (net_apply_game_start). */
-    g_game_session.glyph_share_mask = 0;
-    g_game_session.shared_bridge_player_mask = 0;
-    game_session_refresh_player_maintenance_budgets(&g_game_session);
     reset_view_after_load();
     g_menu.animation_ticks = body.animation_ticks;
     g_sim_speed = body.sim_speed >= 1U && body.sim_speed <= 3U ? body.sim_speed : 1U;
-    if (begin_tribe_choice(window)) return 1;
+    /* The tribe choice still counts the network game's tribes
+       (shared_bridge_player_mask); then the network-only pools end with the
+       session: no shared glyph bonuses or bridge access between tribes in a
+       solo game. A network reload sets both again from the lobby
+       (net_apply_game_start). */
+    choosing = begin_tribe_choice(window);
+    g_game_session.glyph_share_mask = 0;
+    g_game_session.shared_bridge_player_mask = 0;
+    game_session_refresh_player_maintenance_budgets(&g_game_session);
+    if (choosing) return 1;
     on_island = body.on_island && body.selected_map_island >= 0;
     g_menu.screen = SCREEN_WORLD_MAP;
     if (on_island && !open_island_view(window, body.selected_map_island))
