@@ -2175,10 +2175,14 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
             game_session_tick_timed_movement_state(floater);
             continue;
         }
-        /* FUN_0041e569 skips FUN_00422d27 while a melee hold (0x10) is set. */
+        /* FUN_0041e569 skips FUN_00422d27 while a melee hold (0x10) is set.
+           States 0xf/0x10 test their arrival first (0x41edf0) and skip only
+           the step (0x41ee8a), so a held floater answering its holder still
+           reaches it and strikes (gate below). */
         if ((floater->source_runtime_flags & 0x010U) != 0 &&
             floater->movement_state != 0 && floater->movement_state != 6 &&
-            floater->movement_state != 7) continue;
+            floater->movement_state != 7 && floater->movement_state != 0x0f &&
+            floater->movement_state != 0x10) continue;
         dx = (int32_t)floater->destination_x - floater->x;
         dy = (int32_t)floater->destination_y - floater->y;
         /* FUN_00423068 updates facing from the destination independently of
@@ -2203,6 +2207,9 @@ void game_session_tick_floater_moves(GameSession *session, uint32_t source_tick,
             game_session_tick_timed_movement_state(floater);
             continue;
         }
+        if ((floater->source_runtime_flags & 0x010U) != 0 &&
+            (floater->movement_state == 0x0f || floater->movement_state == 0x10))
+            continue;
 
         /* State 0x0f/0x10 tests its previously resolved destination against
            the arrival radius before refreshing the live target coordinates. */
