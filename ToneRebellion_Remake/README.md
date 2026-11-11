@@ -21,7 +21,7 @@ cmake --build build/ucrt64
 ctest --test-dir build/ucrt64 --output-on-failure
 ```
 
-The build refreshes `ToneRebellion_Remake.exe`, `SDL3.dll` and `libiconv-2.dll` beside this file. The browser build is `tools/build_web.sh <SDL3 source directory>` (Emscripten; output in `web/out/`). Details, the e2e scripts and the benchmarks: [build and validation](docs/build-and-validation.md), [bench/](bench/).
+The build refreshes `ToneRebellion_Remake.exe`, `SDL3.dll` and `libiconv-2.dll` beside this file. The browser build is `tools/build_web.sh <SDL3 source directory>` (Emscripten; output in `web/out/`). `python tools/build_pages.py --site build/site` renders the game guide and this changelog as web pages (`guide.html`, `changelog.html`) and assembles the published site in `build/site`. Details, the e2e scripts and the benchmarks: [build and validation](docs/build-and-validation.md), [bench/](bench/).
 
 ## Releases
 
@@ -36,7 +36,7 @@ Every player-facing change goes into [CHANGELOG.md](CHANGELOG.md) under the next
 
 ## Documentation
 
-- [Game guide](docs/game-guide.md): unlocks per world, glyphs, difficulty, unit and building stats (also published as `guide.html` beside the browser version; rebuild it with `python tools/build_guide.py`)
+- [Game guide](docs/game-guide.md): unlocks per world, glyphs, difficulty, unit and building stats (published as `guide.html` beside the browser version)
 - [Menu, map, and island UI](docs/menu-and-island-ui.md)
 - [World start and initial simulation](docs/world-start.md)
 - [Building rendering](docs/building-rendering.md)
