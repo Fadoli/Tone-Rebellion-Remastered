@@ -441,6 +441,17 @@ static int game_session_tick_floater_charge(GameSession *session,
         succeeded = game_session_link_floater_charge(
             session, floater_index, floater->source_order_parameter_32);
     } else {
+        /* State 12 refills only on its destination (0x41f703). */
+        GameRuntimeLocation *target = &session->islands[floater->island_index]
+            .locations[floater->source_order_parameter_32];
+        if (floater->x != target->x || floater->y != target->y) {
+            floater->destination_x = target->x;
+            floater->destination_y = target->y;
+            floater->stop_radius = 0;
+            floater->has_move_order = 1;
+            return 0;
+        }
+        floater->has_move_order = 0;
         succeeded = floater->charge_source_island == floater->island_index &&
             floater->charge_source_location == floater->source_order_parameter_32 &&
             game_session_refill_floater_charge(session, floater_index);
@@ -457,6 +468,12 @@ static int game_session_tick_floater_charge(GameSession *session,
         floater->movement_state = 0;
         floater->order_timer = 0;
         floater->has_move_order = 0;
+        /* Remake: a failed level-up refill (stock spent meanwhile) ends
+           action 0xc so FUN_0042219e can send the floater again. */
+        if (floater->active_order_action == 0x0c) {
+            floater->active_order_action = 0;
+            floater->has_wander_order = 1;
+        }
         if (floater->source_link_0c == -1) {
             /* FUN_0041e569's failure tail assigns FA_MoveTo only to subtypes
                4 and 8: subtype 4 returns to this source; subtype 8 returns to
@@ -1557,7 +1574,44 @@ static int game_session_check_linked_retreat(GameSession *session,
     uint8_t action = floater->movement_state == 0x11
         ? floater->handoff_resume_action : floater->active_order_action;
 
-    if (building->charge_recent_floater == (int16_t)floater_index) return 1;
+    if (building->charge_recent_floater == (int16_t)floater_index) {
+        /* FUN_0042219e 0x4229b2..0x422a1d (ev_fe744a5b): the building's
+           current floater (+0x4c) without flag 0x20 is not training yet
+           (a level-up candidate, or a trainee whose order was cut): unless
+           already on action 0xc, FUN_00421ec1(-1), then +0x3c = 0xc,
+           +0x40/+0x42 = the building's island/site, +0x46 = 0. */
+        if (action != 0x0c && (floater->source_runtime_flags & 0x020U) == 0) {
+            release_task_claim(session, floater);
+            floater->source_runtime_flags &= ~0x065U;
+            floater->movement_state = 0;
+            floater->has_move_order = 0;
+            floater->has_wander_order = 0;
+            floater->wander_timer = 0;
+            floater->order_target_floater = -1;
+            floater->source_order_pending = 0;
+            floater->order_progress = 0;
+            floater->order_timer = 0;
+            floater->active_order_action = 0x0c;
+            floater->order_target_island = floater->charge_source_island;
+            floater->order_target_location =
+                (int16_t)floater->charge_source_location;
+            /* FUN_004211bb (ev_a5c09b06): another island is crossed to
+               first through FUN_004210a9; failure cancels the order. */
+            if (floater->island_index != floater->charge_source_island) {
+                if (!game_session_begin_floater_handoff(
+                        session, floater, floater->charge_source_island)) {
+                    floater->active_order_action = 0;
+                    floater->order_target_location = -1;
+                    floater->has_wander_order = 1;
+                }
+            } else if (!game_session_plan_linked_level_up(session, floater)) {
+                floater->active_order_action = 0;
+                floater->order_target_location = -1;
+                floater->has_wander_order = 1;
+            }
+        }
+        return 1;
+    }
     if (action == 2 && (floater->source_runtime_flags & 1U) != 0) return 1;
     if (action == 6 || action == 7 ||
         ((action == 8 || action == 9) && floater->order_progress != 0)) {
@@ -2506,6 +2560,37 @@ int game_session_order_floater_to_defend(GameSession *session,
     floater->order_progress = 0;
     floater->source_order_pending = 0;
     floater->has_move_order = 0;
+    floater->has_wander_order = 0;
+    floater->wander_timer = 0;
+    return 1;
+}
+
+int game_session_plan_linked_level_up(GameSession *session,
+                                      GameFloaterStart *floater)
+{
+    const GameRuntimeLocation *source;
+    if (session == NULL || floater == NULL ||
+        floater->island_index >= session->island_count ||
+        floater->order_target_location < 0 ||
+        (uint16_t)floater->order_target_location >=
+            session->islands[floater->island_index].location_count) return 0;
+    source = &session->islands[floater->island_index]
+                  .locations[(uint16_t)floater->order_target_location];
+    /* Block 0x421731 (ev_3477c421): drop/credit a carried object, +0x2c =
+       12, +0x32 = +0x42, +0x34 = 0. State 12 refills only once the step
+       reports the floater on its destination (0x41f703); the writer of that
+       destination is not identified, the remake walks to the building. */
+    game_session_drop_carried_artifact(session, floater);
+    floater->active_order_action = 0x0c;
+    floater->source_order_parameter_32 = (uint16_t)floater->order_target_location;
+    floater->movement_state = 12;
+    floater->order_timer = 0;
+    floater->destination_x = source->x;
+    floater->destination_y = source->y;
+    floater->stop_radius = 0;
+    floater->has_move_order =
+        (uint8_t)(floater->x != source->x || floater->y != source->y);
+    floater->source_order_pending = 0;
     floater->has_wander_order = 0;
     floater->wander_timer = 0;
     return 1;
