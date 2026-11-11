@@ -621,7 +621,7 @@ static int update_location_action_hover(int x, int y)
     int upgrade_hovered = 0;
     int onoff_hovered = 0;
     if (g_game_session_valid && g_menu.screen == SCREEN_ISLAND &&
-        g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL &&
+        island_panel_location_info_visible(g_island_panel_mode) &&
         g_menu.selected_map_island >= 0 &&
         g_menu.selected_map_island < g_game_session.island_count &&
         view_selected_location() >= 0) {

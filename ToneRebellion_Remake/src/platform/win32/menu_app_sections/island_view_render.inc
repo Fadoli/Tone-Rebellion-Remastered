@@ -2597,7 +2597,7 @@ static void draw_location_action_panel(RenderSurface *surface)
                 g_inventory_item_info_text[
                     selected_location->record_value_24 - 5]);
         }
-    } else if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL &&
+    } else if (island_panel_location_info_visible(g_island_panel_mode) &&
                selected_location->renderer_class == 0 &&
                location_base_item_id(selected_location) == 0x2a &&
                selected_location->owner_id >= 0 &&
@@ -2625,7 +2625,7 @@ static void draw_location_action_panel(RenderSurface *surface)
                 text_panel->pane.top + pane_height / 2 - 10,
                 RGB(230, 238, 255));
         }
-    } else if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL &&
+    } else if (island_panel_location_info_visible(g_island_panel_mode) &&
         selected_location->record_value_10 >= 0x25 &&
         selected_location->record_value_10 < PAD_CATALOG_MAX_ITEMS &&
         g_building_descriptions[selected_location->record_value_10][0] != '\0') {
@@ -2639,7 +2639,7 @@ static void draw_location_action_panel(RenderSurface *surface)
             draw_iw_text_info_text(surface, text_panel,
                 g_building_descriptions[selected_location->record_value_10]);
         }
-    } else if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL &&
+    } else if (island_panel_location_info_visible(g_island_panel_mode) &&
                selected_location->owner_id == 4 &&
                selected_location->renderer_class == 0 &&
                selected_location->record_value_10 >= 5 &&
@@ -2664,7 +2664,7 @@ static void draw_location_action_panel(RenderSurface *surface)
                 text_panel->pane.top + pane_height / 2 - 10,
                 RGB(230, 238, 255));
         }
-    } else if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL &&
+    } else if (island_panel_location_info_visible(g_island_panel_mode) &&
                island_site_info_text(selected_location,
                                      g_menu.selected_tribe) != NULL) {
         text_panel = window_catalog_find(&g_window_catalog, "IWTextInfo", 3);
@@ -2680,7 +2680,7 @@ static void draw_location_action_panel(RenderSurface *surface)
     }
 
     action = selected_location_action();
-    if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL) {
+    if (island_panel_location_info_visible(g_island_panel_mode)) {
         const WindowTemplate *onoff_button = window_catalog_find(
             &g_window_catalog, "BC_OnOff", 3);
         const WindowTemplate *upgrade_button = window_catalog_find(

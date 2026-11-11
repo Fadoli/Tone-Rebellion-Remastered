@@ -428,7 +428,7 @@ static void handle_click(HWND window, int x, int y)
                 return;
             }
         }
-        if (g_island_panel_mode == WINDOW_ISLAND_PANEL_GENERAL &&
+        if (island_panel_location_info_visible(g_island_panel_mode) &&
             location_controls_shown() &&
             g_game_session_valid && selection_island() >= 0 &&
             selection_island() < g_game_session.island_count &&
