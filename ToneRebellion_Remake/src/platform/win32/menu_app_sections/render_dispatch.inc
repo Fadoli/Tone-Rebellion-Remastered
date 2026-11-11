@@ -2,9 +2,6 @@
    map palette; FUN_004702d9 case 1 preloads them in world state 3. */
 static SpriteSheet g_paradise_art;
 static SpriteSheet g_paraglow_art;
-/* DAT_006324b8: post-incremented on every PARADISE paint. */
-static uint32_t g_paradise_paint_count;
-
 static void render_world_map(RenderSurface *surface)
 {
     const WorldDefinition *world;
@@ -160,8 +157,11 @@ paradise:
     if (sequence_state > 3 && !player0_latched) {
         if ((sequence_state != 4 || sequence_tick > 0x3b) &&
             g_paradise_art.frame_count != 0) {
+            /* Remake: the native counter steps on each dirty repaint; here it
+               steps once per game tick, so the glitter keeps the game's
+               pace at any frame rate. */
             draw_sprite(surface, &g_paradise_art,
-                        (g_paradise_paint_count++) % 21U % g_paradise_art.frame_count,
+                        g_menu.animation_ticks % 21U % g_paradise_art.frame_count,
                         319, 254);
         }
         if (sequence_state == 4 && sequence_tick < 0x50 &&
