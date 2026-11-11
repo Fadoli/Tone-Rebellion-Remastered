@@ -262,22 +262,24 @@ An elite (level 1) creature has × 1.7 HP and + 3 strength; ranks (difficulty 2 
 
 The Leviathan's buildings defend its islands. Damage per hit is 1 to strength − 1 (always 1 for strength 2); the hit chance is shown against an untrained target (workers, spores). Period is the time between shots, in ticks.
 
-| Building | Kind | Range | Str | Damage | Hit % | HP | Period |
-|---|---|---|---|---|---|---|---|
-| Quitch | close attack | < 60 | 4 | 1–3 | 57 | 18 | 40 |
-| Blistin | close attack | < 60 | 5 | 1–4 | 61 | 10 | 40 |
-| Menace Aveugle | close attack | < 60 | 3 | 1–2 | 52 | 15 | 40 |
-| Hydron | close attack | < 60 | 7 | 1–6 | 70 | 22 | 40 |
-| Essaim de Feu | close attack | < 60 | 8 | 1–7 | 74 | 24 | ≈ 30 |
-| Mabus | lightning | < 60 | 10 | 1–9 | 82 | 23 | 160 |
-| Plasid | shooter | 150 | 2 | 1 | 48 | 9 | 20 |
-| Anénépode | shooter | 260 | 6 | 1–5 | 65 | 15 | 10 |
-| Xylus | shooter | 320 | 6 | 1–5 | 65 | 16 | 20 |
-| Grender | rod | 100 | 3 | 1–2 | 52 | 13 | ≈ 30 |
-| Mesron | rod | 200 | 4 | 1–3 | 57 | 11 | ≈ 30 |
-| Sentinelle mécanique | rod | 175 | 5 | 1–4 | 61 | 20 | 40 |
+| Building | Kind | Realm | Range | Str | Damage | Hit % | HP | Period |
+|---|---|---|---|---|---|---|---|---|
+| Quitch | close attack | Ethereal | < 60 | 4 | 1–3 | 57 | 18 | 40 |
+| Blistin | close attack | Natural | < 60 | 5 | 1–4 | 61 | 10 | 40 |
+| Menace Aveugle | close attack | Physical | < 60 | 3 | 1–2 | 52 | 15 | 40 |
+| Hydron | close attack | Supernatural | < 60 | 7 | 1–6 | 70 | 22 | 40 |
+| Essaim de Feu | close attack | Ethereal | < 60 | 8 | 1–7 | 74 | 24 | ≈ 30 |
+| Mabus | lightning | Ethereal | < 60 | 10 | 1–9 | 82 | 23 | 160 |
+| Plasid | shooter | Ethereal | 150 | 2 | 1 | 48 | 9 | 20 |
+| Anénépode | shooter | Supernatural | 260 | 6 | 1–5 | 65 | 15 | 10 |
+| Xylus | shooter | Supernatural | 320 | 6 | 1–5 | 65 | 16 | 20 |
+| Grender | rod | Ethereal | 100 | 3 | 1–2 | 52 | 13 | ≈ 30 |
+| Mesron | rod | Ethereal | 200 | 4 | 1–3 | 57 | 11 | ≈ 30 |
+| Sentinelle mécanique | rod | Ethereal | 175 | 5 | 1–4 | 61 | 20 | 40 |
 
-Close-attack buildings hit a random one of up to five of your floaters nearby; shooters and rods lock the first floater in range. Their shots are never affected by realms.
+They fire at the floaters of **every** tribe on their island, yours and your rivals' alike (workers included), never at Leviathan creatures. Close-attack buildings and Mabus hit a random one of the first five floaters within 60 px; shooters and rods lock the first floater within their range and fire at it even if it moves away. A shooter's or rod's shot can miss when it lands; the target's own strength lowers the hit chance as for any attack.
+
+**Realm.** Each defence's attack has a realm (the Realm column, the colour of its impact), but the original game cancels it in the hit roll: the building attacks "in the target's own realm", so there is never a realm bonus or penalty against it. Your units' realms do not help or hurt against Leviathan buildings' shots.
 
 Other Leviathan sites: contamination (7 HP); supply centres Marais de Broont (100), Fournaise de Sasp (80), Orbe bestial (80), Arbre de Sanders (100); the hub (20). The seals (20 HP each) cannot be hurt by floaters, only by their glyph.
 
