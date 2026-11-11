@@ -86,12 +86,15 @@ static void handle_click(HWND window, int x, int y)
            (messages 60..63). */
         dispatch_newgame_master_message(window, 60 + clicked_tribe);
     } else if (g_menu.screen == SCREEN_NEW_GAME &&
-               (x - 320) * (x - 320) + (y - 240) * (y - 240) < 100) {
-        /* The NewGameWin handler assigns this inner hit region to difficulty. */
+               (x - 320) * (x - 320) + (y - 240) * (y - 240) < 100 * 100) {
+        /* FUN_0044e4f8 compares the distance itself (sqrt at 0x44e5b4) with
+           the floats at 0x4946c4 / 0x4946c8, 100.0 and 200.0
+           (ev_c4ace037, ev_54ec275a): within 100 pixels of (320,240) the
+           centre changes the difficulty... */
         dispatch_newgame_master_message(window, 55);
     } else if (g_menu.screen == SCREEN_NEW_GAME &&
-               (x - 320) * (x - 320) + (y - 240) * (y - 240) < 200) {
-        /* The surrounding NewGameWin hit region changes world size. */
+               (x - 320) * (x - 320) + (y - 240) * (y - 240) < 200 * 200) {
+        /* ...and the ring out to 200 pixels the world size. */
         dispatch_newgame_master_message(window, 53);
     } else if (g_menu.screen == SCREEN_NEW_GAME) {
         control = window_catalog_hit_test(&g_window_catalog, 1, x, y);

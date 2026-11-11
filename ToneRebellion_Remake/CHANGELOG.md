@@ -10,6 +10,7 @@ Player-facing changes of the Tone Rebellion remake, newest first. Each release i
 
 ### Fixed
 
+- New Game screen: the centre art changes the difficulty within 100 pixels and the world size out to 200 pixels, as in the original; the clickable zones were only 10 and 14 pixels wide.
 - Widescreen: the start-up logo (The Logic Factory) is drawn centred instead of as a garbled, sheared image.
 
 ## 0.2.0 - 2026-11-11

@@ -20,7 +20,7 @@ Cette page est un index; le détail est réparti en pages thématiques pour limi
 
 ## Revue de l'écran Nouvelle partie (REA, `FUN_0044e9c7`, `FUN_0044ebea`, `FUN_0044e4f8`, `FUN_0044ec5d`; ev_3b86c0b1…, ev_b4501114…, ev_4970330f…)
 
-Observation: la fenêtre (état 1: `+0x74 = 0xbf`, `DAT_0049f538 = -1`, blocs de `newgame.txt` par `FUN_0044e77f`) route les clics par cercles (`FUN_0044e4f8`): quatre tribus (rayon < 50) -> messages 60..63, centre (320,240): `d² < 100` -> 4 (difficulté, message 55), `d² < 200` -> 5 (taille du monde, message 53),
+Observation: la fenêtre (état 1: `+0x74 = 0xbf`, `DAT_0049f538 = -1`, blocs de `newgame.txt` par `FUN_0044e77f`) route les clics par cercles (`FUN_0044e4f8`): quatre tribus (rayon < 50) -> messages 60..63, centre (320,240): distance `sqrt(d²) < 100.0` -> 4 (difficulté, message 55), `< 200.0` -> 5 (taille du monde, message 53) (flottants 0x4946c4/0x4946c8, ev_c4ace037, ev_54ec275a),
 ces deux zones seulement si `DAT_004befe0 == 0` ou (`DAT_004befe0 != 0` et `DAT_004befec == DAT_004befe8`). Défaut: la tribu sélectionnée est la plus petite `i` dont le bit est posé dans `DAT_005e1730[DAT_004befec]`, sinon -1 (pas de panneau de tribu). Sprite de difficulté `levidiff`
 (`DAT_004bf11c`) en (320,240); légende de survol à `y = 0x1ae` depuis `DAT_005e4c30`. Touches natives (cas 5: Home, flèches, haut/bas) agissent sur `+0x74` et sont gardées par `DAT_004c2b74` (`nevada`, inerte). Début de partie: message 52 (`BEGINGAME`) vers MASTER; graine `DAT_0049c9b0`
 (aléatoire `FUN_00467260(2) << 1` si négative et `DAT_004c2b9c != 0`), mode solo 1; lien 52 -> `FUN_004121b7` cas 9 non vérifié.

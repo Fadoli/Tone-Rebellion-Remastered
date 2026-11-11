@@ -390,6 +390,7 @@ static void e2e_write_state(void)
             g_net_mode, g_net_mode != NET_MODE_NONE ? (int)g_net_lobby.local_slot : -1,
             g_net_mode != NET_MODE_NONE ? net_lobby_player_count(&g_net_lobby) : 0U,
             g_menu.world_index);
+    fprintf(file, "world_index %d\ndifficulty %d\n", g_menu.world_index, g_menu.difficulty);
     fprintf(file, "net_options %d\nnet_tribe %d\nglyph_share_mask %d\nbridge_share_mask %d\n",
             g_net_mode != NET_MODE_NONE ? (int)g_net_lobby.options : -1,
             g_net_mode != NET_MODE_NONE && g_net_lobby.local_slot < NET_LOBBY_MAX_PLAYERS

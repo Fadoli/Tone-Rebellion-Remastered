@@ -35,8 +35,9 @@ static int newgame_text_index_at(int x, int y)
         int dx = x - 320;
         int dy = y - 240;
         int distance_squared = dx * dx + dy * dy;
-        if (distance_squared < 100) return 4;
-        if (distance_squared < 200) return 5;
+        /* FUN_0044e4f8: distance < 100.0 difficulty, < 200.0 world size. */
+        if (distance_squared < 100 * 100) return 4;
+        if (distance_squared < 200 * 200) return 5;
     }
     control = window_catalog_hit_test(&g_window_catalog, 1, x, y);
     if (control == NULL) return -1;
