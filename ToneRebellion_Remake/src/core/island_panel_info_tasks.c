@@ -309,9 +309,14 @@ int island_panel_info_extract_entry(const unsigned char *bytes, size_t length,
                 text_end = cursor;
                 if (text_end > text_start && bytes[text_end - 1] == '\r') --text_end;
                 {
+                    /* FUN_0040f5b3: a line ends at ';' or "//", and a line
+                       starting with one is a comment (bldtxt.txt's FEATnn
+                       entries hold ';' lines repeating their title). */
                     size_t comment;
-                    for (comment = text_start; comment + 1 < text_end; ++comment) {
-                        if (bytes[comment] == '/' && bytes[comment + 1] == '/') {
+                    for (comment = text_start; comment < text_end; ++comment) {
+                        if (bytes[comment] == ';' ||
+                            (comment + 1 < text_end && bytes[comment] == '/' &&
+                             bytes[comment + 1] == '/')) {
                             text_end = comment;
                             break;
                         }

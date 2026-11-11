@@ -378,6 +378,22 @@ int main(int argc, char **argv)
         sizeof(diplomacy_captions) - 1, "TRCOMHI", description,
         sizeof(description)));
     assert(strcmp(description, "Communiquer ?") == 0);
+    {
+        /* FUN_0040f5b3 skips ';' and "//" lines and cuts a line there:
+           bldtxt.txt FEAT00 repeats its title in ';' lines. */
+        static const unsigned char feature[] =
+            "FEAT00\r\n"
+            "Mantu - Lieu sacre.\r\n"
+            ";Mantu - Lieu sacre.\r\n"
+            "  ; ; second commentaire\r\n"
+            "Effet unique. ; fin coupee\r\n"
+            "// commentaire\r\n"
+            "END\r\n";
+        assert(island_panel_info_extract_entry(feature, sizeof(feature) - 1,
+                                               "FEAT00", description,
+                                               sizeof(description)));
+        assert(strcmp(description, "Mantu - Lieu sacre. Effet unique.") == 0);
+    }
     if (argc > 1) {
         FILE *file = fopen(argv[1], "rb");
         unsigned char *bytes;

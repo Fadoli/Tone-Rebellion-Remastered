@@ -137,9 +137,12 @@ static size_t extract_repeated_help_entries(const unsigned char *bytes, size_t l
                 text_end = cursor;
                 if (text_end > text_start && bytes[text_end - 1] == '\r') --text_end;
                 {
+                    /* FUN_0040f5b3: a line ends at ';' or "//". */
                     size_t comment;
-                    for (comment = text_start; comment + 1 < text_end; ++comment) {
-                        if (bytes[comment] == '/' && bytes[comment + 1] == '/') {
+                    for (comment = text_start; comment < text_end; ++comment) {
+                        if (bytes[comment] == ';' ||
+                            (comment + 1 < text_end && bytes[comment] == '/' &&
+                             bytes[comment + 1] == '/')) {
                             text_end = comment;
                             break;
                         }
