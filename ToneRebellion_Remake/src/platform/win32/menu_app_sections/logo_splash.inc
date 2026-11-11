@@ -215,6 +215,13 @@ static void render_logo(RenderSurface *surface)
         unsigned blue = (g_logo_palette[index * 3U + 2U] * scale >> 8) * 255U / 63U;
         lut[index] = (DWORD)(red << 16 | green << 8 | blue);
     }
-    for (pixel = 0; pixel < (size_t)LOGO_WIDTH * LOGO_HEIGHT; ++pixel)
-        surface->pixels[pixel] = lut[g_logo_pixels[pixel]];
+    /* Row by row: with widescreen the surface is the centred 640 window of a
+       wider frame, so its rows are `stride` pixels apart, not 640. */
+    for (pixel = 0; pixel < (size_t)LOGO_WIDTH * LOGO_HEIGHT; ++pixel) {
+        size_t row = pixel / LOGO_WIDTH;
+        size_t column = pixel % LOGO_WIDTH;
+        if ((int)row >= surface->height || (int)column >= surface->width) continue;
+        surface->pixels[row * (size_t)surface->stride + column] =
+            lut[g_logo_pixels[pixel]];
+    }
 }

@@ -2,6 +2,12 @@
 
 Player-facing changes of the Tone Rebellion remake, newest first. Each release is a `v*` tag (see [Releases](README.md#releases)); its GitHub release text is the matching section below. Behaviour that knowingly differs from `FLOAT.EXE` is detailed in [differences from the original](docs/differences-from-original.md).
 
+## 0.2.1 - unreleased
+
+### Fixed
+
+- Widescreen: the start-up logo (The Logic Factory) is drawn centred instead of as a garbled, sheared image.
+
 ## 0.2.0 - 2026-11-11
 
 ### Added
