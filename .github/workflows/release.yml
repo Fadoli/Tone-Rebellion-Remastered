@@ -101,6 +101,7 @@ jobs:
           cp ToneRebellion_Remake/web/out/ToneRebellion_Remake.js \
              ToneRebellion_Remake/web/out/ToneRebellion_Remake.wasm site/
           cp ToneRebellion_Remake/web/out/ToneRebellion_Remake.html site/index.html
+          cp ToneRebellion_Remake/web/guide.html site/guide.html
           touch site/.nojekyll
           name="ToneRebellion_Remake-${{ github.ref_name }}-web"
           (cd site && zip -r "../$name.zip" .)

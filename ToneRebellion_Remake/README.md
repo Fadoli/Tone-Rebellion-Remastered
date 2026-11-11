@@ -36,6 +36,7 @@ Every player-facing change goes into [CHANGELOG.md](CHANGELOG.md) under the next
 
 ## Documentation
 
+- [Game guide](docs/game-guide.md): unlocks per world, glyphs, difficulty, unit and building stats (also published as `guide.html` beside the browser version; rebuild it with `python tools/build_guide.py`)
 - [Menu, map, and island UI](docs/menu-and-island-ui.md)
 - [World start and initial simulation](docs/world-start.md)
 - [Building rendering](docs/building-rendering.md)

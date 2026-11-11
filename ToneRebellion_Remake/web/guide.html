@@ -1,0 +1,1324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tone Rebellion Guide</title>
+<meta name="description" content="Tone Rebellion (1997): what unlocks when, glyph bonuses, difficulty effects, unit, spell and building stats.">
+<style>
+  :root { color-scheme: dark; --bg: #0b0d12; --panel: #161a23; --text: #e6e8ee;
+          --muted: #9aa1b1; --accent: #7fb2ff; --border: #2a3040; --row: #121620; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+               font: 15px/1.6 system-ui, sans-serif; }
+  main { max-width: 60rem; margin: 0 auto; padding: 2.5rem 1rem 4rem; }
+  a { color: var(--accent); }
+  h1 { margin: 0 0 .5rem; font-size: 2rem; line-height: 1.2; }
+  h2 { margin: 2.75rem 0 .75rem; padding-top: .5rem; font-size: 1.4rem;
+        border-top: 1px solid var(--border); }
+  h3 { margin: 1.75rem 0 .5rem; font-size: 1.1rem; }
+  p, li { color: var(--muted); }
+  strong { color: var(--text); }
+  code { font: .9em ui-monospace, Consolas, monospace; }
+  .back { display: inline-block; margin-bottom: 1.5rem; }
+  .t { overflow-x: auto; margin: .75rem 0; border: 1px solid var(--border);
+        border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: .92rem; }
+  th, td { padding: .4rem .7rem; text-align: left; vertical-align: top;
+            border-bottom: 1px solid var(--border); }
+  th { background: var(--panel); color: var(--text); white-space: nowrap; }
+  td { color: var(--text); }
+  tbody tr:nth-child(even) td { background: var(--row); }
+  tbody tr:last-child td { border-bottom: 0; }
+  ol li, ul li { margin: .2rem 0; }
+</style>
+</head>
+<body>
+<main>
+<a class="back" href="./">&larr; Play in the browser</a>
+<h1 id="tone-rebellion-game-guide">Tone Rebellion game guide</h1>
+<p>What unlocks when, what each glyph does, what the difficulty changes, and the stats of every unit and defence. Built from the game's own data files (<code>floater.txt</code>, <code>pad.txt</code>, <code>spells.txt</code>, <code>worldpos.txt</code>, …) and from static analysis of <code>FLOAT.EXE</code>, as ported by the remake. Nothing here was measured on the running original game.</p>
+<p>Names are those of the French release (the only data set available here); English names are translations or come from comments in the data files. Times are in game ticks: 20 ticks = 1 second at normal speed.</p>
+<h2 id="contents">Contents</h2>
+<ol>
+<li><a href="#worlds">Worlds</a></li>
+<li><a href="#what-unlocks-when">What unlocks when</a></li>
+<li><a href="#glyphs">Glyphs</a></li>
+<li><a href="#difficulty">Difficulty</a></li>
+<li><a href="#tribe-units">Tribe units</a></li>
+<li><a href="#spells">Spells</a></li>
+<li><a href="#tribe-buildings">Tribe buildings</a></li>
+<li><a href="#leviathan-creatures">Leviathan creatures</a></li>
+<li><a href="#leviathan-defences">Leviathan defences</a></li>
+<li><a href="#combat-rules">Combat rules</a></li>
+<li><a href="#sources-and-limits">Sources and limits</a></li>
+</ol>
+<h2 id="worlds">Worlds</h2>
+<p>The new-game screen offers three worlds ("map sizes"). The last island of each is the Leviathan's island.</p>
+<div class="t"><table>
+<thead>
+<tr>
+<th>World</th>
+<th>Islands</th>
+<th>Islands to win back</th>
+<th>Glyphs you can find</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0 – small</td>
+<td>7</td>
+<td>6</td>
+<td>6 (Tal … Tra)</td>
+</tr>
+<tr>
+<td>1 – medium</td>
+<td>11</td>
+<td>10</td>
+<td>10 (Tal … Mn)</td>
+</tr>
+<tr>
+<td>2 – large</td>
+<td>15</td>
+<td>14</td>
+<td>all 14</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Islands reached</strong> is the number that drives every unlock below: an island counts once one of your floaters has crossed to it (or you built the bridge that reaches it), and it keeps counting for the rest of the game, even if you lose everything there. Your starting island counts.</p>
+<h2 id="what-unlocks-when">What unlocks when</h2>
+<h3 id="building">Building</h3>
+<p>A small pad takes the four Tone buildings; the schools need a medium or large pad.</p>
+<div class="t"><table>
+<thead>
+<tr>
+<th>Building</th>
+<th>Pad</th>
+<th>World 0</th>
+<th>World 1</th>
+<th>World 2</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tone generator, Magic Tone maker, Crystal Tone maker, Tone nebuliser</td>
+<td>small</td>
+<td>always</td>
+<td>always</td>
+<td>always</td>
+</tr>
+<tr>
+<td>Train 1 school (first warriors)</td>
+<td>medium</td>
+<td>1 island</td>
+<td>1 island</td>
+<td>1 island</td>
+</tr>
+<tr>
+<td>Train 2 school</td>
+<td>medium</td>
+<td>2 islands</td>
+<td>2 islands</td>
+<td>2 islands</td>
+</tr>
+<tr>
+<td>Train 3 school</td>
+<td>medium</td>
+<td><strong>never</strong></td>
+<td>8 islands</td>
+<td>8 islands</td>
+</tr>
+<tr>
+<td>Spell school (wizards)</td>
+<td>medium</td>
+<td>3 islands</td>
+<td>3 islands</td>
+<td>3 islands</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="upgrading-a-school">Upgrading a school</h3>
+<p>The Upgrade button appears on a finished school once you have reached enough islands; the upgrade then needs 20 Build Tone delivered to it.</p>
+<div class="t"><table>
+<thead>
+<tr>
+<th>School</th>
+<th>Max tier</th>
+<th>World 0: tier 1 / tier 2</th>
+<th>World 1</th>
+<th>World 2</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Train 1</td>
+<td>2</td>
+<td>4 / 6 islands</td>
+<td>4 / 7</td>
+<td>4 / 7</td>
+</tr>
+<tr>
+<td>Train 2</td>
+<td>2</td>
+<td>5 / never</td>
+<td>5 / 9</td>
+<td>5 / 9</td>
+</tr>
+<tr>
+<td>Train 3</td>
+<td>1</td>
+<td>never</td>
+<td>never</td>
+<td>11 / –</td>
+</tr>
+<tr>
+<td>Spell school</td>
+<td>2</td>
+<td>never / never</td>
+<td>6 / never</td>
+<td>6 / 10</td>
+</tr>
+</tbody>
+</table></div>
+<p>What a tier gives:</p>
+<ul>
+<li><strong>Unit level cap.</strong> A unit's level can never exceed its school's tier, so tier 1 allows level 2 units ("Niveau 2" in game) and tier 2 allows level 3.</li>
+<li><strong>More places.</strong> Train 1 and Train 2 keep 3 units at level 0, plus 2 at level 1 from tier 1, plus 1 at level 2 from tier 2 (Train 3 the same, stopping at tier 1). The spell school keeps 1 wizard per level.</li>
+<li><strong>Sturdier building.</strong> Building HP = base HP + 5 per tier.</li>
+<li><strong>More spell storage.</strong> A spell school holds 50 + 25 × tier Magic Tone.</li>
+<li>Moving the building costs (tier + 1) times its move cost.</li>
+</ul>
+<h3 id="the-hall">The Hall</h3>
+<p>The Hall grows on its own, in every world: tier 1 at 4 islands reached, tier 2 at 6. It never shrinks back. Its restock target is 150 + 50 × tier.</p>
+<h3 id="what-each-world-allows-in-the-end">What each world allows in the end</h3>
+<div class="t"><table>
+<thead>
+<tr>
+<th></th>
+<th>World 0</th>
+<th>World 1</th>
+<th>World 2</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Warrior schools</td>
+<td>Train 1, Train 2</td>
+<td>Train 1–3</td>
+<td>Train 1–3</td>
+</tr>
+<tr>
+<td>Best warrior level</td>
+<td>Train 1: 3, Train 2: 2</td>
+<td>Train 1: 3, Train 2: 3, Train 3: 1</td>
+<td>Train 1: 3, Train 2: 3, Train 3: 2</td>
+</tr>
+<tr>
+<td>Wizard spells</td>
+<td>level 1 only</td>
+<td>levels 1–2</td>
+<td>levels 1–3</td>
+</tr>
+<tr>
+<td>Glyph bonuses</td>
+<td>Tal, Dre, Lon, Tuka, Dran, Tra</td>
+<td>+ Ahn, Phet, Lod, Mn</td>
+<td>all</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="glyphs">Glyphs</h2>
+<p>Each island except the Leviathan's holds two artefacts. Bring both to the island's two trigger sites (the ruins) and you earn that island's glyph. The glyph is numbered by the island's place in the world (first island = Tal), so a small world only ever offers the first six.</p>
+<p>A glyph has two uses:</p>
+<ul>
+<li><strong>A permanent bonus</strong> for your tribe, listed below.</li>
+<li><strong>Victory.</strong> The Leviathan's island carries one seal per glyph. Late in the game some of your floaters become glyph bearers (more often the more glyphs you hold). Pick a glyph, target its seal: glyph <em>k</em> breaks seal <em>k</em>. Breaking every seal wins the game.</li>
+</ul>
+<div class="t"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Glyph</th>
+<th>Permanent bonus</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>Tal</td>
+<td>Train 1 units: +1 strength</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Dre</td>
+<td>Train 1 units: HP × 5/4</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Lon</td>
+<td>Ranged units of a school: range × 5/4</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Tuka</td>
+<td>Train 1 units: +1 speed</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Dran</td>
+<td>Workers: +1 HP</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Tra</td>
+<td>Train 2 units: +1 speed</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Ahn</td>
+<td>Train 2 units: +1 strength</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Phet</td>
+<td>Train 2 units: HP × 5/4</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Lod</td>
+<td>Spells cost 1/3 less Magic Tone (Crystal cost unchanged)</td>
+</tr>
+<tr>
+<td>9</td>
+<td>Mn</td>
+<td>Train 3 units: +1 speed</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Nos</td>
+<td>Train 3 units: +1 strength</td>
+</tr>
+<tr>
+<td>11</td>
+<td>Grem</td>
+<td>Train 3 units: HP × 5/4</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Mef</td>
+<td>no bonus found in the code</td>
+</tr>
+<tr>
+<td>13</td>
+<td>Vinya</td>
+<td>Building upkeep −15 %</td>
+</tr>
+</tbody>
+</table></div>
+<p>Glyphs never unlock buildings or spells. The design notes inside <code>bldtxt.txt</code> describe other bonuses; the shipped code does what this table says.</p>
+<h2 id="difficulty">Difficulty</h2>
+<p>Five levels, chosen on the new-game screen with the Leviathan picture. The game calls them by the Leviathan's mood:</p>
+<div class="t"><table>
+<thead>
+<tr>
+<th>Level</th>
+<th>Name (French release)</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>Léviathan peureux</td>
+<td>timid</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Léviathan joueur</td>
+<td>playful</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Léviathan maussade</td>
+<td>sullen</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Léviathan agressif</td>
+<td>aggressive</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Léviathan destructeur</td>
+<td>destructive</td>
+</tr>
+</tbody>
+</table></div>
+<p>What it changes (d = level 0–4):</p>
+<div class="t"><table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Contamination</td>
+<td>A contaminated Tone pool spawns after 1200 − 100 d ticks (60 s at level 0, 40 s at level 4).</td>
+</tr>
+<tr>
+<td>Spawning</td>
+<td>Leviathan buildings spawn sooner (threshold 10000 − 400 d); from level 2 they speed up further late in the game and as the Leviathan loses islands.</td>
+</tr>
+<tr>
+<td>Leviathan buildings</td>
+<td>Stronger kinds join the random pick: 6 kinds at level 0, 10 at level 1, all 12 from level 2.</td>
+</tr>
+<tr>
+<td>Elite spawns</td>
+<td>A new Leviathan creature can start at level 1 (×1.7 HP, +3 strength); the chance grows with d and with the island's place, halved below level 2.</td>
+</tr>
+<tr>
+<td>Creature ranks</td>
+<td>From level 2 only: Leviathan creatures gain rank over time (rank × strength / 22 extra power), faster at higher levels.</td>
+</tr>
+<tr>
+<td>Garrisons</td>
+<td>Each Leviathan island keeps more creatures and rebuilds them faster: island tier = min(island / 4, d), budget per site 2 × tier + 4.</td>
+</tr>
+<tr>
+<td>Attack waves</td>
+<td>Waves grow: (tier + 2 + d) / 2 creatures plus a random extra.</td>
+</tr>
+<tr>
+<td>Realm advantage</td>
+<td>The realm bonus in the hit roll grows: strength / 4 at level 0, / 2 at levels 1–2, × 2/3 at levels 3–4. It applies to both sides.</td>
+</tr>
+<tr>
+<td>Your warriors</td>
+<td>Need more experience to level up: from 25 → 75 (first level) and 100 → 200 (second) at level 0 → 4 for Train 1; see <a href="#tribe-units">Tribe units</a>.</td>
+</tr>
+<tr>
+<td>Score</td>
+<td>+50 per level.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Difficulty does <strong>not</strong> change your starting Tone, buildings, units or costs.</p>
+<h2 id="tribe-units">Tribe units</h2>
+<p>How to read the table:</p>
+<ul>
+<li><strong>Realm</strong>: Physical, Supernatural, Ethereal or Natural (see <a href="#combat-rules">Combat rules</a>).</li>
+<li><strong>Range</strong>: in pixels; melee units pin their target in place.</li>
+<li><strong>HP / Charge</strong>: at levels 1 / 2 / 3. Each attack spends one charge; an empty unit fights like a worker until it recharges at its school (10 Crystal Tone).</li>
+<li><strong>Str</strong>: strength, the base of hit chance and damage. A charged unit hits with Str + 2 × (level − 1).</li>
+<li><strong>Spd</strong>: pixels per movement step.</li>
+<li><strong>Strike</strong>: ticks from the start of an attack to the hit.</li>
+</ul>
+<p>Training: a worker enters a school holding more than 9 Crystal Tone, pays 10 and trains for about 12.5 s. Workers are free; a new one appears when you have Tone to spare and room in your population.</p>
+<p>Experience: +1 per damaging hit, +5 per spell cast. Level-up thresholds, from difficulty 0 to 4:</p>
+<div class="t"><table>
+<thead>
+<tr>
+<th>School</th>
+<th>to level 2</th>
+<th>to level 3</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Train 1</td>
+<td>25 → 75</td>
+<td>100 → 200</td>
+</tr>
+<tr>
+<td>Train 2</td>
+<td>30 → 90</td>
+<td>120 → 240</td>
+</tr>
+<tr>
+<td>Train 3</td>
+<td>40 → 120</td>
+<td>–</td>
+</tr>
+<tr>
+<td>Spell school</td>
+<td>25 → 75</td>
+<td>100 → 200</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="tark-protectors">Tark (Protectors)</h3>
+<div class="t"><table>
+<thead>
+<tr>
+<th>Unit</th>
+<th>Realm</th>
+<th>Range</th>
+<th>HP</th>
+<th>Charge</th>
+<th>Str</th>
+<th>Spd</th>
+<th>Strike</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Worker</td>
+<td>Physical</td>
+<td>melee</td>
+<td>3</td>
+<td>0</td>
+<td>0</td>
+<td>3</td>
+<td>10</td>
+</tr>
+<tr>
+<td>Train 1 – Confrérie du Tentacule (Brotherhood of the Tentacle)</td>
+<td>Physical</td>
+<td>melee</td>
+<td>17 / 25 / 34</td>
+<td>19 / 28 / 38</td>
+<td>5</td>
+<td>3</td>
+<td>10</td>
+</tr>
+<tr>
+<td>Train 2 – Contemplatif (Gazers)</td>
+<td>Supernatural</td>
+<td>145</td>
+<td>14 / 21 / 28</td>
+<td>17 / 25 / 34</td>
+<td>4</td>
+<td>3</td>
+<td>12</td>
+</tr>
+<tr>
+<td>Train 3 – Confédération de l'Étoile (League of the Star)</td>
+<td>Physical</td>
+<td>120</td>
+<td>15 / 22</td>
+<td>19 / 28</td>
+<td>5</td>
+<td>4</td>
+<td>10</td>
+</tr>
+<tr>
+<td>Wizard – Société des Magiciens</td>
+<td>Physical</td>
+<td>melee</td>
+<td>16 / 24 / 32</td>
+<td>10 / 15 / 20</td>
+<td>3</td>
+<td>3</td>
+<td>12</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="zygon-seekers">Zygon (Seekers)</h3>
+<div class="t"><table>
+<thead>
+<tr>
+<th>Unit</th>
+<th>Realm</th>
+<th>Range</th>
+<th>HP</th>
+<th>Charge</th>
+<th>Str</th>
+<th>Spd</th>
+<th>Strike</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Worker</td>
+<td>Supernatural</td>
+<td>melee</td>
+<td>3</td>
+<td>0</td>
+<td>0</td>
+<td>3</td>
+<td>12</td>
+</tr>
+<tr>
+<td>Train 1 – Clan de Sol</td>
+<td>Supernatural</td>
+<td>160</td>
+<td>13 / 19 / 26</td>
+<td>13 / 19 / 26</td>
+<td>5</td>
+<td>4</td>
+<td>12</td>
+</tr>
+<tr>
+<td>Train 2 – Voix de l'Esprit (Spirit Callers)</td>
+<td>Ethereal</td>
+<td>melee</td>
+<td>15 / 22 / 30</td>
+<td>15 / 22 / 30</td>
+<td>5</td>
+<td>3</td>
+<td>14</td>
+</tr>
+<tr>
+<td>Train 3 – Guilde de la Lumière (Light Shapers)</td>
+<td>Supernatural</td>
+<td>melee</td>
+<td>14 / 21</td>
+<td>14 / 21</td>
+<td>6</td>
+<td>4</td>
+<td>12</td>
+</tr>
+<tr>
+<td>Wizard – Sorcier du Firmament</td>
+<td>Supernatural</td>
+<td>melee</td>
+<td>14 / 21 / 28</td>
+<td>10 / 15 / 20</td>
+<td>2</td>
+<td>4</td>
+<td>12</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="cepheen-mystics">Céphéen (Mystics)</h3>
+<div class="t"><table>
+<thead>
+<tr>
+<th>Unit</th>
+<th>Realm</th>
+<th>Range</th>
+<th>HP</th>
+<th>Charge</th>
+<th>Str</th>
+<th>Spd</th>
+<th>Strike</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Worker</td>
+<td>Ethereal</td>
+<td>melee</td>
+<td>3</td>
+<td>0</td>
+<td>0</td>
+<td>3</td>
+<td>10</td>
+</tr>
+<tr>
+<td>Train 1 – Fée du requiem (Banshees)</td>
+<td>Ethereal</td>
+<td>melee</td>
+<td>14 / 21 / 28</td>
+<td>14 / 21 / 28</td>
+<td>5</td>
+<td>4</td>
+<td>16</td>
+</tr>
+<tr>
+<td>Train 2 – Prêtre de l'orage (Stormers)</td>
+<td>Natural</td>
+<td>175</td>
+<td>15 / 22 / 30</td>
+<td>16 / 24 / 32</td>
+<td>3</td>
+<td>4</td>
+<td>20</td>
+</tr>
+<tr>
+<td>Train 3 – Explorateur céleste (Astral Travellers)</td>
+<td>Ethereal</td>
+<td>195</td>
+<td>13 / 19</td>
+<td>16 / 24</td>
+<td>4</td>
+<td>3</td>
+<td>6</td>
+</tr>
+<tr>
+<td>Wizard – Ordre d'Arcania</td>
+<td>Ethereal</td>
+<td>melee</td>
+<td>15 / 22 / 30</td>
+<td>10 / 15 / 20</td>
+<td>2</td>
+<td>4</td>
+<td>20</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="dyla-lifegivers">Dyla (Lifegivers)</h3>
+<div class="t"><table>
+<thead>
+<tr>
+<th>Unit</th>
+<th>Realm</th>
+<th>Range</th>
+<th>HP</th>
+<th>Charge</th>
+<th>Str</th>
+<th>Spd</th>
+<th>Strike</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Worker</td>
+<td>Natural</td>
+<td>melee</td>
+<td>3</td>
+<td>0</td>
+<td>0</td>
+<td>3</td>
+<td>12</td>
+</tr>
+<tr>
+<td>Train 1 – Sorcier Invocateur (Summoners)</td>
+<td>Natural</td>
+<td>230</td>
+<td>13 / 19 / 26</td>
+<td>16 / 24 / 32</td>
+<td>5</td>
+<td>3</td>
+<td>5</td>
+</tr>
+<tr>
+<td>Train 2 – Repaire de la Bête (Den of the Beast)</td>
+<td>Physical</td>
+<td>melee</td>
+<td>19 / 28 / 38</td>
+<td>17 / 25 / 34</td>
+<td>4</td>
+<td>3</td>
+<td>12</td>
+</tr>
+<tr>
+<td>Train 3 – Façonneur du Vent (Wind Shapers)</td>
+<td>Natural</td>
+<td>melee</td>
+<td>16 / 24</td>
+<td>18 / 27</td>
+<td>3</td>
+<td>4</td>
+<td>13</td>
+</tr>
+<tr>
+<td>Wizard – Druide Enchanteur</td>
+<td>Natural</td>
+<td>melee</td>
+<td>16 / 24 / 32</td>
+<td>12 / 18 / 24</td>
+<td>2</td>
+<td>3</td>
+<td>38</td>
+</tr>
+</tbody>
+</table></div>
+<p>Glyph bonuses (Tal, Dre, Tuka, …) come on top of these numbers. A school that is destroyed turns its units back into workers.</p>
+<h2 id="spells">Spells</h2>
+<p>Each tribe's wizard knows eight spells. A level-2 spell needs a level-2 wizard (spell school tier 1), a level-3 spell a level-3 wizard (tier 2); two exceptions are marked ★ (castable at any level). Costs are Magic / Crystal Tone; glyph Lod cuts the Magic cost by a third.</p>
+<div class="t"><table>
+<thead>
+<tr>
+<th>Spell</th>
+<th>Level</th>
+<th>Magic</th>
+<th>Crystal</th>
+<th>Tark</th>
+<th>Zygon</th>
+<th>Céphéen</th>
+<th>Dyla</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Guérison du Dojo (Dojo Healing)</td>
+<td>1</td>
+<td>9</td>
+<td>7</td>
+<td></td>
+<td>✓</td>
+<td></td>
+<td>✓</td>
+<td>heals the floaters of a school</td>
+</tr>
+<tr>
+<td>Paralysie des germes parasites (Spore Paralysis)</td>
+<td>1</td>
+<td>16</td>
+<td>11</td>
+<td></td>
+<td>✓</td>
+<td>✓</td>
+<td></td>
+<td>stuns Leviathan spores in an area</td>
+</tr>
+<tr>
+<td>Guérison (Healing)</td>
+<td>1</td>
+<td>12</td>
+<td>9</td>
+<td></td>
+<td></td>
+<td></td>
+<td>✓</td>
+<td>heals your most wounded workers</td>
+</tr>
+<tr>
+<td>Réparation (Repair)</td>
+<td>1</td>
+<td>9</td>
+<td>12</td>
+<td></td>
+<td></td>
+<td></td>
+<td>✓</td>
+<td>restores a building to full HP</td>
+</tr>
+<tr>
+<td>Enchantement de bâtiment (Building Enchantment)</td>
+<td>1</td>
+<td>10</td>
+<td>9</td>
+<td>✓</td>
+<td></td>
+<td>✓</td>
+<td></td>
+<td>a wall of Tone shields a building from all damage</td>
+</tr>
+<tr>
+<td>Bouclier silencieux (Silent Shield)</td>
+<td>1</td>
+<td>12</td>
+<td>7</td>
+<td></td>
+<td></td>
+<td>✓</td>
+<td></td>
+<td>protects a Tone nodule from contamination</td>
+</tr>
+<tr>
+<td>Gardien du bassin (Pool Guardian)</td>
+<td>1</td>
+<td>14</td>
+<td>10</td>
+<td></td>
+<td></td>
+<td></td>
+<td>✓</td>
+<td>protects a Tone pool from contamination</td>
+</tr>
+<tr>
+<td>Sacrifice</td>
+<td>1</td>
+<td>11</td>
+<td>17</td>
+<td>✓</td>
+<td></td>
+<td></td>
+<td></td>
+<td>a destructive wave, at the cost of the wizard</td>
+</tr>
+<tr>
+<td>Saisie à distance (Remote Grab)</td>
+<td>1</td>
+<td>9</td>
+<td>14</td>
+<td></td>
+<td>✓</td>
+<td></td>
+<td></td>
+<td>fetches an artefact from any visible area</td>
+</tr>
+<tr>
+<td>Disque stellaire (Stellar Disc)</td>
+<td>1</td>
+<td>11</td>
+<td>13</td>
+<td>✓</td>
+<td></td>
+<td></td>
+<td></td>
+<td>destroys a building or a spore (not a spawning pond)</td>
+</tr>
+<tr>
+<td>Pluie de météores (Meteor Shower)</td>
+<td>1</td>
+<td>7</td>
+<td>13</td>
+<td>✓</td>
+<td></td>
+<td></td>
+<td></td>
+<td>rocks that destroy Leviathan creatures</td>
+</tr>
+<tr>
+<td>Réveil spirituel (Spiritual Awakening)</td>
+<td>2</td>
+<td>33</td>
+<td>13</td>
+<td>✓</td>
+<td></td>
+<td></td>
+<td>✓</td>
+<td>a school's floaters withstand attacks better</td>
+</tr>
+<tr>
+<td>Courage des braves (Courage of the Brave)</td>
+<td>2</td>
+<td>28</td>
+<td>17</td>
+<td>✓</td>
+<td></td>
+<td>✓</td>
+<td></td>
+<td>a school's floaters gain strength and skill</td>
+</tr>
+<tr>
+<td>Changement de royaume (Realm Shift)</td>
+<td>2</td>
+<td>34</td>
+<td>12</td>
+<td></td>
+<td>✓</td>
+<td></td>
+<td>✓</td>
+<td>moves a school's floaters to the next realm</td>
+</tr>
+<tr>
+<td>Enchantement de tribu (Tribe Enchantment)</td>
+<td>2</td>
+<td>36</td>
+<td>17</td>
+<td>✓</td>
+<td>✓</td>
+<td></td>
+<td></td>
+<td>makes your workers invulnerable</td>
+</tr>
+<tr>
+<td>Résistance (Endurance)</td>
+<td>2</td>
+<td>22</td>
+<td>19</td>
+<td></td>
+<td>✓★</td>
+<td></td>
+<td></td>
+<td>a school's floaters fight without resting</td>
+</tr>
+<tr>
+<td>Libération de bassin de Tone (Pool Release)</td>
+<td>2</td>
+<td>27</td>
+<td>17</td>
+<td></td>
+<td></td>
+<td>✓</td>
+<td>✓</td>
+<td>destroys a Leviathan spawning pond</td>
+</tr>
+<tr>
+<td>Rébellion des bassins de Tone (Pool Rebellion)</td>
+<td>2</td>
+<td>35</td>
+<td>12</td>
+<td></td>
+<td></td>
+<td>✓★</td>
+<td></td>
+<td>freezes the spawning ponds</td>
+</tr>
+<tr>
+<td>Explosion de Qi (Qi Burst)</td>
+<td>3</td>
+<td>39</td>
+<td>18</td>
+<td></td>
+<td>✓</td>
+<td></td>
+<td></td>
+<td>destroys everything nearby, the wizard stays safe</td>
+</tr>
+<tr>
+<td>Mémoire ethnique (Ethnic Memory)</td>
+<td>3</td>
+<td>43</td>
+<td>18</td>
+<td></td>
+<td></td>
+<td>✓</td>
+<td></td>
+<td>moves a school's floaters to the previous realm</td>
+</tr>
+<tr>
+<td>Cadmus</td>
+<td>3</td>
+<td>59</td>
+<td>33</td>
+<td>✓</td>
+<td></td>
+<td>✓</td>
+<td></td>
+<td>enemy creatures of an island turn on each other</td>
+</tr>
+<tr>
+<td>Brume temporelle (Time Mist)</td>
+<td>3</td>
+<td>46</td>
+<td>22</td>
+<td></td>
+<td>✓</td>
+<td></td>
+<td>✓</td>
+<td>all your floaters move faster</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="tribe-buildings">Tribe buildings</h2>
+<p>Players build no defence towers: you defend with warriors and spells.</p>
+<div class="t"><table>
+<thead>
+<tr>
+<th>Building</th>
+<th>Role</th>
+<th>Pad</th>
+<th>Build Tone</th>
+<th>Upkeep</th>
+<th>HP (Tark / Zygon / Céphéen / Dyla)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Générateur de Tone structurel</td>
+<td>makes Build Tone (pays for buildings)</td>
+<td>small</td>
+<td>35</td>
+<td>1</td>
+<td>30 / 25 / 25 / 30</td>
+</tr>
+<tr>
+<td>Créateur de Tone magique</td>
+<td>makes Magic Tone (spells)</td>
+<td>small</td>
+<td>60</td>
+<td>1</td>
+<td>20 / 30 / 30 / 20</td>
+</tr>
+<tr>
+<td>Producteur de Tone cristallin</td>
+<td>makes Crystal Tone (training, recharging, healing); extends your Tone range by 320 px</td>
+<td>small</td>
+<td>45</td>
+<td>1</td>
+<td>30 / 25 / 25 / 30</td>
+</tr>
+<tr>
+<td>Nébuliseur de Tone</td>
+<td>extends your Tone range by 320 px</td>
+<td>small</td>
+<td>10</td>
+<td>1</td>
+<td>20</td>
+</tr>
+<tr>
+<td>Train 1 / Train 2 / Train 3 school</td>
+<td>trains warriors</td>
+<td>medium</td>
+<td>50</td>
+<td>0</td>
+<td>T1 35; T2 35 / 40 / 40 / 40; T3 50 / 50 / 50 / 45</td>
+</tr>
+<tr>
+<td>Spell school</td>
+<td>trains wizards</td>
+<td>medium</td>
+<td>50</td>
+<td>0</td>
+<td>30</td>
+</tr>
+<tr>
+<td>Hall (Refuge du Clan / Grande Bibliothèque)</td>
+<td>home and storage; cannot be built</td>
+<td>–</td>
+<td>–</td>
+<td>0</td>
+<td>50 / 45 / 45 / 50</td>
+</tr>
+</tbody>
+</table></div>
+<p>HP grows by 5 per tier. A floater hitting a building deals 1 to 6 damage, with no hit roll.</p>
+<h2 id="leviathan-creatures">Leviathan creatures</h2>
+<div class="t"><table>
+<thead>
+<tr>
+<th>Kind</th>
+<th>Names</th>
+<th>Realm</th>
+<th>Range</th>
+<th>HP</th>
+<th>Charge</th>
+<th>Str</th>
+<th>Spd</th>
+<th>Strike</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Spore (builder, infector)</td>
+<td>Spores</td>
+<td>Physical</td>
+<td>–</td>
+<td>4</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>–</td>
+</tr>
+<tr>
+<td>Physical melee</td>
+<td>Rakalingus / Broontilingus</td>
+<td>Physical</td>
+<td>melee</td>
+<td>16</td>
+<td>10</td>
+<td>4</td>
+<td>2</td>
+<td>6</td>
+</tr>
+<tr>
+<td>Physical ranged</td>
+<td>Zeeth / Keth</td>
+<td>Physical</td>
+<td>130</td>
+<td>11</td>
+<td>10</td>
+<td>4</td>
+<td>2</td>
+<td>40</td>
+</tr>
+<tr>
+<td>Supernatural melee</td>
+<td>Drack / Nadrack</td>
+<td>Supernatural</td>
+<td>melee</td>
+<td>13</td>
+<td>10</td>
+<td>3</td>
+<td>3</td>
+<td>3</td>
+</tr>
+<tr>
+<td>Supernatural ranged</td>
+<td>Guêpe du Tone / Sasp</td>
+<td>Supernatural</td>
+<td>140</td>
+<td>8</td>
+<td>10</td>
+<td>3</td>
+<td>3</td>
+<td>14</td>
+</tr>
+<tr>
+<td>Ethereal melee</td>
+<td>Ronth / Varnth</td>
+<td>Ethereal</td>
+<td>melee</td>
+<td>14</td>
+<td>10</td>
+<td>5</td>
+<td>4</td>
+<td>32</td>
+</tr>
+<tr>
+<td>Ethereal ranged</td>
+<td>Metha / Koalint</td>
+<td>Ethereal</td>
+<td>150</td>
+<td>9</td>
+<td>10</td>
+<td>4</td>
+<td>3</td>
+<td>20</td>
+</tr>
+<tr>
+<td>Natural melee</td>
+<td>Zwacker / Zwaup</td>
+<td>Natural</td>
+<td>melee</td>
+<td>15</td>
+<td>10</td>
+<td>3</td>
+<td>3</td>
+<td>12</td>
+</tr>
+<tr>
+<td>Natural ranged</td>
+<td>Shandi / Flindex</td>
+<td>Natural</td>
+<td>160</td>
+<td>10</td>
+<td>10</td>
+<td>5</td>
+<td>2</td>
+<td>28</td>
+</tr>
+</tbody>
+</table></div>
+<p>An elite (level 1) creature has × 1.7 HP and + 3 strength; ranks (difficulty 2 and above) add rank × strength / 22.</p>
+<h2 id="leviathan-defences">Leviathan defences</h2>
+<p>The Leviathan's buildings defend its islands. Damage per hit is 1 to strength − 1 (always 1 for strength 2); the hit chance is shown against an untrained target (workers, spores). Period is the time between shots, in ticks.</p>
+<div class="t"><table>
+<thead>
+<tr>
+<th>Building</th>
+<th>Kind</th>
+<th>Range</th>
+<th>Str</th>
+<th>Damage</th>
+<th>Hit %</th>
+<th>HP</th>
+<th>Period</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Quitch</td>
+<td>close attack</td>
+<td>&lt; 60</td>
+<td>4</td>
+<td>1–3</td>
+<td>57</td>
+<td>18</td>
+<td>40</td>
+</tr>
+<tr>
+<td>Blistin</td>
+<td>close attack</td>
+<td>&lt; 60</td>
+<td>5</td>
+<td>1–4</td>
+<td>61</td>
+<td>10</td>
+<td>40</td>
+</tr>
+<tr>
+<td>Menace Aveugle</td>
+<td>close attack</td>
+<td>&lt; 60</td>
+<td>3</td>
+<td>1–2</td>
+<td>52</td>
+<td>15</td>
+<td>40</td>
+</tr>
+<tr>
+<td>Hydron</td>
+<td>close attack</td>
+<td>&lt; 60</td>
+<td>7</td>
+<td>1–6</td>
+<td>70</td>
+<td>22</td>
+<td>40</td>
+</tr>
+<tr>
+<td>Essaim de Feu</td>
+<td>close attack</td>
+<td>&lt; 60</td>
+<td>8</td>
+<td>1–7</td>
+<td>74</td>
+<td>24</td>
+<td>≈ 30</td>
+</tr>
+<tr>
+<td>Mabus</td>
+<td>lightning</td>
+<td>&lt; 60</td>
+<td>10</td>
+<td>1–9</td>
+<td>82</td>
+<td>23</td>
+<td>160</td>
+</tr>
+<tr>
+<td>Plasid</td>
+<td>shooter</td>
+<td>150</td>
+<td>2</td>
+<td>1</td>
+<td>48</td>
+<td>9</td>
+<td>20</td>
+</tr>
+<tr>
+<td>Anénépode</td>
+<td>shooter</td>
+<td>260</td>
+<td>6</td>
+<td>1–5</td>
+<td>65</td>
+<td>15</td>
+<td>10</td>
+</tr>
+<tr>
+<td>Xylus</td>
+<td>shooter</td>
+<td>320</td>
+<td>6</td>
+<td>1–5</td>
+<td>65</td>
+<td>16</td>
+<td>20</td>
+</tr>
+<tr>
+<td>Grender</td>
+<td>rod</td>
+<td>100</td>
+<td>3</td>
+<td>1–2</td>
+<td>52</td>
+<td>13</td>
+<td>≈ 30</td>
+</tr>
+<tr>
+<td>Mesron</td>
+<td>rod</td>
+<td>200</td>
+<td>4</td>
+<td>1–3</td>
+<td>57</td>
+<td>11</td>
+<td>≈ 30</td>
+</tr>
+<tr>
+<td>Sentinelle mécanique</td>
+<td>rod</td>
+<td>175</td>
+<td>5</td>
+<td>1–4</td>
+<td>61</td>
+<td>20</td>
+<td>40</td>
+</tr>
+</tbody>
+</table></div>
+<p>Close-attack buildings hit a random one of up to five of your floaters nearby; shooters and rods lock the first floater in range. Their shots are never affected by realms.</p>
+<p>Other Leviathan sites: contamination (7 HP); supply centres Marais de Broont (100), Fournaise de Sasp (80), Orbe bestial (80), Arbre de Sanders (100); the hub (20). The seals (20 HP each) cannot be hurt by floaters, only by their glyph.</p>
+<h2 id="combat-rules">Combat rules</h2>
+<p><strong>Realms.</strong> Physical beats Supernatural, Supernatural beats Ethereal, Ethereal beats Natural, Natural beats Physical. Attacking the realm you beat adds a bonus to the hit roll, attacking the realm that beats you subtracts it; opposite realms swing with the realm cycle shown in the island view. An uncharged unit fights in its tribe's worker realm.</p>
+<p><strong>Hit chance (%)</strong> = 60 × (A + 7 − D ± realm bonus) / 14 + 10, where A is the attacker's strength and D the target's strength if it is a trained unit (0 for workers and spores). The realm bonus is A / 4, A / 2 or 2A / 3 depending on difficulty.</p>
+<p><strong>Damage</strong> per hit: the average of three random draws, between 1 and A − 1, at most 10. Every attempt spends one charge, hit or miss.</p>
+<h2 id="sources-and-limits">Sources and limits</h2>
+<ul>
+<li>Unit and building numbers: <code>floater.txt</code>, <code>fltinf.txt</code>, <code>pad.txt</code>, <code>bldname.txt</code>, <code>bldtxt.txt</code>, <code>spells.txt</code>, <code>names.txt</code>, <code>worldpos.txt</code> from the game data.</li>
+<li>Rules: the remake's ports of <code>FLOAT.EXE</code> (<code>src/core</code>), each traced to a function of the original in <a href="https://github.com/Fadoli/Tone-Rebellion-Remastered/tree/main/decompilation/behavior/">the decompilation notes</a> (island tasks, inventory and glyphs, end game, enemy AI). The upgrade thresholds were read byte for byte from the executable (<code>0x4a42b8</code>).</li>
+<li>Limits: the glyph number of an island is its place in the world (from the analysis, not seen in play); glyph 12 (Mef) has no effect found; which of a creature's two names shows is unknown; fire periods marked ≈ are computed from animation data. The original game was never run for this guide.</li>
+</ul>
+</main>
+</body>
+</html>
