@@ -182,8 +182,21 @@ static void handle_click(HWND window, int x, int y)
                     IslandPanelSelection selection = {
                         g_selected_location, g_selected_floater
                     };
+                    const GameFloaterStart *slot_unit =
+                        &g_game_session.floaters[slot_floater];
+                    int building_island = selection_island();
                     island_panel_select_floater(&selection, slot_floater);
-                    select_location_anywhere(selection_island(), selection.location_index);
+                    /* Remake: the island view shows only its own units, so a
+                       linked unit standing on another island is shown there,
+                       centred, with its building kept as the location. */
+                    if ((int)slot_unit->island_index != g_menu.selected_map_island) {
+                        if (!open_island_view(window, slot_unit->island_index))
+                            return;
+                        g_scroll_animating = 0;
+                        g_island_scroll_x = island_clamp_scroll(
+                            (int)slot_unit->x - LOGICAL_WIDTH / 2);
+                    }
+                    select_location_anywhere(building_island, selection.location_index);
                     g_selected_floater = slot_floater;
                     ++g_floater_select_serial;
                     g_hovered_location = -1;
