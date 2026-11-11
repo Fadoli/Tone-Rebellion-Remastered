@@ -208,6 +208,18 @@ static int load_building_render_catalog(char *error, size_t error_capacity)
         free(sound_bytes);
         if (error != NULL && error_capacity != 0) error[0] = '\0';
     }
+    {
+        const CobMember *shapes_member = cob_archive_find(&archive, "shapes.txt");
+        unsigned char *shapes_bytes = shapes_member != NULL
+            ? (unsigned char *)malloc(shapes_member->length + 1U) : NULL;
+        g_shape_manifest_count = 0;
+        if (shapes_bytes != NULL &&
+            cob_archive_read_member(&archive, shapes_member, shapes_bytes,
+                                    shapes_member->length, error, error_capacity))
+            shape_manifest_load(shapes_bytes, shapes_member->length);
+        free(shapes_bytes);
+        if (error != NULL && error_capacity != 0) error[0] = '\0';
+    }
     animation_member = cob_archive_find(&archive, "bldinf.txt");
     description_member = cob_archive_find(&archive, "bldtxt.txt");
     name_member = cob_archive_find(&archive, "bldname.txt");

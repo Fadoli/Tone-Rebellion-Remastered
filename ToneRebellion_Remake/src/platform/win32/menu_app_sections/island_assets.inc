@@ -1,3 +1,60 @@
+/* shapes.txt (TONE00.COB): "data\file.shp KEY" lines name the file of each
+   shape key. effects.txt SHAPE names are keys; every one is its file's base
+   name except PT2B (tribe 0 Gazer bullet), which is data\pt2ball.shp. Filled
+   by load_building_render_catalog; a key it lacks maps to data\<key>.shp. */
+enum { SHAPE_MANIFEST_MAX = 512, SHAPE_KEY_CAPACITY = 16, SHAPE_PATH_CAPACITY = 40 };
+static char g_shape_manifest_keys[SHAPE_MANIFEST_MAX][SHAPE_KEY_CAPACITY];
+static char g_shape_manifest_paths[SHAPE_MANIFEST_MAX][SHAPE_PATH_CAPACITY];
+static int g_shape_manifest_count;
+
+static void shape_lower(char *text)
+{
+    for (; *text != '\0'; ++text)
+        if (*text >= 'A' && *text <= 'Z') *text = (char)(*text - 'A' + 'a');
+}
+
+static void shape_manifest_load(const unsigned char *bytes, size_t length)
+{
+    size_t position = 0;
+    g_shape_manifest_count = 0;
+    while (position < length && g_shape_manifest_count < SHAPE_MANIFEST_MAX) {
+        char line[160];
+        char path[SHAPE_PATH_CAPACITY];
+        char key[SHAPE_KEY_CAPACITY];
+        size_t used = 0;
+        char *comment;
+        while (position < length && bytes[position] != '\n' && used + 1 < sizeof(line))
+            line[used++] = (char)bytes[position++];
+        while (position < length && bytes[position] != '\n') ++position;
+        ++position;
+        line[used] = '\0';
+        comment = strchr(line, ';');
+        if (comment != NULL) *comment = '\0';
+        if (sscanf(line, "%39s %15s", path, key) != 2) continue;
+        shape_lower(path);
+        shape_lower(key);
+        memcpy(g_shape_manifest_keys[g_shape_manifest_count], key, sizeof(key));
+        memcpy(g_shape_manifest_paths[g_shape_manifest_count], path, sizeof(path));
+        ++g_shape_manifest_count;
+    }
+}
+
+/* Archive member (lower case) of shape `key`. */
+static void shape_manifest_member(const char *key, char *member, size_t capacity)
+{
+    char lowered[SHAPE_KEY_CAPACITY];
+    int index;
+    (void)snprintf(lowered, sizeof(lowered), "%s", key);
+    shape_lower(lowered);
+    for (index = 0; index < g_shape_manifest_count; ++index) {
+        if (strcmp(g_shape_manifest_keys[index], lowered) == 0) {
+            (void)snprintf(member, capacity, "%s", g_shape_manifest_paths[index]);
+            return;
+        }
+    }
+    (void)snprintf(member, capacity, "data\\%s.shp", lowered);
+}
+
 static int load_island_surface(int island_id, int map_island_index,
                                char *error, size_t error_capacity)
 {
@@ -610,11 +667,7 @@ static int load_island_surface(int island_id, int map_island_index,
                  effect->type == FLOATER_EFFECT_CAST)) {
                 char member[48];
                 char effect_error[96];
-                size_t c;
-                (void)snprintf(member, sizeof(member), "data\\%s.shp", effect->shape);
-                for (c = 0; member[c] != '\0'; ++c)
-                    if (member[c] >= 'A' && member[c] <= 'Z')
-                        member[c] = (char)(member[c] - 'A' + 'a');
+                shape_manifest_member(effect->shape, member, sizeof(member));
                 if (!load_sprite_sheet(&archive, member, palette, &art,
                                        effect_error, sizeof(effect_error)))
                     free_sprite_sheet(&art);
