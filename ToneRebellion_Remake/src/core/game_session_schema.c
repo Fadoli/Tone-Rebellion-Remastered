@@ -462,6 +462,7 @@ static const GameSessionSchemaField k_fields_GameSession[] = {
     SCHEMA_FIELD(GameSession, world_bridges, ((GameSession *)0)->world_bridges[0], 21),
     SCHEMA_SCALAR(GameSession, active_bridge_mask, ((GameSession *)0)->active_bridge_mask),
     SCHEMA_SCALAR(GameSession, shared_bridge_player_mask, ((GameSession *)0)->shared_bridge_player_mask),
+    SCHEMA_SCALAR(GameSession, glyph_share_mask, ((GameSession *)0)->glyph_share_mask),
     SCHEMA_FIELD(GameSession, islands, ((GameSession *)0)->islands[0], 23),
     SCHEMA_SCALAR(GameSession, save_revision, ((GameSession *)0)->save_revision),
 };

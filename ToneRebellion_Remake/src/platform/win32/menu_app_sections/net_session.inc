@@ -437,6 +437,11 @@ static void net_apply_game_start(HWND window, const NetGameStart *start)
             if (start->tribes[slot] < GAME_START_PLAYER_COUNT)
                 g_game_session.shared_bridge_player_mask |=
                     (uint8_t)(1U << start->tribes[slot]);
+        /* Host option: the played tribes pool their glyph bonuses. */
+        g_game_session.glyph_share_mask =
+            (start->options & NET_LOBBY_OPTION_SHARED_GLYPHS) != 0
+                ? g_game_session.shared_bridge_player_mask : 0;
+        game_session_refresh_player_maintenance_budgets(&g_game_session);
         if (g_net_mode == NET_MODE_HOST)
             for (slot = 1; slot < NET_LOBBY_MAX_PLAYERS; ++slot)
                 if (g_net_lobby.players[slot].connected) peers |= (uint8_t)(1U << slot);
@@ -1263,6 +1268,34 @@ static void net_leave_lobby(void)
 /* FUN_0044ec5d lists the session players (DAT_004beff0) on the New Game
    screen when DAT_004befe0 != 0; its geometry is not ported, so the remake
    draws a plain two-column list in the free band above the top tribe glyph. */
+/* Remake host options on the New Game screen of a session: one line per
+   option under the player list; the host clicks it to switch it. */
+enum { NET_OPTION_LINE_X = 200, NET_OPTION_LINE_Y = 52 };
+
+static const char *net_shared_glyphs_label(void)
+{
+    static char line[96];
+    const char *state = (g_net_lobby.options & NET_LOBBY_OPTION_SHARED_GLYPHS) != 0
+        ? TR(T_NET_SHARED_GLYPHS_ON) : TR(T_NET_SHARED_GLYPHS_OFF);
+    if (g_net_mode != NET_MODE_HOST || g_net_lobby.started) return state;
+    (void)snprintf(line, sizeof(line), TR(T_NET_OPTION_CLICK), state);
+    return line;
+}
+
+static int net_lobby_option_click(int x, int y)
+{
+    const char *label;
+    if (g_net_mode != NET_MODE_HOST || g_net_lobby.started) return 0;
+    label = net_shared_glyphs_label();
+    if (x < NET_OPTION_LINE_X ||
+        x >= NET_OPTION_LINE_X + measure_bitmap_text(NULL, label, strlen(label)) ||
+        y < NET_OPTION_LINE_Y - 1 || y > NET_OPTION_LINE_Y + 11) return 0;
+    net_lobby_set_options(&g_net_lobby,
+        (uint8_t)(g_net_lobby.options ^ NET_LOBBY_OPTION_SHARED_GLYPHS));
+    net_host_broadcast_state();
+    return 1;
+}
+
 static void render_net_lobby(RenderSurface *surface)
 {
     char line[96];
@@ -1289,4 +1322,9 @@ static void render_net_lobby(RenderSurface *surface)
         }
     }
     draw_small_label(surface, g_net_status, 200, 40, RGB(255, 220, 120));
+    if (g_net_mode != NET_MODE_NONE)
+        draw_small_label(surface, net_shared_glyphs_label(), NET_OPTION_LINE_X,
+                         NET_OPTION_LINE_Y,
+                         g_net_mode == NET_MODE_HOST && !g_net_lobby.started
+                             ? RGB(150, 220, 255) : color);
 }

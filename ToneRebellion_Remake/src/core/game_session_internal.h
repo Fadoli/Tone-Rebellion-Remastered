@@ -36,6 +36,40 @@ static inline int32_t game_session_base_item_id(
     return item_id;
 }
 
+/* Glyph bits whose passive bonuses apply to player_slot's units: its own
+   glyph mask, or, when the network option pools them (glyph_share_mask),
+   every sharing tribe's. Ownership checks (panel, glyph actions, seals) read
+   GamePlayerEconomy.glyph_mask directly. */
+static inline uint16_t game_session_glyph_effect_mask(const GameSession *session,
+                                                      unsigned int player_slot)
+{
+    uint16_t mask;
+    unsigned int other;
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT) return 0;
+    mask = session->economy[player_slot].glyph_mask;
+    if ((session->glyph_share_mask & (1U << player_slot)) == 0) return mask;
+    for (other = 0; other < GAME_START_PLAYER_COUNT; ++other)
+        if ((session->glyph_share_mask & (1U << other)) != 0)
+            mask = (uint16_t)(mask | session->economy[other].glyph_mask);
+    return mask;
+}
+
+/* Same pooling for DAT_00619242, the completed-feature island bits that
+   FUN_00420f28 reads for the hit-point bonuses. */
+static inline uint16_t game_session_feature_effect_mask(const GameSession *session,
+                                                        unsigned int player_slot)
+{
+    uint16_t mask;
+    unsigned int other;
+    if (session == NULL || player_slot >= GAME_START_PLAYER_COUNT) return 0;
+    mask = session->economy[player_slot].special_feature_island_mask;
+    if ((session->glyph_share_mask & (1U << player_slot)) == 0) return mask;
+    for (other = 0; other < GAME_START_PLAYER_COUNT; ++other)
+        if ((session->glyph_share_mask & (1U << other)) != 0)
+            mask = (uint16_t)(mask | session->economy[other].special_feature_island_mask);
+    return mask;
+}
+
 /* pad.txt IDs 0x17..0x24 are PIT_LeviShield0..13: the "SEAL_%02d" sites
    (FUN_00439673) that FUN_00464b9e places on the last island. */
 static inline int game_session_is_leviathan_seal(int32_t item_id)

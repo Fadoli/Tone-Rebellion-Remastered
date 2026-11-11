@@ -824,7 +824,8 @@ unsigned int game_session_dispatch_cast_actions(GameSession *session)
         magic_cost = cast_magic_costs[kind];
         crystal_cost = cast_crystal_costs[kind];
         /* FUN_0045d9c1 applies the glyph-8 discount to magic only. */
-        if ((session->economy[request.player_slot].glyph_mask & 0x0100U) != 0)
+        if ((game_session_glyph_effect_mask(session, request.player_slot) &
+             0x0100U) != 0)
             magic_cost = (magic_cost * 2U) / 3U;
 
         caster = find_spell_caster(session, building, request.player_slot,

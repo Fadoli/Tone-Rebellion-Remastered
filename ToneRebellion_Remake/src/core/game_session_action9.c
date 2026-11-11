@@ -512,7 +512,8 @@ uint16_t game_session_floater_approach_radius(
             floater->charge_source_island < session->island_count &&
             floater->charge_source_location <
                 session->islands[floater->charge_source_island].location_count &&
-            (session->economy[floater->owner_slot].glyph_mask & 0x0004U) != 0)
+            (game_session_glyph_effect_mask(session, floater->owner_slot) &
+             0x0004U) != 0)
             range = (int32_t)(int16_t)(range * 5) / 4;
         if (range > 0) return (uint16_t)range;
     }

@@ -2,6 +2,7 @@
 #include "game_session_combat_internal.h"
 #include "game_session_delivery.h"
 #include "game_session_delivery_internal.h"
+#include "game_session_internal.h"
 #include "game_session_movement_internal.h"
 #include "iw_construct.h"
 #include "building_render.h"

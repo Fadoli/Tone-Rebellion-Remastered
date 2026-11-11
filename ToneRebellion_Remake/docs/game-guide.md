@@ -102,6 +102,8 @@ A glyph has two uses:
 | 12 | Mef | no bonus found in the code |
 | 13 | Vinya | Building upkeep −15 % |
 
+**Network games (remake):** with the host's "Shared glyphs" option, on by default, every player's tribe gets the bonuses of all the glyphs the players hold together. Each glyph still belongs to the tribe that earned it for the seals. Tribes start allied, as in every game.
+
 Glyphs never unlock buildings or spells. The design notes inside `bldtxt.txt` describe other bonuses; the shipped code does what this table says.
 
 ## Difficulty

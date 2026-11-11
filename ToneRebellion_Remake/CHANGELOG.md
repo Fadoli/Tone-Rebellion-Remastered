@@ -4,6 +4,10 @@ Player-facing changes of the Tone Rebellion remake, newest first. Each release i
 
 ## 0.2.1 - unreleased
 
+### Added
+
+- Network games: a "Shared glyphs" host option in the lobby, on by default. Every player's tribe gets the bonuses (strength, hit points, speed, range, spell cost, upkeep) of all the glyphs the players hold together; each glyph still belongs to its tribe for the seals. Tribes start allied, as before. Players need this version on every machine (lobby protocol 3).
+
 ### Fixed
 
 - Widescreen: the start-up logo (The Logic Factory) is drawn centred instead of as a garbled, sheared image.

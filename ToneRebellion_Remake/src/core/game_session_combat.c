@@ -199,7 +199,7 @@ static int32_t floater_attack_power(const GameSession *session,
             source->owner_id == (int32_t)floater->owner_slot) {
             int32_t source_item = game_session_base_item_id(source);
             uint16_t glyph_mask = floater->owner_slot < GAME_START_PLAYER_COUNT
-                ? session->economy[floater->owner_slot].glyph_mask : 0U;
+                ? game_session_glyph_effect_mask(session, floater->owner_slot) : 0U;
             if ((source->source_flags & 0x8000U) != 0) power += 3;
             if (((glyph_mask & 0x0001U) != 0 && source_item == 0x2c) ||
                 ((glyph_mask & 0x0040U) != 0 && source_item == 0x2d) ||

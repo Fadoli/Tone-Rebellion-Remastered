@@ -47,12 +47,23 @@ int main(void)
            NET_LOBBY_EVENT_WELCOME);
     assert(client.local_slot == 1);
 
+    /* Host options: shared glyphs on by default; the list carries them. */
+    assert(host.options == NET_LOBBY_OPTION_SHARED_GLYPHS);
+    net_lobby_set_options(&host, 0);
+    length = net_lobby_encode_player_list(&host, bytes, sizeof(bytes));
+    deliver(&reader, bytes, length, &frame);
+    assert(net_lobby_client_handle(&client, &frame, &received, &reason) ==
+           NET_LOBBY_EVENT_STATE);
+    assert(client.options == 0);
+    net_lobby_set_options(&host, NET_LOBBY_OPTION_SHARED_GLYPHS);
+
     net_lobby_set_world(&host, 2, 3);
     length = net_lobby_encode_player_list(&host, bytes, sizeof(bytes));
     deliver(&reader, bytes, length, &frame);
     assert(net_lobby_client_handle(&client, &frame, &received, &reason) ==
            NET_LOBBY_EVENT_STATE);
     assert(client.world_index == 2 && client.difficulty == 3);
+    assert(client.options == NET_LOBBY_OPTION_SHARED_GLYPHS);
     assert(net_lobby_player_count(&client) == 2U);
     assert(strcmp(client.players[0].name, "Host") == 0);
     assert(client.players[1].tribe == 1);
@@ -77,7 +88,11 @@ int main(void)
            received.difficulty == 3 && received.player_count == 2);
     assert(received.tribes[0] == 0 && received.tribes[1] == 3 &&
            received.tribes[2] == NET_LOBBY_NO_TRIBE);
+    assert(received.options == NET_LOBBY_OPTION_SHARED_GLYPHS);
     assert(client.started);
+    /* Options are frozen once the game started. */
+    net_lobby_set_options(&client, 0);
+    assert(client.options == NET_LOBBY_OPTION_SHARED_GLYPHS);
 
     /* Full lobby, version mismatch, departure. */
     length = net_lobby_encode_hello(bytes, sizeof(bytes), "C");

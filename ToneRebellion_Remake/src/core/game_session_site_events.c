@@ -374,7 +374,7 @@ static void game_session_recalculate_player_maintenance_budgets(
         }
         /* FUN_0045e6d3 discounts site maintenance by 15% when the player's
            glyph-ownership mask at +0x8a contains bit 13 (0x2000). */
-        if ((session->economy[player_slot].glyph_mask & 0x2000U) != 0)
+        if ((game_session_glyph_effect_mask(session, player_slot) & 0x2000U) != 0)
             maintenance[player_slot] = (maintenance[player_slot] * 0x11) / 0x14;
         for (floater_index = 0; floater_index < session->floater_count;
              ++floater_index) {

@@ -79,6 +79,8 @@ static void handle_click(HWND window, int x, int y)
             else
                 slide_panel_open_paused();
         }
+    } else if (g_menu.screen == SCREEN_NEW_GAME && net_lobby_option_click(x, y)) {
+        /* Remake host option line of a network lobby (shared glyphs). */
     } else if (g_menu.screen == SCREEN_NEW_GAME && clicked_tribe >= 0) {
         /* NewGameWin's custom mouse handler resolves the animated tribe glyphs
            (messages 60..63). */

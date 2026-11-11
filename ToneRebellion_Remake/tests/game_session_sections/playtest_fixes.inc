@@ -460,8 +460,30 @@ static void test_plasid_never_kills_a_fresh_worker_in_one_hit(void)
     assert(mesron_one_shot);
 }
 
+static void test_shared_glyphs_pool_the_bonuses_of_the_sharing_tribes(void)
+{
+    /* Network host option: tribes 0 and 2 share their glyph bonuses. Tribe 2
+       holds Tal (bit 0, Train 1 +1 strength), Lod (bit 8, spell magic cost)
+       and the feature bit of Dre (bit 1, Train 1 HP); tribe 3, outside the
+       pool, holds Vinya (bit 13). Ownership itself stays per tribe. */
+    static GameSession session;
+    memset(&session, 0, sizeof(session));
+    session.economy[2].glyph_mask = 0x0101U;
+    session.economy[2].special_feature_island_mask = 0x0002U;
+    session.economy[3].glyph_mask = 0x2000U;
+    assert(game_session_glyph_effect_mask(&session, 0) == 0);
+    session.glyph_share_mask = 0x05U;
+    assert(game_session_glyph_effect_mask(&session, 0) == 0x0101U);
+    assert(game_session_glyph_effect_mask(&session, 2) == 0x0101U);
+    assert(game_session_feature_effect_mask(&session, 0) == 0x0002U);
+    assert(game_session_glyph_effect_mask(&session, 1) == 0);
+    assert(game_session_glyph_effect_mask(&session, 3) == 0x2000U);
+    assert(session.economy[0].glyph_mask == 0);
+}
+
 static void run_playtest_fix_tests(void)
 {
+    test_shared_glyphs_pool_the_bonuses_of_the_sharing_tribes();
     test_plasid_never_kills_a_fresh_worker_in_one_hit();
     test_wizard_does_not_attack_on_its_own();
     test_freed_leviathan_sites_become_visible_again();

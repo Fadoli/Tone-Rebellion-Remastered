@@ -1249,8 +1249,8 @@ void game_session_recalculate_floater_attack_points(
         value = ((int32_t)floater->base_max_attack_points *
                  ((int32_t)level + 2)) / 2;
         if (floater->owner_slot < GAME_START_PLAYER_COUNT)
-            island_mask = session->economy[floater->owner_slot]
-                .special_feature_island_mask;
+            island_mask = game_session_feature_effect_mask(session,
+                floater->owner_slot);
         if (floater->source_subtype == 0U && (island_mask & 0x10U) != 0)
             ++value;
         if (floater->source_link_0c >= 0 &&

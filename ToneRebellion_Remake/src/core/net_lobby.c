@@ -94,6 +94,7 @@ void net_lobby_host_init(NetLobby *lobby, const char *name, uint32_t seed)
     lobby->is_host = 1;
     lobby->local_slot = 0;
     lobby->seed = seed;
+    lobby->options = NET_LOBBY_DEFAULT_OPTIONS;
     lobby->players[0].connected = 1;
     lobby->players[0].tribe = 0;
     copy_name(lobby->players[0].name, name);
@@ -161,6 +162,12 @@ void net_lobby_set_world(NetLobby *lobby, uint8_t world_index, uint8_t difficult
     lobby->difficulty = difficulty;
 }
 
+void net_lobby_set_options(NetLobby *lobby, uint8_t options)
+{
+    if (lobby == NULL || lobby->started) return;
+    lobby->options = options;
+}
+
 unsigned net_lobby_player_count(const NetLobby *lobby)
 {
     unsigned slot;
@@ -191,6 +198,7 @@ int net_lobby_game_start(const NetLobby *lobby, NetGameStart *start)
     start->world_index = lobby->world_index;
     start->difficulty = lobby->difficulty;
     start->player_count = (uint8_t)net_lobby_player_count(lobby);
+    start->options = lobby->options;
     for (slot = 0; slot < NET_LOBBY_MAX_PLAYERS; ++slot)
         start->tribes[slot] = lobby->players[slot].connected
             ? lobby->players[slot].tribe : (uint8_t)NET_LOBBY_NO_TRIBE;
@@ -255,15 +263,17 @@ size_t net_lobby_encode_tribe(uint8_t *out, size_t capacity, uint8_t slot, uint8
     return net_frame_encode(out, capacity, NET_RECORD_TRIBE, slot, &tribe, 1);
 }
 
-/* Payload: world, difficulty, then per slot: connected, tribe, name[16]. */
+/* Payload: world, difficulty, options, then per slot: connected, tribe,
+   name[16]. */
 size_t net_lobby_encode_player_list(const NetLobby *lobby, uint8_t *out, size_t capacity)
 {
-    uint8_t payload[2 + NET_LOBBY_MAX_PLAYERS * (2 + NET_LOBBY_NAME_CAPACITY)];
-    size_t offset = 2;
+    uint8_t payload[3 + NET_LOBBY_MAX_PLAYERS * (2 + NET_LOBBY_NAME_CAPACITY)];
+    size_t offset = 3;
     unsigned slot;
     if (lobby == NULL) return 0;
     payload[0] = lobby->world_index;
     payload[1] = lobby->difficulty;
+    payload[2] = lobby->options;
     for (slot = 0; slot < NET_LOBBY_MAX_PLAYERS; ++slot) {
         payload[offset++] = lobby->players[slot].connected;
         payload[offset++] = lobby->players[slot].tribe;
@@ -273,10 +283,11 @@ size_t net_lobby_encode_player_list(const NetLobby *lobby, uint8_t *out, size_t 
     return net_frame_encode(out, capacity, NET_RECORD_PLAYER_LIST, 0, payload, offset);
 }
 
-/* Payload: seed (LE), world, difficulty, player count, tribe per slot. */
+/* Payload: seed (LE), world, difficulty, player count, tribe per slot,
+   options. */
 size_t net_lobby_encode_game_start(const NetGameStart *start, uint8_t *out, size_t capacity)
 {
-    uint8_t payload[7 + NET_LOBBY_MAX_PLAYERS];
+    uint8_t payload[8 + NET_LOBBY_MAX_PLAYERS];
     if (start == NULL) return 0;
     payload[0] = (uint8_t)(start->seed & 0xffU);
     payload[1] = (uint8_t)((start->seed >> 8) & 0xffU);
@@ -286,6 +297,7 @@ size_t net_lobby_encode_game_start(const NetGameStart *start, uint8_t *out, size
     payload[5] = start->difficulty;
     payload[6] = start->player_count;
     memcpy(payload + 7, start->tribes, NET_LOBBY_MAX_PLAYERS);
+    payload[7 + NET_LOBBY_MAX_PLAYERS] = start->options;
     return net_frame_encode(out, capacity, NET_RECORD_GAME_START, 0,
                             payload, sizeof(payload));
 }
@@ -306,11 +318,12 @@ int net_lobby_client_handle(NetLobby *lobby, const NetFrame *frame,
             *reject_reason = frame->length != 0U ? frame->payload[0] : 0;
         return NET_LOBBY_EVENT_REJECT;
     case NET_RECORD_PLAYER_LIST: {
-        size_t offset = 2;
-        if (frame->length != 2U + NET_LOBBY_MAX_PLAYERS * (2U + NET_LOBBY_NAME_CAPACITY))
+        size_t offset = 3;
+        if (frame->length != 3U + NET_LOBBY_MAX_PLAYERS * (2U + NET_LOBBY_NAME_CAPACITY))
             return NET_LOBBY_EVENT_ERROR;
         lobby->world_index = frame->payload[0];
         lobby->difficulty = frame->payload[1];
+        lobby->options = frame->payload[2];
         for (slot = 0; slot < NET_LOBBY_MAX_PLAYERS; ++slot) {
             char name[NET_LOBBY_NAME_CAPACITY + 1];
             lobby->players[slot].connected = frame->payload[offset++] != 0U;
@@ -323,7 +336,7 @@ int net_lobby_client_handle(NetLobby *lobby, const NetFrame *frame,
         return NET_LOBBY_EVENT_STATE;
     }
     case NET_RECORD_GAME_START:
-        if (frame->length != 7U + NET_LOBBY_MAX_PLAYERS || start == NULL)
+        if (frame->length != 8U + NET_LOBBY_MAX_PLAYERS || start == NULL)
             return NET_LOBBY_EVENT_ERROR;
         memset(start, 0, sizeof(*start));
         start->seed = (uint32_t)frame->payload[0] | ((uint32_t)frame->payload[1] << 8) |
@@ -332,7 +345,9 @@ int net_lobby_client_handle(NetLobby *lobby, const NetFrame *frame,
         start->difficulty = frame->payload[5];
         start->player_count = frame->payload[6];
         memcpy(start->tribes, frame->payload + 7, NET_LOBBY_MAX_PLAYERS);
+        start->options = frame->payload[7 + NET_LOBBY_MAX_PLAYERS];
         lobby->seed = start->seed;
+        lobby->options = start->options;
         lobby->world_index = start->world_index;
         lobby->difficulty = start->difficulty;
         lobby->started = 1;

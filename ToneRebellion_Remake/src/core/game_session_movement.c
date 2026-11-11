@@ -1014,7 +1014,7 @@ static int game_session_floater_has_site_speed_bonus(
 
     site = &session->islands[floater->charge_source_island]
                 .locations[floater->charge_source_location];
-    glyph_mask = session->economy[floater->owner_slot].glyph_mask;
+    glyph_mask = game_session_glyph_effect_mask(session, floater->owner_slot);
     {
         int32_t base_item_id = game_session_base_item_id(site);
         return ((glyph_mask & 0x0008U) != 0 && base_item_id == 0x2c) ||

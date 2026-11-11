@@ -18,13 +18,22 @@ enum {
     NET_LOBBY_NAME_CAPACITY = 16,
     NET_LOBBY_NO_TRIBE = 0xff,
     NET_LOBBY_NO_SLOT = 0xff,
-    /* 2: HELLO carries the session build tag after the version byte. */
-    NET_LOBBY_VERSION = 2,
+    /* 2: HELLO carries the session build tag after the version byte.
+       3: the player list and the game start carry the host's options. */
+    NET_LOBBY_VERSION = 3,
     NET_LOBBY_HELLO_HEADER = 5,
     NET_FRAME_HEADER_SIZE = 4,
     NET_FRAME_MAX_PAYLOAD = 2304,
     NET_FRAME_MAX_SIZE = NET_FRAME_HEADER_SIZE + NET_FRAME_MAX_PAYLOAD,
     NET_LOBBY_DEFAULT_PORT = 28610
+};
+
+/* Host options (remake), a bit set carried by the player list and the game
+   start. Shared glyphs: every player's glyph bonuses apply to all the
+   players' tribes (GameSession.glyph_share_mask). On by default. */
+enum {
+    NET_LOBBY_OPTION_SHARED_GLYPHS = 1,
+    NET_LOBBY_DEFAULT_OPTIONS = NET_LOBBY_OPTION_SHARED_GLYPHS
 };
 
 typedef enum NetRecordType {
@@ -70,6 +79,7 @@ typedef struct NetLobby {
     uint8_t world_index;
     uint8_t difficulty;
     uint8_t started;
+    uint8_t options;        /* NET_LOBBY_OPTION_* */
     uint32_t seed;
     NetLobbyPlayer players[NET_LOBBY_MAX_PLAYERS];
 } NetLobby;
@@ -80,6 +90,7 @@ typedef struct NetGameStart {
     uint8_t difficulty;
     uint8_t player_count;
     uint8_t tribes[NET_LOBBY_MAX_PLAYERS];  /* per slot, NET_LOBBY_NO_TRIBE if empty */
+    uint8_t options;                         /* NET_LOBBY_OPTION_* */
 } NetGameStart;
 
 /* Client-side events reported by net_lobby_client_handle. */
@@ -119,6 +130,8 @@ void net_lobby_remove_player(NetLobby *lobby, uint8_t slot);
    another player holds). */
 int net_lobby_set_tribe(NetLobby *lobby, uint8_t slot, uint8_t tribe);
 void net_lobby_set_world(NetLobby *lobby, uint8_t world_index, uint8_t difficulty);
+/* Host: NET_LOBBY_OPTION_* bits, before the start. */
+void net_lobby_set_options(NetLobby *lobby, uint8_t options);
 unsigned net_lobby_player_count(const NetLobby *lobby);
 /* Host: at least two players, each with a tribe. */
 int net_lobby_can_start(const NetLobby *lobby);

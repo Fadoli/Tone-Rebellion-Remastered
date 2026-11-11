@@ -342,6 +342,13 @@ typedef struct GameSession {
        already reaches one of its islands; see
        mark_bridge_constructed_with_contributor. */
     uint8_t shared_bridge_player_mask;
+    /* Remake addition (network host option, NET_LOBBY_OPTION_SHARED_GLYPHS):
+       the tribes whose glyph bonuses are pooled. Each of them gets the
+       passive effects of every glyph any of them holds (strength, HP, speed,
+       range, spell cost, upkeep; game_session_glyph_effect_mask). Owning a
+       glyph, the glyph panel, glyph bearers and seals stay per tribe. Zero
+       in solo and when the host turns the option off. */
+    uint8_t glyph_share_mask;
     GameRuntimeIsland islands[WORLD_MAP_MAX_ISLANDS];
     /* Remake addition: GAME_SESSION_SAVE_REVISION of the build that wrote
        the save (game_session_schema.h); 0 in saves older than the field. */
