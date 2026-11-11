@@ -563,6 +563,7 @@ static void test_island_access_follows_open_bridges_for_human_players(void)
 #include "game_session_sections/worker_scheduler.inc"
 #include "game_session_sections/audio.inc"
 #include "game_session_sections/spells.inc"
+#include "game_session_sections/playtest_fixes.inc"
 
 int main(void)
 {
@@ -701,6 +702,7 @@ int main(void)
     test_wounded_soldier_heals_in_its_building();
     test_wounded_soldier_crosses_a_bridge_to_heal();
     test_effect_instances_queue_their_sound_with_position();
+    run_playtest_fix_tests();
     (void)puts("game session unit tests passed");
     return 0;
 }
