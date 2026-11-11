@@ -4,6 +4,7 @@
 #include "game_session_economy_internal.h"
 #include "game_session_internal.h"
 #include "game_session_delivery_internal.h"
+#include "game_session_movement_internal.h"
 
 #include <string.h>
 
@@ -757,7 +758,9 @@ static GameFloaterStart *find_spell_caster(GameSession *session,
         floater = &session->floaters[(unsigned int)linked];
         if (!game_session_floater_is_active(floater) ||
             floater->owner_slot != player_slot ||
-            floater->active_order_action == 0x13) continue;
+            floater->active_order_action == 0x13 ||
+            (floater->movement_state == 0x11 &&
+             floater->handoff_resume_action == 0x13)) continue;
         if (!((floater->type_index == 1U && kind == 15U) ||
               (floater->type_index == 2U && kind == 17U)) &&
             (kind >= 18U ? 2U : kind >= 11U ? 1U : 0U) >
@@ -834,10 +837,6 @@ unsigned int game_session_dispatch_cast_actions(GameSession *session)
         if (building->resource_stock[GAME_RESOURCE_MAGIC_TONE] < magic_cost ||
             building->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] < crystal_cost)
             continue;
-        building->resource_stock[GAME_RESOURCE_MAGIC_TONE] = (uint16_t)(
-            building->resource_stock[GAME_RESOURCE_MAGIC_TONE] - magic_cost);
-        building->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = (uint16_t)(
-            building->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] - crystal_cost);
 
         caster->active_order_action = 0x13;
         caster->movement_state = 0x13;
@@ -855,6 +854,26 @@ unsigned int game_session_dispatch_cast_actions(GameSession *session)
         caster->has_move_order = 0;
         caster->has_wander_order = 0;
         caster->wander_timer = 0;
+        /* FUN_004211bb crosses first for any action but 4/5/0xd/0x12 whose
+           target island +0x40 differs from +0x0e, FA_Cast (0x13) included
+           (ev_96f90fdc); the handoff tick resumes the cast on arrival. A
+           caster with no route drops the order and the pools are kept. */
+        if (request.target_island < session->island_count &&
+            request.target_island != caster->island_index &&
+            !game_session_begin_floater_handoff(session, caster,
+                                                request.target_island)) {
+            caster->active_order_action = 0;
+            caster->movement_state = 0;
+            caster->order_target_floater = -1;
+            caster->order_target_location = -1;
+            caster->order_progress = 0;
+            caster->has_wander_order = 1;
+            continue;
+        }
+        building->resource_stock[GAME_RESOURCE_MAGIC_TONE] = (uint16_t)(
+            building->resource_stock[GAME_RESOURCE_MAGIC_TONE] - magic_cost);
+        building->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = (uint16_t)(
+            building->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] - crystal_cost);
         ++dispatched;
     }
     memset(session->cast_actions, 0, sizeof(session->cast_actions));

@@ -2,6 +2,12 @@
 
 Player-facing changes of the Tone Rebellion remake, newest first. Each release is a `v*` tag (see [Releases](README.md#releases)); its GitHub release text is the matching section below. Behaviour that knowingly differs from `FLOAT.EXE` is detailed in [differences from the original](docs/differences-from-original.md).
 
+## 0.1.4 - unreleased
+
+### Fixed
+
+- A spell caster standing on another island than its target crosses the bridges first and casts on arrival, as in the original, instead of casting from afar; its spell is no longer dropped during the crossing.
+
 ## 0.1.3 - 2026-11-11
 
 ### Fixed

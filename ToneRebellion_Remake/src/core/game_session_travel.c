@@ -398,6 +398,25 @@ int game_session_tick_floater_handoff(GameSession *session,
                     (unsigned int)(floater - session->floaters), resume_action,
                     floater->island_index, (unsigned int)target);
             return 1;
+        } else if (resume_action == 0x13) {
+            /* FA_Cast whose target island differed: next bridge while
+               +0x40 != +0x0e, then the cast starts again from tick 0. */
+            if (floater->order_target_island != floater->island_index) {
+                if (!game_session_begin_floater_handoff(session, floater,
+                        floater->order_target_island)) {
+                    cancel_handoff(session, floater);
+                    return 1;
+                }
+                floater->handoff_resume_action = 0x13;
+                return 1;
+            }
+            floater->active_order_action = 0x13;
+            floater->movement_state = 0x13;
+            floater->order_progress = UINT8_MAX;
+            floater->order_timer = 0;
+            floater->has_move_order = 0;
+            floater->stop_radius = 0;
+            return 1;
         } else if (resume_action == 0x0e) {
             floater->movement_state = 0;
             floater->active_order_action = 0x0e;

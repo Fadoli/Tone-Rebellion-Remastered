@@ -1723,7 +1723,12 @@ static void game_session_adopt_building_order(GameSession *session,
         game_session_counter_attack_holder(session, floater_index);
         return;
     }
-    if (floater->active_order_action == 0x13) return;
+    /* FUN_004210a9 keeps +0x3c during a crossing (ev_dd046f00); the remake
+       parks it in handoff_resume_action, so a caster crossing to its target
+       is still on FA_Cast here. */
+    if (floater->active_order_action == 0x13 ||
+        (floater->movement_state == 0x11 &&
+         floater->handoff_resume_action == 0x13)) return;
     building = &session->islands[floater->charge_source_island].locations[
         floater->charge_source_location];
     if (building->owner_id == (int32_t)floater->owner_slot &&
