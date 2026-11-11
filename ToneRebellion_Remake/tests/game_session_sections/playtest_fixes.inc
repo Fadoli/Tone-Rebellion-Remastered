@@ -373,8 +373,96 @@ static void test_wizard_does_not_attack_on_its_own(void)
     assert(enemy->current_hit_points == 60);
 }
 
+/* Fires one Leviathan bolt tower (pad.txt range, strength) at a fresh 3-HP
+   worker until it dies or `limit` ticks pass; returns the largest HP loss
+   seen in a single tick, and the number of hits through *hits. */
+static int32_t largest_bolt_hit_on_a_worker(int32_t item_id, int16_t range,
+                                            int16_t strength, uint32_t seed,
+                                            unsigned int *hits)
+{
+    static GameSession session;
+    PadCatalog pads;
+    BuildingRenderCatalog buildings = {0};
+    GameRuntimeLocation *tower;
+    GameFloaterStart *worker;
+    int32_t largest = 0;
+    unsigned int tick;
+
+    memset(&session, 0, sizeof(session));
+    tone_rng_seed(&session.random_state, seed);
+    make_leviathan_pads(&pads);
+    make_leviathan_buildings(&buildings);
+    pads.items[item_id].movement_cost[0] = range;
+    pads.items[item_id].movement_cost[1] = strength;
+    /* bldinf.txt V-SHOT1: PROD 15 21 2 L 0 20 -3,-50 VSHT1B. */
+    buildings.items[item_id].prod.present = 1;
+    buildings.items[item_id].prod.first_frame = 15;
+    buildings.items[item_id].prod.last_frame = 21;
+    buildings.items[item_id].prod.ticks_per_frame = 2;
+    buildings.items[item_id].prod.threshold = 10;
+    buildings.items[item_id].prod.offset_x = -3;
+    buildings.items[item_id].prod.offset_y = -50;
+    session.island_count = 1;
+    session.islands[0].location_count = 1;
+    tower = &session.islands[0].locations[0];
+    make_leviathan_marker(tower, 0, item_id);
+    tower->x = 500;
+    tower->y = 500;
+    tower->source_flags = 0x001U;
+    tower->resource_retry_tick_36 = -1;
+    add_test_worker(&session, 0, 0, 580, 500, 0);
+    worker = &session.floaters[0];
+    worker->current_hit_points = 3; /* floater.txt pwork: 3 HP */
+    worker->max_hit_points = 3;
+    *hits = 0;
+    for (tick = 0; tick < 4000 && (worker->source_runtime_flags & 0x008U) == 0;
+         ++tick) {
+        int16_t before = worker->current_hit_points;
+        game_session_tick_item_animations_with_floaters(
+            &session, &buildings, NULL, &pads);
+        if (worker->current_hit_points < before) {
+            ++*hits;
+            if (before - worker->current_hit_points > largest)
+                largest = before - worker->current_hit_points;
+        }
+    }
+    return largest;
+}
+
+static void test_plasid_never_kills_a_fresh_worker_in_one_hit(void)
+{
+    /* Playtest 2026-11-11: "a Plasid shot killed a worker in one hit".
+       Plasid (V-SHOT1, pad.txt "150,2,0") has strength 2: FUN_00420217
+       rolls (r(1) + r(1) + 3 + r(1)) / 3 = 1 on every hit, so a 3-HP worker
+       takes three hits. Mesron (V-ROD2, "200,4,0") fires the same VSHT1B
+       bolt with strength 4 and can deal 3 in one hit. */
+    uint32_t seed;
+    int mesron_one_shot = 0;
+    for (seed = 1; seed <= 12; ++seed) {
+        unsigned int hits;
+        assert(largest_bolt_hit_on_a_worker(0x10, 150, 2, seed, &hits) == 1);
+        assert(hits == 3);
+    }
+    /* Mesron's strength-4 roll (the damage function the bolt calls) deals 1
+       to 3; a 3 needs all three draws at 2, about 3 % of hits. */
+    for (seed = 0; seed < 4000 && !mesron_one_shot; ++seed) {
+        static GameSession session;
+        memset(&session, 0, sizeof(session));
+        session.random_state = seed * 1000003U;
+        add_test_worker(&session, 0, 0, 0, 0, 0);
+        session.floaters[0].current_hit_points = 3;
+        session.floaters[0].max_hit_points = 3;
+        if (game_session_damage_floater_from_power(&session, 0, 4) == 3) {
+            assert((session.floaters[0].source_runtime_flags & 0x008U) != 0);
+            mesron_one_shot = 1;
+        }
+    }
+    assert(mesron_one_shot);
+}
+
 static void run_playtest_fix_tests(void)
 {
+    test_plasid_never_kills_a_fresh_worker_in_one_hit();
     test_wizard_does_not_attack_on_its_own();
     test_freed_leviathan_sites_become_visible_again();
     test_caster_on_another_island_crosses_before_casting();
