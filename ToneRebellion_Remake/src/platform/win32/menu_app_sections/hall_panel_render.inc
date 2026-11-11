@@ -1,3 +1,23 @@
+/* Remake: the Tasks list's scrollup/scrolldn pair is shown and clickable
+   only when the list is longer than the IWTasks pane (the original always
+   shows it). */
+static int task_list_needs_scroll(void)
+{
+    const WindowTemplate *task_panel =
+        window_catalog_find(&g_window_catalog, "IWTasks", 3);
+    uint8_t task_slots[GAME_SESSION_MAX_TASKS];
+    int hall_player = island_panel_player_for_mode(
+        WINDOW_ISLAND_PANEL_TASKS,
+        g_game_session_valid ? (int)g_game_session.config.selected_tribe : -1,
+        selected_hall_player());
+    size_t task_count = g_game_session_valid && hall_player >= 0
+        ? game_session_collect_task_slots(&g_game_session, (int16_t)hall_player,
+              task_slots, sizeof(task_slots) / sizeof(task_slots[0])) : 0;
+    int visible_rows = task_panel != NULL
+        ? (task_panel->pane.bottom - task_panel->pane.top) / 13 : 0;
+    return visible_rows > 0 && task_count > (size_t)visible_rows;
+}
+
 static void draw_hall_panel(RenderSurface *surface, int hall_player)
 {
     const WindowTemplate *panel = NULL;
@@ -23,6 +43,8 @@ static void draw_hall_panel(RenderSurface *surface, int hall_player)
                   sizeof(task_scroll_names) / sizeof(task_scroll_names[0]))
             : NULL;
         size_t task_index;
+        const int tasks_scroll = panel_state != WINDOW_ISLAND_PANEL_TASKS ||
+            task_list_needs_scroll();
         if (panel_state == WINDOW_ISLAND_PANEL_TASKS) {
             for (task_index = 0;
                  task_index < sizeof(task_window_names) / sizeof(task_window_names[0]);
@@ -55,7 +77,7 @@ static void draw_hall_panel(RenderSurface *surface, int hall_player)
              ++task_index) {
             const WindowTemplate *control = window_catalog_find(
                 &g_window_catalog, task_scroll_names[task_index], 3);
-            if (control != NULL &&
+            if (control != NULL && tasks_scroll &&
                 window_catalog_scroll_panel_mode(control->name) == panel_state &&
                 control->shape_frame >= 0) {
                 int frame = window_catalog_control_frame(

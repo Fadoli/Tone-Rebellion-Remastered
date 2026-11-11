@@ -6,6 +6,7 @@ Player-facing changes of the Tone Rebellion remake, newest first. Each release i
 
 ### Changed
 
+- The Tasks list shows its scroll arrows only when it is longer than its pane (the original always shows them).
 - Clicking a building's linked unit that stands on another island opens that island on the unit.
 
 ### Fixed

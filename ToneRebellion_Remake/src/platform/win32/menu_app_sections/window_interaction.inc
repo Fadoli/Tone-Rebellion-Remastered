@@ -349,9 +349,11 @@ static void handle_click(HWND window, int x, int y)
                    record became stale before dispatch. */
                 return;
             }
-            const WindowTemplate *scroll_control = window_catalog_hit_test_names(
-                &g_window_catalog, 3, x, y, task_scroll_names,
-                sizeof(task_scroll_names) / sizeof(task_scroll_names[0]));
+            const WindowTemplate *scroll_control = task_list_needs_scroll()
+                ? window_catalog_hit_test_names(&g_window_catalog, 3, x, y,
+                      task_scroll_names,
+                      sizeof(task_scroll_names) / sizeof(task_scroll_names[0]))
+                : NULL;
             if (scroll_control != NULL) {
                 const WindowTemplate *task_panel = window_catalog_find(
                     &g_window_catalog, "IWTasks", 3);
