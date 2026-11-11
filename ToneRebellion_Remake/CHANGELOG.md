@@ -24,6 +24,7 @@ Player-facing changes of the Tone Rebellion remake, newest first. Each release i
 - Wizards no longer attack enemies on their own: after each task they head back to their building, as in the original, even when the building guards its spot.
 - The building panel opened from a unit, a bridge or the Tasks list now shows the building's description and its On/Off, Upgrade and Repair buttons, like the general panel (the original builds the same button list in both). Before, those buttons were missing there.
 - During the end of a game (victory or defeat) the world map no longer lets you open an island, as in the original.
+- The victory tune keeps playing when the end sequence returns to the world map, instead of being replaced by the menu music.
 - A unit held by a melee attacker answers it: its counter-attack now reaches the holder and strikes, instead of standing still until the holder stops.
 - Tribe 0 Gazers' bullets use their own sheet (`PT2B` is `pt2ball.shp` in `shapes.txt`), with the right colours.
 - Widescreen island: the alerts sit at the window's right edge and the island message line at its left edge, rather than in the middle.

@@ -164,7 +164,10 @@ static void update_window_title(HWND window)
         title = TRU(T_WIN_ISLAND);
     else if (g_menu.screen == SCREEN_LOAD_GAME) title = g_load_save_mode ? TRU(T_WIN_SAVE) : TRU(T_WIN_LOAD);
     platform_set_title(window, title);
-    if (g_menu.screen != SCREEN_ISLAND && g_menu.screen != SCREEN_INTRO) {
+    /* The end sequence's winend / loosend (FUN_004334ce) keeps playing on
+       the map: the original requests no other tune before the end screen. */
+    if (g_menu.screen != SCREEN_ISLAND && g_menu.screen != SCREEN_INTRO &&
+        !end_sequence_running()) {
         /* FUN_004489c0 requests ambi1 for the title. The remake keeps this
            menu bed through setup/map screens. Island-entry music is selected
            once per realm using FUN_00470fe7's transition table. The intro

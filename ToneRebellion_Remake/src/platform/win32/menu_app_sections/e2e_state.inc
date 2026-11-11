@@ -370,6 +370,7 @@ static void e2e_write_state(void)
     fprintf(file, "construct_open %d\nconstruct_column %d\nconstruct_item %d\n",
             g_iw_construct_open, (int)g_iw_construct.hovered_column,
             (int)g_iw_construct_info.item_id);
+    fprintf(file, "tune %s\n", g_current_tune[0] != '\0' ? g_current_tune : "-");
     fprintf(file, "net_status %s\nisland_message_count %u\n",
             g_net_status[0] != '\0' ? g_net_status : "-",
             (unsigned)g_island_message_count);
