@@ -15,6 +15,7 @@ Player-facing changes of the Tone Rebellion remake, newest first. Each release i
 - Widescreen island: the view no longer slides past the island's edge (broken drawing) when the explored part is narrow or near an end.
 - A building's linked unit chosen from another island now shows as selected.
 - Mystic site descriptions no longer repeat their title: `;` comment lines in `bldtxt.txt` are skipped, as the original text reader does.
+- Hidden building and Hall buttons (orders, spells, training stock, move, on/off, upgrade, repair, Obtain, UpgSpread, Hall stock) no longer react to clicks, hover or shortcut keys in the panels or while the construction window covers them.
 - A destroyed Leviathan building frees its pad or pool for every tribe at once: the site shows again and can be built on, instead of staying hidden until something else refreshed the island.
 - A trained soldier with enough experience goes back to its building and levels up, as in the original. Before, the building waited for it forever: the soldier stood idle and the building trained no one else.
 - A unit held by a melee attacker answers it: its counter-attack now reaches the holder and strikes, instead of standing still until the holder stops.

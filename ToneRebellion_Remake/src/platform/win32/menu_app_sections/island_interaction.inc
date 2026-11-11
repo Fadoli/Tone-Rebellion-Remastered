@@ -329,10 +329,22 @@ static int update_island_location_hover(int x, int y)
     return 1;
 }
 
+/* The building controls (IWLocControl: move, on/off, upgrade, repair, spells,
+   orders, training stock, obtain, UpgSpread) are drawn only in the location
+   panel modes and while IWConstruct is closed (draw_location_action_panel);
+   their hit tests use the same gate so a hidden button takes no click or
+   hover. */
+static int location_controls_shown(void)
+{
+    return island_panel_location_control_visible(g_island_panel_mode) &&
+        iw_construct_location_control_pane_visible(g_iw_construct_open);
+}
+
 static IslandLocationActionControl selected_location_action(void)
 {
     const GameRuntimeIsland *island;
     const GameRuntimeLocation *location;
+    if (!location_controls_shown()) return ISLAND_LOCATION_ACTION_NONE;
     if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
         g_menu.selected_tribe < 0 ||
         g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
@@ -472,7 +484,7 @@ static int selected_cast_action_at(int x, int y)
     const WindowTemplate *button;
     unsigned int index;
 
-    if (location == NULL) return -1;
+    if (location == NULL || !location_controls_shown()) return -1;
     button = window_catalog_hit_test_names(&g_window_catalog, 3, x, y,
         k_spell_button_names, 8);
     if (button == NULL) return -1;
@@ -693,7 +705,7 @@ static int obtain_button_rect(RECT *rect)
 static int obtain_button_at(int x, int y)
 {
     RECT rect;
-    return obtain_button_rect(&rect) && x >= rect.left &&
+    return location_controls_shown() && obtain_button_rect(&rect) && x >= rect.left &&
         x <= rect.right && y >= rect.top && y <= rect.bottom;
 }
 
@@ -724,7 +736,7 @@ static const char *const k_building_order_buttons[5] = {
 static int building_order_button_at(int x, int y)
 {
     unsigned int index;
-    if (!defend_area_button_visible()) return 0;
+    if (!location_controls_shown() || !defend_area_button_visible()) return 0;
     for (index = 0; index < 5U; ++index) {
         const WindowTemplate *control = window_catalog_find(
             &g_window_catalog, k_building_order_buttons[index], 3);
@@ -741,6 +753,7 @@ static int training_stock_control_at(int x, int y)
 {
     static const char *const names[2] = {"BC_TrnStkC", "BC_TrnStkM"};
     unsigned int index;
+    if (!location_controls_shown()) return 0;
     if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
         g_menu.selected_tribe < 0 ||
         g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
@@ -802,6 +815,7 @@ static int ensure_clipboard_art(void)
 static int upgspread_button_at(int x, int y)
 {
     const WindowTemplate *control;
+    if (!location_controls_shown()) return 0;
     if (!g_game_session_valid || g_menu.screen != SCREEN_ISLAND ||
         g_menu.selected_tribe < 0 ||
         g_menu.selected_tribe >= GAME_START_PLAYER_COUNT ||
@@ -1090,7 +1104,10 @@ static int hall_stock_control_at(int x, int y)
     static const char *const names[] = {
         "BC_HallStkB", "BC_HallStkC", "BC_HallStkM"
     };
-    const WindowTemplate *control = window_catalog_hit_test_names(
+    const WindowTemplate *control;
+    /* Drawn only in modes GENERAL/LOCATION (island_view_render.inc). */
+    if (!island_panel_location_info_visible(g_island_panel_mode)) return -1;
+    control = window_catalog_hit_test_names(
         &g_window_catalog, 3, x, y, names, sizeof(names) / sizeof(names[0]));
     if (control == NULL) return -1;
     if (strcmp(control->name, "BC_HallStkB") == 0) return GAME_RESOURCE_BUILD_TONE;
@@ -1130,7 +1147,8 @@ static int update_hall_command_hover(int x, int y)
     static const char *const names[] = {
         "BC_GenInfo", "BC_Storage", "BC_Knowledge", "BC_Trade", "BC_Diplomacy"
     };
-    const WindowTemplate *control = selected_hall_player() >= 0
+    const WindowTemplate *control = selected_hall_player() >= 0 &&
+        island_panel_location_control_visible(g_island_panel_mode)
         ? window_catalog_hit_test_names(&g_window_catalog, 3, x, y,
               names, sizeof(names) / sizeof(names[0])) : NULL;
     int hovered = control != NULL
