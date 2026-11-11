@@ -2,7 +2,7 @@
 
 Player-facing changes of the Tone Rebellion remake, newest first. Each release is a `v*` tag (see [Releases](README.md#releases)); its GitHub release text is the matching section below. Behaviour that knowingly differs from `FLOAT.EXE` is detailed in [differences from the original](docs/differences-from-original.md).
 
-## 0.1.4 - unreleased
+## 0.2.0 - 2026-11-11
 
 ### Added
 
