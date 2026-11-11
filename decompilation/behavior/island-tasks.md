@@ -105,6 +105,17 @@ niveau L = `+0x4a + 1` ≤ `{2,2,1,2}[T]`, N = nombre d'îles où l'entier par p
 près: il exige propriétaire = joueur et classe 0 (absents du natif), utilise l'item de base, et
 rejetait `world >= 3` alors que le natif range `>= 2` ensemble (aligné le 2026-11-03: table 2 pour tout monde >= 2); `FUN_0045c9b5` ne fait que créer
 la requête (le port peut aussi l'annuler).
+Revue 2026-11-11 (REA haiku): `DAT_006136b2` = index 0-based du monde choisi, écrit par
+`FUN_004637fc` @0x46387a (`[this+0x2749a]`, base 0x5ec218, arg du cas 9 de `FUN_004121b7`;
+le même appel fixe `DAT_006136b0` = nombre d'îles de ce monde lu dans `worldpos.txt`) et par
+le chargement `FUN_00467be5` @0x467cb0 (ev_56bd97e2…, ev_89b3f037…, ev_4c58c950…): le port
+(`config.world_index`) est conforme. Le drapeau compté (`île+0x29ac+slot*4`) vaut 1 au départ
+(`FUN_0046466f`), à la première acquisition (`FUN_00466b09`: message cat. 2/9, pont construit,
+arrivée d'une unité état 17), 0 seulement à la mise en place du monde (`FUN_00461859`); aucun
+effacement en jeu (ev_1f516589…, ev_b1567869…). `FUN_00442799` masque aussi le bouton si
+`FUN_00450385` ne trouve pas l'entrée de personnel (`+0x18 == -1`). Seuls écarts restants du
+port: propriétaire = joueur local, classe 0, site « établi » (`(+0x1c & 0xb0) == 0`) et
+L ≥ 1; en réseau, `shared_bridge_player_mask` peut accorder des îles en plus (ajout remake).
 `FUN_00452bc5(p)` (porte UPGSPREAD): bloc de type `0x28`, propriétaire 0..3, bit p de `+0x22`,
 drapeau `0x800<<p` absent; `FUN_0045fe62` crée l'entrée de genre 1 (île, site, 1, tâche, 0);
 `FUN_0045fd91` crée celle de genre 0 (REPAIR) sans contrôle de type. Le port n'a pas cette
