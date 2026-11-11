@@ -688,6 +688,9 @@ static void handle_click(HWND window, int x, int y)
             } else if (stock_control >= 0) {
                 (void)ISSUE_COMMAND(GAME_COMMAND_CYCLE_RESOURCE_STOCK, (uint8_t)hall_player,
                     (GameResourceType)stock_control);
+            } else if (center_on_info_location(window, x, y)) {
+                /* Remake: a left click on the building drawn in IWLocInfo
+                   centres the island view on it, on its own island. */
             } else {
                 /* FUN_00435581 has no explored-cell gate on the floater pass. */
                 int clicked_floater = g_game_session_valid

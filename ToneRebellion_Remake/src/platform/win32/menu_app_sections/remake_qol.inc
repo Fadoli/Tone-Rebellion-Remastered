@@ -596,6 +596,34 @@ static int alert_jump(HWND window)
     return 1;
 }
 
+/* Remake: a left click on IWLocInfo (the selected building, or the default
+   Hall) centres the island view on that site, opening its island first. The
+   original has no such click. */
+static int center_on_info_location(HWND window, int x, int y)
+{
+    const GameRuntimeIsland *island;
+    const WindowTemplate *info;
+    int location;
+    uint8_t island_index;
+    int site_x;
+    if (g_menu.screen != SCREEN_ISLAND ||
+        !island_panel_location_info_visible(g_island_panel_mode)) return 0;
+    info = window_catalog_find(&g_window_catalog, "IWLocInfo", 3);
+    if (info == NULL || x < info->pane.left || x > info->pane.right ||
+        y < info->pane.top || y > info->pane.bottom) return 0;
+    if (!effective_info_location(&island, &location, &island_index)) return 0;
+    site_x = (int)island->locations[location].x;
+    if ((int)island_index != g_menu.selected_map_island) {
+        int kept = g_selected_location;
+        if (!open_island_view(window, island_index)) return 0;
+        if (kept >= 0) select_location_on_view(kept);
+    }
+    g_scroll_animating = 0;
+    g_island_scroll_x = island_clamp_scroll(site_x - LOGICAL_WIDTH / 2);
+    g_hovered_location = -1;
+    return 1;
+}
+
 static void render_alerts(RenderSurface *surface)
 {
     uint32_t now = platform_ticks_ms();
