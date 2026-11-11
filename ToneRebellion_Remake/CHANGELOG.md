@@ -7,6 +7,7 @@ Player-facing changes of the Tone Rebellion remake, newest first. Each release i
 ### Fixed
 
 - A spell caster standing on another island than its target crosses the bridges first and casts on arrival, as in the original, instead of casting from afar; its spell is no longer dropped during the crossing.
+- Widescreen island: the view no longer slides past the island's edge (broken drawing) when the explored part is narrow or near an end.
 
 ## 0.1.3 - 2026-11-11
 

@@ -37,7 +37,10 @@ static int island_clamp_scroll(int scroll)
         int wide_lo = lo + side;
         int wide_hi = hi - side;
         if (wide_hi < wide_lo) wide_lo = wide_hi = (lo + hi) / 2;
+        /* The art bounds win over the explored ones: a narrow extent near
+           an end (or an island not explored yet) centres past them. */
         if (wide_lo < side) wide_lo = side;
+        if (wide_lo > 1920 - side) wide_lo = 1920 - side;
         if (wide_hi > 1920 - side) wide_hi = 1920 - side;
         if (wide_hi < wide_lo) wide_hi = wide_lo;
         lo = wide_lo;
