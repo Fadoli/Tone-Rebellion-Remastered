@@ -277,7 +277,7 @@ The Leviathan's buildings defend its islands. Damage per hit is 1 to strength �
 | Mesron | rod | Ethereal | 200 | 4 | 1–3 | 57 | 11 | ≈ 30 |
 | Sentinelle mécanique | rod | Ethereal | 175 | 5 | 1–4 | 61 | 20 | 40 |
 
-They fire at the floaters of **every** tribe on their island, yours and your rivals' alike (workers included), never at Leviathan creatures. Close-attack buildings and Mabus hit a random one of the first five floaters within 60 px; shooters and rods lock the first floater within their range and fire at it even if it moves away. A shooter's or rod's shot can miss when it lands; the target's own strength lowers the hit chance as for any attack.
+They fire at the floaters of **every** tribe on their island, yours and your rivals' alike (workers included), never at Leviathan creatures. Close-attack buildings and Mabus hit a random one of the first five floaters within 60 px; shooters and rods lock the first floater within their range and fire at it even if it moves away. Plasid and Mesron fire the very same bolt, but a Plasid bolt always deals exactly 1 damage while a Mesron bolt deals 1 to 3, enough to kill a fresh worker (3 HP) in one hit. A shooter's or rod's shot can miss when it lands; the target's own strength lowers the hit chance as for any attack.
 
 **Realm.** Each defence's attack has a realm (the Realm column, the colour of its impact), but the original game cancels it in the hit roll: the building attacks "in the target's own realm", so there is never a realm bonus or penalty against it. Your units' realms do not help or hurt against Leviathan buildings' shots.
 
