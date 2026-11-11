@@ -600,8 +600,16 @@ static void render_alerts(RenderSurface *surface)
 {
     uint32_t now = platform_ticks_ms();
     int y = 104;
+    int right = LOGICAL_WIDTH;
     unsigned n;
     if (g_options_open) return;
+    /* Widescreen island: against the frame's right edge, over the wider
+       view, rather than in the middle of the window. */
+    if (g_menu.screen == SCREEN_ISLAND && g_frame_surface != NULL &&
+        surface == &g_panel_surface && g_frame_surface->width > LOGICAL_WIDTH) {
+        surface = g_frame_surface;
+        right = g_frame_surface->width;
+    }
     for (n = 0; n < ALERT_SLOTS; ++n) {
         /* Newest first. */
         const RemakeAlert *alert =
@@ -613,9 +621,9 @@ static void render_alerts(RenderSurface *surface)
         (void)snprintf(line, sizeof(line), "%s%s", alert->text,
                        n == 0 && alert->island >= 0 ? TR(T_ALERT_GO_SUFFIX) : "");
         width = options_text_width(line);
-        fill_rect(surface, LOGICAL_WIDTH - width - 16, y - 3, LOGICAL_WIDTH - 4, y + 16,
+        fill_rect(surface, right - width - 16, y - 3, right - 4, y + 16,
                   RGB(24, 12, 20));
-        options_label(surface, line, LOGICAL_WIDTH - width - 10, y,
+        options_label(surface, line, right - width - 10, y,
                       alert->island >= 0 ? RGB(255, 200, 120) : RGB(200, 210, 255));
         y += 21;
     }

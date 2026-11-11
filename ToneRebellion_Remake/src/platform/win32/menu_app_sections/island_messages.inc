@@ -166,6 +166,11 @@ static void draw_island_message(RenderSurface *surface)
         --g_island_message_count;
     }
     if (g_island_message_count == 0) return;
+    /* Widescreen: at the frame's left edge, as the original line sits at
+       the view's, not inside the centred 640 picture. */
+    if (g_frame_surface != NULL && surface == &g_panel_surface &&
+        g_frame_surface->width > LOGICAL_WIDTH)
+        surface = g_frame_surface;
     head = &g_island_messages[0];
     level = 7;
     if (head->elapsed < 0x32) level = head->elapsed / 2;
@@ -189,7 +194,7 @@ static void draw_island_message(RenderSurface *surface)
                 uint8_t value = glyph_pixels[(size_t)row * glyph_width + col];
                 int px = x + (int)col;
                 uint32_t *pixel;
-                if (value == 0xffu || px < 0 || px >= LOGICAL_WIDTH) continue;
+                if (value == 0xffu || px < 0 || px >= surface->width) continue;
                 pixel = &surface->pixels[(ptrdiff_t)py * surface->stride + px];
                 *pixel = hazed_island_pixel(*pixel, value == 0u ? 0 : head->selector,
                                             level);
