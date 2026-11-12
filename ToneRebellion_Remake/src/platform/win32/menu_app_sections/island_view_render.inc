@@ -1391,6 +1391,15 @@ static void render_island_view(RenderSurface *surface)
             draw_sprite(surface, &g_tone_field_art, ISLAND_TONE_POOL_BASE_FRAME, x, y);
             draw_sprite(surface, &g_tone_field_art, frame, x, y);
             draw_island_worker_birth(surface, runtime_location, x, y);
+            /* FUN_0040bf98 ends every site, POOL included, with the flag
+               0x200 shimmer (FUN_00411478): Silent Shield and Pool Guardian
+               (spells 5 and 6, FUN_00453b09) protect a Tone pool with it.
+               The class-1 rectangle is x +-50, y +-20, as in
+               draw_runtime_item_scaled. */
+            if (runtime_location != NULL &&
+                (runtime_location->source_flags & 0x200U) != 0)
+                draw_site_shimmer(surface, x - 50, y - 20, x + 50, y + 20,
+                                  g_game_session.simulation_tick >> 1);
         }
         }
         /* FUN_0040bf98 draws an installed runtime item at this record. Such an
@@ -2002,9 +2011,12 @@ static void render_island_view(RenderSurface *surface)
                 draw_bitmap_label(surface, row, info->pane.left + 4, row_y,
                                   RGB(230, 238, 255));
                 row_y += 10;
-                (void)snprintf(row, sizeof(row), "%s %u",
+                /* FUN_0044338b draws FUN_0041fde6, the effective power
+                   (level, glyph, spell), not the raw strength column. */
+                (void)snprintf(row, sizeof(row), "%s %d",
                     g_unit_label_text[4],
-                    (unsigned int)selected_floater->attack_strength);
+                    (int)game_session_floater_power(&g_game_session,
+                                                    selected_floater));
                 draw_bitmap_label(surface, row, info->pane.left + 4, row_y,
                                   RGB(230, 238, 255));
             } else {
@@ -2036,8 +2048,9 @@ static void render_island_view(RenderSurface *surface)
                     (unsigned int)selected_floater->current_hit_points,
                     (unsigned int)selected_floater->max_hit_points);
                 (void)snprintf(strength_label, sizeof(strength_label),
-                    "%s %u", g_unit_label_text[4],
-                    (unsigned int)selected_floater->attack_strength);
+                    "%s %d", g_unit_label_text[4],
+                    (int)game_session_floater_power(&g_game_session,
+                                                    selected_floater));
                 draw_bitmap_label(surface, hit_points_label,
                                   info->pane.left + 5, info->pane.top + 23,
                                   RGB(230, 238, 255));
@@ -2246,9 +2259,10 @@ static void render_island_view(RenderSurface *surface)
             draw_bitmap_label(surface, row_label, info->pane.left + 5, row_y,
                               RGB(230, 238, 255));
             row_y += 10;
-            (void)snprintf(row_label, sizeof(row_label), "%s %u",
+            (void)snprintf(row_label, sizeof(row_label), "%s %d",
                 g_unit_label_text[4],
-                (unsigned int)selected_floater->attack_strength);
+                (int)game_session_floater_power(&g_game_session,
+                                                selected_floater));
             draw_bitmap_label(surface, row_label, info->pane.left + 5, row_y,
                               RGB(230, 238, 255));
             draw_island_leviathan_floater(surface, selected_floater,

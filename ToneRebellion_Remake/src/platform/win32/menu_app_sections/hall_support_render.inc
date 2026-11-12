@@ -22,7 +22,7 @@ static void draw_hall_info_panel(RenderSurface *surface, int panel_state)
         } else if (g_glyph_info_default) {
             text = g_glyph_info_text;
         }
-    } else if (panel_state == WINDOW_ISLAND_PANEL_GENERAL) {
+    } else if (island_panel_location_info_visible(panel_state)) {
         const int hall_player = selected_hall_player();
         if (hall_player >= 0 && g_hovered_hall_stock >= 0 &&
             g_hovered_hall_stock < GAME_RESOURCE_TYPE_COUNT) {

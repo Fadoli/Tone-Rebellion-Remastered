@@ -10,6 +10,9 @@ Player-facing changes of the Tone Rebellion remake, newest first. Each release i
 
 ### Fixed
 
+- The unit panel's "Puissance" row shows the unit's real strength, which grows by 2 per level (plus the school glyph and Courage of the Brave), as in the original. It showed the base value of the unit type, so a levelled-up unit looked unchanged.
+- Silent Shield and Pool Guardian show their shimmer over the protected Tone pool while they last; the protection worked but was invisible.
+- The Hall keeps showing its resources (and their hover text) in the building panel, e.g. after crossing a bridge with the Hall selected; they only showed in the general panel.
 - Reloading a network save: every tribe a player held in that game can be chosen again, even one that had not built anything yet. Before, the host could not start the reloaded game ("every player must choose a played tribe").
 - New Game screen: the centre art changes the difficulty within 100 pixels and the world size out to 200 pixels, as in the original; the clickable zones were only 10 and 14 pixels wide.
 - Widescreen: the start-up logo (The Logic Factory) is drawn centred instead of as a garbled, sheared image.

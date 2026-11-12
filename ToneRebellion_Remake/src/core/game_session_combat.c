@@ -216,6 +216,13 @@ static int32_t floater_attack_power(const GameSession *session,
     return power;
 }
 
+int32_t game_session_floater_power(const GameSession *session,
+                                   const GameFloaterStart *floater)
+{
+    if (floater == NULL) return 0;
+    return floater_attack_power(session, floater);
+}
+
 /* FUN_00420217 (assembly 0x4202a7..0x4203f5, ev_d4bb6e22): the hit chance is
    (int)(60 * score / 14) + 10 with __ftol (0x472c6c) truncating toward zero.
    score = attack + 7 - defense; the difficulty term is a double:

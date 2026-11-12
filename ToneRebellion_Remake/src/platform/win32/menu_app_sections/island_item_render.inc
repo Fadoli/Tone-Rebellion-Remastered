@@ -1065,8 +1065,11 @@ static void draw_hall_stock_summary(RenderSurface *surface, int hall_player,
     int hall_location;
     uint8_t hall_island_index;
 
+    /* FUN_00440567 is IWLocInfo's painter: it runs in panel mode 0 and in
+       the building mode 3 alike (FUN_0042f303 shows IWLocInfo in both), e.g.
+       after a bridge crossing keeps the Hall selected. */
     if (hall_player < 0 || selected_hall_player() != hall_player ||
-        g_island_panel_mode != WINDOW_ISLAND_PANEL_GENERAL ||
+        !island_panel_location_info_visible(g_island_panel_mode) ||
         !effective_info_location(&island, &hall_location,
                                  &hall_island_index)) return;
     info = window_catalog_find(&g_window_catalog, "IWLocInfo", 3);

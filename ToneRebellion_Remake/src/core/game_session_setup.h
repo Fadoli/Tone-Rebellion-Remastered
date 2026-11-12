@@ -17,6 +17,13 @@ int game_session_floater_charge_values(const GameFloaterStart *floater,
                                        const FloaterCatalog *catalog,
                                        int16_t *current, int16_t *maximum);
 
+/* FUN_0041fde6: the floater's effective power, the value FUN_0044338b shows
+   on the STRENGTH ("Puissance") row: the strength column while charged,
+   plus 2 per level (3 for Leviathans), the school glyph and the +3 of
+   Courage of the Brave (ev_6840e960, ev_347b34f6). */
+int32_t game_session_floater_power(const GameSession *session,
+                                   const GameFloaterStart *floater);
+
 /* FUN_004459e6 reads REPAIR's island at +0x0a and location at +0x0e;
    repair reads current +0x34 and FUN_00450978 max. */
 int game_session_repair_task_values(const GameSession *session,

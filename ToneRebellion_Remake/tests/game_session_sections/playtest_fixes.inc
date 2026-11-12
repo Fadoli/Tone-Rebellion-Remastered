@@ -481,8 +481,36 @@ static void test_shared_glyphs_pool_the_bonuses_of_the_sharing_tribes(void)
     assert(session.economy[0].glyph_mask == 0);
 }
 
+static void test_unit_panel_power_grows_with_the_level(void)
+{
+    /* Playtest 2026-11-12: "levelled-up units keep their level-1 stats".
+       FUN_0044338b shows FUN_0041fde6 on the STRENGTH row: a charged Train 1
+       unit of strength 5 shows 5 at level 1, 7 at level 2, 9 at level 3;
+       without charge only the level part remains. */
+    static GameSession session;
+    GameFloaterStart *unit;
+    memset(&session, 0, sizeof(session));
+    session.floater_count = 1;
+    unit = &session.floaters[0];
+    unit->is_active = 1;
+    unit->type_index = 0;
+    unit->owner_slot = 0;
+    unit->source_subtype = 1;
+    unit->source_link_0c = -1;
+    unit->attack_strength = 5;
+    unit->charge_current = 10;
+    assert(game_session_floater_power(&session, unit) == 5);
+    unit->attack_level_flags = 1;
+    assert(game_session_floater_power(&session, unit) == 7);
+    unit->attack_level_flags = 2;
+    assert(game_session_floater_power(&session, unit) == 9);
+    unit->charge_current = 0;
+    assert(game_session_floater_power(&session, unit) == 4);
+}
+
 static void run_playtest_fix_tests(void)
 {
+    test_unit_panel_power_grows_with_the_level();
     test_shared_glyphs_pool_the_bonuses_of_the_sharing_tribes();
     test_plasid_never_kills_a_fresh_worker_in_one_hit();
     test_wizard_does_not_attack_on_its_own();
