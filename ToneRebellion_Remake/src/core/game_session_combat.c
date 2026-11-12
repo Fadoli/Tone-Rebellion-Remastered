@@ -1694,15 +1694,20 @@ void game_session_tick_cast_effects(GameSession *session,
                     (unsigned int)cast_finish_pass_length(effect->step));
             break;
         case GAME_CAST_PHASE_DESTSUPP_TRAVEL:
-            /* FUN_0041760b case 0x10 (ev_9605cef5): an odd update with the
-               frame still at or below 4 only steps the frame; any other
-               update travels at the default SPEED 5 (the def has none). On
-               arrival the frame jumps to level 3's first (def +0x18 = 15),
-               frames 15..18 once, then the cast resolves. */
+            /* FUN_0041760b case 0x10 (ev_df9c9036): an odd update with the
+               frame still at or below 4 only steps the frame (frames 1..4,
+               zero-based 0..3 here); any other update travels at the default
+               SPEED 5 (the def has none) through FUN_0041521a (ev_37c4c47f),
+               which on odd updates steps the frame inside level 2 (5..14)
+               and wraps it back to 5. On arrival the frame jumps to level
+               3's first (def +0x18 = 15), frames 15..18 once, then the cast
+               resolves. */
             if (odd && effect->odd_updates_remaining < 4U) {
                 ++effect->odd_updates_remaining;
                 break;
             }
+            if (odd && ++effect->odd_updates_remaining > 13U)
+                effect->odd_updates_remaining = 4U;
             if (!cast_effect_target(session, effect, &target_x, &target_y) ||
                 cast_effect_travel(effect, target_x, target_y, 5))
                 cast_effect_enter_phase(effect, GAME_CAST_PHASE_FINISH, 4);

@@ -595,8 +595,54 @@ static void test_courage_boosts_the_targeted_school(void)
     assert((caster->source_runtime_flags & 0x2000U) == 0);
 }
 
+static void test_tone_pool_release_bolt_loops_level_two_in_flight(void)
+{
+    /* Playtest 2026-11-12: DESTSUPP plays frames 1..4 once, loops 5..14
+       while it flies (FUN_0041521a steps the level-2 frame on odd updates
+       and wraps it), then 15..18 on the pool (ev_df9c9036, ev_37c4c47f). */
+    static GameSession session;
+    PadCatalog pads;
+    uint32_t tick;
+    int visual;
+    unsigned int frame;
+    unsigned int seen_level_two = 0;
+    int wrapped = 0;
+    unsigned int previous = 0;
+    int finished = 0;
+
+    make_pad_catalog(&pads);
+    memset(&session, 0, sizeof(session));
+    session.island_count = 1;
+    session.islands[0].location_count = 1;
+    session.islands[0].locations[0].x = 900;
+    session.islands[0].locations[0].y = 200;
+    add_test_worker(&session, 0, 0, 100, 200, 0);
+    session.floaters[0].cast_spell_kind = 0x10;
+    assert(game_session_schedule_cast_effect_step(&session, 0, 0x10, 0));
+    for (tick = 1; tick < 600 && session.cast_effects[0].active; ++tick) {
+        game_session_tick_cast_effects(&session, tick, &pads);
+        if (!game_session_cast_effect_visual(&session, 0, &visual, &frame))
+            continue;
+        assert(visual == 8);
+        if (session.cast_effects[0].animation_phase ==
+            GAME_CAST_PHASE_DESTSUPP_TRAVEL) {
+            assert(frame <= 13U);
+            if (frame >= 4U) seen_level_two |= 1U << frame;
+            if (previous == 13U && frame == 4U) wrapped = 1;
+            previous = frame;
+        } else {
+            assert(frame >= 14U && frame <= 17U);
+            finished = 1;
+        }
+    }
+    assert(seen_level_two == 0x3ff0U);   /* every frame 5..14 */
+    assert(wrapped);
+    assert(finished);
+}
+
 static void run_playtest_fix_tests(void)
 {
+    test_tone_pool_release_bolt_loops_level_two_in_flight();
     test_courage_boosts_the_targeted_school();
     test_recharging_units_level_up_only_into_free_places();
     test_unit_panel_power_grows_with_the_level();
