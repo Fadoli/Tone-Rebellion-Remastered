@@ -508,8 +508,58 @@ static void test_unit_panel_power_grows_with_the_level(void)
     assert(game_session_floater_power(&session, unit) == 4);
 }
 
+static void test_recharging_units_level_up_only_into_free_places(void)
+{
+    /* Playtest 2026-11-12: three warriors could level up at once. A tier-1
+       Train 1 school keeps 2 units at level 2 (Niveau 2). Three level-1
+       units with enough experience come back together to recharge (flag
+       0x21, FUN_0045c797): the native 251 step raised all three; the remake
+       promotes two and only recharges the third. */
+    static GameSession session;
+    static FloaterCatalog floaters;
+    PadCatalog pads;
+    BuildingRenderCatalog buildings = {0};
+    GameRuntimeLocation *home;
+    unsigned int index;
+    unsigned int promoted = 0;
+
+    make_pad_catalog(&pads);
+    make_floater_catalog(&floaters);
+    floaters.rows[1].hit_points = 9;
+    floaters.rows[1].max_attack_points = 4;
+    memset(&session, 0, sizeof(session));
+    session.island_count = 1;
+    session.islands[0].location_count = 1;
+    home = school(&session, 0, 0, 600);
+    home->source_capacity_4a = 1;
+    home->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 50;
+    home->source_value_32 = 251;
+    for (index = 0; index < 3; ++index) {
+        GameFloaterStart *unit;
+        soldier(&session, index, 0, 600, 0);
+        unit = &session.floaters[index];
+        unit->attack_level_flags = 0;
+        unit->source_progress_08 = 100;
+        unit->charge_current = 0;
+        unit->source_runtime_flags |= 0x21U;
+        home->charge_floater_slots[index] = (int16_t)index;
+    }
+    home->charge_floater_count = 3;
+
+    game_session_tick_item_animations_with_floaters(&session, &buildings,
+                                                    &floaters, &pads);
+    for (index = 0; index < 3; ++index) {
+        const GameFloaterStart *unit = &session.floaters[index];
+        if ((unit->attack_level_flags & 0x0fU) == 1) ++promoted;
+        assert(unit->charge_current == 4);
+        assert((unit->source_runtime_flags & 0x20U) == 0);
+    }
+    assert(promoted == 2);
+}
+
 static void run_playtest_fix_tests(void)
 {
+    test_recharging_units_level_up_only_into_free_places();
     test_unit_panel_power_grows_with_the_level();
     test_shared_glyphs_pool_the_bonuses_of_the_sharing_tribes();
     test_plasid_never_kills_a_fresh_worker_in_one_hit();

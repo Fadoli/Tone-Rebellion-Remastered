@@ -1383,6 +1383,29 @@ static void apply_trained_floater_stats(GameSession *session,
     game_session_recalculate_floater_attack_points(session, floater);
 }
 
+/* FUN_0045cd75's level-up test for a trained floater of this school: below
+   level 2, the subtype's cap and the school tier, a free place at the next
+   level, and the experience threshold weighted by the difficulty. The
+   native test accepts a negative place count (`!= 0`); the remake asks for
+   a free place (> 0) so a school never holds more units of a level than its
+   tier allows. */
+static int staff_level_up_allowed(const GameFloaterStart *floater,
+                                  int32_t source_level,
+                                  const int16_t need_by_level[3],
+                                  int32_t difficulty)
+{
+    uint16_t level = (uint16_t)(floater->attack_level_flags & 0x0fU);
+    int32_t threshold;
+    if (floater->source_subtype == 0 || floater->source_subtype > 8 ||
+        level >= 2U || level >= source_staff_level_caps[floater->source_subtype] ||
+        level >= (uint16_t)source_level || need_by_level[level + 1U] <= 0)
+        return 0;
+    threshold = ((4 - difficulty) *
+        source_staff_threshold_low[floater->source_subtype][level] +
+        difficulty * source_staff_threshold_high[floater->source_subtype][level]) / 4;
+    return threshold > 0 && threshold <= (int16_t)floater->source_progress_08;
+}
+
 static void tick_source_staff_cycle(GameSession *session,
                                     GameRuntimeLocation *source,
                                     const FloaterCatalog *floater_catalog,
@@ -1439,31 +1462,19 @@ static void tick_source_staff_cycle(GameSession *session,
         uint16_t progress;
         uint16_t increment;
         uint16_t level;
+        int promoted;
 
         if (index < 0 || (unsigned int)index >= session->floater_count) continue;
         floater = &session->floaters[(unsigned int)index];
         if ((floater->source_runtime_flags & 0x20U) == 0) {
-            int32_t threshold;
-            int32_t weighted_threshold;
-
             if (floater->source_subtype == 2U &&
                 (source->source_flags & 1U) != 0)
                 source->source_flags |= 0x008U;
 
-            level = (uint16_t)(floater->attack_level_flags & 0x0fU);
             if (source->charge_recent_floater != -1 ||
-                source->charge_staff_task_handle != -1 ||
-                level >= 2U || level >= source_staff_level_caps[
-                    floater->source_subtype <= 8 ? floater->source_subtype : 0] ||
-                level >= (uint16_t)source_level || need_by_level[level + 1U] == 0 ||
-                !stock_available || floater->source_subtype > 8) continue;
-
-            weighted_threshold = (4 - difficulty) *
-                source_staff_threshold_low[floater->source_subtype][level] +
-                difficulty * source_staff_threshold_high[floater->source_subtype][level];
-            threshold = weighted_threshold / 4;
-            if (threshold <= 0 ||
-                threshold > (int16_t)floater->source_progress_08) continue;
+                source->charge_staff_task_handle != -1 || !stock_available ||
+                !staff_level_up_allowed(floater, source_level, need_by_level,
+                                        difficulty)) continue;
             source->charge_recent_floater = index;
             continue;
         }
@@ -1487,9 +1498,20 @@ static void tick_source_staff_cycle(GameSession *session,
 
         /* At 251, FUN_0045cd75 trains subtype 0 to the source class, then
            advances an already trained floater's low-nibble level. */
+        promoted = 1;
         if (floater->source_subtype == 0) {
             floater->source_subtype = (uint8_t)(base_item_id - 0x2b);
             floater->attack_level_flags &= 0xfff0U;
+        } else if (index != source->charge_recent_floater &&
+                   !staff_level_up_allowed(floater, source_level,
+                                           need_by_level, difficulty)) {
+            /* Remake: FUN_0045c797 flags a unit that only came back to
+               recharge (state 12) like a trainee, and the native 251 step
+               then raises the level of every flagged unit, with no
+               experience or place test (ev_c008f1e1, ev_2fcabb95). Such a
+               unit is only recharged and healed here unless it could have
+               been picked as the school's level-up candidate. */
+            promoted = 0;
         } else {
             level = (uint16_t)(floater->attack_level_flags & 0x0fU);
             if (level < 5U) ++level;
@@ -1513,8 +1535,13 @@ static void tick_source_staff_cycle(GameSession *session,
             apply_trained_floater_stats(session, floater_catalog, floater,
                                         stats);
             level = (uint16_t)(floater->attack_level_flags & 0x0fU);
-            if (level > 0 && level <= 3U)
+            if (promoted && level > 0 && level <= 3U) {
                 --need_by_level[level - 1U];
+                /* Remake: the promoted unit also takes its place at its new
+                   level, so a second unit finishing on the same tick cannot
+                   claim the same free place (staff_level_up_allowed). */
+                if (level < 3U) --need_by_level[level];
+            }
         }
         /* FUN_0045c82f clears the current worker, then FUN_00421ec1(-1)
            ends its active source action (releasing its task claim) and

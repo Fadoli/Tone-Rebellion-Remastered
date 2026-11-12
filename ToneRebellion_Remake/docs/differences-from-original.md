@@ -57,6 +57,7 @@ This page lists every behaviour of the remake that knowingly differs from `FLOAT
 | Building move | The source site is cleared 8 to 16 ticks after the placement (`FUN_00450a71`). | Cleared at once: the delay would show two Halls to the Hall search. |
 | CONSTR action | Workers carry action 5 (`FA_Build`). | Action 4, with no observed effect. |
 | Birth site | Picked on events and kept between them (`FUN_0045e6d3`). | Searched again every tick; same result while the markers do not change. |
+| Level-up at the school | `FUN_0045c797` flags a unit that only came back to recharge like a trainee, and `FUN_0045cd75` then raises the level of every flagged unit at progress 251, with no experience or free-place test (`ev_c008f1e1`, `ev_2fcabb95`): several units could level up at once, beyond the school tier's places. | A unit coming back to recharge levels up only if it meets the candidate test (experience, tier, a free place at the next level); otherwise it is recharged and healed. A promotion takes its place at once, so two units finishing together cannot share the last place. |
 
 ## Platforms
 
