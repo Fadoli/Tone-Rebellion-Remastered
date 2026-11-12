@@ -152,7 +152,10 @@ int game_session_cast_effect_visual(const GameSession *session,
         }
         break;
     case GAME_CAST_PHASE_DESTSUPP_TRAVEL:
-        id = 8; count = 4; loop = 1;
+        /* FUN_0041760b case 0x10 (ev_9605cef5): frames 1..4 once, one per
+           odd update, then the frame stays on 5 (level 2's first) while the
+           bolt travels; no wrap. */
+        id = 8; count = 5;
         break;
     case GAME_CAST_PHASE_FINISH:
         switch (effect->step) {

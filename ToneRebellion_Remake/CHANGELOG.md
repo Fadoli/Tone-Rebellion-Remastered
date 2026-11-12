@@ -10,6 +10,8 @@ Player-facing changes of the Tone Rebellion remake, newest first. Each release i
 
 ### Fixed
 
+- Courage of the Brave, Realm Shift, Spiritual Awakening, Endurance and Dojo Healing act on the school you target, as in the original, instead of the wizard's own school.
+- Tone Pool Release animates as in the original: its bolt plays its opening frames once and then flies, instead of looping them all the way, then bursts on the pool.
 - Units coming back to their school to recharge no longer all level up at once: a unit levels up only with enough experience and a free place at the next level for the school's tier; otherwise it is just recharged and healed. The original promoted every unit recharging at that moment.
 - Pointing at a spell button of a wizard school shows the spell's cost left of the spell grid, as two Tone piles (Magic above, Crystal below) that grow with the cost, as in the original; the Magic pile includes glyph Lod's discount.
 - The unit panel's "Puissance" row shows the unit's real strength, which grows by 2 per level (plus the school glyph and Courage of the Brave), as in the original. It showed the base value of the unit type, so a levelled-up unit looked unchanged.

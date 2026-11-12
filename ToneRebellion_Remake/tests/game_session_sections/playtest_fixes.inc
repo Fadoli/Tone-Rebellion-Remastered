@@ -557,8 +557,47 @@ static void test_recharging_units_level_up_only_into_free_places(void)
     assert(promoted == 2);
 }
 
+static void test_courage_boosts_the_targeted_school(void)
+{
+    /* Playtest 2026-11-12: Courage of the Brave (kind 0xc) boosted the
+       caster's own school. FUN_004239e9 flags the TARGET site (caster +0x32)
+       with 0x8000 and pulses its linked floaters (ev_66861927, ev_5b35a523). */
+    static GameSession session;
+    PadCatalog pads;
+    GameRuntimeLocation *wizard_school;
+    GameRuntimeLocation *warrior_school;
+    GameFloaterStart *caster;
+    GameFloaterStart *warrior;
+
+    make_pad_catalog(&pads);
+    memset(&session, 0, sizeof(session));
+    session.island_count = 1;
+    session.islands[0].location_count = 2;
+    wizard_school = school(&session, 0, 0, 300);
+    wizard_school->record_value_10 = 0x2f;
+    warrior_school = school(&session, 1, 0, 700);
+    warrior_school->source_location_slot_18 = 1;
+    soldier(&session, 0, 0, 300, 0);           /* the wizard */
+    caster = &session.floaters[0];
+    caster->source_subtype = 4;
+    caster->cast_spell_kind = 0x0c;
+    caster->active_order_action = 0x13;
+    wizard_school->charge_floater_slots[0] = 0;
+    soldier(&session, 1, 0, 700, 1);           /* a warrior of the target */
+    warrior = &session.floaters[1];
+    warrior->source_link_0c = 1;
+    warrior_school->charge_floater_slots[0] = 1;
+
+    assert(game_session_resolve_cast_effect_step(&session, &pads, 0, 0x0c, 1) != 0);
+    assert((warrior_school->source_flags & 0x8000U) != 0);
+    assert((wizard_school->source_flags & 0x8000U) == 0);
+    assert((warrior->source_runtime_flags & 0x2000U) != 0);
+    assert((caster->source_runtime_flags & 0x2000U) == 0);
+}
+
 static void run_playtest_fix_tests(void)
 {
+    test_courage_boosts_the_targeted_school();
     test_recharging_units_level_up_only_into_free_places();
     test_unit_panel_power_grows_with_the_level();
     test_shared_glyphs_pool_the_bonuses_of_the_sharing_tribes();

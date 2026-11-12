@@ -878,24 +878,27 @@ static unsigned int game_session_apply_cast_area_damage(
     return affected;
 }
 
-static GameRuntimeLocation *game_session_cast_source_site(
-    GameSession *session, const GameFloaterStart *caster)
+/* FUN_004239e9 (assembly at its jump table 0x425028, ev_66861927): the
+   school spells act on the TARGET site S = island(caster +0x0e) site
+   (caster +0x32), the building the player clicked, and on its staff record
+   P = FUN_00450385(S) (S +0x18 != -1), never on the caster's own school.
+   Kinds 0xc/0xd/0x13 flag S; kinds 0, 0xb, 0xf and the pulse act on the
+   floaters linked to it (ev_5b35a523). Returns NULL without such a site. */
+static GameRuntimeLocation *game_session_cast_target_school(
+    GameSession *session, const GameFloaterStart *caster,
+    int16_t target_location_index)
 {
-    GameRuntimeLocation *source;
-
+    GameRuntimeLocation *site;
     if (session == NULL || caster == NULL ||
-        caster->owner_slot >= GAME_START_PLAYER_COUNT ||
-        caster->source_link_0c < 0 ||
-        caster->charge_source_island >= session->island_count ||
-        caster->charge_source_location >=
-            session->islands[caster->charge_source_island].location_count)
+        caster->island_index >= session->island_count ||
+        target_location_index < 0 ||
+        (uint16_t)target_location_index >=
+            session->islands[caster->island_index].location_count) return NULL;
+    site = &session->islands[caster->island_index]
+                .locations[(uint16_t)target_location_index];
+    if (site->renderer_class != 0 || site->source_location_slot_18 < 0)
         return NULL;
-    source = &session->islands[caster->charge_source_island].locations[
-        caster->charge_source_location];
-    if (source->owner_id != caster->owner_slot ||
-        source->source_location_slot_18 != caster->source_link_0c)
-        return NULL;
-    return source;
+    return site;
 }
 
 static unsigned int game_session_pulse_cast_source_floaters(
@@ -967,20 +970,11 @@ unsigned int game_session_resolve_cast_effect_step(
 
         if (caster->cast_spell_kind != 0) return 0;
         caster->source_runtime_flags |= 0x200U;
-        if (caster->owner_slot >= GAME_START_PLAYER_COUNT ||
-            caster->source_link_0c < 0 ||
-            caster->charge_source_island >= session->island_count ||
-            caster->charge_source_location >=
-                session->islands[caster->charge_source_island].location_count)
-            return 1;
+        source = game_session_cast_target_school(session, caster,
+                                                 target_location_index);
+        if (source == NULL) return 1;
 
-        source = &session->islands[caster->charge_source_island]
-            .locations[caster->charge_source_location];
-        if (source->owner_id != (int32_t)caster->owner_slot ||
-            source->source_location_slot_18 != caster->source_link_0c)
-            return 1;
-
-        /* FUN_004239e9 case 0 follows the caster's +0x18 source record and
+        /* FUN_004239e9 case 0 follows the target site's +0x18 record and
            heals each linked floater by (level + 2) / 4 of its maximum HP. */
         for (slot = 0; slot < 8; ++slot) {
             int16_t target_index = source->charge_floater_slots[slot];
@@ -1250,7 +1244,8 @@ unsigned int game_session_resolve_cast_effect_step(
 
         if (caster->cast_spell_kind != step) return 0;
         caster->source_runtime_flags |= 0x200U;
-        source = game_session_cast_source_site(session, caster);
+        source = game_session_cast_target_school(session, caster,
+                                                 target_location_index);
         if (source == NULL) return 0;
         level = caster->attack_level_flags & 0x000fU;
         /* FUN_00453b38/00453b76 set distinct timed source flags; both then
@@ -1293,7 +1288,8 @@ unsigned int game_session_resolve_cast_effect_step(
 
         if (caster->cast_spell_kind != 0x0f) return 0;
         caster->source_runtime_flags |= 0x200U;
-        source = game_session_cast_source_site(session, caster);
+        source = game_session_cast_target_school(session, caster,
+                                                 target_location_index);
         if (source == NULL) return 0;
         multiplier = (int32_t)(caster->attack_level_flags & 0x000fU) + 3;
         /* FUN_004239e9 case 0xf multiplies each linked floater's +0x2a,
@@ -1353,7 +1349,8 @@ unsigned int game_session_resolve_cast_effect_step(
 
         if (caster->cast_spell_kind != 0x0b) return 0;
         caster->source_runtime_flags |= 0x200U;
-        source = game_session_cast_source_site(session, caster);
+        source = game_session_cast_target_school(session, caster,
+                                                 target_location_index);
         if (source == NULL) return 0;
         multiplier = (uint32_t)(caster->attack_level_flags & 0x000fU) + 1U;
         /* FUN_004239e9 case 0xb multiplies each linked floater's charge by
@@ -1697,8 +1694,15 @@ void game_session_tick_cast_effects(GameSession *session,
                     (unsigned int)cast_finish_pass_length(effect->step));
             break;
         case GAME_CAST_PHASE_DESTSUPP_TRAVEL:
-            /* Frames 0..3 loop at the default SPEED 5; arrival switches to
-               frames 14..17, a four-update pass. */
+            /* FUN_0041760b case 0x10 (ev_9605cef5): an odd update with the
+               frame still at or below 4 only steps the frame; any other
+               update travels at the default SPEED 5 (the def has none). On
+               arrival the frame jumps to level 3's first (def +0x18 = 15),
+               frames 15..18 once, then the cast resolves. */
+            if (odd && effect->odd_updates_remaining < 4U) {
+                ++effect->odd_updates_remaining;
+                break;
+            }
             if (!cast_effect_target(session, effect, &target_x, &target_y) ||
                 cast_effect_travel(effect, target_x, target_y, 5))
                 cast_effect_enter_phase(effect, GAME_CAST_PHASE_FINISH, 4);
