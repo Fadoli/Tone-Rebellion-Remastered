@@ -10,6 +10,7 @@ Player-facing changes of the Tone Rebellion remake, newest first. Each release i
 
 ### Fixed
 
+- Pointing at a spell button of a wizard school shows the spell's cost left of the spell grid, as two Tone piles (Magic above, Crystal below) that grow with the cost, as in the original; the Magic pile includes glyph Lod's discount.
 - The unit panel's "Puissance" row shows the unit's real strength, which grows by 2 per level (plus the school glyph and Courage of the Brave), as in the original. It showed the base value of the unit type, so a levelled-up unit looked unchanged.
 - Silent Shield and Pool Guardian show their shimmer over the protected Tone pool while they last; the protection worked but was invisible.
 - The Hall keeps showing its resources (and their hover text) in the building panel, e.g. after crossing a bridge with the Hall selected; they only showed in the general panel.

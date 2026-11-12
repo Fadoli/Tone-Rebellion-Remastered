@@ -968,13 +968,11 @@ static void draw_spell_cost_bars(RenderSurface *surface, const WindowTemplate *i
     int owner = location->owner_id;
     int magic;
 
-    if (g_hovered_spell_kind < 0 ||
-        !game_session_cast_kind_costs(g_hovered_spell_kind, &magic_cost,
-                                      &crystal_cost)) return;
+    if (g_hovered_spell_kind < 0 || owner < 0 ||
+        !game_session_spell_costs(&g_game_session, (uint8_t)owner,
+                                  g_hovered_spell_kind, &magic_cost,
+                                  &crystal_cost)) return;
     magic = magic_cost;
-    if (owner >= 0 && owner < GAME_START_PLAYER_COUNT &&
-        (g_game_session.economy[owner].special_feature_island_mask & 0x100U))
-        magic = magic * 2 / 3;
     draw_spell_cost_bar(surface, info->pane.left + 15, info->pane.top + 20,
         crystal_cost, capacity,
         (int)crystal_cost > (int)location->resource_stock[1] ? 2 : 4);

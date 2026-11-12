@@ -280,6 +280,12 @@ int game_session_spell_has_caster(const GameSession *session,
                                   uint8_t player_slot, unsigned int kind);
 int game_session_cast_kind_costs(int kind, uint16_t *magic_cost,
                                  uint16_t *crystal_cost);
+/* The costs player_slot pays for spell `kind`: FUN_0045d9c1 takes a third
+   off the magic with glyph Lod (bit 8, shared glyphs included); crystal is
+   never discounted. */
+int game_session_spell_costs(const GameSession *session, uint8_t player_slot,
+                             int kind, uint16_t *magic_cost,
+                             uint16_t *crystal_cost);
 unsigned int game_session_dispatch_cast_actions(GameSession *session);
 /* BC_OnOff's established message route. */
 int game_session_queue_onoff_action(GameSession *session,

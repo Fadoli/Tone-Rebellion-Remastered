@@ -667,6 +667,17 @@ int game_session_cast_kind_costs(int kind, uint16_t *magic_cost,
     return 1;
 }
 
+int game_session_spell_costs(const GameSession *session, uint8_t player_slot,
+                             int kind, uint16_t *magic_cost,
+                             uint16_t *crystal_cost)
+{
+    if (!game_session_cast_kind_costs(kind, magic_cost, crystal_cost)) return 0;
+    if (session != NULL && player_slot < GAME_START_PLAYER_COUNT &&
+        (game_session_glyph_effect_mask(session, player_slot) & 0x0100U) != 0)
+        *magic_cost = (uint16_t)((*magic_cost * 2U) / 3U);
+    return 1;
+}
+
 int game_session_queue_cast_action(GameSession *session,
                                    uint8_t player_slot,
                                    uint8_t island_index,

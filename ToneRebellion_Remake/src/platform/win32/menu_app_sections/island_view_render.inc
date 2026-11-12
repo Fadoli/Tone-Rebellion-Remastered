@@ -2836,6 +2836,33 @@ static void draw_location_action_panel(RenderSurface *surface)
                 g_hovered_spell_kind == kind ||
                 g_armed_spell_action == (int)(0x15U + spell_index));
         }
+        /* FUN_0043fced (IWLocControl paint, ev_7b0f7fe9 / ev_b95d6cb7): with
+           a BC_Spell button under the pointer on an item 0x2f/0x30 school,
+           the spell's cost as two Tone piles left of the grid: MAGCTONE
+           frame magic - 1 at (W / 4 - 5, 26), TONECRYS frame crystal - 1 at
+           (W / 4 - 5, 55), both clamped to 0..49; the magic is the discounted
+           FUN_0045d9c1 value. */
+        if (spell_hall != NULL && g_hovered_spell_kind >= 0) {
+            const WindowTemplate *control_pane = window_catalog_find(
+                &g_window_catalog, "IWLocControl", 3);
+            uint16_t magic_cost;
+            uint16_t crystal_cost;
+            if (control_pane != NULL &&
+                game_session_spell_costs(&g_game_session,
+                    (uint8_t)spell_hall->source_value_14, g_hovered_spell_kind,
+                    &magic_cost, &crystal_cost)) {
+                int gauge_x = control_pane->pane.left +
+                    (control_pane->pane.right - control_pane->pane.left) / 4 - 5;
+                int magic_frame = magic_cost < 1 ? 0 : magic_cost > 50 ? 49 : magic_cost - 1;
+                int crystal_frame = crystal_cost < 1 ? 0 : crystal_cost > 50 ? 49 : crystal_cost - 1;
+                if ((uint32_t)magic_frame < g_magctone_art.frame_count)
+                    draw_sprite(surface, &g_magctone_art, (uint32_t)magic_frame,
+                                gauge_x, control_pane->pane.top + 26);
+                if ((uint32_t)crystal_frame < g_tone_crys_art.frame_count)
+                    draw_sprite(surface, &g_tone_crys_art, (uint32_t)crystal_frame,
+                                gauge_x, control_pane->pane.top + 55);
+            }
+        }
     }
     if (defend_area_button_visible() && ensure_trainb_art()) {
         unsigned int index;
