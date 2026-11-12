@@ -10,12 +10,19 @@ Player-facing changes of the Tone Rebellion remake, newest first. Each release i
 
 ### Fixed
 
+- Spells checked one by one against the original:
+  - Paralysis of the parasite spores spreads around the wizard, not around the clicked site.
+  - Repair cast on open ground heals up to 2 + 2 x level of your damaged workers.
+  - Spiritual Awakening raises the school's units' hit points (up to twice their maximum); it raised their charge.
+  - Building Enchantment, Silent Shield, Pool Guardian, Courage of the Brave, Realm Shift and Ethnic Memory are refused, with nothing spent, on a site that is already under such a spell or of the wrong kind (Silent Shield: an empty pad; Pool Guardian: a Tone pool).
+  - Sacrifice and Qi Burst protect their wizard from the moment they are cast.
+  - Stellar Disc cast on a site it cannot affect plays and ends normally instead of keeping the wizard busy for 20 seconds.
 - Courage of the Brave, Realm Shift, Spiritual Awakening, Endurance and Dojo Healing act on the school you target, as in the original, instead of the wizard's own school.
 - Tone Pool Release animates as in the original: its opening frames play once, its flight loops its own animation (frames 5 to 14, never shown before), then it bursts on the pool. It used to loop the opening frames all the way.
 - Units coming back to their school to recharge no longer all level up at once: a unit levels up only with enough experience and a free place at the next level for the school's tier; otherwise it is just recharged and healed. The original promoted every unit recharging at that moment.
 - Pointing at a spell button of a wizard school shows the spell's cost left of the spell grid, as two Tone piles (Magic above, Crystal below) that grow with the cost, as in the original; the Magic pile includes glyph Lod's discount.
 - The unit panel's "Puissance" row shows the unit's real strength, which grows by 2 per level (plus the school glyph and Courage of the Brave), as in the original. It showed the base value of the unit type, so a levelled-up unit looked unchanged.
-- Silent Shield and Pool Guardian show their shimmer over the protected Tone pool while they last; the protection worked but was invisible.
+- Silent Shield (on an empty building pad) and Pool Guardian (on a Tone pool) show their shimmer over the protected site while they last; the protection worked but was invisible.
 - The Hall keeps showing its resources (and their hover text) in the building panel, e.g. after crossing a bridge with the Hall selected; they only showed in the general panel.
 - Reloading a network save: every tribe a player held in that game can be chosen again, even one that had not built anything yet. Before, the host could not start the reloaded game ("every player must choose a played tribe").
 - New Game screen: the centre art changes the difficulty within 100 pixels and the world size out to 200 pixels, as in the original; the clickable zones were only 10 and 14 pixels wide.

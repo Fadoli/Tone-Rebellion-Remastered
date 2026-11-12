@@ -206,9 +206,9 @@ Each tribe's wizard knows eight spells. A level-2 spell needs a level-2 wizard (
 | Spell | Level | Magic | Crystal | Tark | Zygon | Céphéen | Dyla | Effect |
 |---|---|---|---|---|---|---|---|---|
 | Guérison du Dojo (Dojo Healing) | 1 | 9 | 7 | | ✓ | | ✓ | heals the floaters of a school |
-| Paralysie des germes parasites (Spore Paralysis) | 1 | 16 | 11 | | ✓ | ✓ | | stuns Leviathan spores in an area |
+| Paralysie des germes parasites (Spore Paralysis) | 1 | 16 | 11 | | ✓ | ✓ | | stuns Leviathan spores around the wizard |
 | Guérison (Healing) | 1 | 12 | 9 | | | | ✓ | heals your most wounded workers |
-| Réparation (Repair) | 1 | 9 | 12 | | | | ✓ | restores a building to full HP |
+| Réparation (Repair) | 1 | 9 | 12 | | | | ✓ | restores a building to full HP; cast on open ground, heals up to 2 + 2 × level of your workers |
 | Enchantement de bâtiment (Building Enchantment) | 1 | 10 | 9 | ✓ | | ✓ | | a wall of Tone shields a building from all damage |
 | Bouclier silencieux (Silent Shield) | 1 | 12 | 7 | | | ✓ | | protects a Tone nodule from contamination |
 | Gardien du bassin (Pool Guardian) | 1 | 14 | 10 | | | | ✓ | protects a Tone pool from contamination |
@@ -216,7 +216,7 @@ Each tribe's wizard knows eight spells. A level-2 spell needs a level-2 wizard (
 | Saisie à distance (Remote Grab) | 1 | 9 | 14 | | ✓ | | | fetches an artefact from any visible area |
 | Disque stellaire (Stellar Disc) | 1 | 11 | 13 | ✓ | | | | destroys a building or a spore (not a spawning pond) |
 | Pluie de météores (Meteor Shower) | 1 | 7 | 13 | ✓ | | | | rocks that destroy Leviathan creatures |
-| Réveil spirituel (Spiritual Awakening) | 2 | 33 | 13 | ✓ | | | ✓ | a school's floaters withstand attacks better |
+| Réveil spirituel (Spiritual Awakening) | 2 | 33 | 13 | ✓ | | | ✓ | multiplies a school's floaters' hit points by level + 1 (up to twice their maximum) |
 | Courage des braves (Courage of the Brave) | 2 | 28 | 17 | ✓ | | ✓ | | a school's floaters gain strength and skill |
 | Changement de royaume (Realm Shift) | 2 | 34 | 12 | | ✓ | | ✓ | moves a school's floaters to the next realm |
 | Enchantement de tribu (Tribe Enchantment) | 2 | 36 | 17 | ✓ | ✓ | | | makes your workers invulnerable |

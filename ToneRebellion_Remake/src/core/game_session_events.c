@@ -839,6 +839,32 @@ unsigned int game_session_dispatch_cast_actions(GameSession *session)
              0x0100U) != 0)
             magic_cost = (magic_cost * 2U) / 3U;
 
+        /* FUN_0045da80 (ev_d00b4069) refuses these before choosing a caster
+           or spending anything: kinds 4, 0xc, 0xd and 0x13 need a target
+           site whose effect timer (+0x38) has run out; kind 5 (Silent
+           Shield) an empty class-0 pad, kind 6 (Pool Guardian) an empty
+           Tone pool (class 1, item 0). The native test also limits the
+           site index to 1..14 of the island; the remake takes any site. */
+        if (kind == 4 || kind == 5 || kind == 6 || kind == 0x0c ||
+            kind == 0x0d || kind == 0x13) {
+            uint8_t site_island = request.target_island < session->island_count
+                ? request.target_island : request.island_index;
+            const GameRuntimeLocation *site;
+            if (request.target_location < 0 ||
+                (uint16_t)request.target_location >=
+                    session->islands[site_island].location_count) continue;
+            site = &session->islands[site_island]
+                        .locations[(uint16_t)request.target_location];
+            if (kind == 5 &&
+                (site->renderer_class != 0 || site->record_value_10 != 0))
+                continue;
+            if (kind == 6 &&
+                (site->renderer_class != 1 || site->record_value_10 != 0))
+                continue;
+            if (kind != 5 && kind != 6 && site->source_effect_timer_38 > 0U)
+                continue;
+        }
+
         caster = find_spell_caster(session, building, request.player_slot,
                                    kind);
         if (caster == NULL) continue;
@@ -881,6 +907,13 @@ unsigned int game_session_dispatch_cast_actions(GameSession *session)
             caster->order_progress = 0;
             caster->has_wander_order = 1;
             continue;
+        }
+        /* FUN_0045da80: Sacrifice and Qi Burst protect their caster from
+           the start (flag 0x100, +0x24 = -4000, so the shared counter runs
+           6000 updates); case 7/0x12 clear it when they resolve. */
+        if (kind == 7 || kind == 0x12) {
+            caster->source_runtime_flags |= 0x100U;
+            caster->source_death_timer = (uint16_t)(int16_t)-4000;
         }
         building->resource_stock[GAME_RESOURCE_MAGIC_TONE] = (uint16_t)(
             building->resource_stock[GAME_RESOURCE_MAGIC_TONE] - magic_cost);

@@ -640,8 +640,119 @@ static void test_tone_pool_release_bolt_loops_level_two_in_flight(void)
     assert(finished);
 }
 
+/* Spell audit 2026-11-13: a wizard school of `owner` with one linked level-0
+   wizard (floater 0) and full pools, at site 0; other sites are free. */
+static GameRuntimeLocation *spell_audit_school(GameSession *session,
+                                               int32_t owner)
+{
+    GameRuntimeLocation *home;
+    memset(session, 0, sizeof(*session));
+    session->island_count = 1;
+    session->islands[0].location_count = 4;
+    home = school(session, 0, owner, 300);
+    home->record_value_10 = 0x2f + owner * 16;
+    home->resource_stock[GAME_RESOURCE_MAGIC_TONE] = 200;
+    home->resource_stock[GAME_RESOURCE_CRYSTAL_TONE] = 200;
+    soldier(session, 0, (uint8_t)owner, 300, 0);
+    session->floaters[0].source_subtype = 4;
+    session->floaters[0].attack_level_flags = 0;
+    home->charge_floater_slots[0] = 0;
+    home->charge_floater_count = 1;
+    return home;
+}
+
+static void test_spell_pre_checks_spend_nothing_on_a_wrong_target(void)
+{
+    /* FUN_0045da80 (ev_d00b4069): Silent Shield (kind 5, Cephean button 3)
+       needs an empty class-0 pad; anything else is refused before the
+       caster is chosen and before the pools are spent. */
+    static GameSession session;
+    GameRuntimeLocation *home = spell_audit_school(&session, 2);
+    GameRuntimeLocation *built = &session.islands[0].locations[1];
+    GameRuntimeLocation *empty = &session.islands[0].locations[2];
+    built->renderer_class = 0;
+    built->record_value_10 = 0x25;
+    empty->renderer_class = 0;
+    empty->record_value_10 = 0;
+    assert(game_session_queue_cast_action_at(&session, 2, 0, 0, 0x17, 0, 1, -1));
+    assert(game_session_dispatch_cast_actions(&session) == 0);
+    assert(home->resource_stock[GAME_RESOURCE_MAGIC_TONE] == 200);
+    assert(session.floaters[0].active_order_action != 0x13);
+    assert(game_session_queue_cast_action_at(&session, 2, 0, 0, 0x17, 0, 2, -1));
+    assert(game_session_dispatch_cast_actions(&session) == 1);
+    assert(home->resource_stock[GAME_RESOURCE_MAGIC_TONE] == 200 - 12);
+    assert(session.floaters[0].cast_spell_kind == 5);
+}
+
+static void test_sacrifice_protects_its_caster_from_the_start(void)
+{
+    /* FUN_0045da80: kinds 7 and 0x12 set flag 0x100 and +0x24 = -4000. */
+    static GameSession session;
+    GameFloaterStart *caster;
+    (void)spell_audit_school(&session, 0);
+    assert(game_session_queue_cast_action_at(&session, 0, 0, 0, 0x16, 0, 1, -1));
+    assert(game_session_dispatch_cast_actions(&session) == 1);
+    caster = &session.floaters[0];
+    assert(caster->cast_spell_kind == 7);
+    assert((caster->source_runtime_flags & 0x100U) != 0);
+    assert((int16_t)caster->source_death_timer == -4000);
+}
+
+static void test_spiritual_awakening_raises_hit_points(void)
+{
+    /* FUN_004239e9 case 0xb multiplies the linked units' hit points (+0x20)
+       by level + 1, capped at twice their maximum; the charge is untouched. */
+    static GameSession session;
+    GameRuntimeLocation *target;
+    GameFloaterStart *warrior;
+    (void)spell_audit_school(&session, 0);
+    session.floaters[0].cast_spell_kind = 0x0b;
+    session.floaters[0].attack_level_flags = 1;
+    target = school(&session, 1, 0, 600);
+    target->source_location_slot_18 = 1;
+    soldier(&session, 1, 0, 600, 1);
+    warrior = &session.floaters[1];
+    warrior->current_hit_points = 25;
+    warrior->max_hit_points = 30;
+    warrior->charge_current = 7;
+    target->charge_floater_slots[0] = 1;
+    assert(game_session_resolve_cast_effect_step(&session, NULL, 0, 0x0b, 1) != 0);
+    assert(warrior->current_hit_points == 50);
+    assert(warrior->charge_current == 7);
+    warrior->current_hit_points = 40;
+    session.floaters[0].source_runtime_flags &= ~0x200U;
+    assert(game_session_resolve_cast_effect_step(&session, NULL, 0, 0x0b, 1) != 0);
+    assert(warrior->current_hit_points == 60);   /* capped at 2 * 30 */
+}
+
+static void test_repair_on_open_ground_heals_workers(void)
+{
+    /* FUN_004239e9 case 3 (asm 0x42444b..0x42457d): a target that is not a
+       building heals the owner's damaged workers, up to 2 * level + 2. */
+    static GameSession session;
+    unsigned int index;
+    unsigned int healed = 0;
+    (void)spell_audit_school(&session, 3);
+    session.floaters[0].cast_spell_kind = 3;
+    session.islands[0].locations[1].record_value_10 = 0;   /* empty pad */
+    for (index = 1; index <= 4; ++index) {
+        add_test_worker(&session, index, 0, 400, 200, 3);
+        session.floaters[index].type_index = 3;
+        session.floaters[index].current_hit_points = 1;
+        session.floaters[index].max_hit_points = 3;
+    }
+    assert(game_session_resolve_cast_effect_step(&session, NULL, 0, 3, 1) != 0);
+    for (index = 1; index <= 4; ++index)
+        if (session.floaters[index].current_hit_points == 3) ++healed;
+    assert(healed == 2);   /* level 0: 2 * 0 + 2 */
+}
+
 static void run_playtest_fix_tests(void)
 {
+    test_spell_pre_checks_spend_nothing_on_a_wrong_target();
+    test_sacrifice_protects_its_caster_from_the_start();
+    test_spiritual_awakening_raises_hit_points();
+    test_repair_on_open_ground_heals_workers();
     test_tone_pool_release_bolt_loops_level_two_in_flight();
     test_courage_boosts_the_targeted_school();
     test_recharging_units_level_up_only_into_free_places();

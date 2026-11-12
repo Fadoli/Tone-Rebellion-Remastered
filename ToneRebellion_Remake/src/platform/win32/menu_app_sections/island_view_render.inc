@@ -1430,6 +1430,13 @@ static void render_island_view(RenderSurface *surface)
                 ? draw_runtime_item(surface, runtime_location, x, y) : 0;
             if (occupied && !has_runtime_item)
                 (void)draw_ground_item_icon(surface, runtime_location, x, y);
+            /* Silent Shield (spell 5) protects an empty pad with the flag
+               0x200 shimmer (FUN_00411478); class-0 rectangle as in
+               draw_runtime_item_scaled. */
+            if (!has_runtime_item && runtime_location != NULL &&
+                (runtime_location->source_flags & 0x200U) != 0)
+                draw_site_shimmer(surface, x - 20, y - 50, x + 20, y,
+                                  g_game_session.simulation_tick >> 1);
             if (!has_runtime_item && !occupied &&
                 island_site_should_draw_pad(pad_group, occupied) &&
                 g_pad_art.frame_count == 27) {

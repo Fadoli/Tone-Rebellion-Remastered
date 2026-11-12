@@ -245,13 +245,16 @@ static void game_session_tick_floater_cast_pulse(GameFloaterStart *floater)
     /* FUN_0041e569 tail: flag 0x100 shares the +0x24 counter. FUN_00425296
        gives 2000 for 0x100 and 0xdac for 0x1000; past 0xdac with 0x1000 set
        both flags clear, otherwise the counter runs to 2000 and then clears. */
+    /* +0x24 is a signed dword natively: Sacrifice and Qi Burst start it at
+       -4000 (FUN_0045da80), so the comparisons are signed. */
     if ((floater->source_runtime_flags & 0x100U) != 0) {
+        int16_t counter = (int16_t)floater->source_death_timer;
         if ((floater->source_runtime_flags & 0x1000U) == 0 ||
-            floater->source_death_timer <= 0xdacU) {
-            if (floater->source_death_timer > 2000U)
+            counter <= 0xdac) {
+            if (counter > 2000)
                 floater->source_runtime_flags &= ~0x100U;
             else
-                ++floater->source_death_timer;
+                floater->source_death_timer = (uint16_t)(counter + 1);
         } else {
             floater->source_runtime_flags &= ~0x1100U;
         }

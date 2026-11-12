@@ -168,6 +168,10 @@ static void test_cast_kind_one_applies_area_and_expires_site_state(void)
     other_item->x = 101;
     other_item->y = 100;
 
+    /* FUN_004239e9 case 1 centres the ring on the caster (+0x28/+0x2a,
+       parked on the caster since kind 1 has no range), not on the site. */
+    caster->x = 100;
+    caster->y = 100;
     assert(game_session_resolve_cast_effect_step(&session, NULL, 0, 1, 0) == 1);
     assert((caster->source_runtime_flags & 0x200U) != 0);
     assert((inside->source_flags & 0x100U) != 0);
