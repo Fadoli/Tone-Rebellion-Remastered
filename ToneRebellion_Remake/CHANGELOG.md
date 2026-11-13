@@ -11,7 +11,6 @@ Player-facing changes of the Tone Rebellion remake, newest first. Each release i
 ### Fixed
 
 - Spells checked one by one against the original:
-  - Paralysis of the parasite spores spreads around the wizard, not around the clicked site.
   - Repair cast on open ground heals up to 2 + 2 x level of your damaged workers.
   - Spiritual Awakening raises the school's units' hit points (up to twice their maximum); it raised their charge.
   - Building Enchantment, Silent Shield, Pool Guardian, Courage of the Brave, Realm Shift and Ethnic Memory are refused, with nothing spent, on a site that is already under such a spell or of the wrong kind (Silent Shield: an empty pad; Pool Guardian: a Tone pool).

@@ -206,7 +206,7 @@ Each tribe's wizard knows eight spells. A level-2 spell needs a level-2 wizard (
 | Spell | Level | Magic | Crystal | Tark | Zygon | Céphéen | Dyla | Effect |
 |---|---|---|---|---|---|---|---|---|
 | Guérison du Dojo (Dojo Healing) | 1 | 9 | 7 | | ✓ | | ✓ | heals the floaters of a school |
-| Paralysie des germes parasites (Spore Paralysis) | 1 | 16 | 11 | | ✓ | ✓ | | stuns Leviathan spores around the wizard |
+| Paralysie des germes parasites (Spore Paralysis) | 1 | 16 | 11 | | ✓ | ✓ | | stuns Leviathan spores around the targeted site |
 | Guérison (Healing) | 1 | 12 | 9 | | | | ✓ | heals your most wounded workers |
 | Réparation (Repair) | 1 | 9 | 12 | | | | ✓ | restores a building to full HP; cast on open ground, heals up to 2 + 2 × level of your workers |
 | Enchantement de bâtiment (Building Enchantment) | 1 | 10 | 9 | ✓ | | ✓ | | a wall of Tone shields a building from all damage |

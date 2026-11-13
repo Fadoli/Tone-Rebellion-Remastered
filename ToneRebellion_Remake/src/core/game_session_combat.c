@@ -1012,16 +1012,20 @@ unsigned int game_session_resolve_cast_effect_step(
         unsigned int affected = 0;
 
         if (caster->cast_spell_kind != 1 ||
-            caster->island_index >= session->island_count) return 0;
+            caster->island_index >= session->island_count ||
+            target_location_index < 0 ||
+            (uint16_t)target_location_index >=
+                session->islands[caster->island_index].location_count) return 0;
         caster->source_runtime_flags |= 0x200U;
         island = &session->islands[caster->island_index];
         /* FUN_004239e9 case 1 (asm 0x424899..0x4248c4) centres the ring on
-           the caster's +0x28/+0x2a. Kind 1 has no range (-1), so
-           FUN_0042383d parks that point on the caster every tick: the
-           paralysis spreads from where the wizard stands, not from the
-           clicked site. */
-        centre_x = caster->x;
-        centre_y = caster->y;
+           the caster's +0x28/+0x2a. FUN_0042383d parks that point on the
+           caster during the cast, but at the end of the FREEZELB flight
+           FUN_0041760b (0x417a2f..0x417a7c) overwrites it with the
+           projectile's destination site (FUN_00414fbf) just before calling
+           case 1: the paralysis spreads around the target. */
+        centre_x = island->locations[(uint16_t)target_location_index].x;
+        centre_y = island->locations[(uint16_t)target_location_index].y;
         radius = (int32_t)(caster->attack_level_flags & 0x000fU) * 50 + 0xaf;
         for (location_index = 0; location_index < island->location_count;
              ++location_index) {
@@ -1030,7 +1034,7 @@ unsigned int game_session_resolve_cast_effect_step(
             int32_t dy;
 
             /* FUN_004239e9 case 1 accepts raw item IDs 10..21 and uses a
-               strict Chebyshev radius around the caster. */
+               strict Chebyshev radius around the target site. */
             if (site->record_value_10 <= 9 || site->record_value_10 >= 22)
                 continue;
             dx = (int32_t)site->x - centre_x;
