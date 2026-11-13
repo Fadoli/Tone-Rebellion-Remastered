@@ -43,7 +43,18 @@ Limites et interprétations:
 ## Floater sous effet de sort
 
 Observations (REA haiku 2026-11-03, `ev_70c91b7b…` `FUN_004239e9`, `ev_5cc7f5cc…` `FUN_0042704b`, `ev_450fd5fa…` `FUN_00411478`, `ev_8578fcc7…` `FUN_0041e569`):
-- Drapeaux posés sur la cible: 0x2000 (sorts 0, 2, 3, 0xb, 0xf, 0x15, compteur `+0x24` remis à 0), 0x100 (0xe, plus 0x1000 au niveau 2; 1 via 0x453ade). 0xd/0x13: 0x10000 et `+0x38`, sans lecteur trouvé dans le dessin.
+- Drapeaux posés sur la cible: 0x2000 (sorts 0, 2, 3, 0xb, 0xf, 0x15, compteur `+0x24` remis à 0), 0x100 (0xe, plus 0x1000 au niveau 2). Les sorts 1 et 0x11 passent par `FUN_00453ade`, qui vise un site, pas un floater (voir ci-dessous). 0xd/0x13: 0x10000 et `+0x38`, sans lecteur trouvé dans le dessin.
 - `FUN_0042704b`, après le corps et avant les badges: `FUN_00411478` (scintillement tramé, graine `DAT_00618e44 >> 1`) sur (x−18, y−12)..(x+18, y+24) si 0x2000, ou 0x100 avec `+0x24 < FUN_00425296(0x2000)` = 45; seulement si `param_5 != 0` (vue d'île). Aucune teinte ni clignotement liés aux sorts.
 - Durées (`FUN_0041e569`): 0x2000 effacé après 45 ticks; 0x100 après 2000, 3500 avec 0x1000.
 Port: `draw_floater_spell_shimmer` (`island_view_render.inc`, ouvriers et Léviathans de la vue d'île), même tramage que le scintillement des sites (`draw_site_shimmer`). Vérifié en jeu (fixture `spell`, sort 14: quatre ouvriers 0x100 scintillent). Badge d'état (`FUN_0042704b`, `DAT_005c37f8`, vue d'île, corps présent; pseudocode `functions/0011_batch_0007/details-02-01.md`): `fltinfo` en (x du badge de royaume, haut − 10), premier cas vrai: 0x1e Léviathan sur une île dont `DAT_0061fa2e` > 100; 0x1c sous-type 0 avec 0x100; 0x1f sous-type 0 pendant le minuteur `DAT_00618f5a` du propriétaire (sort 0x15); 0x1b bâtiment lié (`FUN_004207f2`/`FUN_0045c3bb`) avec 0x8000; 0x1d charge `+0x22` > ligne de catalogue `+8`; 0x1a PV `+0x20` > `FUN_00420f28`. Port: `floater_status_badge_frame`; vérifié en jeu (sort 14: 0x1c au-dessus de la jauge de vie des ouvriers enchantés). Limite: `DAT_0061fa2e` n'a pas d'écrivain connu (0 au port), 0x1e ne s'affiche donc pas.
+
+## Paralysie des germes parasites (sort 1)
+
+Observations (REA haiku 2026-11-13; `ev_04a93108…`/`ev_0c23a222…` `FUN_0042383d`, `ev_8072182a…` `FUN_0041760b`, `ev_7d84180a…` `FUN_00414fbf`, `ev_7e3191b3…` `FUN_00453ade`, `ev_4e9d9f16…` `FUN_00453958`, `FUN_00450a71` `functions/0015_batch_0011/details-04-02.md`):
+- Centre: `FUN_004239e9` case 1 lit le floater +0x28/+0x2a. `FUN_0042383d` y recopie la position du lanceur à chaque tick (portée `DAT_0049d234` = -1). En fin de phase 0x400, `FUN_0041760b` (0x417a2f..0x417a7c) écrase ce point par le site de destination (`FUN_00414fbf`, drapeau d'effet 0x2), juste avant l'appel. L'anneau est donc centré sur le site visé, à l'impact.
+- Plafond: `FUN_0042383d` pose 0x200 à +0x34 >= 400 (0x423988), ce qui annule le case 1. Le lancement intervient au tick 10, puis ~30 ticks de FLTARMOR, le vol à 15 px/tick et ~30 ticks de FLTARMOR. Il faudrait un vol d'environ 4950 px pour atteindre le plafond, ce qui n'arrive pas en pratique.
+- Site: `FUN_00453ade` pose 0x100 et +0x44 = 0, puis appelle `FUN_00453a5f`. `FUN_00450a71` incrémente +0x44 à chaque tick et lève 0x100 après 999. `FUN_00453958` laisse le site actif tant que +0x44 < 0x14. Le site est donc éteint du tick 20 au tick 1000; un site Léviathan éteint déclenche le recalcul de l'île (`FUN_00460460`).
+- Le case 0x11 applique le même état à tous les sites de types 6..9 de l'île, sans filtre de distance.
+
+Port: `game_session_resolve_cast_effect_step` étape 1 et 0x11, `game_session_tick_site_effect_timers`. Test: `test_cast_kind_one_applies_area_and_expires_site_state`.
+Interprétation: l'effet concret d'un site éteint sur l'attaque des Léviathans passe par le bit actif (bit 0) et le recalcul d'île, déjà portés.
