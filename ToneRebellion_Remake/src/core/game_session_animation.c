@@ -2006,27 +2006,31 @@ void game_session_tick_item_animations_with_floaters(
                 goto tick_location_done;
 
             /* FUN_00450a71 starts autonomous production on class-1 item IDs
-               6..9 from +0x0c. Its interval contracts with world time,
-               difficulty and island population; the linked type-4 unit starts
-               at the marker and moves to the PROD output offset on completion. */
+               6..9 from the word at +0x30 (ADD [site+0x30], [site+0x32] at
+               0x451410..0x45142a, compare at 0x45159f; FUN_004528ca zeroes
+               it at 0x4528df when the spawner replaces its pool, ev_05424bff,
+               ev_b4e2e438). No random draw on this path. Its interval
+               contracts with world time, difficulty and island population;
+               the linked type-4 unit starts at the marker and moves to the
+               PROD output offset on completion. */
             if (state->renderer_class == 1 &&
                 state->record_value_10 >= 6 && state->record_value_10 <= 9 &&
                 (state->source_flags & 3U) == 1U) {
                 int16_t rate = state->source_value_32;
-                int16_t cadence = (int16_t)state->producer_cadence;
+                int16_t cadence = (int16_t)state->charge_source_value_30;
                 int threshold;
                 if (rate != 0) {
-                    cadence = (int16_t)(state->producer_cadence + rate);
-                    state->producer_cadence = (uint16_t)cadence;
+                    cadence = (int16_t)(state->charge_source_value_30 + rate);
+                    state->charge_source_value_30 = (uint16_t)cadence;
                 }
                 /* Native gates only the +0x32 increment; it still compares
-                   the preserved +0x0c cadence when the rate is zero. */
+                   the preserved +0x30 counter when the rate is zero. */
                 threshold = leviathan_spawn_threshold(session, island);
                 if (threshold <= cadence) {
                     state->source_flags |= 0x002U;
                     state->production_progress = 0;
                     state->source_value_42 = 0;
-                    state->producer_cadence = 0;
+                    state->charge_source_value_30 = 0;
                     state->leviathan_spawned_floater =
                         (int16_t)spawn_leviathan_floater(
                             session, floater_catalog, island, state);

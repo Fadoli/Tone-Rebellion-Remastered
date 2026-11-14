@@ -11,6 +11,7 @@ Player-facing changes of the Tone Rebellion remake, newest first. Each release i
 
 ### Fixed
 
+- Leviathan spawners keep their progress toward the next unit when an original saved game is loaded, instead of starting over (the timer now uses the original's field). In a remake save made before this version, a spawner restarts its current countdown once.
 - Leviathan contamination on a pad shows the contamination animation sized for that pad (small, medium or large), with no build ring under it, as in the original.
 - Occasional building animations (INCI) play as in the original: enrichers, training and spell schools loop theirs, and the Natural Procreator (Procréateur naturel) plays its full animation at random moments instead of flickering through its first frames.
 - Leviathan spores only settle on building pads and Tone pools; they no longer claim the Leviathan island's shield sites or unused bridge markers. A Leviathan building already on such a site in a loaded save is drawn instead of staying invisible while selectable.

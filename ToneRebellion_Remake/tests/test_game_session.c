@@ -565,6 +565,7 @@ static void test_island_access_follows_open_bridges_for_human_players(void)
 #include "game_session_sections/audio.inc"
 #include "game_session_sections/spells.inc"
 #include "game_session_sections/playtest_fixes.inc"
+#include "game_session_sections/leviathan_spawn.inc"
 
 int main(void)
 {
@@ -620,6 +621,10 @@ int main(void)
     test_spore_claimed_noshape_pad_grows_without_render_rows();
     test_leviathan_spread_only_converts_its_own_island();
     test_leviathan_spawner_births_units_on_its_island_over_time();
+    test_leviathan_rate_follows_tier_difficulty_and_marker_count();
+    test_leviathan_contaminated_sites_use_up_the_site_budget();
+    test_leviathan_rate_stays_zero_after_a_kill_until_recalculated();
+    test_leviathan_spawn_threshold_follows_difficulty_time_and_pools();
     test_leviathan_defense_hurts_only_workers_in_reach_on_its_island();
     test_inactive_leviathan_defense_does_not_fire();
     test_leviathan_bolt_starts_at_the_prod_offset();
