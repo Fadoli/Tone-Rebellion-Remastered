@@ -504,6 +504,17 @@ static int floater_belongs_to_selected_building(const GameFloaterStart *floater)
         (int)floater->charge_source_location == g_selected_location;
 }
 
+/* FUN_004455d1 sets word 0x5e16ec to the selected Tasks row's slot while the
+   Tasks list is shown (9999 otherwise); the minimap (0x438781) and the world
+   floater draw (FUN_0042704b, 0x42722e) highlight a floater whose attached
+   task (+0x38) equals it. */
+static int floater_on_selected_task(const GameFloaterStart *floater)
+{
+    return g_island_panel_mode == WINDOW_ISLAND_PANEL_TASKS &&
+        g_selected_task_slot >= 0 &&
+        floater->linked_task_slot == (int16_t)g_selected_task_slot;
+}
+
 /* Port-only: selecting a building also selects its first linked warrior of
    the viewing player, so the floater panel and orders have a target. */
 static void select_building_warrior(void)

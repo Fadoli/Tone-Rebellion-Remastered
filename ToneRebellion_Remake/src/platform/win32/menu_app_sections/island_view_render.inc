@@ -841,9 +841,12 @@ static void draw_island_lilmap_dots(RenderSurface *surface, const WindowTemplate
                 fl->island_index != g_menu.selected_map_island) continue;
             if (own && fl->source_link_0c != -1)
                 slot = fl->source_subtype == 4 ? 4 : 2;
-            /* Port-only: the warriors linked to the selected building are
-               drawn like the selected floater. */
+            /* 0x43876f: an own floater whose task (+0x38) is the selected
+               Tasks row (word 0x5e16ec) or whose link (+0x0c) is the selected
+               building's +0x18 (word 0x49e9c8, FUN_0042f755) takes slot 5.
+               Port-only: the selected floater too. */
             if (own && ((int)n == g_selected_floater ||
+                        floater_on_selected_task(fl) ||
                         floater_belongs_to_selected_building(fl))) slot = 5;
             px = (int)fl->x / 10 + mini_map->pane.left;
             py = (int)fl->y / 10 + mini_map->pane.top;
@@ -1536,6 +1539,13 @@ static void render_island_view(RenderSurface *surface)
                        by its DIE cells (FUN_0041137c). */
                     const int dying = (floater->source_runtime_flags & 0x008U) != 0;
                     const int counter = (int)floater->source_death_timer;
+                    /* FUN_0042704b (0x42722e): a floater on the selected
+                       Tasks row blits body and legs through the
+                       FUN_004106dd(1, 1) table, as the selected floater. */
+                    if (floater_on_selected_task(floater)) {
+                        g_sprite_haze_selector = 1;
+                        g_sprite_haze_level = 1;
+                    }
                     if (body_art->frame_count != 0) {
                         if (!dying || counter < 20)
                             draw_island_floater_layer(surface, body_art,
@@ -1554,6 +1564,7 @@ static void render_island_view(RenderSurface *surface)
                             draw_floater_death_cells(surface, leg_art,
                                 leg_frame, floater_x, floater_y, counter);
                     }
+                    g_sprite_haze_level = -1;
                 }
                 body_art = island_floater_body_art(floater);
                 draw_floater_spell_shimmer(surface, floater, floater_x, floater_y);
