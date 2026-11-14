@@ -6,6 +6,7 @@ Player-facing changes of the Tone Rebellion remake, newest first. Each release i
 
 ### Added
 
+- Leviathan buildings now rise out of the ground when they appear on a pool or pad, as player buildings do, instead of popping in finished.
 - Network games: a "Shared glyphs" host option, on by default. Every player's tribe gets the bonuses (strength, hit points, speed, range, spell cost, upkeep) of all the glyphs the players hold together; each glyph still belongs to the tribe that earned it for the Glyph panel, the glyph bearers and the seals. The host switches it by clicking the "Shared glyphs" line under the player list on the New Game screen; the other players see its state. Reloading a network save in a network game uses the lobby's setting; loaded in solo, the save drops the sharing. Tribes start allied, as before. Every player needs this version (lobby protocol 3).
 
 ### Fixed

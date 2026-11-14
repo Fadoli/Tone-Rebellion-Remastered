@@ -126,8 +126,10 @@ static void test_class0_item5_spawns_neutral_item_after_difficulty_delay(void)
     assert(source->owner_id == 4 && source->source_value_14 == 4);
     assert(source->source_value_34 == 30 && source->source_value_32 == 1);
     assert(source->record_value_24 == 7);
-    /* Replacement keeps 0x400 only (FUN_00452859 clears 0x10); the active bit is then recomputed. */
-    assert(source->source_flags == 0xdeadbe41U);
+    /* FUN_004528ca clears bits 0..3 and ORs 0x410; FUN_00452859 clears 0x10
+       only for item 5, so the spawned building keeps its placement ramp.
+       The active bit is then recomputed. */
+    assert((source->source_flags & ~1U) == 0xdeadbe50U);
     assert(source->source_value_22 == 0);
     assert(source->charge_source_value_30 == 0);
     assert(source->source_value_3a == 0 && source->source_value_3c == 0);

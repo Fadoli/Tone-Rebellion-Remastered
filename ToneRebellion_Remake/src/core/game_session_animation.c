@@ -167,9 +167,12 @@ static int tick_item5_spawn(GameSession *session,
     state->source_value_32 = 1;
     if (state->record_value_24 < 5 || state->record_value_24 > 0x21)
         state->record_value_24 = 0;
-    /* FUN_004528ca initializes 0x410, then FUN_00452859 clears 0x10
-       specifically for item 5, leaving only the 0x400 replacement flag. */
-    state->source_flags = (state->source_flags & ~0x1fU) | 0x400U;
+    /* FUN_004528ca clears bit 0 and ORs 0x410 (FUN_00452fcb clears 1..3);
+       FUN_00452859 then clears 0x10 only for item 5 (CMP [EBP+8],5 at
+       0x45288d, ev_91d45664), so a spawned Leviathan building keeps the
+       0x10 placement ramp that FUN_00450a71 runs on +0x48 up to 100. */
+    state->source_flags = (state->source_flags & ~0x0fU) | 0x410U;
+    if (spawned_item_id == 5) state->source_flags &= ~0x010U;
     state->source_value_34 = item->hit_points;
     state->maintenance_tone_cost = 0;
     state->resource_stock[GAME_RESOURCE_BUILD_TONE] = 0;
