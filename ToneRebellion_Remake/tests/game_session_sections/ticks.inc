@@ -19,26 +19,43 @@ static void test_inci_animation_uses_source_counter_and_delayed_activation(void)
     item->item_id = 42;
     item->present = 1;
     item->inci.present = 1;
+    item->inci.first_frame = 2;
+    item->inci.last_frame = 3;
     item->inci.ticks_per_frame = 2;
     item->inci.fallback_frame = 0;
 
-    /* The first RNG draw from seed 0 yields zero in [0, 5), activating frame
-       zero. The next source tick exceeds threshold 0 and restores the sentinel. */
+    /* The INCI line's last value is the delay (FUN_00455833 record +4):
+       0 rolls in [0, 1) and starts at once. The run lasts
+       (last - first + 1) * speed = 4 ticks for an L layer. */
     session.random_state = 0;
     game_session_tick_item_animations(&session, &catalog);
     assert(location->source_value_3e == 0 && location->inci_progress == 0);
     game_session_tick_item_animations(&session, &catalog);
+    game_session_tick_item_animations(&session, &catalog);
+    game_session_tick_item_animations(&session, &catalog);
+    assert(location->source_value_3e == 3 && location->inci_progress == 3);
+    game_session_tick_item_animations(&session, &catalog);
     assert(location->source_value_3e == -1 && location->inci_progress == 0);
 
+    /* P layer: (last - first) * 2 * speed = 4 ticks as well. */
+    item->inci.ping_pong = 1;
+    item->inci.last_frame = 4;
+    item->inci.ticks_per_frame = 1;
+    game_session_tick_item_animations(&session, &catalog);
+    assert(location->source_value_3e == 0);
+    game_session_tick_item_animations(&session, &catalog);
+    game_session_tick_item_animations(&session, &catalog);
+    game_session_tick_item_animations(&session, &catalog);
+    assert(location->source_value_3e == 3);
+    game_session_tick_item_animations(&session, &catalog);
+    assert(location->source_value_3e == -1);
+
     /* A byte delay >= 100 follows the increment/threshold path without RNG. */
-    item->inci.ticks_per_frame = 100;
-    item->inci.fallback_frame = 1;
+    item->inci.fallback_frame = 100;
     random_state = session.random_state;
     game_session_tick_item_animations(&session, &catalog);
     assert(location->source_value_3e == 0 && location->inci_progress == 0);
     assert(session.random_state == random_state);
-    game_session_tick_item_animations(&session, &catalog);
-    assert(location->source_value_3e == -1 && location->inci_progress == 0);
 }
 
 static void test_active_item_four_and_twenty_two_counter_stops_at_32(void)

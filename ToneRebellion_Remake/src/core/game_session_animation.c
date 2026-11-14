@@ -1186,9 +1186,19 @@ static void tick_inci_animation(GameSession *session,
     if (!item->inci.present) return;
 
     /* FUN_00450a71 stores an inactive sentinel in +0x3e. For delays below
-       100 it rolls delay*delay+1 and starts the INCI phase only on zero. */
-    delay = (uint8_t)item->inci.ticks_per_frame;
-    threshold = (int16_t)item->inci.fallback_frame;
+       100 it rolls delay*delay+1 and starts the INCI phase only on zero.
+       FUN_00455833 keeps the INCI line's last value as that delay (record
+       +4) and its run length in record +6: (last-first+1)*speed for L,
+       (last-first)*2*speed for P (16-bit IMUL; asm ev_64a0d48d, tick
+       0x451265..0x4512e7 ev_05424bff). */
+    delay = (uint8_t)item->inci.fallback_frame;
+    {
+        int32_t span = (int32_t)item->inci.last_frame -
+            (int32_t)item->inci.first_frame;
+        threshold = (int16_t)(item->inci.ping_pong
+            ? span * 2 * (int32_t)item->inci.ticks_per_frame
+            : (span + 1) * (int32_t)item->inci.ticks_per_frame);
+    }
     if (state->source_value_3e == -1 && delay < 100U) {
         uint32_t range = (uint32_t)delay * delay + 1U;
         if (tone_rng_bounded(&session->random_state, (int32_t)range) == 0)
