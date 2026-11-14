@@ -228,11 +228,17 @@ unsigned int game_session_cancel_tasks_for_location(GameSession *session,
                 session, (uint8_t)slot, 12, &expected);
         }
     }
-    /* FUN_00460029 also frees the location's repair/UpgSpread list slots. */
-    memset(session->islands[island_index].locations[location_index]
-               .repair_task_plus1, 0,
-           sizeof(session->islands[island_index].locations[location_index]
-                      .repair_task_plus1));
+    /* FUN_00460029 frees every list entry of this site, genre 0 (repair)
+       and genre 1 (UpgSpread), for the four players (ev_66d3d7af). */
+    {
+        GameRuntimeLocation *location =
+            &session->islands[island_index].locations[location_index];
+        memset(location->repair_task_plus1, 0,
+               sizeof(location->repair_task_plus1));
+        memset(location->spread_task_plus1, 0,
+               sizeof(location->spread_task_plus1));
+        memset(location->spread_count, 0, sizeof(location->spread_count));
+    }
     return cancelled;
 }
 

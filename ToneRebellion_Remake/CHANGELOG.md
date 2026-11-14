@@ -10,6 +10,7 @@ Player-facing changes of the Tone Rebellion remake, newest first. Each release i
 
 ### Fixed
 
+- Destroying or moving a Tone nebuliser drops every player's UpgSpread entry on it, as the original does; a stale entry could count a later Build Tone delivery to that pad toward a shared link.
 - Spells checked one by one against the original:
   - Repair cast on open ground heals up to 2 + 2 x level of your damaged workers.
   - Spiritual Awakening raises the school's units' hit points (up to twice their maximum); it raised their charge.
