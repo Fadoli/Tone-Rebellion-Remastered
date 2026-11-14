@@ -1434,8 +1434,46 @@ static void render_island_view(RenderSurface *surface)
                 runtime_location->record_value_24 <= 3;
             int occupied = is_item_render_site && runtime_location != NULL &&
                 runtime_location->record_value_10 > 0 && !resource_pile;
-            int has_runtime_item = is_item_render_site && !resource_pile
-                ? draw_runtime_item(surface, runtime_location, x, y) : 0;
+            /* FUN_0040d48c sends a class-0 item-5 site to FUN_0040afd3: the
+               PADS ring (FUN_0040ab42), then a V-INFECT overlay whose band
+               is picked by the pad size +0x0c from the byte tables at
+               0x49ad04 / 0x49ad08 (lo {22,11,0}, hi {32,21,10}: small pads
+               use frames 23..33, large ones 1..11), ping-pong on +0x3a / 3
+               (asm 0x40b031..0x40b06f, ev_e2921e9e, ev_21f8d51f). */
+            int infected_pad = is_construction_site && pad_group >= 0 &&
+                runtime_location != NULL &&
+                runtime_location->renderer_class == 0 &&
+                runtime_location->record_value_10 == 5;
+            int has_runtime_item = 0;
+            if (infected_pad) {
+                static const uint8_t band_lo[3] = {22, 11, 0};
+                static const uint8_t band_hi[3] = {32, 21, 10};
+                unsigned size = runtime_location->construction_site_size <= 2
+                    ? runtime_location->construction_site_size
+                    : (unsigned)location->renderer_subtype % 3U;
+                const SpriteSheet *infect_art = &g_building_art[5];
+                uint32_t span = (uint32_t)(band_hi[size] - band_lo[size]);
+                uint32_t step = (uint32_t)runtime_location->chug_progress / 3U;
+                uint32_t offset = step % (span * 2U);
+                if (offset > span) offset = span * 2U - offset;
+                if (g_pad_art.frame_count == 27)
+                    draw_sprite(surface, &g_pad_art,
+                                island_pad_frame(g_menu.animation_ticks,
+                                                 location->x,
+                                                 (unsigned)pad_group,
+                                                 location->renderer_subtype),
+                                x, y);
+                if (infect_art->frame_count > (uint32_t)band_lo[size] + offset)
+                    draw_sprite(surface, infect_art,
+                                (uint32_t)band_lo[size] + offset, x, y);
+                if ((runtime_location->source_flags & 0x200U) != 0)
+                    draw_site_shimmer(surface, x - 20, y - 50, x + 20, y,
+                                      g_game_session.simulation_tick >> 1);
+                has_runtime_item = 1;
+            } else if (is_item_render_site && !resource_pile) {
+                has_runtime_item = draw_runtime_item(surface, runtime_location,
+                                                     x, y);
+            }
             if (occupied && !has_runtime_item)
                 (void)draw_ground_item_icon(surface, runtime_location, x, y);
             /* Silent Shield (spell 5) protects an empty pad with the flag
