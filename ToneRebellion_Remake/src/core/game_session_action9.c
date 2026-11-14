@@ -232,6 +232,13 @@ static int action9_find_category4_subtype9_site(
             (location->source_value_14 != -1 &&
              !(location->record_value_10 == 1 &&
                location->record_value_24 == 1))) continue;
+        /* Remake rule, not native: FUN_00420a55 mode 2 tests only class,
+           +0x14 and the +0x10/+0x24 pile pair (ev_2d5d4353), so a class-0
+           levshld record or a demoted bridge marker (FUN_00461b3b /
+           FUN_00461859 give both class 0) also passes. Spores only claim
+           real pad/smpad/mdpad/lgpad sites here. */
+        if (site_class == 0 && location->construction_site_size > 2U)
+            continue;
         distance = game_session_source_chebyshev_distance(
             floater->x, floater->y, location->x, location->y);
         if (distance == 0) continue;

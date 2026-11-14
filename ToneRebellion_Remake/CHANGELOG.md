@@ -11,9 +11,9 @@ Player-facing changes of the Tone Rebellion remake, newest first. Each release i
 
 ### Fixed
 
-- Leviathan contamination on a pad shows the pad ring under it and the contamination animation sized for that pad (small, medium or large), as in the original.
+- Leviathan contamination on a pad shows the contamination animation sized for that pad (small, medium or large), with no build ring under it, as in the original.
 - Occasional building animations (INCI) play as in the original: enrichers, training and spell schools loop theirs, and the Natural Procreator (Procréateur naturel) plays its full animation at random moments instead of flickering through its first frames.
-- A Leviathan building grown on a site that is not a pad or a Tone pool (spores can claim those too) is drawn on the island instead of staying invisible while selectable.
+- Leviathan spores only settle on building pads and Tone pools; they no longer claim the Leviathan island's shield sites or unused bridge markers. A Leviathan building already on such a site in a loaded save is drawn instead of staying invisible while selectable.
 - Selecting a task in the Tasks list highlights its workers: yellow on the minimap and highlighted in the island view, as in the original.
 - Destroying or moving a Tone nebuliser drops every player's UpgSpread entry on it, as the original does; a stale entry could count a later Build Tone delivery to that pad toward a shared link.
 - Spells checked one by one against the original:

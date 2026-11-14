@@ -1414,11 +1414,11 @@ static void render_island_view(RenderSurface *surface)
             int32_t runtime_item_id = runtime_location != NULL
                 ? runtime_location->record_value_10 : 0;
             /* FUN_00435f4d hands every site to FUN_0040bf98, which draws the
-               record's item whatever the island tag. Spores can claim a
-               class-0 site that is not a pad (levshld, unknown tag, unpaired
-               bridge marker demoted to class 0) and grow a Leviathan
-               building there; draw it too. On a Tone pool, item 5 keeps the
-               POOL renderer above. */
+               record's item whatever the island tag. The remake's Spores
+               only claim real pads, but a loaded native save can hold a
+               Leviathan building on a levshld or demoted bridge record;
+               draw it too. On a Tone pool, item 5 keeps the POOL renderer
+               above. */
             int is_leviathan_building = runtime_item_id > 0 &&
                 (location->kind != ISLAND_LOCATION_TONE ||
                  runtime_item_id != ISLAND_TONE_POOL_ITEM_ALTERNATE) &&
@@ -1456,7 +1456,15 @@ static void render_island_view(RenderSurface *surface)
                 uint32_t step = (uint32_t)runtime_location->chug_progress / 3U;
                 uint32_t offset = step % (span * 2U);
                 if (offset > span) offset = span * 2U - offset;
-                if (g_pad_art.frame_count == 27)
+                /* FUN_0040ab42 returns before the ring draw when the viewing
+                   tribe's bit (DAT_0049f538) is clear in +0x22 (asm
+                   0x40ab4b..0x40ab62, ev_56c52e6a); the item-5 conversion
+                   and the visibility pass clear it on owner-4 sites. */
+                unsigned viewer = g_game_session.config.selected_tribe;
+                int ring_visible = viewer < 8U &&
+                    ((runtime_location->source_value_22 & 0xffU) &
+                     (1U << viewer)) != 0U;
+                if (ring_visible && g_pad_art.frame_count == 27)
                     draw_sprite(surface, &g_pad_art,
                                 island_pad_frame(g_menu.animation_ticks,
                                                  location->x,
